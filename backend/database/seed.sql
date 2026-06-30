@@ -1,0 +1,2 @@
+-- Seed data is currently included at the bottom of DBase.sql.
+-- Keep this file for future data-only seed scripts.
