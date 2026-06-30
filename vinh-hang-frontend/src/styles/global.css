@@ -1,0 +1,52 @@
+@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap');
+
+:root {
+  /* === Màu nền === */
+  --color-bg-primary:    #0A1628;
+  --color-bg-secondary:  #0D1F35;
+  --color-bg-elevated:   #122040;
+  --color-bg-card:       #0F1E33;
+
+  /* === Accent === */
+  --color-accent-teal:   #00C8A0;
+  --color-accent-teal-hover: #00A884;
+  --color-accent-gold:   #D4A843;
+
+  /* === Text === */
+  --color-text-primary:   #FFFFFF;
+  --color-text-secondary: #8DA5C0;
+  --color-text-muted:     #4A6480;
+
+  /* === Border === */
+  --color-border:         #1E3A5A;
+  --color-border-focus:   #00C8A0;
+
+  /* === Status === */
+  --color-success:  #00C8A0;
+  --color-danger:   #FF5C5C;
+  --color-warning:  #F5A623;
+  --color-info:     #4A9EFF;
+
+  /* === Spacing === */
+  --radius-card: 12px;
+  --radius-btn:  8px;
+  --radius-sm:   6px;
+
+  /* === Font === */
+  --font-display: 'Be Vietnam Pro', sans-serif;
+  --font-body:    'Inter', sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar tối */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--color-bg-secondary); }
+::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
