@@ -1,0 +1,163 @@
+@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap');
+
+.map-page, .map-page *{box-sizing:border-box}
+.map-page{
+  --ink-void:#04060e;
+  --ink-deep:#080d1a;
+  --teal-glow:#00e5c4;
+  --teal-soft:#00b89e;
+  --teal-dim:#065a50;
+  --gold:#c9a84c;
+  --gold-dim:#7a5f28;
+  --gold-bright:#f0c060;
+  --blue-glow:#4da6ff;
+  --purple:#7b6bcc;
+  --text-main:#d4e8e0;
+  --text-muted:#7a9a90;
+  --border-dim:rgba(0,229,196,0.12);
+  --border-soft:rgba(0,229,196,0.25);
+  --border-gold:rgba(201,168,76,0.25);
+
+  position:relative;
+  background:var(--ink-void);
+  color:var(--text-main);
+  font-family:'Be Vietnam Pro',sans-serif;
+  min-height:100vh;
+  overflow-x:hidden;
+}
+
+/* BG */
+.map-page .bg-canvas{position:fixed;inset:0;pointer-events:none;z-index:0}
+.map-page .glow-orb{position:absolute;border-radius:50%;filter:blur(100px);animation:map-pulse-orb 8s ease-in-out infinite}
+@keyframes map-pulse-orb{0%,100%{opacity:0.1}50%{opacity:0.18}}
+.map-page .mountain-layer{position:absolute;bottom:0;left:0;right:0;height:50vh;opacity:0.1}
+.map-page .lotus-float{position:absolute;font-size:60px;opacity:0.04;animation:map-float-lotus 12s ease-in-out infinite}
+@keyframes map-float-lotus{0%,100%{transform:translateY(0) rotate(-5deg)}50%{transform:translateY(-20px) rotate(5deg)}}
+.map-page .stars{position:absolute;inset:0}
+.map-page .star{position:absolute;background:#fff;border-radius:50%;animation:map-twinkle var(--d,3s) ease-in-out infinite var(--delay,0s)}
+@keyframes map-twinkle{0%,100%{opacity:0.1}50%{opacity:0.8}}
+
+/* BREADCRUMB */
+.map-page .breadcrumb{position:relative;z-index:10;padding:16px 48px;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-muted)}
+.map-page .breadcrumb a{color:var(--text-muted);text-decoration:none}
+.map-page .breadcrumb a:hover{color:var(--teal-glow)}
+.map-page .breadcrumb .sep{opacity:0.4}
+.map-page .breadcrumb .current{color:var(--teal-soft)}
+
+/* LAYOUT */
+.map-page .app-body{position:relative;z-index:10;display:grid;grid-template-columns:280px 1fr 300px;height:calc(100vh - 110px);overflow:hidden}
+
+/* LEFT SIDEBAR */
+.map-page .sidebar-left{border-right:0.5px solid var(--border-dim);background:rgba(8,13,26,0.6);backdrop-filter:blur(8px);display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden}
+.map-page .sidebar-section{padding:20px 20px 0}
+.map-page .sidebar-title{font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:var(--teal-soft);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.map-page .sidebar-title::after{content:'';flex:1;height:0.5px;background:var(--border-dim)}
+
+/* SEARCH */
+.map-page .search-box{display:flex;align-items:center;gap:8px;background:rgba(4,6,14,0.8);border:0.5px solid var(--border-dim);border-radius:8px;padding:9px 13px;margin-bottom:16px;transition:border-color 0.2s}
+.map-page .search-box:focus-within{border-color:var(--teal-soft)}
+.map-page .search-box input{background:none;border:none;outline:none;color:var(--text-main);font-size:13px;font-family:'Be Vietnam Pro',sans-serif;width:100%}
+.map-page .search-box input::placeholder{color:var(--text-muted)}
+.map-page .search-icon{font-size:14px;color:var(--text-muted);flex-shrink:0}
+
+/* FILTER CHIPS */
+.map-page .filter-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px}
+.map-page .chip{padding:5px 11px;border-radius:20px;border:0.5px solid var(--border-dim);font-size:11px;color:var(--text-muted);cursor:pointer;transition:all 0.2s;letter-spacing:0.03em}
+.map-page .chip:hover{border-color:var(--border-soft);color:var(--text-main)}
+.map-page .chip.on{border-color:var(--teal-soft);color:var(--teal-glow);background:rgba(0,229,196,0.06)}
+.map-page .chip.gold-on{border-color:var(--gold);color:var(--gold);background:rgba(201,168,76,0.06)}
+
+/* ZONE LEGEND */
+.map-page .zone-list{display:flex;flex-direction:column;gap:6px;margin-bottom:16px}
+.map-page .zone-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;cursor:pointer;transition:all 0.2s;border:0.5px solid transparent}
+.map-page .zone-item:hover{background:rgba(0,229,196,0.03);border-color:var(--border-dim)}
+.map-page .zone-item.active-zone{background:rgba(0,229,196,0.05);border-color:var(--border-soft)}
+.map-page .zone-dot{width:12px;height:12px;border-radius:3px;flex-shrink:0}
+.map-page .zone-name{font-size:13px;color:var(--text-main);flex:1}
+.map-page .zone-count{font-size:11px;color:var(--text-muted)}
+
+/* STATUS LEGEND */
+.map-page .status-legend{display:flex;flex-direction:column;gap:6px;padding:0 20px;margin-bottom:16px}
+.map-page .status-row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-muted)}
+.map-page .status-dot{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+
+/* STATS */
+.map-page .stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 20px 20px}
+.map-page .stat-card{background:rgba(4,6,14,0.6);border:0.5px solid var(--border-dim);border-radius:10px;padding:12px}
+.map-page .stat-num{font-family:'Playfair Display',serif;font-size:22px;color:var(--teal-glow);line-height:1;margin-bottom:3px}
+.map-page .stat-num.gold{color:var(--gold)}
+.map-page .stat-label{font-size:11px;color:var(--text-muted);line-height:1.4}
+
+/* MAP AREA */
+.map-page .map-area{position:relative;overflow:hidden;background:rgba(4,6,14,0.4)}
+.map-page .map-toolbar{position:absolute;top:16px;left:16px;z-index:20;display:flex;gap:8px}
+.map-page .map-btn{padding:7px 13px;border-radius:8px;border:0.5px solid var(--border-dim);background:rgba(8,13,26,0.8);backdrop-filter:blur(8px);color:var(--text-muted);font-size:12px;font-family:'Be Vietnam Pro',sans-serif;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;gap:6px}
+.map-page .map-btn:hover{border-color:var(--border-soft);color:var(--text-main)}
+.map-page .map-btn.active{border-color:var(--teal-soft);color:var(--teal-glow);background:rgba(0,229,196,0.06)}
+.map-page .map-zoom{position:absolute;bottom:24px;right:16px;z-index:20;display:flex;flex-direction:column;gap:4px}
+.map-page .zoom-btn{width:36px;height:36px;border-radius:8px;border:0.5px solid var(--border-dim);background:rgba(8,13,26,0.85);backdrop-filter:blur(8px);color:var(--text-main);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.2s}
+.map-page .zoom-btn:hover{border-color:var(--border-soft);color:var(--teal-glow)}
+.map-page .map-minimap{position:absolute;bottom:24px;left:16px;z-index:20;width:120px;height:80px;border:0.5px solid var(--border-soft);border-radius:8px;background:rgba(8,13,26,0.85);backdrop-filter:blur(8px);overflow:hidden}
+.map-page .map-scale{position:absolute;bottom:80px;left:16px;z-index:20;font-size:10px;color:var(--text-muted);display:flex;align-items:center;gap:6px}
+.map-page .scale-bar{width:60px;height:2px;background:var(--text-muted);border-radius:1px}
+
+/* SVG MAP */
+.map-page #cemetery-map{width:100%;height:100%;cursor:grab}
+.map-page #cemetery-map:active{cursor:grabbing}
+.map-page .lot-rect{transition:all 0.15s;cursor:pointer}
+.map-page .lot-rect:hover{filter:brightness(1.4)}
+.map-page .map-road{fill:rgba(0,229,196,0.05);stroke:rgba(0,229,196,0.15);stroke-width:0.5}
+.map-page .map-road-label{fill:rgba(0,229,196,0.3);font-size:8px;font-family:'Be Vietnam Pro',sans-serif}
+.map-page .zone-label{font-family:'Playfair Display',serif;font-size:11px;fill:rgba(255,255,255,0.2);letter-spacing:0.08em}
+.map-page .compass{position:absolute;top:60px;right:16px;z-index:20;width:40px;height:40px;opacity:0.5}
+
+/* RIGHT PANEL */
+.map-page .panel-right{border-left:0.5px solid var(--border-dim);background:rgba(8,13,26,0.6);backdrop-filter:blur(8px);overflow-y:auto;display:flex;flex-direction:column}
+.map-page .panel-right::-webkit-scrollbar{width:4px}
+.map-page .panel-right::-webkit-scrollbar-thumb{background:var(--border-dim)}
+.map-page .detail-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;padding:40px 24px;text-align:center;color:var(--text-muted)}
+.map-page .detail-empty-icon{font-size:48px;opacity:0.3;margin-bottom:16px}
+.map-page .detail-empty p{font-size:13px;line-height:1.7}
+
+.map-page .detail-panel{padding:24px;display:none;flex-direction:column;gap:0}
+.map-page .detail-panel.visible{display:flex}
+.map-page .detail-tag{font-size:11px;letter-spacing:0.12em;color:var(--gold);text-transform:uppercase;margin-bottom:6px;opacity:0.8}
+.map-page .detail-lot-id{font-family:'Playfair Display',serif;font-size:26px;color:#e8f4f0;margin-bottom:4px}
+.map-page .detail-zone{font-size:13px;color:var(--text-muted);margin-bottom:18px}
+.map-page .status-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;font-size:12px;margin-bottom:18px}
+.map-page .status-badge.available{background:rgba(0,229,196,0.08);border:0.5px solid var(--teal-soft);color:var(--teal-glow)}
+.map-page .status-badge.occupied{background:rgba(201,168,76,0.08);border:0.5px solid var(--gold);color:var(--gold)}
+.map-page .status-badge.reserved{background:rgba(123,107,204,0.08);border:0.5px solid var(--purple);color:var(--purple)}
+.map-page .detail-divider{height:0.5px;background:var(--border-dim);margin:16px 0}
+.map-page .detail-row{display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0}
+.map-page .detail-row-label{font-size:12px;color:var(--text-muted)}
+.map-page .detail-row-val{font-size:13px;color:var(--text-main);text-align:right;max-width:160px}
+.map-page .detail-row-val.highlight{color:var(--teal-glow)}
+.map-page .price-box{background:rgba(201,168,76,0.05);border:0.5px solid var(--border-gold);border-radius:10px;padding:14px 16px;margin:16px 0}
+.map-page .price-label{font-size:11px;color:var(--text-muted);margin-bottom:4px}
+.map-page .price-val{font-family:'Playfair Display',serif;font-size:22px;color:var(--gold-bright)}
+.map-page .price-note{font-size:11px;color:var(--text-muted);margin-top:4px}
+.map-page .detail-actions{display:flex;flex-direction:column;gap:8px;margin-top:4px}
+.map-page .btn-primary{width:100%;padding:12px;border-radius:8px;background:linear-gradient(135deg,rgba(201,168,76,0.15),rgba(0,229,196,0.1));border:0.5px solid var(--border-gold);color:var(--gold);font-size:14px;font-family:'Be Vietnam Pro',sans-serif;font-weight:500;cursor:pointer;transition:all 0.2s;letter-spacing:0.04em}
+.map-page .btn-primary:hover{background:rgba(201,168,76,0.22)}
+.map-page .btn-secondary{width:100%;padding:10px;border-radius:8px;background:transparent;border:0.5px solid var(--border-dim);color:var(--text-muted);font-size:13px;font-family:'Be Vietnam Pro',sans-serif;cursor:pointer;transition:all 0.2s}
+.map-page .btn-secondary:hover{border-color:var(--border-soft);color:var(--text-main)}
+.map-page .btn-ghost{width:100%;padding:10px;border-radius:8px;background:transparent;border:none;color:var(--teal-soft);font-size:13px;font-family:'Be Vietnam Pro',sans-serif;cursor:pointer;transition:color 0.2s;text-align:center}
+.map-page .btn-ghost:hover{color:var(--teal-glow)}
+
+/* NEARBY */
+.map-page .nearby-section{padding:0 24px 24px}
+.map-page .nearby-title{font-size:11px;letter-spacing:0.1em;color:var(--teal-soft);text-transform:uppercase;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.map-page .nearby-title::after{content:'';flex:1;height:0.5px;background:var(--border-dim)}
+.map-page .nearby-list{display:flex;flex-direction:column;gap:6px}
+.map-page .nearby-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;border:0.5px solid var(--border-dim);cursor:pointer;transition:all 0.2s;font-size:12px}
+.map-page .nearby-item:hover{border-color:var(--border-soft);background:rgba(0,229,196,0.02)}
+.map-page .nearby-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0}
+.map-page .nearby-info{flex:1;color:var(--text-muted)}
+.map-page .nearby-info strong{color:var(--text-main);display:block;margin-bottom:1px}
+
+/* TOOLTIP */
+.map-page .map-tooltip{position:fixed;z-index:100;background:rgba(8,13,26,0.95);border:0.5px solid var(--border-soft);border-radius:8px;padding:10px 14px;pointer-events:none;display:none;font-size:12px;backdrop-filter:blur(8px)}
+.map-page .tooltip-id{font-family:'Playfair Display',serif;font-size:14px;color:#e8f4f0;margin-bottom:3px}
+.map-page .tooltip-status{font-size:11px}
+.map-page .tooltip-price{font-size:11px;color:var(--gold);margin-top:3px}

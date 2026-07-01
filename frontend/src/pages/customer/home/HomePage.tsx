@@ -117,7 +117,15 @@ export default function HomePage() {
         </div>
         <ul className="nav-links">
           <li>
-            <a href="#map">Bản đồ</a>
+            <a
+              href={ROUTES.MAP}
+              onClick={(e) => {
+                e.preventDefault()
+                navigate(ROUTES.MAP)
+              }}
+            >
+              Bản đồ
+            </a>
           </li>
           <li>
             <a href="#features">Chức năng</a>
@@ -439,10 +447,23 @@ export default function HomePage() {
                 Đã khoá
               </div>
             </div>
+
+            <button
+              className="nav-cta"
+              style={{ marginTop: '28px' }}
+              onClick={() => navigate(ROUTES.MAP)}
+            >
+              Xem bản đồ đầy đủ →
+            </button>
           </div>
 
-          {/* Mini 2D Map */}
-          <div className="map-canvas">
+          {/* Mini 2D Map (bản xem trước — bấm vào để mở bản đồ tương tác thật) */}
+          <div
+            className="map-canvas"
+            onClick={() => navigate(ROUTES.MAP)}
+            style={{ cursor: 'pointer' }}
+            title="Bấm để mở bản đồ tương tác đầy đủ"
+          >
             <svg width="100%" height="100%" viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
               <defs>
                 <pattern id="grid" width="12" height="12" patternUnits="userSpaceOnUse">
