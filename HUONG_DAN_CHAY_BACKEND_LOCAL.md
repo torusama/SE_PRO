@@ -212,3 +212,30 @@ Backend hiện tại là API, không phải frontend. Mở các link `/api/...` 
 ```txt
 http://localhost:3001/api
 ```
+
+## 9. Chạy Frontend Local
+
+Backend chính của project là thư mục `backend/`, chạy ở port `3001`.
+
+Frontend nằm trong thư mục `vinh-hang-frontend`. Lần đầu chạy:
+
+```powershell
+cd D:\SE_CNPM\vinh-hang-frontend
+npm install
+Copy-Item .env.example .env
+npm run dev
+```
+
+File `vinh-hang-frontend/.env` cần có:
+
+```env
+VITE_API_URL=http://localhost:3001/api
+```
+
+Khi Vite chạy xong, mở link local mà terminal in ra, thường là:
+
+```txt
+http://localhost:5173
+```
+
+Lưu ý: thư mục `server/` chỉ là backend Express auth demo cũ. Backend chính để chạy cùng frontend là `backend/`.

@@ -1,4 +1,3 @@
-// src/lib/authService.ts
 import { api } from './api'
 
 export type Role = 'customer' | 'admin'
@@ -29,10 +28,8 @@ export interface AuthResponse {
   role: Role
 }
 
-// Backend trả về role dạng 'Admin' | 'Customer' (đúng theo CHECK constraint trong DB).
-// Hàm này chuẩn hoá về chữ thường để khớp với authStore của frontend.
 function normalizeRole(raw: string): Role {
-  return raw.toLowerCase() === 'admin' ? 'admin' : 'customer'
+  return raw?.toLowerCase() === 'admin' ? 'admin' : 'customer'
 }
 
 function buildInitials(fullName: string) {
@@ -42,41 +39,36 @@ function buildInitials(fullName: string) {
   return (first + last).toUpperCase() || 'KH'
 }
 
-export async function loginRequest(payload: LoginPayload): Promise<AuthResponse> {
-  // Backend trả về: { user: { user_id, full_name, email, role }, token }
-  const { data } = await api.post('/auth/login', payload)
+function normalizeAuthResponse(raw: any): AuthResponse {
+  const payload = raw.data ?? raw
+  const user = payload.user
+  const fullName = user.fullName ?? user.full_name ?? user.name ?? ''
 
   return {
-    token: data.token,
-    role: normalizeRole(data.user.role),
+    token: payload.accessToken ?? payload.token,
+    role: normalizeRole(user.role),
     user: {
-      id: String(data.user.user_id),
-      name: data.user.full_name,
-      initials: buildInitials(data.user.full_name),
-      email: data.user.email,
+      id: String(user.id ?? user.user_id),
+      name: fullName,
+      initials: buildInitials(fullName),
+      email: user.email,
     },
   }
+}
+
+export async function loginRequest(payload: LoginPayload): Promise<AuthResponse> {
+  const { data } = await api.post('/auth/login', payload)
+  return normalizeAuthResponse(data)
 }
 
 export async function registerRequest(payload: RegisterPayload): Promise<AuthResponse> {
   const fullName = `${payload.firstName} ${payload.lastName}`.trim()
 
   const { data } = await api.post('/auth/register', {
-    full_name: fullName,
+    fullName,
     email: payload.email,
     password: payload.password,
-    // DB dùng CHECK (role IN ('Admin','Customer')) -> viết hoa chữ cái đầu
-    role: payload.role === 'admin' ? 'Admin' : 'Customer',
   })
 
-  return {
-    token: data.token,
-    role: normalizeRole(data.user.role),
-    user: {
-      id: String(data.user.user_id),
-      name: data.user.full_name,
-      initials: buildInitials(data.user.full_name),
-      email: data.user.email,
-    },
-  }
+  return normalizeAuthResponse(data)
 }

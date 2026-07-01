@@ -9,6 +9,11 @@ backend/node_modules/
 backend/.env
 backend/.env.*
 !backend/.env.example
+server/.env
+server/.env.*
+vinh-hang-frontend/.env
+vinh-hang-frontend/.env.*
+!vinh-hang-frontend/.env.example
 
 # Build outputs
 dist/
@@ -17,6 +22,8 @@ coverage/
 backend/dist/
 backend/build/
 backend/coverage/
+server/node_modules/
+vinh-hang-frontend/node_modules/
 
 # Logs
 *.log
