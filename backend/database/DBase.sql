@@ -939,41 +939,39 @@ INSERT INTO cemetery_zones (zone_code, zone_name, description, map_x, map_y, map
 INSERT INTO plots (plot_code, zone_id, row_number, column_number, map_x, map_y, map_width, map_height, area_sqm, price, direction, plot_type, status) VALUES
 ('A-01-001', 1, '01', '001',  10,  10, 40, 40, 4.0,  50000000, 'Nam',   'single', 'available'),
 ('A-01-002', 1, '01', '002',  55,  10, 40, 40, 4.0,  50000000, 'Nam',   'single', 'available'),
-('A-01-003', 1, '01', '003', 100,  10, 40, 40, 4.0,  52000000, 'ÄÃ´ng',  'single', 'sold'),
-('A-01-004', 1, '01', '004', 145,  10, 40, 40, 4.0,  52000000, 'ÄÃ´ng',  'single', 'reserved'),
+('A-01-003', 1, '01', '003', 100,  10, 40, 40, 4.0,  52000000, 'ÄÃ´ng',  'single', 'available'),
+('A-01-004', 1, '01', '004', 145,  10, 40, 40, 4.0,  52000000, 'ÄÃ´ng',  'single', 'available'),
 ('A-01-005', 1, '01', '005', 190,  10, 40, 40, 4.0,  50000000, 'Nam',   'single', 'available'),
 ('A-02-001', 1, '02', '001',  10,  60, 40, 40, 4.0,  48000000, 'Nam',   'single', 'available'),
 ('A-02-002', 1, '02', '002',  55,  60, 40, 40, 4.0,  48000000, 'Nam',   'single', 'available'),
 ('A-02-003', 1, '02', '003', 100,  60, 40, 40, 4.0,  49000000, 'TÃ¢y',   'single', 'available'),
 ('A-02-004', 1, '02', '004', 145,  60, 40, 40, 4.0,  49000000, 'TÃ¢y',   'single', 'available'),
-('A-02-005', 1, '02', '005', 190,  60, 40, 40, 4.0,  48000000, 'Nam',   'single', 'sold'),
+('A-02-005', 1, '02', '005', 190,  60, 40, 40, 4.0,  48000000, 'Nam',   'single', 'available'),
 ('A-03-001', 1, '03', '001',  10, 110, 85, 40, 8.0,  95000000, 'Nam',   'double', 'available'),
-('A-03-002', 1, '03', '002', 100, 110, 85, 40, 8.0,  95000000, 'Nam',   'double', 'locked');
+('A-03-002', 1, '03', '002', 100, 110, 85, 40, 8.0,  95000000, 'Nam',   'double', 'available');
 
--- Set tráº¡ng thÃ¡i pending + reserved_until cho 2 lÃ´ Ä‘ang bá»‹ giá»¯ chá»— bá»Ÿi request máº«u
--- (Pháº£i cháº¡y sau INSERT plots vÃ¬ trigger khÃ´ng fire trÃªn INSERT tháº³ng)
-UPDATE plots SET status = 'pending', reserved_until = NOW() + INTERVAL '30 minutes'
-WHERE plot_code IN ('A-02-001', 'A-02-003');
+-- KhÃ´ng seed tráº¡ng thÃ¡i pending/sold/reserved.
+-- CÃ¡c tráº¡ng thÃ¡i nÃ y chá»‰ phÃ¡t sinh khi user gá»­i yÃªu cáº§u vÃ  admin duyá»‡t.
 
 -- Plots â€” Khu B (10 lÃ´ Ä‘Æ¡n)
 INSERT INTO plots (plot_code, zone_id, row_number, column_number, map_x, map_y, map_width, map_height, area_sqm, price, direction, plot_type, status) VALUES
 ('B-01-001', 2, '01', '001',  10,  10, 40, 40, 3.5, 30000000, 'Nam',   'single', 'available'),
 ('B-01-002', 2, '01', '002',  55,  10, 40, 40, 3.5, 30000000, 'Nam',   'single', 'available'),
-('B-01-003', 2, '01', '003', 100,  10, 40, 40, 3.5, 31000000, 'ÄÃ´ng',  'single', 'sold'),
+('B-01-003', 2, '01', '003', 100,  10, 40, 40, 3.5, 31000000, 'ÄÃ´ng',  'single', 'available'),
 ('B-01-004', 2, '01', '004', 145,  10, 40, 40, 3.5, 31000000, 'ÄÃ´ng',  'single', 'available'),
 ('B-01-005', 2, '01', '005', 190,  10, 40, 40, 3.5, 30000000, 'Nam',   'single', 'available'),
 ('B-02-001', 2, '02', '001',  10,  60, 40, 40, 3.5, 29000000, 'Nam',   'single', 'available'),
 ('B-02-002', 2, '02', '002',  55,  60, 40, 40, 3.5, 29000000, 'Nam',   'single', 'available'),
 ('B-02-003', 2, '02', '003', 100,  60, 40, 40, 3.5, 30000000, 'Báº¯c',   'single', 'available'),
 ('B-02-004', 2, '02', '004', 145,  60, 40, 40, 3.5, 30000000, 'Báº¯c',   'single', 'available'),
-('B-02-005', 2, '02', '005', 190,  60, 40, 40, 3.5, 29000000, 'Nam',   'single', 'sold');
+('B-02-005', 2, '02', '005', 190,  60, 40, 40, 3.5, 29000000, 'Nam',   'single', 'available');
 
 -- Plots â€” Khu C (6 lÃ´ gia Ä‘Ã¬nh)
 INSERT INTO plots (plot_code, zone_id, row_number, column_number, map_x, map_y, map_width, map_height, area_sqm, price, direction, plot_type, status) VALUES
 ('C-01-001', 3, '01', '001',  10,  10, 80, 80, 12.0, 120000000, 'Nam',  'family', 'available'),
 ('C-01-002', 3, '01', '002', 100,  10, 80, 80, 12.0, 120000000, 'Nam',  'family', 'available'),
 ('C-01-003', 3, '01', '003', 190,  10, 80, 80, 12.0, 118000000, 'ÄÃ´ng', 'family', 'available'),
-('C-02-001', 3, '02', '001',  10, 100, 80, 80, 12.0, 115000000, 'ÄÃ´ng', 'family', 'sold'),
+('C-02-001', 3, '02', '001',  10, 100, 80, 80, 12.0, 115000000, 'ÄÃ´ng', 'family', 'available'),
 ('C-02-002', 3, '02', '002', 100, 100, 80, 80, 12.0, 115000000, 'ÄÃ´ng', 'family', 'available'),
 ('C-02-003', 3, '02', '003', 190, 100, 80, 80, 12.0, 113000000, 'Nam',  'family', 'available');
 
@@ -982,7 +980,7 @@ INSERT INTO plots (plot_code, zone_id, row_number, column_number, map_x, map_y, 
 ('D-01-001', 4, '01', '001',  10,  10, 40, 40, 3.0, 20000000, 'Nam',   'single', 'available'),
 ('D-01-002', 4, '01', '002',  55,  10, 40, 40, 3.0, 20000000, 'Nam',   'single', 'available'),
 ('D-01-003', 4, '01', '003', 100,  10, 40, 40, 3.0, 21000000, 'ÄÃ´ng',  'single', 'available'),
-('D-01-004', 4, '01', '004', 145,  10, 40, 40, 3.0, 21000000, 'ÄÃ´ng',  'single', 'sold'),
+('D-01-004', 4, '01', '004', 145,  10, 40, 40, 3.0, 21000000, 'ÄÃ´ng',  'single', 'available'),
 ('D-02-001', 4, '02', '001',  10,  60, 40, 40, 3.0, 19000000, 'Nam',   'single', 'available'),
 ('D-02-002', 4, '02', '002',  55,  60, 40, 40, 3.0, 19000000, 'Nam',   'single', 'available'),
 ('D-02-003', 4, '02', '003', 100,  60, 40, 40, 3.0, 20000000, 'Báº¯c',   'single', 'available'),
@@ -999,37 +997,8 @@ INSERT INTO service_types (name, description, base_price, unit, category, sort_o
 ('SÆ¡n sá»­a bia má»™',          'SÆ¡n láº¡i bia má»™ vÃ  khu vá»±c xung quanh',                1500000,  'láº§n',   'maintenance', 7),
 ('Chá»¥p áº£nh má»™ pháº§n',        'Ghi láº¡i hÃ¬nh áº£nh má»™ pháº§n vÃ  gá»­i vá» cho gia Ä‘Ã¬nh',      300000,   'láº§n',   'other',       8);
 
--- Reservation Request máº«u (status = approved â†’ contract sáº½ táº¡o riÃªng)
-INSERT INTO reservation_requests
-    (user_id, request_type, status, requester_name, requester_phone, requester_id_card,
-     deceased_name, deceased_dob, deceased_dod, total_price, note, is_ai_draft)
-VALUES
-    (3, 'purchase', 'approved', 'Nguyá»…n VÄƒn An', '0987654321', '079300001111',
-     'Nguyá»…n Thá»‹ Máº¹', '1948-01-15', '2026-05-10', 52000000, 'YÃªu cáº§u mua lÃ´ A-01-003', FALSE),
-    (4, 'purchase', 'submitted', 'Tráº§n Thá»‹ BÃ¬nh', '0912345678', '079300002222',
-     NULL, NULL, NULL, 50000000, 'Äáº·t mua lÃ´ gáº§n cá»•ng chÃ­nh', FALSE),
-    (5, 'reserve', 'pending', 'LÃª VÄƒn CÆ°á»ng', '0933445566', '079300003333',
-     NULL, NULL, NULL, 48000000, 'Giá»¯ chá»— cho gia Ä‘Ã¬nh', FALSE);
-
--- Request plots (gÃ¡n lÃ´ cho tá»«ng request)
-INSERT INTO request_plots (request_id, plot_id, plot_price) VALUES
-    (1, 3,  52000000),  -- request 1 â†’ lÃ´ A-01-003
-    (2, 1,  50000000),  -- request 2 â†’ lÃ´ A-01-001
-    (3, 6,  48000000);  -- request 3 â†’ lÃ´ A-02-001
-
--- Contract máº«u â€” paid_amount = 0 (trigger fn_accum_payment sáº½ cá»™ng khi insert payment_transaction)
--- KHÃ”NG seed paid_amount trá»±c tiáº¿p Ä‘á»ƒ trÃ¡nh nhÃ¢n Ä‘Ã´i sá»‘ tiá»n (bug 1)
-INSERT INTO contracts
-    (contract_code, request_id, user_id, plot_id, contract_date,
-     total_amount, paid_amount, payment_method, ownership_source, status, created_by, notes)
-VALUES
-    ('HD-2026-0001', 1, 3, 3, '2026-06-01',
-     52000000, 0, 'bank_transfer', 'purchase', 'active', 1, 'Há»£p Ä‘á»“ng mua lÃ´ A-01-003');
-
--- Payment transaction â€” trigger fn_accum_payment tá»± cá»™ng vÃ o contracts.paid_amount
--- Sau khi insert: paid_amount = 0 + 52000000 = 52000000 âœ“
-INSERT INTO payment_transactions (contract_id, amount, payment_method, payment_date, reference_code, note, recorded_by)
-VALUES (1, 52000000, 'bank_transfer', '2026-06-01', 'FT20260601001', 'Chuyá»ƒn khoáº£n Ä‘á»§ 100%', 1);
+-- KhÃ´ng seed reservation/contract/payment máº«u.
+-- CÃ¡c báº£n ghi nÃ y chá»‰ Ä‘Æ°á»£c táº¡o tá»« thao tÃ¡c user tháº­t trÃªn frontend.
 
 -- Service order máº«u
 INSERT INTO service_orders (user_id, plot_id, service_type_id, quantity, unit_price, amount, requested_date, status, note)

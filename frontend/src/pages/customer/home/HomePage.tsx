@@ -111,7 +111,7 @@ export default function HomePage() {
   return (
     <>
       {/* NAV */}
-      <nav>
+      <nav className="home-nav">
         <div className="nav-logo">
           VĨNH PHÚC <span>VIÊN</span>
         </div>
@@ -418,7 +418,7 @@ export default function HomePage() {
       </div>
 
       {/* MAP SECTION */}
-      <section id="map">
+      <section id="map" className="home-section">
         <div className="map-section">
           <div>
             <p className="section-eyebrow">FR-02 · Bản đồ nghĩa trang</p>
@@ -634,7 +634,7 @@ export default function HomePage() {
 
       {/* FEATURES */}
       <div className="wide-bg" id="features">
-        <section style={{ paddingTop: '60px', paddingBottom: '60px' }}>
+        <section className="home-section" style={{ paddingTop: '60px', paddingBottom: '60px' }}>
           <p className="section-eyebrow" style={{ textAlign: 'center' }}>
             Hệ thống FR-01 đến FR-14
           </p>
@@ -681,7 +681,7 @@ export default function HomePage() {
       </div>
 
       {/* AI SECTION */}
-      <section id="ai">
+      <section id="ai" className="home-section">
         <div className="ai-section">
           <div>
             <p className="section-eyebrow">FR-14 · AI Cemetery Concierge</p>
@@ -779,7 +779,7 @@ export default function HomePage() {
       </svg>
 
       {/* FOOTER */}
-      <footer>
+      <footer className="home-footer">
         <div className="footer-logo">VĨNH PHÚC VIÊN</div>
         <div className="footer-sub">永 福 苑 · Hệ thống Quản lý Nghĩa trang</div>
         <div className="footer-copy">Nhóm 8 · 2026 · Dự án môn học</div>

@@ -26,7 +26,8 @@ export class PlotsService {
               row_number AS "rowCode", column_number AS "plotNumber",
               status, price::float, area_sqm::float AS area,
               map_x AS "mapX", map_y AS "mapY", map_width AS "mapWidth",
-              map_height AS "mapHeight", zone_color AS "zoneColor", direction
+              map_height AS "mapHeight", zone_color AS "zoneColor", direction,
+              plot_type AS "plotType", description
        FROM vw_plots_map
        ORDER BY zone_code, row_number, column_number`,
     );
