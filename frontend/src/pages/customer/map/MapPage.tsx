@@ -99,6 +99,10 @@ const T = {
   loginRequired: 'B\u1ea1n c\u1ea7n \u0111\u0103ng nh\u1eadp \u0111\u1ec3 g\u1eedi y\u00eau c\u1ea7u gi\u1eef ch\u1ed7.',
   submitFailed: 'Kh\u00f4ng th\u1ec3 g\u1eedi y\u00eau c\u1ea7u gi\u1eef ch\u1ed7.',
   unavailable: 'L\u00f4 n\u00e0y hi\u1ec7n kh\u00f4ng th\u1ec3 ch\u1ecdn.',
+  pendingUnavailable: 'L\u00f4 n\u00e0y \u0111ang ch\u1edd duy\u1ec7t y\u00eau c\u1ea7u, kh\u00f4ng th\u1ec3 g\u1eedi th\u00eam y\u00eau c\u1ea7u.',
+  reservedUnavailable: 'L\u00f4 n\u00e0y \u0111\u00e3 \u0111\u01b0\u1ee3c gi\u1eef ch\u1ed7.',
+  soldUnavailable: 'L\u00f4 n\u00e0y \u0111\u00e3 \u0111\u01b0\u1ee3c b\u00e1n.',
+  lockedUnavailable: 'L\u00f4 n\u00e0y \u0111ang b\u1ecb kh\u00f3a.',
   selectedPlots: 'L\u00f4 \u0111\u00e3 ch\u1ecdn',
   clusterHint: 'Ch\u1ecdn c\u00e1c l\u00f4 c\u00f2n tr\u1ed1ng \u0111\u1ec3 th\u00eam v\u00e0o nh\u00f3m gia \u0111\u00ecnh. C\u00e1c l\u00f4 c\u1ea7n n\u1eb1m li\u1ec1n k\u1ec1 nhau.',
   removeGroup: 'X\u00f3a kh\u1ecfi nh\u00f3m',
@@ -379,6 +383,15 @@ function formatVnd(value: number) {
 
 function getStatusLabel(plot: MapPlot) {
   return plot.isPlaceholder ? T.noData : STATUS_LABEL[plot.status]
+}
+
+function getUnavailableMessage(plot: MapPlot) {
+  if (plot.isPlaceholder) return T.noData
+  if (plot.status === 'pending') return T.pendingUnavailable
+  if (plot.status === 'reserved') return T.reservedUnavailable
+  if (plot.status === 'sold') return T.soldUnavailable
+  if (plot.status === 'locked') return T.lockedUnavailable
+  return T.unavailable
 }
 
 function getPlannedDirection(zoneCode: string, rowInput: string | number, colInput: string | number) {
@@ -715,7 +728,6 @@ export default function MapPage() {
         note: `Customer selected ${plotIds.length} plot(s) from 2D map demo`,
       })
       const created = createResponse.data.data
-      await api.post(`/reservations/${created.id}/submit`)
       setSubmitMessage(`${T.submitted} #${created.id}`)
       setPlots((current) => current.map((plot) => (plotIds.includes(Number(plot.id)) ? { ...plot, status: 'pending' } : plot)))
       setClusterPlots([])
@@ -957,7 +969,7 @@ export default function MapPage() {
               {selectionMode === 'single' && (
                 <div className="detail-actions">
                   {selectedPlot.isPlaceholder ? (
-                    <div className="selection-message">{selectedPlot.isPlaceholder ? T.noData : T.unavailable}</div>
+                    <div className="selection-message">{getUnavailableMessage(selectedPlot)}</div>
                   ) : (
                     <>
                       {selectedIsAvailable ? (
@@ -965,7 +977,7 @@ export default function MapPage() {
                           {submitting ? T.submitting : T.continuePlot}
                         </button>
                       ) : (
-                        <div className="selection-message">{T.unavailable}</div>
+                        <div className="selection-message">{getUnavailableMessage(selectedPlot)}</div>
                       )}
                     </>
                   )}
@@ -973,7 +985,7 @@ export default function MapPage() {
               )}
 
               {selectionMode === 'cluster' && adjacencyWarning && <div className="adjacency-warning">{adjacencyWarning}</div>}
-              {selectionMode === 'cluster' && !selectedIsAvailable && <div className="selection-message">{selectedPlot.isPlaceholder ? T.noData : T.unavailable}</div>}
+              {selectionMode === 'cluster' && !selectedIsAvailable && <div className="selection-message">{getUnavailableMessage(selectedPlot)}</div>}
             </div>
           )}
 

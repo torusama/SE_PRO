@@ -78,8 +78,7 @@ export default function BookingPage() {
         note: `Customer selected plot ${plot.plotCode} from 2D map`,
       })
       const created = createResponse.data.data as ReservationResult
-      const submitResponse = await api.post(`/reservations/${created.id}/submit`)
-      setReservation(submitResponse.data.data ?? created)
+      setReservation(created)
       setPlot((current) => current ? { ...current, status: 'pending' } : current)
     } catch (err: any) {
       setError(err?.response?.data?.message ?? 'Không thể tạo yêu cầu giữ chỗ.')

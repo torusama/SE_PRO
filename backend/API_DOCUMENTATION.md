@@ -11,7 +11,7 @@ All successful responses follow:
 Errors follow:
 
 ```json
-{ "success": false, "message": "Error message", "error": "BAD_REQUEST" }
+{ "success": false, "message": "Error message", "data": null, "error": "BAD_REQUEST" }
 ```
 
 Use `Authorization: Bearer <accessToken>` for protected endpoints.
@@ -71,19 +71,77 @@ Map item sample:
 
 | Method | Endpoint | Auth | Role |
 | --- | --- | --- | --- |
-| POST | `/reservations` | Yes | customer/admin |
-| GET | `/my/reservations` | Yes | customer/admin |
-| GET | `/my/reservations/:id` | Yes | customer/admin |
-| POST | `/reservations/:id/submit` | Yes | customer/admin |
-| POST | `/reservations/:id/cancel` | Yes | customer/admin |
+| POST | `/reservations` | Yes | customer |
+| GET | `/my/reservations` | Yes | customer |
+| GET | `/my/reservations/:id` | Yes | customer |
+| POST | `/reservations/:id/submit` | Yes | customer |
+| POST | `/reservations/:id/cancel` | Yes | customer |
 | GET | `/admin/reservations` | Yes | admin |
 | GET | `/admin/reservations/:id` | Yes | admin |
 | PATCH | `/admin/reservations/:id/approve` | Yes | admin |
 | PATCH | `/admin/reservations/:id/reject` | Yes | admin |
 
-Create body: `{ "type": "purchase", "plotIds": [1, 2], "note": "Muon mua khu gia dinh" }`
+### Create reservation
+
+`POST /reservations`
+
+Body:
+
+```json
+{ "type": "purchase", "plotIds": [1, 2], "note": "Muon mua khu gia dinh" }
+```
+
+`type` must be `reserve` or `purchase`. `plotIds` must be a non-empty array of unique positive integers. All selected plots must currently be `available`; otherwise the request is rejected and no partial reservation data is kept.
+
+Successful creation immediately creates a `pending` reservation request and updates all selected plots to `pending`.
+
+Sample response:
+
+```json
+{
+  "success": true,
+  "message": "Reservation request created",
+  "data": {
+    "id": 10,
+    "type": "purchase",
+    "status": "pending",
+    "totalPrice": 100000000,
+    "plotCount": 2,
+    "plotCodes": ["A-01-001", "A-01-002"],
+    "plots": [
+      { "id": 1, "code": "A-01-001", "status": "pending", "price": 50000000 },
+      { "id": 2, "code": "A-01-002", "status": "pending", "price": 50000000 }
+    ]
+  }
+}
+```
+
+Common errors:
+
+- Unavailable/missing plot: `{ "success": false, "message": "All plots must be available", "data": null, "error": "BAD_REQUEST" }`
+- Duplicate plot ID: `{ "success": false, "message": "Duplicate plot IDs are not allowed", "data": null, "error": "BAD_REQUEST" }`
+
+### Customer reservation views
+
+`GET /my/reservations` returns only the authenticated customer's reservation summaries.
+
+`GET /my/reservations/:id` returns only the authenticated customer's reservation detail with selected plots. Requests owned by another customer are returned as not found.
+
+### Admin reservation review
+
+`GET /admin/reservations` lists all reservation requests.
+
+`GET /admin/reservations/:id` returns any reservation request detail for admin review.
 
 Admin approve/reject body: `{ "adminNote": "OK" }`
+
+Approval/rejection are transaction-safe:
+
+- Approve `reserve`: request becomes `approved`; related plots become `reserved`; one `request_approved` notification is created for the customer.
+- Approve `purchase`: request becomes `approved`; related plots become `sold`; one `request_approved` notification is created for the customer.
+- Reject: request becomes `rejected`; related pending plots return to `available` only when no other valid request still claims them; one `request_rejected` notification is created for the customer.
+
+Only `pending` requests are valid for new decisions. Existing `submitted` records are also tolerated for backward compatibility. Already approved/rejected requests return an error and do not create duplicate notifications.
 
 ## Contracts
 

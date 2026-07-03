@@ -1,0 +1,368 @@
+import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { ReservationsService } from './reservations.service';
+
+type QueryHandler = (sql: string, params?: unknown[]) => unknown;
+
+const result = (rows: unknown[] = [], rowCount = rows.length) => ({
+  rows,
+  rowCount,
+});
+
+function createService(handler?: QueryHandler) {
+  const client = {
+    query: jest.fn((sql: string, params?: unknown[]) =>
+      handler ? handler(sql, params) : result(),
+    ),
+  };
+  const database = {
+    query: jest.fn(),
+    queryOne: jest.fn(),
+    transaction: jest.fn(
+      async (
+        callback: (transactionClient: typeof client) => Promise<unknown>,
+      ) => callback(client),
+    ),
+  };
+
+  return {
+    client,
+    database,
+    service: new ReservationsService(database as never),
+  };
+}
+
+describe('ReservationsService', () => {
+  describe('create', () => {
+    it('creates a pending multi-plot reservation in a transaction', async () => {
+      const { client, database, service } = createService((sql) => {
+        if (sql.includes('FROM plots') && sql.includes('FOR UPDATE')) {
+          return result([
+            { id: 1, code: 'A-01-001', status: 'available', price: 100 },
+            { id: 2, code: 'A-01-002', status: 'available', price: 150 },
+          ]);
+        }
+        if (sql.includes('INSERT INTO reservation_requests')) {
+          return result([{ id: 10 }]);
+        }
+        if (sql.includes('UPDATE plots')) {
+          return result([], 2);
+        }
+        if (sql.includes('FROM reservation_requests rr')) {
+          return result([
+            {
+              id: 10,
+              type: 'reserve',
+              status: 'pending',
+              totalPrice: 250,
+              note: 'hold',
+              createdAt: new Date('2026-07-03T00:00:00Z'),
+            },
+          ]);
+        }
+        if (
+          sql.includes('FROM request_plots rp') &&
+          !sql.includes('FOR UPDATE')
+        ) {
+          return result([
+            { id: 1, code: 'A-01-001', status: 'pending', price: 100 },
+            { id: 2, code: 'A-01-002', status: 'pending', price: 150 },
+          ]);
+        }
+        return result();
+      });
+
+      const created = await service.create(7, {
+        type: 'reserve',
+        plotIds: [1, 2],
+        note: 'hold',
+      });
+
+      expect(database.transaction).toHaveBeenCalledTimes(1);
+      expect(client.query).toHaveBeenCalledWith(
+        expect.stringContaining("VALUES ($1, $2, 'pending'"),
+        [7, 'reserve', 250, 'hold', false],
+      );
+      expect(created).toMatchObject({
+        id: 10,
+        status: 'pending',
+        totalPrice: 250,
+        plotCount: 2,
+        plotCodes: ['A-01-001', 'A-01-002'],
+      });
+    });
+
+    it('rejects duplicate plot IDs before opening a transaction', async () => {
+      const { database, service } = createService();
+
+      await expect(
+        service.create(7, { type: 'purchase', plotIds: [1, 1] }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(database.transaction).not.toHaveBeenCalled();
+    });
+
+    it('rejects unavailable plots without partial writes', async () => {
+      const { client, service } = createService((sql) => {
+        if (sql.includes('FROM plots') && sql.includes('FOR UPDATE')) {
+          return result([
+            { id: 1, code: 'A-01-001', status: 'pending', price: 100 },
+          ]);
+        }
+        return result();
+      });
+
+      await expect(
+        service.create(7, { type: 'purchase', plotIds: [1] }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(
+        client.query.mock.calls.some(([sql]) =>
+          String(sql).includes('INSERT INTO reservation_requests'),
+        ),
+      ).toBe(false);
+    });
+  });
+
+  describe('approve', () => {
+    it('approves a reserve request, reserves plots, and creates a notification', async () => {
+      const { client, service } = createService((sql) => {
+        if (
+          sql.includes('FROM reservation_requests') &&
+          sql.includes('FOR UPDATE')
+        ) {
+          return result([
+            {
+              request_id: 10,
+              user_id: 7,
+              request_type: 'reserve',
+              status: 'pending',
+            },
+          ]);
+        }
+        if (
+          sql.includes('FROM request_plots rp') &&
+          sql.includes('FOR UPDATE')
+        ) {
+          return result([
+            { id: 1, code: 'A-01-001', status: 'pending', price: 100 },
+          ]);
+        }
+        if (sql.includes('UPDATE plots')) {
+          return result([], 1);
+        }
+        return result();
+      });
+
+      await expect(service.approve(1, 10, 'ok')).resolves.toEqual({
+        id: 10,
+        status: 'approved',
+        plotStatus: 'reserved',
+        notificationCreated: true,
+      });
+      expect(client.query).toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE plots'),
+        [[1], 'reserved'],
+      );
+      expect(client.query).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO notifications'),
+        expect.arrayContaining([7, 'request_approved']),
+      );
+    });
+
+    it('approves a purchase request as sold', async () => {
+      const { client, service } = createService((sql) => {
+        if (
+          sql.includes('FROM reservation_requests') &&
+          sql.includes('FOR UPDATE')
+        ) {
+          return result([
+            {
+              request_id: 10,
+              user_id: 7,
+              request_type: 'purchase',
+              status: 'pending',
+            },
+          ]);
+        }
+        if (
+          sql.includes('FROM request_plots rp') &&
+          sql.includes('FOR UPDATE')
+        ) {
+          return result([
+            { id: 1, code: 'A-01-001', status: 'pending', price: 100 },
+          ]);
+        }
+        if (sql.includes('UPDATE plots')) {
+          return result([], 1);
+        }
+        return result();
+      });
+
+      await expect(service.approve(1, 10)).resolves.toMatchObject({
+        plotStatus: 'sold',
+      });
+      expect(client.query).toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE plots'),
+        [[1], 'sold'],
+      );
+    });
+
+    it('rejects approving a non-pending request', async () => {
+      const { service } = createService((sql) => {
+        if (
+          sql.includes('FROM reservation_requests') &&
+          sql.includes('FOR UPDATE')
+        ) {
+          return result([{ request_id: 10, status: 'approved' }]);
+        }
+        return result();
+      });
+
+      await expect(service.approve(1, 10)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    });
+  });
+
+  describe('reject', () => {
+    it('rejects a pending request, releases plots, and creates a notification', async () => {
+      const { client, service } = createService((sql) => {
+        if (
+          sql.includes('FROM reservation_requests') &&
+          sql.includes('FOR UPDATE')
+        ) {
+          return result([{ request_id: 10, user_id: 7, status: 'pending' }]);
+        }
+        if (
+          sql.includes('FROM request_plots rp') &&
+          sql.includes('FOR UPDATE')
+        ) {
+          return result([
+            { id: 1, code: 'A-01-001', status: 'pending', price: 100 },
+          ]);
+        }
+        return result();
+      });
+
+      await expect(service.reject(1, 10, 'no')).resolves.toEqual({
+        id: 10,
+        status: 'rejected',
+        plotStatus: 'available',
+        notificationCreated: true,
+      });
+      expect(client.query).toHaveBeenCalledWith(
+        expect.stringContaining("SET status = 'available'"),
+        [[1], 10, ['pending', 'submitted', 'approved']],
+      );
+      expect(client.query).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO notifications'),
+        expect.arrayContaining([7, 'request_rejected']),
+      );
+    });
+
+    it('blocks repeated rejection for finalized requests', async () => {
+      const { service } = createService((sql) => {
+        if (
+          sql.includes('FROM reservation_requests') &&
+          sql.includes('FOR UPDATE')
+        ) {
+          return result([{ request_id: 10, user_id: 7, status: 'rejected' }]);
+        }
+        return result();
+      });
+
+      await expect(service.reject(1, 10)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    });
+
+    it('does not create a notification when a decision fails', async () => {
+      const { client, service } = createService((sql) => {
+        if (
+          sql.includes('FROM reservation_requests') &&
+          sql.includes('FOR UPDATE')
+        ) {
+          return result([{ request_id: 10, user_id: 7, status: 'rejected' }]);
+        }
+        return result();
+      });
+
+      await expect(service.reject(1, 10)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      expect(
+        client.query.mock.calls.some(([sql]) =>
+          String(sql).includes('INSERT INTO notifications'),
+        ),
+      ).toBe(false);
+    });
+  });
+
+  describe('read models', () => {
+    it('lists customer reservations with plot summaries', async () => {
+      const { database, service } = createService();
+      database.query.mockResolvedValue([{ id: 10, plotCount: 2 }]);
+
+      await expect(service.my(7)).resolves.toEqual([{ id: 10, plotCount: 2 }]);
+      expect(database.query).toHaveBeenCalledWith(
+        expect.stringContaining('WHERE rr.user_id = $1'),
+        [7],
+      );
+    });
+
+    it('returns customer details with joined plots', async () => {
+      const { database, service } = createService();
+      database.queryOne.mockResolvedValue({
+        id: 10,
+        type: 'purchase',
+        status: 'pending',
+        totalPrice: '100',
+      });
+      database.query.mockResolvedValue([
+        { id: 1, code: 'A-01-001', status: 'pending', price: '100' },
+      ]);
+
+      await expect(service.myOne(7, 10)).resolves.toMatchObject({
+        id: 10,
+        plotCount: 1,
+        plotCodes: ['A-01-001'],
+      });
+    });
+
+    it('throws not found for missing customer detail', async () => {
+      const { database, service } = createService();
+      database.queryOne.mockResolvedValue(null);
+
+      await expect(service.myOne(7, 10)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+
+    it('lists and loads admin reservation views', async () => {
+      const { database, service } = createService();
+      database.query.mockResolvedValueOnce([
+        { id: 10, customerName: 'Customer' },
+      ]);
+
+      await expect(service.adminList()).resolves.toEqual([
+        { id: 10, customerName: 'Customer' },
+      ]);
+      expect(database.query).toHaveBeenCalledWith(
+        expect.stringContaining('FROM vw_reservation_requests_full'),
+      );
+
+      database.queryOne.mockResolvedValueOnce({
+        id: 10,
+        customerName: 'Customer',
+        totalPrice: 100,
+      });
+      database.query.mockResolvedValueOnce([
+        { id: 1, code: 'A-01-001', status: 'pending', price: 100 },
+      ]);
+
+      await expect(service.adminOne(10)).resolves.toMatchObject({
+        id: 10,
+        customerName: 'Customer',
+        plotCount: 1,
+      });
+    });
+  });
+});
