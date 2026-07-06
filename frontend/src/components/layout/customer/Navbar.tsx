@@ -8,7 +8,7 @@ const TXT = {
   brand: 'V\u0129nh Ph\u00fac Vi\u00ean',
   subtitle: 'Ngh\u0129a trang sinh th\u00e1i',
   map: 'B\u1ea3n \u0111\u1ed3',
-  myLots: 'L\u00f4 c\u1ee7a t\u00f4i',
+
   services: 'D\u1ecbch v\u1ee5',
   reminders: 'Nh\u1eafc nh\u1edf',
   profile: 'H\u1ed3 s\u01a1 c\u1ee7a t\u00f4i',
@@ -18,7 +18,6 @@ const TXT = {
 
 const NAV_LINKS = [
   { label: TXT.map, to: ROUTES.MAP },
-  { label: TXT.myLots, to: ROUTES.MY_LOTS },
   { label: TXT.services, to: ROUTES.SERVICES },
   { label: TXT.reminders, to: ROUTES.NOTIFICATION },
 ]
