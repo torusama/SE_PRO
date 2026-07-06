@@ -966,6 +966,7 @@ export default function MapPage() {
                 </div>
               )}
 
+
               {selectionMode === 'single' && (
                 <div className="detail-actions">
                   {selectedPlot.isPlaceholder ? (
@@ -980,6 +981,7 @@ export default function MapPage() {
                         <div className="selection-message">{getUnavailableMessage(selectedPlot)}</div>
                       )}
                     </>
+
                   )}
                 </div>
               )}
