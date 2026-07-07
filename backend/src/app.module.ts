@@ -12,6 +12,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { AiAgentModule } from './modules/ai-agent/ai-agent.module';
 import { UploadsModule } from './uploads/uploads.module';
+import { AppointmentsModule } from './appointments/appointments.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { UploadsModule } from './uploads/uploads.module';
     DashboardModule,
     AiAgentModule,
     UploadsModule,
+    AppointmentsModule,
   ],
 })
 export class AppModule {}

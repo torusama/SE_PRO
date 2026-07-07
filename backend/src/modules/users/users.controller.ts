@@ -13,7 +13,7 @@ class UpdateUserStatusDto {
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller()
-export class UsersController {
+export class  UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get('users/me')

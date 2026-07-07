@@ -59,6 +59,31 @@ CREATE INDEX idx_users_email    ON users(email);
 CREATE INDEX idx_users_role     ON users(role);
 CREATE INDEX idx_users_active   ON users(is_active, is_deleted);
 
+-- Represents the time windows a user (or admin) has marked as available
+CREATE TABLE user_availability_slots (
+    slot_id SERIAL PRIMARY KEY,
+    user_id INT NOT NULL REFERENCES users(user_id),
+    available_date DATE NOT NULL,
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
+    is_booked BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_avail_user_date ON user_availability_slots(user_id, available_date);
+
+-- Represents the actual appointment booked against a slot
+CREATE TABLE appointments (
+    appointment_id SERIAL PRIMARY KEY,
+    customer_id INT NOT NULL REFERENCES users(user_id),
+    slot_id INT NOT NULL REFERENCES user_availability_slots(slot_id),
+    purpose VARCHAR(100) NOT NULL,
+    status VARCHAR(20) DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'completed', 'cancelled')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(slot_id) -- Ensures a slot cannot be double-booked at the DB level
+);
+
 -- ================================================================
 -- 2. CEMETERY ZONES (FR-02, FR-10)
 -- ================================================================
@@ -623,6 +648,10 @@ CREATE TRIGGER trg_tr_updated_at
 
 CREATE TRIGGER trg_rem_updated_at
     BEFORE UPDATE ON reminders
+    FOR EACH ROW EXECUTE FUNCTION fn_update_updated_at();
+
+CREATE TRIGGER trg_appointments_updated_at
+    BEFORE UPDATE ON appointments
     FOR EACH ROW EXECUTE FUNCTION fn_update_updated_at();
 
 -- ----------------------------------------------------------------
