@@ -320,6 +320,7 @@
 }
 
 .map-page .plot-cell { cursor: pointer; }
+.map-page #cemetery-map { user-select: none; touch-action: none; }
 .map-page .lot-rect { transition: filter 0.15s, stroke-width 0.15s; vector-effect: non-scaling-stroke; }
 .map-page .plot-cell:hover .lot-rect { filter: brightness(1.35); }
 .map-page .plot-cell.selected .lot-rect { filter: brightness(1.25) drop-shadow(0 0 5px rgba(240, 192, 96, 0.55)); }

@@ -1,0 +1,100 @@
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { AppointmentsService } from './appointments.service';
+import { CreateAppointmentDto } from './dto/create-appointment.dto';
+import { UpdateAppointmentStatusDto } from './dto/update-appointment-status.dto';
+import { UpdateAppointmentDto } from './dto/update-appointment.dto';
+
+interface AuthenticatedUser {
+  id: number;
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Controller()
+export class AppointmentsController {
+  constructor(private readonly appointmentsService: AppointmentsService) {}
+
+  @Post('admin/appointments')
+  @Roles('admin')
+  async create(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: CreateAppointmentDto,
+  ) {
+    return {
+      success: true,
+      message: 'Appointment created',
+      data: await this.appointmentsService.create(user.id, dto),
+    };
+  }
+
+  @Get('my/appointments')
+  @Roles('customer')
+  async my(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('status') status?: string,
+  ) {
+    return {
+      success: true,
+      message: 'Appointments retrieved',
+      data: await this.appointmentsService.my(user.id, status),
+    };
+  }
+
+  @Get('admin/appointments')
+  @Roles('admin')
+  async adminList(
+    @Query('status') status?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return {
+      success: true,
+      message: 'Appointments retrieved',
+      data: await this.appointmentsService.adminList({ status, from, to }),
+    };
+  }
+
+  @Patch('admin/appointments/:id')
+  @Roles('admin')
+  async update(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: UpdateAppointmentDto,
+  ) {
+    return {
+      success: true,
+      message: 'Appointment updated',
+      data: await this.appointmentsService.update(user.id, Number(id), dto),
+    };
+  }
+
+  @Patch('admin/appointments/:id/status')
+  @Roles('admin')
+  async updateStatus(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: UpdateAppointmentStatusDto,
+  ) {
+    return {
+      success: true,
+      message: 'Appointment status updated',
+      data: await this.appointmentsService.updateStatus(
+        user.id,
+        Number(id),
+        dto,
+      ),
+    };
+  }
+}

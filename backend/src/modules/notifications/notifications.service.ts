@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { PoolClient } from 'pg';
 import { DatabaseService } from '../../database/database.service';
 
 @Injectable()
@@ -43,5 +44,53 @@ export class NotificationsService {
       [userId],
     );
     return { updated: true };
+  }
+
+  async createInApp(
+    userId: number,
+    type: string,
+    title: string,
+    message: string,
+    relatedEntityType?: string,
+    relatedEntityId?: number,
+  ) {
+    return this.database.queryOne(
+      `INSERT INTO notifications (user_id, type, title, message, related_entity_type, related_entity_id)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING notification_id AS id, type, title, message`,
+      [
+        userId,
+        type,
+        title,
+        message,
+        relatedEntityType ?? null,
+        relatedEntityId ?? null,
+      ],
+    );
+  }
+
+  async createInAppWithClient(
+    client: PoolClient,
+    userId: number,
+    type: string,
+    title: string,
+    message: string,
+    relatedEntityType?: string,
+    relatedEntityId?: number,
+  ) {
+    const result = await client.query(
+      `INSERT INTO notifications (user_id, type, title, message, related_entity_type, related_entity_id)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING notification_id AS id, type, title, message`,
+      [
+        userId,
+        type,
+        title,
+        message,
+        relatedEntityType ?? null,
+        relatedEntityId ?? null,
+      ],
+    );
+    return result.rows[0];
   }
 }

@@ -1,5 +1,5 @@
 // src/pages/customer/map/MapPage.tsx
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ROUTES } from '@/constants/routes'
 import { API_BASE_URL, api } from '@/lib/api'
@@ -96,6 +96,7 @@ const T = {
   submitSelected: 'G\u1eedi y\u00eau c\u1ea7u cho c\u00e1c l\u00f4 \u0111\u00e3 ch\u1ecdn',
   submitting: '\u0110ang g\u1eedi y\u00eau c\u1ea7u...',
   submitted: '\u0110\u00e3 g\u1eedi y\u00eau c\u1ea7u ch\u1edd duy\u1ec7t.',
+  clusterMin: 'Vui l\u00f2ng ch\u1ecdn \u00edt nh\u1ea5t 2 l\u00f4 li\u1ec1n k\u1ec1 cho nh\u00f3m gia \u0111\u00ecnh.',
   loginRequired: 'B\u1ea1n c\u1ea7n \u0111\u0103ng nh\u1eadp \u0111\u1ec3 g\u1eedi y\u00eau c\u1ea7u gi\u1eef ch\u1ed7.',
   submitFailed: 'Kh\u00f4ng th\u1ec3 g\u1eedi y\u00eau c\u1ea7u gi\u1eef ch\u1ed7.',
   unavailable: 'L\u00f4 n\u00e0y hi\u1ec7n kh\u00f4ng th\u1ec3 ch\u1ecdn.',
@@ -526,6 +527,8 @@ export default function MapPage() {
   const token = useAuthStore((state) => state.token)
   const starsRef = useRef<HTMLDivElement>(null)
   const tooltipRef = useRef<HTMLDivElement>(null)
+  const dragModeRef = useRef<'add' | 'remove' | null>(null)
+  const dragVisitedRef = useRef<Set<string>>(new Set())
 
   const [plots, setPlots] = useState<MapPlot[]>(INITIAL_PLANNED_PLOTS)
   const [isLoading, setIsLoading] = useState(false)
@@ -556,6 +559,15 @@ export default function MapPage() {
       const gold = Math.random() < 0.08
       d.style.cssText = `width:${size}px;height:${size}px;left:${Math.random() * 100}%;top:${Math.random() * 65}%;--d:${2 + Math.random() * 5}s;--delay:${-Math.random() * 6}s;background:${teal ? '#00e5c4' : gold ? '#c9a84c' : '#fff'}`
       el.appendChild(d)
+    }
+  }, [])
+
+  useEffect(() => {
+    window.addEventListener('pointerup', endClusterDrag)
+    window.addEventListener('pointercancel', endClusterDrag)
+    return () => {
+      window.removeEventListener('pointerup', endClusterDrag)
+      window.removeEventListener('pointercancel', endClusterDrag)
     }
   }, [])
 
@@ -655,7 +667,8 @@ export default function MapPage() {
     if (mode === 'single') setClusterPlots([])
   }
 
-  function handlePlotClick(plot: MapPlot) {
+  function handlePlotPointerDown(event: ReactPointerEvent<SVGGElement>, plot: MapPlot) {
+    event.preventDefault()
     setAdjacencyWarning('')
     setRoutePlotId(null)
     setSubmitMessage('')
@@ -663,20 +676,45 @@ export default function MapPage() {
     setSelectedPlot(plot)
 
     if (selectionMode === 'single') return
-    if (plot.isPlaceholder || plot.status !== 'available') return
 
     const alreadySelected = clusterPlots.some((p) => p.id === plot.id)
-    if (alreadySelected) {
+    dragModeRef.current = alreadySelected ? 'remove' : 'add'
+    dragVisitedRef.current = new Set()
+    applyClusterDrag(plot, dragModeRef.current)
+  }
+
+  function handlePlotPointerEnter(plot: MapPlot) {
+    if (selectionMode !== 'cluster' || !dragModeRef.current) return
+    applyClusterDrag(plot, dragModeRef.current)
+  }
+
+  function endClusterDrag() {
+    dragModeRef.current = null
+    dragVisitedRef.current.clear()
+  }
+
+  function applyClusterDrag(plot: MapPlot, mode: 'add' | 'remove') {
+    if (dragVisitedRef.current.has(plot.id)) return
+    dragVisitedRef.current.add(plot.id)
+    setSelectedPlot(plot)
+
+    if (mode === 'remove') {
       setClusterPlots((prev) => prev.filter((p) => p.id !== plot.id))
+      setAdjacencyWarning('')
       return
     }
 
-    if (!isAdjacentToCluster(plot, clusterPlots)) {
-      setAdjacencyWarning('Vui l\u00f2ng ch\u1ecdn c\u00e1c l\u00f4 li\u1ec1n k\u1ec1 nhau cho nh\u00f3m gia \u0111\u00ecnh.')
-      return
-    }
+    if (plot.isPlaceholder || plot.status !== 'available') return
 
-    setClusterPlots((prev) => [...prev, plot])
+    setClusterPlots((prev) => {
+      if (prev.some((p) => p.id === plot.id)) return prev
+      if (!isAdjacentToCluster(plot, prev)) {
+        setAdjacencyWarning('Vui l\u00f2ng ch\u1ecdn c\u00e1c l\u00f4 li\u1ec1n k\u1ec1 nhau cho nh\u00f3m gia \u0111\u00ecnh.')
+        return prev
+      }
+      setAdjacencyWarning('')
+      return [...prev, plot]
+    })
   }
 
   function removeFromCluster(plotId: string) {
@@ -708,9 +746,13 @@ export default function MapPage() {
     if (tooltipRef.current) tooltipRef.current.style.display = 'none'
   }
 
-  async function submitReservation(targetPlots: MapPlot[]) {
+  async function submitReservation(targetPlots: MapPlot[], multiPlot = false) {
     const realAvailablePlots = targetPlots.filter((plot) => !plot.isPlaceholder && plot.status === 'available')
     if (realAvailablePlots.length === 0) return
+    if (multiPlot && realAvailablePlots.length < 2) {
+      setSubmitError(T.clusterMin)
+      return
+    }
     if (!token) {
       setSubmitError(T.loginRequired)
       navigate(ROUTES.LOGIN)
@@ -722,10 +764,12 @@ export default function MapPage() {
     setSubmitMessage('')
     try {
       const plotIds = realAvailablePlots.map((plot) => Number(plot.id))
-      const createResponse = await api.post('/reservations', {
+      const createResponse = await api.post(multiPlot ? '/reservations/multiple' : '/reservations', {
         type: 'reserve',
         plotIds,
-        note: `Customer selected ${plotIds.length} plot(s) from 2D map demo`,
+        note: multiPlot
+          ? `Customer selected ${plotIds.length} adjacent family plot(s) from 2D map`
+          : `Customer selected ${plotIds.length} plot(s) from 2D map`,
       })
       const created = createResponse.data.data
       setSubmitMessage(`${T.submitted} #${created.id}`)
@@ -856,7 +900,7 @@ export default function MapPage() {
               <text x="20" y="8" textAnchor="middle" fill="rgba(232,74,74,0.8)" fontSize="6" fontFamily="Be Vietnam Pro">N</text>
             </svg>
 
-            <svg id="cemetery-map" viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg" style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }}>
+            <svg id="cemetery-map" viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg" style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }} onPointerUp={endClusterDrag} onPointerLeave={endClusterDrag}>
               <defs>
                 <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
                   <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(0,229,196,0.05)" strokeWidth="0.5" />
@@ -884,7 +928,7 @@ export default function MapPage() {
               {filteredPlots.map((plot) => {
                 const color = STATUS_COLOR[plot.status]
                 return (
-                  <g key={plot.id} className={getPlotClassName(plot)} onClick={() => handlePlotClick(plot)} onMouseEnter={(event) => handleMouseEnter(event, plot)} onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}>
+                  <g key={plot.id} className={getPlotClassName(plot)} onPointerDown={(event) => handlePlotPointerDown(event, plot)} onPointerEnter={() => handlePlotPointerEnter(plot)} onMouseEnter={(event) => handleMouseEnter(event, plot)} onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}>
                     <rect className="lot-rect" x={plot.x} y={plot.y} width={plot.width} height={plot.height} rx="2" fill={color.fill} stroke={getPlotStroke(plot)} strokeWidth={selectedPlot?.id === plot.id || clusterIds.has(plot.id) ? 2 : 0.8} data-id={plot.id} data-zone={plot.zoneName} data-status={plot.status} />
                     <title>{plot.plotCode} - {plot.zoneName} - {getStatusLabel(plot)}</title>
                     <text x={plot.x + plot.width / 2} y={plot.y + Math.min(16, plot.height / 2 + 3)} textAnchor="middle" className="plot-code" fill={color.text}>{plot.plotNumber}</text>
@@ -1012,7 +1056,7 @@ export default function MapPage() {
                     <div className="cluster-summary-row"><span className="cluster-summary-label">{T.totalPrice}</span><span className="cluster-summary-val total">{formatVnd(clusterTotalPrice)}</span></div>
                   </div>
                   <div className="detail-actions" style={{ marginTop: 14 }}>
-                    <button className="btn-primary" type="button" disabled={submitting} onClick={() => submitReservation(clusterPlots)}>
+                    <button className="btn-primary" type="button" disabled={submitting} onClick={() => submitReservation(clusterPlots, true)}>
                       {submitting ? T.submitting : T.submitSelected}
                     </button>
                     <button className="btn-secondary" type="button" onClick={clearCluster}>{T.clear}</button>

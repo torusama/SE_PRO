@@ -5,6 +5,11 @@ import {
 } from '@nestjs/common';
 import { PoolClient, QueryResultRow } from 'pg';
 import { DatabaseService } from '../../database/database.service';
+import {
+  PlotAdjacencyResult,
+  PlotAdjacencyService,
+} from '../plots/plot-adjacency.service';
+import { CreateMultipleReservationDto } from './dto/create-multiple-reservation.dto';
 import { CreateReservationDto } from './dto/create-reservation.dto';
 
 type ReservationStatus = 'pending' | 'submitted' | 'approved' | 'rejected';
@@ -31,6 +36,13 @@ interface PlotRow extends QueryResultRow {
   code: string;
   status: string;
   price: number | string;
+  zoneId?: number | null;
+  rowNumber?: string | null;
+  columnNumber?: string | null;
+  mapX?: number | string | null;
+  mapY?: number | string | null;
+  mapWidth?: number | string | null;
+  mapHeight?: number | string | null;
 }
 
 interface LockedReservationRow extends QueryResultRow {
@@ -58,9 +70,30 @@ export class ReservationsService {
     'approved',
   ];
 
-  constructor(private readonly database: DatabaseService) {}
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly plotAdjacency?: PlotAdjacencyService,
+  ) {}
 
   async create(userId: number, dto: CreateReservationDto, isAiDraft = false) {
+    return this.createReservation(userId, dto, isAiDraft);
+  }
+
+  async createMultiple(userId: number, dto: CreateMultipleReservationDto) {
+    if (dto.plotIds.length < 2) {
+      throw new BadRequestException(
+        'At least two plots are required for a multi-plot reservation',
+      );
+    }
+    return this.createReservation(userId, dto, false, true);
+  }
+
+  private async createReservation(
+    userId: number,
+    dto: CreateReservationDto,
+    isAiDraft = false,
+    requireAdjacency = false,
+  ) {
     this.assertUniquePlotIds(dto.plotIds);
 
     return this.database.transaction(async (client) => {
@@ -71,6 +104,9 @@ export class ReservationsService {
       ) {
         throw new BadRequestException('All plots must be available');
       }
+      const adjacency = requireAdjacency
+        ? this.validateAdjacency(plots)
+        : undefined;
 
       const total = plots.reduce((sum, plot) => sum + Number(plot.price), 0);
       const request = await client.query<{ id: number }>(
@@ -99,7 +135,8 @@ export class ReservationsService {
         throw new BadRequestException('Selected plots are no longer available');
       }
 
-      return this.getDetailForClient(client, requestId, userId);
+      const detail = await this.getDetailForClient(client, requestId, userId);
+      return adjacency ? { ...detail, adjacency } : detail;
     });
   }
 
@@ -309,7 +346,11 @@ export class ReservationsService {
 
   private async lockPlots(client: PoolClient, plotIds: number[]) {
     const result = await client.query<PlotRow>(
-      `SELECT plot_id AS id, plot_code AS code, status, price::float AS price
+      `SELECT plot_id AS id, plot_code AS code, status, price::float AS price,
+              zone_id AS "zoneId", row_number AS "rowNumber",
+              column_number AS "columnNumber", map_x AS "mapX",
+              map_y AS "mapY", map_width AS "mapWidth",
+              map_height AS "mapHeight"
        FROM plots
        WHERE plot_id = ANY($1::int[]) AND is_deleted = FALSE
        ORDER BY plot_id
@@ -334,7 +375,11 @@ export class ReservationsService {
 
   private async lockRequestPlots(client: PoolClient, requestId: number) {
     const result = await client.query<PlotRow>(
-      `SELECT p.plot_id AS id, p.plot_code AS code, p.status, p.price::float AS price
+      `SELECT p.plot_id AS id, p.plot_code AS code, p.status, p.price::float AS price,
+              p.zone_id AS "zoneId", p.row_number AS "rowNumber",
+              p.column_number AS "columnNumber", p.map_x AS "mapX",
+              p.map_y AS "mapY", p.map_width AS "mapWidth",
+              p.map_height AS "mapHeight"
        FROM request_plots rp
        JOIN plots p ON p.plot_id = rp.plot_id
        WHERE rp.request_id = $1
@@ -410,7 +455,11 @@ export class ReservationsService {
 
   private plotsSql() {
     return `SELECT p.plot_id AS id, p.plot_code AS code, p.status,
-                   rp.plot_price::float AS price
+                   rp.plot_price::float AS price,
+                   p.zone_id AS "zoneId", p.row_number AS "rowNumber",
+                   p.column_number AS "columnNumber", p.map_x AS "mapX",
+                   p.map_y AS "mapY", p.map_width AS "mapWidth",
+                   p.map_height AS "mapHeight"
             FROM request_plots rp
             JOIN plots p ON p.plot_id = rp.plot_id
             WHERE rp.request_id = $1
@@ -426,8 +475,33 @@ export class ReservationsService {
       plots: plots.map((plot) => ({
         ...plot,
         price: Number(plot.price),
+        mapX:
+          plot.mapX === null || plot.mapX === undefined
+            ? plot.mapX
+            : Number(plot.mapX),
+        mapY:
+          plot.mapY === null || plot.mapY === undefined
+            ? plot.mapY
+            : Number(plot.mapY),
+        mapWidth:
+          plot.mapWidth === null || plot.mapWidth === undefined
+            ? plot.mapWidth
+            : Number(plot.mapWidth),
+        mapHeight:
+          plot.mapHeight === null || plot.mapHeight === undefined
+            ? plot.mapHeight
+            : Number(plot.mapHeight),
       })),
     };
+  }
+
+  private validateAdjacency(plots: PlotRow[]): PlotAdjacencyResult {
+    if (!this.plotAdjacency) {
+      throw new BadRequestException(
+        'Selected plots do not have enough location data to validate adjacency',
+      );
+    }
+    return this.plotAdjacency.validateAdjacent(plots);
   }
 
   private async notify(

@@ -44,3 +44,8 @@ Thumbs.db
 .npm/
 tmp/
 temp/
+
+# Local Spec Kit / agent artifacts
+.agents/
+.specify/
+specs/

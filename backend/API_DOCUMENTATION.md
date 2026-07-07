@@ -72,6 +72,7 @@ Map item sample:
 | Method | Endpoint | Auth | Role |
 | --- | --- | --- | --- |
 | POST | `/reservations` | Yes | customer |
+| POST | `/reservations/multiple` | Yes | customer |
 | GET | `/my/reservations` | Yes | customer |
 | GET | `/my/reservations/:id` | Yes | customer |
 | POST | `/reservations/:id/submit` | Yes | customer |
@@ -121,6 +122,42 @@ Common errors:
 - Unavailable/missing plot: `{ "success": false, "message": "All plots must be available", "data": null, "error": "BAD_REQUEST" }`
 - Duplicate plot ID: `{ "success": false, "message": "Duplicate plot IDs are not allowed", "data": null, "error": "BAD_REQUEST" }`
 
+### Create multi-plot family reservation
+
+`POST /reservations/multiple`
+
+Body:
+
+```json
+{ "type": "purchase", "plotIds": [1, 2, 3], "note": "Khu gia dinh" }
+```
+
+This endpoint is stricter than `POST /reservations`: it requires at least two unique plots, all plots must be `available`, and the selected plots must be adjacent/nearby. Backend validates adjacency using plot map rectangles first (`mapX`, `mapY`, `mapWidth`, `mapHeight`) and falls back to same-zone row/column adjacency when map data cannot be used.
+
+Successful response includes the normal reservation detail plus adjacency metadata:
+
+```json
+{
+  "success": true,
+  "message": "Multi-plot reservation request created",
+  "data": {
+    "id": 10,
+    "type": "purchase",
+    "status": "pending",
+    "totalPrice": 150000000,
+    "plotCount": 3,
+    "plotCodes": ["A-01-001", "A-01-002", "A-01-003"],
+    "adjacency": { "valid": true, "method": "map" }
+  }
+}
+```
+
+Additional common errors:
+
+- Too few plots: `At least two plots are required for a multi-plot reservation`
+- Non-adjacent plots: `Selected plots must be adjacent or near each other`
+- Missing location data: `Selected plots do not have enough location data to validate adjacency`
+
 ### Customer reservation views
 
 `GET /my/reservations` returns only the authenticated customer's reservation summaries.
@@ -157,6 +194,78 @@ Only `pending` requests are valid for new decisions. Existing `submitted` record
 
 Payment body: `{ "amount": 1000000, "paymentMethod": "cash", "referenceCode": "ABC", "note": "Deposit" }`
 
+## Offline Appointments
+
+| Method | Endpoint | Auth | Role |
+| --- | --- | --- | --- |
+| POST | `/admin/appointments` | Yes | admin |
+| GET | `/my/appointments` | Yes | customer |
+| GET | `/admin/appointments` | Yes | admin |
+| PATCH | `/admin/appointments/:id` | Yes | admin |
+| PATCH | `/admin/appointments/:id/status` | Yes | admin |
+
+### Create appointment
+
+`POST /admin/appointments`
+
+Body:
+
+```json
+{
+  "reservationRequestId": 10,
+  "scheduledAt": "2026-07-15T09:00:00+07:00",
+  "location": "Van phong nghia trang",
+  "assignedStaffId": 3,
+  "assignedStaffName": "Nguyen Van B",
+  "note": "Mang theo CCCD va giay to lien quan"
+}
+```
+
+The reservation request must be an approved purchase request. Creation is transactional and creates an `appointment_created` notification for the customer.
+
+### Appointment lists
+
+`GET /my/appointments?status=scheduled` returns only the authenticated customer's appointments.
+
+`GET /admin/appointments?status=scheduled&from=2026-07-01T00:00:00Z&to=2026-07-31T23:59:59Z` returns admin appointment list with optional filters.
+
+### Update appointment details
+
+`PATCH /admin/appointments/:id`
+
+Body:
+
+```json
+{
+  "scheduledAt": "2026-07-16T10:00:00+07:00",
+  "location": "Phong hop 2",
+  "assignedStaffId": 4,
+  "assignedStaffName": "Tran Thi C",
+  "note": "Cap nhat lich hen"
+}
+```
+
+Updates create an `appointment_updated` notification.
+
+### Update appointment status
+
+`PATCH /admin/appointments/:id/status`
+
+Body:
+
+```json
+{ "status": "completed", "statusNote": "Da ky hop dong offline" }
+```
+
+`status` must be `scheduled`, `completed`, `cancelled`, or `no_show`. `cancelled` and `no_show` require `statusNote`. Status updates create an `appointment_status_updated` notification.
+
+Common errors:
+
+- Invalid request: `Appointments can only be created for approved purchase requests`
+- Duplicate active appointment: `A scheduled appointment already exists for this reservation`
+- Invalid status: `Invalid appointment status`
+- Missing reason: `A status note is required for cancelled or no-show appointments`
+
 ## Cemetery Services
 
 | Method | Endpoint | Auth | Role |
@@ -180,6 +289,12 @@ Create body: `{ "serviceTypeId": 1, "plotId": 1, "requestedDate": "2026-07-05", 
 | GET | `/notifications/unread-count` | Yes | customer/admin |
 | PATCH | `/notifications/:id/read` | Yes | customer/admin |
 | PATCH | `/notifications/read-all` | Yes | customer/admin |
+
+Appointment notification types:
+
+- `appointment_created`
+- `appointment_updated`
+- `appointment_status_updated`
 
 ## Dashboard
 
