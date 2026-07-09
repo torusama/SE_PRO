@@ -89,7 +89,7 @@ export default function ServiceManagementPage() {
           <span style={{ background: 'rgba(245,166,35,0.16)', color: '#F5A623', borderRadius: 20, padding: '4px 10px', fontSize: 12, fontWeight: 600 }}>
             {awaiting} chờ xác nhận
           </span>
-          <button style={{ background: 'var(--color-accent-teal)', color: '#0A1628', fontWeight: 600, border: 'none', borderRadius: 7, padding: '9px 16px', fontSize: 13, cursor: 'pointer' }}>
+          <button style={{ background: 'var(--color-accent-teal)', color: '#ffffff', fontWeight: 600, border: 'none', borderRadius: 7, padding: '9px 16px', fontSize: 13, cursor: 'pointer' }}>
             + Thêm dịch vụ
           </button>
         </div>
@@ -167,7 +167,7 @@ export default function ServiceManagementPage() {
                     {o.status === 'awaiting' ? (
                       <button
                         onClick={() => acceptOrder(o.id)}
-                        style={{ background: 'var(--color-accent-teal)', color: '#0A1628', fontWeight: 600, border: 'none', borderRadius: 6, padding: '5px 11px', fontSize: 11, cursor: 'pointer' }}>
+                        style={{ background: 'var(--color-accent-teal)', color: '#ffffff', fontWeight: 600, border: 'none', borderRadius: 6, padding: '5px 11px', fontSize: 11, cursor: 'pointer' }}>
                         Nhận đơn
                       </button>
                     ) : (

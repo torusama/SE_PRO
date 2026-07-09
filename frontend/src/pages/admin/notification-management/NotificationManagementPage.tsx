@@ -178,7 +178,7 @@ export default function NotificationManagementPage() {
 
             {sentMessage ? <div style={{ fontSize: 12, color: 'var(--color-accent-teal)' }}>{sentMessage}</div> : null}
 
-            <button onClick={handleSend} style={{ background: 'var(--color-accent-teal)', color: '#0A1628', fontWeight: 600, border: 'none', borderRadius: 7, padding: '10px 0', fontSize: 13, cursor: 'pointer' }}>
+            <button onClick={handleSend} style={{ background: 'var(--color-accent-teal)', color: '#ffffff', fontWeight: 600, border: 'none', borderRadius: 7, padding: '10px 0', fontSize: 13, cursor: 'pointer' }}>
               📤 Gửi ngay
             </button>
             <button style={{ background: 'transparent', border: '1px solid var(--color-border)', color: 'var(--color-text-secondary)', borderRadius: 7, padding: '10px 0', fontSize: 13, cursor: 'pointer' }}>

@@ -22,6 +22,12 @@ import NotificationPage from '@/pages/customer/notification/NotificationPage'
 import DashboardPage    from '@/pages/admin/dashboard/DashboardPage'
 import LotManagementPage from '@/pages/admin/lot-management/LotManagementPage'
 import RequestsPage     from '@/pages/admin/requests/RequestsPage'
+import ActivityPage     from '@/pages/admin/activity/ActivityPage'
+import MapManagementPage from '@/pages/admin/map-management/MapManagementPage'
+import ContractsPage    from '@/pages/admin/contracts/ContractsPage'
+import ServiceManagementPage from '@/pages/admin/service-management/ServiceManagementPage'
+import NotificationManagementPage from '@/pages/admin/notification-management/NotificationManagementPage'
+import TransferPage     from '@/pages/admin/transfer/TransferPage'
 
 // Auth
 import LoginPage    from '@/pages/auth/LoginPage'
@@ -68,10 +74,15 @@ const router = createBrowserRouter([
       {
         element: <AdminLayout />,
         children: [
-          { index: true,     element: <DashboardPage /> },
-          { path: 'lo-dat',  element: <LotManagementPage /> },
-          { path: 'yeu-cau', element: <RequestsPage /> },
-          // ... thêm tiếp
+          { index: true,          element: <DashboardPage /> },
+          { path: 'lo-dat',       element: <LotManagementPage /> },
+          { path: 'yeu-cau',      element: <RequestsPage /> },
+          { path: 'hoat-dong',    element: <ActivityPage /> },
+          { path: 'ban-do',       element: <MapManagementPage /> },
+          { path: 'hop-dong',     element: <ContractsPage /> },
+          { path: 'dich-vu',      element: <ServiceManagementPage /> },
+          { path: 'thong-bao',    element: <NotificationManagementPage /> },
+          { path: 'chuyen-nhuong',element: <TransferPage /> },
         ],
       },
     ],
