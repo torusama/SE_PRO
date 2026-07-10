@@ -52,6 +52,46 @@ describe('PlotAdjacencyService', () => {
     ).toEqual({ valid: true, method: 'grid' });
   });
 
+  it('prefers grid adjacency when map rectangles have planned aisle gaps', () => {
+    expect(
+      service.validateAdjacent([
+        {
+          id: 25,
+          code: 'C-01-003',
+          zoneId: 3,
+          rowNumber: '01',
+          columnNumber: '003',
+          mapX: 190,
+          mapY: 10,
+          mapWidth: 80,
+          mapHeight: 80,
+        },
+        {
+          id: 28,
+          code: 'C-02-003',
+          zoneId: 3,
+          rowNumber: '02',
+          columnNumber: '003',
+          mapX: 190,
+          mapY: 100,
+          mapWidth: 80,
+          mapHeight: 80,
+        },
+        {
+          id: 27,
+          code: 'C-02-002',
+          zoneId: 3,
+          rowNumber: '02',
+          columnNumber: '002',
+          mapX: 100,
+          mapY: 100,
+          mapWidth: 80,
+          mapHeight: 80,
+        },
+      ]),
+    ).toEqual({ valid: true, method: 'grid' });
+  });
+
   it('rejects disconnected selections', () => {
     expect(() =>
       service.validateAdjacent([

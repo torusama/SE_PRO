@@ -50,7 +50,7 @@ export class AppointmentsService {
 
   async create(adminId: number, dto: CreateAppointmentDto) {
     return this.database.transaction(async (client) => {
-      const request = await this.lockApprovedPurchaseRequest(
+      const request = await this.lockApprovedReservationRequest(
         client,
         dto.reservationRequestId,
       );
@@ -240,7 +240,10 @@ export class AppointmentsService {
     });
   }
 
-  private async lockApprovedPurchaseRequest(client: PoolClient, requestId: number) {
+  private async lockApprovedReservationRequest(
+    client: PoolClient,
+    requestId: number,
+  ) {
     const result = await client.query<ReservationForAppointment>(
       `SELECT request_id, user_id, request_type, status
        FROM reservation_requests
@@ -250,9 +253,9 @@ export class AppointmentsService {
     );
     const request = result.rows[0];
     if (!request) throw new NotFoundException('Reservation not found');
-    if (request.request_type !== 'purchase' || request.status !== 'approved') {
+    if (request.status !== 'approved') {
       throw new BadRequestException(
-        'Appointments can only be created for approved purchase requests',
+        'Appointments can only be created for approved reservation requests',
       );
     }
     return request;

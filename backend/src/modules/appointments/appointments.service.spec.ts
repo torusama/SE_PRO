@@ -50,7 +50,7 @@ const appointmentRow = {
 };
 
 describe('AppointmentsService', () => {
-  it('creates appointments only for approved purchase requests and notifies customer', async () => {
+  it('creates appointments for approved reservation requests and notifies customer', async () => {
     const { client, service } = createService((sql) => {
       if (sql.includes('FROM reservation_requests')) {
         return result([
@@ -86,6 +86,38 @@ describe('AppointmentsService', () => {
       expect.stringContaining('INSERT INTO notifications'),
       expect.arrayContaining([7, 'appointment_created']),
     );
+  });
+
+  it('creates appointments for approved hold requests too', async () => {
+    const { service } = createService((sql) => {
+      if (sql.includes('FROM reservation_requests')) {
+        return result([
+          {
+            request_id: 10,
+            user_id: 7,
+            request_type: 'reserve',
+            status: 'approved',
+          },
+        ]);
+      }
+      if (sql.includes('SELECT appointment_id')) return result([]);
+      if (sql.includes('INSERT INTO offline_appointments')) {
+        return result([appointmentRow]);
+      }
+      return result();
+    });
+
+    await expect(
+      service.create(1, {
+        reservationRequestId: 10,
+        scheduledAt: '2026-07-15T09:00:00+07:00',
+        location: 'Office',
+        assignedStaffName: 'Staff',
+      }),
+    ).resolves.toMatchObject({
+      id: 21,
+      notificationCreated: true,
+    });
   });
 
   it('rejects appointment creation for non-approved requests', async () => {

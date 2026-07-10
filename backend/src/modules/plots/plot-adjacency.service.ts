@@ -38,15 +38,6 @@ export class PlotAdjacencyService {
       throw new BadRequestException('Duplicate plot IDs are not allowed');
     }
 
-    if (plots.every((plot) => this.hasUsableMapData(plot))) {
-      if (!this.isConnected(plots, (a, b) => this.rectanglesTouch(a, b))) {
-        throw new BadRequestException(
-          'Selected plots must be adjacent or near each other',
-        );
-      }
-      return { valid: true, method: 'map' };
-    }
-
     if (plots.every((plot) => this.hasUsableGridData(plot))) {
       if (!this.isConnected(plots, (a, b) => this.gridCellsTouch(a, b))) {
         throw new BadRequestException(
@@ -54,6 +45,15 @@ export class PlotAdjacencyService {
         );
       }
       return { valid: true, method: 'grid' };
+    }
+
+    if (plots.every((plot) => this.hasUsableMapData(plot))) {
+      if (!this.isConnected(plots, (a, b) => this.rectanglesTouch(a, b))) {
+        throw new BadRequestException(
+          'Selected plots must be adjacent or near each other',
+        );
+      }
+      return { valid: true, method: 'map' };
     }
 
     throw new BadRequestException(

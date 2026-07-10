@@ -39,6 +39,20 @@ interface ReservationDetail extends ReservationSummary {
   plots?: ReservationPlot[]
 }
 
+type AppointmentStatus = 'scheduled' | 'completed' | 'cancelled' | 'no_show'
+
+interface Appointment {
+  id: number
+  reservationRequestId: number
+  customerName?: string | null
+  scheduledAt: string
+  location: string
+  assignedStaffName?: string | null
+  status: AppointmentStatus
+  note?: string | null
+  statusNote?: string | null
+}
+
 type DecisionAction = 'approve' | 'reject'
 
 const statusMeta: Record<string, { label: string; color: string; bg: string }> = {
@@ -127,6 +141,10 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   )
 }
 
+function isVisibleRequest(request: ReservationSummary) {
+  return !['rejected', 'cancelled'].includes(request.status)
+}
+
 export default function RequestsPage() {
   const [requests, setRequests] = useState<ReservationSummary[]>([])
   const [selectedId, setSelectedId] = useState<number | null>(null)
@@ -137,14 +155,28 @@ export default function RequestsPage() {
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
   const [decisionLoading, setDecisionLoading] = useState<DecisionAction | null>(null)
+  const [appointments, setAppointments] = useState<Appointment[]>([])
+  const [appointmentLoading, setAppointmentLoading] = useState(false)
+  const [appointmentForm, setAppointmentForm] = useState({
+    scheduledAt: '',
+    location: 'Văn phòng nghĩa trang Vĩnh Phúc Viên',
+    assignedStaffName: '',
+    note: '',
+  })
+
+  const visibleRequests = useMemo(() => requests.filter(isVisibleRequest), [requests])
 
   const selectedSummary = useMemo(
-    () => requests.find((request) => request.id === selectedId) ?? null,
-    [requests, selectedId],
+    () => visibleRequests.find((request) => request.id === selectedId) ?? null,
+    [visibleRequests, selectedId],
   )
 
   const current = detail ?? selectedSummary
   const canDecide = current ? ['pending', 'submitted'].includes(current.status) : false
+  const currentAppointment = current
+    ? appointments.find((appointment) => appointment.reservationRequestId === current.id && appointment.status === 'scheduled') ?? null
+    : null
+  const canScheduleAppointment = current?.status === 'approved' && !currentAppointment
 
   async function loadRequests(nextSelectedId?: number) {
     setLoadingList(true)
@@ -152,9 +184,14 @@ export default function RequestsPage() {
     try {
       const response = await api.get<ApiResponse<ReservationSummary[]>>('/admin/reservations')
       const rows = response.data.data ?? []
+      const visibleRows = rows.filter(isVisibleRequest)
       setRequests(rows)
-      const nextId = nextSelectedId ?? selectedId ?? rows[0]?.id ?? null
+      const preferredId = nextSelectedId ?? selectedId
+      const nextId = visibleRows.some((row) => row.id === preferredId)
+        ? preferredId ?? null
+        : visibleRows[0]?.id ?? null
       setSelectedId(nextId)
+      if (!nextId) setDetail(null)
       return nextId
     } catch (err) {
       setError(getErrorMessage(err))
@@ -179,6 +216,15 @@ export default function RequestsPage() {
     }
   }
 
+  async function loadAppointments() {
+    try {
+      const response = await api.get<ApiResponse<Appointment[]>>('/admin/appointments')
+      setAppointments(response.data.data ?? [])
+    } catch {
+      setAppointments([])
+    }
+  }
+
   async function decide(action: DecisionAction) {
     if (!current || !canDecide) return
     const isReject = action === 'reject'
@@ -199,6 +245,7 @@ export default function RequestsPage() {
       setSuccessMessage(isReject ? `Đã từ chối yêu cầu #${current.id}.` : `Đã duyệt yêu cầu #${current.id}.`)
       const nextId = await loadRequests(current.id)
       if (nextId) await loadDetail(nextId)
+      await loadAppointments()
     } catch (err) {
       setError(getErrorMessage(err))
     } finally {
@@ -206,8 +253,42 @@ export default function RequestsPage() {
     }
   }
 
+  async function createAppointment() {
+    if (!current || !canScheduleAppointment) return
+    if (!appointmentForm.scheduledAt || !appointmentForm.location.trim() || !appointmentForm.assignedStaffName.trim()) {
+      setError('Vui lòng nhập đủ thời gian, địa điểm và nhân viên phụ trách lịch hẹn.')
+      return
+    }
+
+    setAppointmentLoading(true)
+    setError('')
+    setSuccessMessage('')
+    try {
+      await api.post('/admin/appointments', {
+        reservationRequestId: current.id,
+        scheduledAt: new Date(appointmentForm.scheduledAt).toISOString(),
+        location: appointmentForm.location.trim(),
+        assignedStaffName: appointmentForm.assignedStaffName.trim(),
+        note: appointmentForm.note.trim() || undefined,
+      })
+      setSuccessMessage(`Đã tạo lịch hẹn ký hợp đồng cho yêu cầu #${current.id}.`)
+      setAppointmentForm({
+        scheduledAt: '',
+        location: 'Văn phòng nghĩa trang Vĩnh Phúc Viên',
+        assignedStaffName: '',
+        note: '',
+      })
+      await loadAppointments()
+    } catch (err) {
+      setError(getErrorMessage(err))
+    } finally {
+      setAppointmentLoading(false)
+    }
+  }
+
   useEffect(() => {
     void loadRequests()
+    void loadAppointments()
   }, [])
 
   useEffect(() => {
@@ -255,16 +336,16 @@ export default function RequestsPage() {
               alignItems: 'center',
             }}>
             <h2 style={{ margin: 0, fontSize: 18 }}>Danh sách yêu cầu</h2>
-            <span style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>{requests.length} yêu cầu</span>
+            <span style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>{visibleRequests.length} yêu cầu</span>
           </div>
 
           {loadingList ? (
             <div style={{ padding: 18, color: 'var(--color-text-secondary)' }}>Đang tải yêu cầu...</div>
-          ) : requests.length === 0 ? (
+          ) : visibleRequests.length === 0 ? (
             <div style={{ padding: 18, color: 'var(--color-text-secondary)' }}>Chưa có yêu cầu nào.</div>
           ) : (
             <div style={{ display: 'grid' }}>
-              {requests.map((request) => {
+              {visibleRequests.map((request) => {
                 const active = request.id === selectedId
                 return (
                   <button
@@ -379,15 +460,116 @@ export default function RequestsPage() {
                 />
               </label>
 
+              {current?.status === 'approved' ? (
+                <div style={{ display: 'grid', gap: 12, padding: 14, border: '1px solid var(--color-border)', borderRadius: 8, background: 'rgba(255,255,255,0.03)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+                    <div>
+                      <div style={{ ...labelStyle, marginBottom: 4 }}>Lịch hẹn ký hợp đồng</div>
+                      {currentAppointment ? (
+                        <div style={{ color: 'var(--color-text-primary)', fontWeight: 700 }}>
+                          {formatDate(currentAppointment.scheduledAt)} · {currentAppointment.location}
+                        </div>
+                      ) : (
+                        <div style={{ color: 'var(--color-text-secondary)', fontSize: 13 }}>
+                          Tạo lịch hẹn offline để khách hoàn tất ký hợp đồng.
+                        </div>
+                      )}
+                    </div>
+                    {currentAppointment ? <StatusPill status={currentAppointment.status} /> : null}
+                  </div>
+
+                  {currentAppointment ? (
+                    <div style={{ color: 'var(--color-text-secondary)', fontSize: 13 }}>
+                      Phụ trách: {currentAppointment.assignedStaffName || '-'}
+                      {currentAppointment.note ? ` · ${currentAppointment.note}` : ''}
+                    </div>
+                  ) : (
+                    <div style={{ display: 'grid', gap: 10 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                        <input
+                          type="datetime-local"
+                          value={appointmentForm.scheduledAt}
+                          onChange={(event) => setAppointmentForm((form) => ({ ...form, scheduledAt: event.target.value }))}
+                          style={{
+                            border: '1px solid var(--color-border)',
+                            borderRadius: 8,
+                            background: 'var(--color-bg-secondary)',
+                            color: 'var(--color-text-primary)',
+                            padding: 10,
+                            fontFamily: 'var(--font-body)',
+                          }}
+                        />
+                        <input
+                          value={appointmentForm.assignedStaffName}
+                          onChange={(event) => setAppointmentForm((form) => ({ ...form, assignedStaffName: event.target.value }))}
+                          placeholder="Nhân viên phụ trách"
+                          style={{
+                            border: '1px solid var(--color-border)',
+                            borderRadius: 8,
+                            background: 'var(--color-bg-secondary)',
+                            color: 'var(--color-text-primary)',
+                            padding: 10,
+                            fontFamily: 'var(--font-body)',
+                          }}
+                        />
+                      </div>
+                      <input
+                        value={appointmentForm.location}
+                        onChange={(event) => setAppointmentForm((form) => ({ ...form, location: event.target.value }))}
+                        placeholder="Địa điểm ký hợp đồng"
+                        style={{
+                          border: '1px solid var(--color-border)',
+                          borderRadius: 8,
+                          background: 'var(--color-bg-secondary)',
+                          color: 'var(--color-text-primary)',
+                          padding: 10,
+                          fontFamily: 'var(--font-body)',
+                        }}
+                      />
+                      <textarea
+                        value={appointmentForm.note}
+                        onChange={(event) => setAppointmentForm((form) => ({ ...form, note: event.target.value }))}
+                        rows={2}
+                        placeholder="Ghi chú lịch hẹn"
+                        style={{
+                          border: '1px solid var(--color-border)',
+                          borderRadius: 8,
+                          background: 'var(--color-bg-secondary)',
+                          color: 'var(--color-text-primary)',
+                          padding: 10,
+                          fontFamily: 'var(--font-body)',
+                          resize: 'vertical',
+                        }}
+                      />
+                      <Button onClick={() => void createAppointment()} loading={appointmentLoading} disabled={!canScheduleAppointment}>
+                        Tạo lịch hẹn
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ) : null}
+
               <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                 <Button
                   variant="danger"
+                  style={{
+                    background: canDecide ? '#dc3545' : 'rgba(220,53,69,0.35)',
+                    color: '#fff',
+                    border: '1px solid #dc3545',
+                    minWidth: 110,
+                  }}
                   onClick={() => void decide('reject')}
                   loading={decisionLoading === 'reject'}
                   disabled={!canDecide || decisionLoading !== null}>
                   Từ chối
                 </Button>
                 <Button
+                  style={{
+                    background: canDecide ? 'var(--color-accent-teal)' : 'rgba(0,150,130,0.35)',
+                    color: '#0A1628',
+                    border: '1px solid var(--color-accent-teal)',
+                    minWidth: 110,
+                  }}
                   onClick={() => void decide('approve')}
                   loading={decisionLoading === 'approve'}
                   disabled={!canDecide || decisionLoading !== null}>

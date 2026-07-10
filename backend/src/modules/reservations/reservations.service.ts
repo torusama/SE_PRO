@@ -202,7 +202,7 @@ export class ReservationsService {
               COALESCE(ARRAY_AGG(p.plot_code ORDER BY p.plot_code)
                 FILTER (WHERE p.plot_id IS NOT NULL), '{}') AS "plotCodes",
               COUNT(rp.plot_id)::int AS "plotCount",
-              rr.created_at AS "createdAt"
+              rr.created_at AS "createdAt", rr.reviewed_at AS "reviewedAt"
        FROM reservation_requests rr
        LEFT JOIN request_plots rp ON rp.request_id = rr.request_id
        LEFT JOIN plots p ON p.plot_id = rp.plot_id
