@@ -1,10 +1,20 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { CreatePlotDto } from './dto/create-plot.dto';
-import { UpdatePlotDto, UpdatePlotStatusDto } from './dto/update-plot.dto';
+import {
+  LockPlotDto,
+  UpdatePlotDto,
+  UpdatePlotPriceDto,
+  UpdatePlotStatusDto,
+} from './dto/update-plot.dto';
 import { PlotsService } from './plots.service';
+
+interface AuthenticatedUser {
+  id: number;
+}
 
 @Controller()
 export class PlotsController {
@@ -44,6 +54,20 @@ export class PlotsController {
   @Roles('admin')
   async updateStatus(@Param('id') id: string, @Body() dto: UpdatePlotStatusDto) {
     return { success: true, message: 'Plot status updated', data: await this.plotsService.updateStatus(Number(id), dto.status) };
+  }
+
+  @Post('admin/plots/:id/lock')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  async lock(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string, @Body() dto: LockPlotDto) {
+    return { success: true, message: 'Plot locked', data: await this.plotsService.lock(Number(id), user.id, dto.reason) };
+  }
+
+  @Post('admin/plots/:id/unlock')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  async unlock(@Param('id') id: string) {
+    return { success: true, message: 'Plot unlocked', data: await this.plotsService.unlock(Number(id)) };
   }
 
   @Delete('admin/plots/:id')

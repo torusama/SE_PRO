@@ -12,7 +12,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { AiAgentModule } from './modules/ai-agent/ai-agent.module';
 import { UploadsModule } from './uploads/uploads.module';
-import { AppointmentsModule } from './appointments/appointments.module';
+import { ScheduleModule } from './modules/schedule/schedule.module';
 
 @Module({
   imports: [
@@ -28,7 +28,7 @@ import { AppointmentsModule } from './appointments/appointments.module';
     DashboardModule,
     AiAgentModule,
     UploadsModule,
-    AppointmentsModule,
+    ScheduleModule,
   ],
 })
 export class AppModule {}

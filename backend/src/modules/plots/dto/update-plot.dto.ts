@@ -42,3 +42,14 @@ export class UpdatePlotStatusDto {
   @IsIn(['available', 'pending', 'reserved', 'sold', 'locked'])
   status: string;
 }
+
+export class UpdatePlotPriceDto {
+  @IsNumber()
+  price: number;
+}
+
+export class LockPlotDto {
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
