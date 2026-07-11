@@ -1,48 +1,51 @@
-import { api } from './api'
+import { api } from "./api";
 
-export type Role = 'customer' | 'admin'
+export type Role = "customer" | "admin";
 
 export interface AuthUser {
-  id: string
-  name: string
-  initials: string
-  email: string
+  id: string;
+  name: string;
+  initials: string;
+  email: string;
 }
 
 export interface LoginPayload {
-  email: string
-  password: string
+  email: string;
+  password: string;
 }
 
 export interface RegisterPayload {
-  role: Role
-  firstName: string
-  lastName: string
-  email: string
-  password: string
+  role: Role;
+  firstName: string;
+  lastName: string;
+  email: string;
+  password: string;
 }
 
 export interface AuthResponse {
-  user: AuthUser
-  token: string
-  role: Role
+  user: AuthUser;
+  token: string;
+  role: Role;
+  // Hồ sơ đã đủ các trường bắt buộc (họ tên, SĐT, ngày sinh, giới tính, địa chỉ) chưa.
+  // Dùng để bắt buộc người dùng mới hoàn thiện hồ sơ trước khi vào các chức năng chính.
+  profileComplete: boolean;
 }
 
 function normalizeRole(raw: string): Role {
-  return raw?.toLowerCase() === 'admin' ? 'admin' : 'customer'
+  return raw?.toLowerCase() === "admin" ? "admin" : "customer";
 }
 
 function buildInitials(fullName: string) {
-  const parts = fullName.trim().split(/\s+/)
-  const first = parts[0]?.[0] ?? ''
-  const last = parts.length > 1 ? parts[parts.length - 1][0] : ''
-  return (first + last).toUpperCase() || 'KH'
+  const parts = fullName.trim().split(/\s+/);
+  const first = parts[0]?.[0] ?? "";
+  const last = parts.length > 1 ? parts[parts.length - 1][0] : "";
+  return (first + last).toUpperCase() || "KH";
 }
 
 function normalizeAuthResponse(raw: any): AuthResponse {
-  const payload = raw.data ?? raw
-  const user = payload.user
-  const fullName = user.fullName ?? user.full_name ?? user.name ?? ''
+  const payload = raw.data ?? raw;
+  const user = payload.user;
+  const fullName = user.fullName ?? user.full_name ?? user.name ?? "";
 
   return {
     token: payload.accessToken ?? payload.token,
@@ -53,22 +56,27 @@ function normalizeAuthResponse(raw: any): AuthResponse {
       initials: buildInitials(fullName),
       email: user.email,
     },
-  }
+    profileComplete: Boolean(user.isProfileComplete),
+  };
 }
 
-export async function loginRequest(payload: LoginPayload): Promise<AuthResponse> {
-  const { data } = await api.post('/auth/login', payload)
-  return normalizeAuthResponse(data)
+export async function loginRequest(
+  payload: LoginPayload,
+): Promise<AuthResponse> {
+  const { data } = await api.post("/auth/login", payload);
+  return normalizeAuthResponse(data);
 }
 
-export async function registerRequest(payload: RegisterPayload): Promise<AuthResponse> {
-  const fullName = `${payload.firstName} ${payload.lastName}`.trim()
+export async function registerRequest(
+  payload: RegisterPayload,
+): Promise<AuthResponse> {
+  const fullName = `${payload.firstName} ${payload.lastName}`.trim();
 
-  const { data } = await api.post('/auth/register', {
+  const { data } = await api.post("/auth/register", {
     fullName,
     email: payload.email,
     password: payload.password,
-  })
+  });
 
-  return normalizeAuthResponse(data)
+  return normalizeAuthResponse(data);
 }

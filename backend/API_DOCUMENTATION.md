@@ -11,42 +11,114 @@ All successful responses follow:
 Errors follow:
 
 ```json
-{ "success": false, "message": "Error message", "data": null, "error": "BAD_REQUEST" }
+{
+  "success": false,
+  "message": "Error message",
+  "data": null,
+  "error": "BAD_REQUEST"
+}
 ```
 
 Use `Authorization: Bearer <accessToken>` for protected endpoints.
 
 ## Auth
 
-| Method | Endpoint | Auth | Role | Body |
-| --- | --- | --- | --- | --- |
-| POST | `/auth/register` | No | - | `{ "fullName": "Nguyen Van A", "email": "user@example.com", "password": "123456", "phone": "0900000000" }` |
-| POST | `/auth/login` | No | - | `{ "email": "user@example.com", "password": "123456" }` |
-| GET | `/auth/me` | Yes | customer/admin | - |
-| POST | `/auth/logout` | No | - | - |
+| Method | Endpoint         | Auth | Role           | Body                                                                                                       |
+| ------ | ---------------- | ---- | -------------- | ---------------------------------------------------------------------------------------------------------- |
+| POST   | `/auth/register` | No   | -              | `{ "fullName": "Nguyen Van A", "email": "user@example.com", "password": "123456", "phone": "0900000000" }` |
+| POST   | `/auth/login`    | No   | -              | `{ "email": "user@example.com", "password": "123456" }`                                                    |
+| GET    | `/auth/me`       | Yes  | customer/admin | -                                                                                                          |
+| POST   | `/auth/logout`   | No   | -              | -                                                                                                          |
 
 ## Users
 
-| Method | Endpoint | Auth | Role |
-| --- | --- | --- | --- |
-| GET | `/users/me` | Yes | customer/admin |
-| GET | `/admin/users` | Yes | admin |
-| GET | `/admin/users/:id` | Yes | admin |
-| PATCH | `/admin/users/:id/status` | Yes | admin |
+| Method | Endpoint                  | Auth | Role           |
+| ------ | ------------------------- | ---- | -------------- |
+| GET    | `/users/me`               | Yes  | customer/admin |
+| GET    | `/users/me/stats`         | Yes  | customer/admin |
+| PATCH  | `/users/me`               | Yes  | customer/admin |
+| POST   | `/users/me/avatar`        | Yes  | customer/admin |
+| PATCH  | `/users/me/password`      | Yes  | customer/admin |
+| GET    | `/admin/users`            | Yes  | admin          |
+| GET    | `/admin/users/:id`        | Yes  | admin          |
+| PATCH  | `/admin/users/:id/status` | Yes  | admin          |
 
 Status body: `{ "isActive": true }`
 
+`GET /users/me/stats` — used by the profile page's stat row. Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "lots": 2,
+    "services": 14,
+    "years": 3,
+    "memberSince": "2023-03-10T00:00:00.000Z"
+  }
+}
+```
+
+### Update profile
+
+`PATCH /users/me`
+
+Body (all fields optional, only provided fields are updated):
+
+```json
+{
+  "fullName": "Nguyen Van Thanh",
+  "dateOfBirth": "1978-04-15",
+  "gender": "male",
+  "address": "142 Nguyen Trai, Q5, TP.HCM"
+}
+```
+
+`gender` must be one of `male`, `female`, `other`. Returns the updated user (same shape as `GET /users/me`).
+
+Note: `phone`/`email` are intentionally not editable here — changing them requires an OTP-verification
+flow that is planned for a later iteration. `idCardNumber` is also read-only once verified.
+
+### Upload avatar
+
+`POST /users/me/avatar` — `multipart/form-data` with a single field named `avatar` (JPG/PNG/WEBP, max 5MB).
+
+Response:
+
+```json
+{
+  "success": true,
+  "message": "Avatar updated",
+  "data": { "id": 12, "avatarUrl": "/uploads/avatars/avatar-169...-123.png" }
+}
+```
+
+The returned `avatarUrl` is a relative path served by the API's static file host, e.g.
+`http://localhost:3001/uploads/avatars/avatar-169...-123.png` (not under the `/api` prefix).
+
+### Change password
+
+`PATCH /users/me/password`
+
+Body:
+
+```json
+{ "currentPassword": "oldpass123", "newPassword": "newpass456" }
+```
+
+`newPassword` must be at least 8 characters. Returns `400 Bad Request` if `currentPassword` doesn't match.
+
 ## Plots
 
-| Method | Endpoint | Auth | Role |
-| --- | --- | --- | --- |
-| GET | `/plots` | No | - |
-| GET | `/plots/map` | No | - |
-| GET | `/plots/:id` | No | - |
-| POST | `/admin/plots` | Yes | admin |
-| PATCH | `/admin/plots/:id` | Yes | admin |
-| PATCH | `/admin/plots/:id/status` | Yes | admin |
-| DELETE | `/admin/plots/:id` | Yes | admin |
+| Method | Endpoint                  | Auth | Role  |
+| ------ | ------------------------- | ---- | ----- |
+| GET    | `/plots`                  | No   | -     |
+| GET    | `/plots/map`              | No   | -     |
+| GET    | `/plots/:id`              | No   | -     |
+| POST   | `/admin/plots`            | Yes  | admin |
+| PATCH  | `/admin/plots/:id`        | Yes  | admin |
+| PATCH  | `/admin/plots/:id/status` | Yes  | admin |
+| DELETE | `/admin/plots/:id`        | Yes  | admin |
 
 Map item sample:
 
@@ -69,18 +141,18 @@ Map item sample:
 
 ## Reservations
 
-| Method | Endpoint | Auth | Role |
-| --- | --- | --- | --- |
-| POST | `/reservations` | Yes | customer |
-| POST | `/reservations/multiple` | Yes | customer |
-| GET | `/my/reservations` | Yes | customer |
-| GET | `/my/reservations/:id` | Yes | customer |
-| POST | `/reservations/:id/submit` | Yes | customer |
-| POST | `/reservations/:id/cancel` | Yes | customer |
-| GET | `/admin/reservations` | Yes | admin |
-| GET | `/admin/reservations/:id` | Yes | admin |
-| PATCH | `/admin/reservations/:id/approve` | Yes | admin |
-| PATCH | `/admin/reservations/:id/reject` | Yes | admin |
+| Method | Endpoint                          | Auth | Role     |
+| ------ | --------------------------------- | ---- | -------- |
+| POST   | `/reservations`                   | Yes  | customer |
+| POST   | `/reservations/multiple`          | Yes  | customer |
+| GET    | `/my/reservations`                | Yes  | customer |
+| GET    | `/my/reservations/:id`            | Yes  | customer |
+| POST   | `/reservations/:id/submit`        | Yes  | customer |
+| POST   | `/reservations/:id/cancel`        | Yes  | customer |
+| GET    | `/admin/reservations`             | Yes  | admin    |
+| GET    | `/admin/reservations/:id`         | Yes  | admin    |
+| PATCH  | `/admin/reservations/:id/approve` | Yes  | admin    |
+| PATCH  | `/admin/reservations/:id/reject`  | Yes  | admin    |
 
 ### Create reservation
 
@@ -182,27 +254,34 @@ Only `pending` requests are valid for new decisions. Existing `submitted` record
 
 ## Contracts
 
-| Method | Endpoint | Auth | Role |
-| --- | --- | --- | --- |
-| GET | `/admin/contracts` | Yes | admin |
-| GET | `/admin/contracts/:id` | Yes | admin |
-| POST | `/admin/contracts/from-reservation/:reservationId` | Yes | admin |
-| PATCH | `/admin/contracts/:id/status` | Yes | admin |
-| POST | `/admin/contracts/:id/payments` | Yes | admin |
-| GET | `/my/contracts` | Yes | customer/admin |
-| GET | `/my/contracts/:id` | Yes | customer/admin |
+| Method | Endpoint                                           | Auth | Role           |
+| ------ | -------------------------------------------------- | ---- | -------------- |
+| GET    | `/admin/contracts`                                 | Yes  | admin          |
+| GET    | `/admin/contracts/:id`                             | Yes  | admin          |
+| POST   | `/admin/contracts/from-reservation/:reservationId` | Yes  | admin          |
+| PATCH  | `/admin/contracts/:id/status`                      | Yes  | admin          |
+| POST   | `/admin/contracts/:id/payments`                    | Yes  | admin          |
+| GET    | `/my/contracts`                                    | Yes  | customer/admin |
+| GET    | `/my/contracts/:id`                                | Yes  | customer/admin |
 
 Payment body: `{ "amount": 1000000, "paymentMethod": "cash", "referenceCode": "ABC", "note": "Deposit" }`
 
+`GET /my/contracts` and `GET /my/contracts/:id` now also return plot/zone context used by the
+customer profile page ("Lô đất của tôi" tab): `plotId`, `areaSqm`, `direction`, `plotType`,
+`zoneName`, `zoneCode`, `remainingAmount` (`totalAmount - paidAmount`), `effectiveDate`,
+`expiryDate`, `deceasedName`/`burialDate` (from the current ownership record, if any). The single
+contract endpoint (`GET /my/contracts/:id`) additionally returns a `payments` array with each
+payment transaction (`id, amount, paymentMethod, paymentDate, referenceCode, note`).
+
 ## Offline Appointments
 
-| Method | Endpoint | Auth | Role |
-| --- | --- | --- | --- |
-| POST | `/admin/appointments` | Yes | admin |
-| GET | `/my/appointments` | Yes | customer |
-| GET | `/admin/appointments` | Yes | admin |
-| PATCH | `/admin/appointments/:id` | Yes | admin |
-| PATCH | `/admin/appointments/:id/status` | Yes | admin |
+| Method | Endpoint                         | Auth | Role     |
+| ------ | -------------------------------- | ---- | -------- |
+| POST   | `/admin/appointments`            | Yes  | admin    |
+| GET    | `/my/appointments`               | Yes  | customer |
+| GET    | `/admin/appointments`            | Yes  | admin    |
+| PATCH  | `/admin/appointments/:id`        | Yes  | admin    |
+| PATCH  | `/admin/appointments/:id/status` | Yes  | admin    |
 
 ### Create appointment
 
@@ -268,27 +347,27 @@ Common errors:
 
 ## Cemetery Services
 
-| Method | Endpoint | Auth | Role |
-| --- | --- | --- | --- |
-| GET | `/service-types` | No | - |
-| POST | `/service-orders` | Yes | customer/admin |
-| GET | `/my/service-orders` | Yes | customer/admin |
-| GET | `/my/service-orders/:id` | Yes | customer/admin |
-| GET | `/admin/service-orders` | Yes | admin |
-| GET | `/admin/service-orders/:id` | Yes | admin |
-| PATCH | `/admin/service-orders/:id/status` | Yes | admin |
-| POST | `/admin/service-orders/:id/completion` | Yes | admin |
+| Method | Endpoint                               | Auth | Role           |
+| ------ | -------------------------------------- | ---- | -------------- |
+| GET    | `/service-types`                       | No   | -              |
+| POST   | `/service-orders`                      | Yes  | customer/admin |
+| GET    | `/my/service-orders`                   | Yes  | customer/admin |
+| GET    | `/my/service-orders/:id`               | Yes  | customer/admin |
+| GET    | `/admin/service-orders`                | Yes  | admin          |
+| GET    | `/admin/service-orders/:id`            | Yes  | admin          |
+| PATCH  | `/admin/service-orders/:id/status`     | Yes  | admin          |
+| POST   | `/admin/service-orders/:id/completion` | Yes  | admin          |
 
 Create body: `{ "serviceTypeId": 1, "plotId": 1, "requestedDate": "2026-07-05", "note": "Don dep va thay hoa" }`
 
 ## Notifications
 
-| Method | Endpoint | Auth | Role |
-| --- | --- | --- | --- |
-| GET | `/notifications` | Yes | customer/admin |
-| GET | `/notifications/unread-count` | Yes | customer/admin |
-| PATCH | `/notifications/:id/read` | Yes | customer/admin |
-| PATCH | `/notifications/read-all` | Yes | customer/admin |
+| Method | Endpoint                      | Auth | Role           |
+| ------ | ----------------------------- | ---- | -------------- |
+| GET    | `/notifications`              | Yes  | customer/admin |
+| GET    | `/notifications/unread-count` | Yes  | customer/admin |
+| PATCH  | `/notifications/:id/read`     | Yes  | customer/admin |
+| PATCH  | `/notifications/read-all`     | Yes  | customer/admin |
 
 Appointment notification types:
 
@@ -300,25 +379,25 @@ Appointment notification types:
 
 All dashboard endpoints require admin auth.
 
-| Method | Endpoint |
-| --- | --- |
-| GET | `/admin/dashboard/summary` |
-| GET | `/admin/dashboard/plots` |
-| GET | `/admin/dashboard/revenue` |
-| GET | `/admin/dashboard/services` |
+| Method | Endpoint                    |
+| ------ | --------------------------- |
+| GET    | `/admin/dashboard/summary`  |
+| GET    | `/admin/dashboard/plots`    |
+| GET    | `/admin/dashboard/revenue`  |
+| GET    | `/admin/dashboard/services` |
 
 ## AI Agent Prototype
 
-| Method | Endpoint | Auth |
-| --- | --- | --- |
-| POST | `/ai-agent/recommend` | No |
-| POST | `/ai-agent/create-draft-reservation` | Yes |
+| Method | Endpoint                             | Auth |
+| ------ | ------------------------------------ | ---- |
+| POST   | `/ai-agent/recommend`                | No   |
+| POST   | `/ai-agent/create-draft-reservation` | Yes  |
 
 Recommend body: `{ "budget": 50000000, "numberOfPlots": 2, "preferredZone": "Khu A", "preferredDirection": "east" }`
 
 ## Upload Placeholders
 
-| Method | Endpoint | Auth |
-| --- | --- | --- |
-| POST | `/uploads/image` | Yes |
-| POST | `/uploads/document` | Yes |
+| Method | Endpoint            | Auth |
+| ------ | ------------------- | ---- |
+| POST   | `/uploads/image`    | Yes  |
+| POST   | `/uploads/document` | Yes  |

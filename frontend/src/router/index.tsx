@@ -1,41 +1,42 @@
 // src/router/index.tsx
-import { createBrowserRouter, RouterProvider } from 'react-router-dom'
-import { ROUTES } from '@/constants/routes'
+import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import { ROUTES } from "@/constants/routes";
 
-import CustomerLayout from '@/components/layout/customer/CustomerLayout'
-import AdminLayout    from '@/components/layout/admin/AdminLayout'
-import RequireAuth     from '@/components/auth/RequireAuth'
-import RequireAdmin    from '@/components/auth/RequireAdmin'
+import CustomerLayout from "@/components/layout/customer/CustomerLayout";
+import AdminLayout from "@/components/layout/admin/AdminLayout";
+import RequireAuth from "@/components/auth/RequireAuth";
+import RequireAdmin from "@/components/auth/RequireAdmin";
+import RequireCompleteProfile from "@/components/auth/RequireCompleteProfile";
 
 // Customer pages
-import HomePage         from '@/pages/customer/home/HomePage'
-import MapPage          from '@/pages/customer/map/MapPage'
-import LotDetailPage    from '@/pages/customer/lot-detail/LotDetailPage'
-import BookingPage      from '@/pages/customer/booking/BookingPage'
-import PaymentPage      from '@/pages/customer/payment/PaymentPage'
-import ProfilePage      from '@/pages/customer/profile/ProfilePage'
-import ServicePage      from '@/pages/customer/service/ServicePage'
-import MyLotsPage       from '@/pages/customer/my-lots/MyLotsPage'
-import NotificationPage from '@/pages/customer/notification/NotificationPage'
+import HomePage from "@/pages/customer/home/HomePage";
+import MapPage from "@/pages/customer/map/MapPage";
+import LotDetailPage from "@/pages/customer/lot-detail/LotDetailPage";
+import BookingPage from "@/pages/customer/booking/BookingPage";
+import PaymentPage from "@/pages/customer/payment/PaymentPage";
+import ProfilePage from "@/pages/customer/profile/ProfilePage";
+import ServicePage from "@/pages/customer/service/ServicePage";
+import MyLotsPage from "@/pages/customer/my-lots/MyLotsPage";
+import NotificationPage from "@/pages/customer/notification/NotificationPage";
 
 // Admin pages
-import DashboardPage    from '@/pages/admin/dashboard/DashboardPage'
-import LotManagementPage from '@/pages/admin/lot-management/LotManagementPage'
-import RequestsPage     from '@/pages/admin/requests/RequestsPage'
-import ActivityPage     from '@/pages/admin/activity/ActivityPage'
-import MapManagementPage from '@/pages/admin/map-management/MapManagementPage'
-import ContractsPage    from '@/pages/admin/contracts/ContractsPage'
-import ServiceManagementPage from '@/pages/admin/service-management/ServiceManagementPage'
-import NotificationManagementPage from '@/pages/admin/notification-management/NotificationManagementPage'
-import TransferPage     from '@/pages/admin/transfer/TransferPage'
+import DashboardPage from "@/pages/admin/dashboard/DashboardPage";
+import LotManagementPage from "@/pages/admin/lot-management/LotManagementPage";
+import RequestsPage from "@/pages/admin/requests/RequestsPage";
+import ActivityPage from "@/pages/admin/activity/ActivityPage";
+import MapManagementPage from "@/pages/admin/map-management/MapManagementPage";
+import ContractsPage from "@/pages/admin/contracts/ContractsPage";
+import ServiceManagementPage from "@/pages/admin/service-management/ServiceManagementPage";
+import NotificationManagementPage from "@/pages/admin/notification-management/NotificationManagementPage";
+import TransferPage from "@/pages/admin/transfer/TransferPage";
 
 // Auth
-import LoginPage    from '@/pages/auth/LoginPage'
-import RegisterPage from '@/pages/auth/RegisterPage'
+import LoginPage from "@/pages/auth/LoginPage";
+import RegisterPage from "@/pages/auth/RegisterPage";
 
 const router = createBrowserRouter([
   // === Auth (không có layout) ===
-  { path: ROUTES.LOGIN,    element: <LoginPage /> },
+  { path: ROUTES.LOGIN, element: <LoginPage /> },
   { path: ROUTES.REGISTER, element: <RegisterPage /> },
 
   // === Trang chủ — KHÔNG bọc CustomerLayout vì HomePage đã tự có
@@ -48,19 +49,26 @@ const router = createBrowserRouter([
     element: <CustomerLayout />,
     children: [
       // --- Công khai: ai cũng xem được, không cần đăng nhập ---
-      { path: ROUTES.MAP,        element: <MapPage /> },
+      { path: ROUTES.MAP, element: <MapPage /> },
       { path: ROUTES.LOT_DETAIL, element: <LotDetailPage /> },
-      { path: ROUTES.SERVICES,   element: <ServicePage /> },
+      { path: ROUTES.SERVICES, element: <ServicePage /> },
 
       // --- Cần đăng nhập (FR-01: chặn người chưa đăng nhập) ---
       {
         element: <RequireAuth />,
         children: [
-          { path: ROUTES.BOOKING,      element: <BookingPage /> },
-          { path: ROUTES.PAYMENT,      element: <PaymentPage /> },
-          { path: ROUTES.MY_LOTS,      element: <MyLotsPage /> },
-          { path: ROUTES.PROFILE,      element: <ProfilePage /> },
-          { path: ROUTES.NOTIFICATION, element: <NotificationPage /> },
+          // Trang Hồ sơ KHÔNG bị chặn bởi RequireCompleteProfile (nếu không sẽ
+          // tạo vòng lặp redirect cho chính người dùng cần vào đây để hoàn thiện hồ sơ).
+          { path: ROUTES.PROFILE, element: <ProfilePage /> },
+          {
+            element: <RequireCompleteProfile />,
+            children: [
+              { path: ROUTES.BOOKING, element: <BookingPage /> },
+              { path: ROUTES.PAYMENT, element: <PaymentPage /> },
+              { path: ROUTES.MY_LOTS, element: <MyLotsPage /> },
+              { path: ROUTES.NOTIFICATION, element: <NotificationPage /> },
+            ],
+          },
         ],
       },
     ],
@@ -68,27 +76,27 @@ const router = createBrowserRouter([
 
   // === Admin routes (chỉ role = admin, FR-01: chặn người không có quyền) ===
   {
-    path: '/admin',
+    path: "/admin",
     element: <RequireAdmin />,
     children: [
       {
         element: <AdminLayout />,
         children: [
-          { index: true,          element: <DashboardPage /> },
-          { path: 'lo-dat',       element: <LotManagementPage /> },
-          { path: 'yeu-cau',      element: <RequestsPage /> },
-          { path: 'hoat-dong',    element: <ActivityPage /> },
-          { path: 'ban-do',       element: <MapManagementPage /> },
-          { path: 'hop-dong',     element: <ContractsPage /> },
-          { path: 'dich-vu',      element: <ServiceManagementPage /> },
-          { path: 'thong-bao',    element: <NotificationManagementPage /> },
-          { path: 'chuyen-nhuong',element: <TransferPage /> },
+          { index: true, element: <DashboardPage /> },
+          { path: "lo-dat", element: <LotManagementPage /> },
+          { path: "yeu-cau", element: <RequestsPage /> },
+          { path: "hoat-dong", element: <ActivityPage /> },
+          { path: "ban-do", element: <MapManagementPage /> },
+          { path: "hop-dong", element: <ContractsPage /> },
+          { path: "dich-vu", element: <ServiceManagementPage /> },
+          { path: "thong-bao", element: <NotificationManagementPage /> },
+          { path: "chuyen-nhuong", element: <TransferPage /> },
         ],
       },
     ],
   },
-])
+]);
 
 export default function AppRouter() {
-  return <RouterProvider router={router} />
+  return <RouterProvider router={router} />;
 }

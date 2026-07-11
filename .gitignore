@@ -15,6 +15,9 @@ vinh-hang-frontend/.env
 vinh-hang-frontend/.env.*
 !vinh-hang-frontend/.env.example
 
+# Local uploads (avatars, etc.)
+backend/uploads/
+
 # Build outputs
 dist/
 build/
