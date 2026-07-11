@@ -19,7 +19,9 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { UpdateIdCardDto } from './dto/update-id-card.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { VerifyPasswordDto } from './dto/verify-password.dto';
 import { UsersService } from './users.service';
 
 interface AuthUser {
@@ -126,6 +128,36 @@ export class UsersController {
         user.id,
         dto.currentPassword,
         dto.newPassword,
+      ),
+    };
+  }
+
+  // CCCD/Hộ chiếu là dữ liệu nhạy cảm: GET /users/me chỉ trả bản che số.
+  // Muốn xem/sửa số đầy đủ, người dùng phải nhập lại mật khẩu đăng nhập ở đây,
+  // dù JWT vẫn còn hiệu lực.
+  @Post('users/me/id-card/reveal')
+  async revealIdCard(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: VerifyPasswordDto,
+  ) {
+    return {
+      success: true,
+      data: await this.usersService.revealIdCard(user.id, dto.password),
+    };
+  }
+
+  @Patch('users/me/id-card')
+  async updateIdCard(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: UpdateIdCardDto,
+  ) {
+    return {
+      success: true,
+      message: 'ID card updated',
+      data: await this.usersService.updateIdCard(
+        user.id,
+        dto.password,
+        dto.idCardNumber,
       ),
     };
   }

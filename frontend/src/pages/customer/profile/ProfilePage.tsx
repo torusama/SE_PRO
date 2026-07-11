@@ -35,7 +35,8 @@ type ModalId =
   | "avatar"
   | "password"
   | "email"
-  | "phone";
+  | "phone"
+  | "idcard-password";
 
 // --- Kiểu dữ liệu khớp với response của backend (xem UsersService / ContractsService) ---
 interface BackendUser {
@@ -131,6 +132,34 @@ function getErrorMessage(error: unknown, fallback: string): string {
   return fallback;
 }
 
+// Quốc tịch: chọn từ danh sách cố định thay vì gõ tự do (tránh sai chính tả/không
+// đồng nhất dữ liệu). Việt Nam để đầu vì phần lớn khách hàng của hệ thống ở VN.
+const COUNTRIES = [
+  "Việt Nam",
+  "Hoa Kỳ",
+  "Canada",
+  "Úc",
+  "Anh",
+  "Pháp",
+  "Đức",
+  "Nhật Bản",
+  "Hàn Quốc",
+  "Trung Quốc",
+  "Đài Loan",
+  "Singapore",
+  "Thái Lan",
+  "Lào",
+  "Campuchia",
+  "Malaysia",
+  "Indonesia",
+  "Philippines",
+  "Ấn Độ",
+  "Nga",
+  "Khác",
+];
+
+const RELATIONS = ["Vợ / Chồng", "Con", "Cha / Mẹ", "Anh / Em", "Khác"];
+
 export default function ProfilePage() {
   const user = useAuthStore((s) => s.user);
   const setAuth = useAuthStore((s) => s.setAuth);
@@ -153,12 +182,26 @@ export default function ProfilePage() {
   // Form state cho tab "Thông tin cá nhân" — TẤT CẢ đều rỗng cho đến khi
   // applyProfile() nạp dữ liệu thật từ GET /users/me. Không còn giá trị mẫu.
   const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
   const [dob, setDob] = useState("");
   const [gender, setGender] = useState("male");
   const [address, setAddress] = useState("");
   const [nationality, setNationality] = useState("");
   const [city, setCity] = useState("");
   const [postalCode, setPostalCode] = useState("");
+
+  // true sau khi người dùng bấm "Lưu thay đổi" ở tab Thông tin cá nhân ít nhất
+  // một lần — dùng để quyết định có tô đỏ các trường bắt buộc còn trống hay không
+  // (không tô đỏ ngay từ đầu để tránh gây khó chịu khi vừa mở trang).
+  const [attemptedSaveInfo, setAttemptedSaveInfo] = useState(false);
+
+  // --- CCCD / Hộ chiếu: dữ liệu nhạy cảm, yêu cầu nhập lại mật khẩu đăng nhập
+  // để mở quyền xem/sửa (dù đang đăng nhập). idCardPasswordRef lưu tạm mật khẩu
+  // trong bộ nhớ (không persist) để dùng lại khi bấm Lưu, tránh phải hỏi 2 lần.
+  const [idCardUnlocked, setIdCardUnlocked] = useState(false);
+  const [idCardValue, setIdCardValue] = useState("");
+  const [idCardSaving, setIdCardSaving] = useState(false);
+  const idCardPasswordRef = useRef<string | null>(null);
 
   const [emergencyContact, setEmergencyContact] = useState({
     name: "",
@@ -197,6 +240,7 @@ export default function ProfilePage() {
   function applyProfile(data: BackendUser) {
     setProfile(data);
     setFullName(data.fullName ?? "");
+    setPhone(data.phone ?? "");
     setDob(data.dateOfBirth ? data.dateOfBirth.slice(0, 10) : "");
     setGender(data.gender ?? "male");
     setAddress(data.address ?? "");
@@ -299,17 +343,41 @@ export default function ProfilePage() {
     if (tab === "lots") setActiveLot(null);
   }
 
+  // Các trường bắt buộc hiển thị dấu * đỏ trên UI tab "Thông tin cá nhân"
+  // (khớp với REQUIRED_PROFILE_FIELDS ở backend + yêu cầu bổ sung: liên hệ khẩn cấp).
+  function getMissingInfoFields() {
+    const missing: string[] = [];
+    if (!fullName.trim()) missing.push("fullName");
+    if (!phone.trim()) missing.push("phone");
+    if (!dob.trim()) missing.push("dob");
+    if (!address.trim()) missing.push("address");
+    if (!emergencyContact.name.trim()) missing.push("emergencyName");
+    if (!emergencyContact.phone.trim()) missing.push("emergencyPhone");
+    return missing;
+  }
+
   async function handleSaveInfo() {
+    setAttemptedSaveInfo(true);
+    if (getMissingInfoFields().length > 0) {
+      showToast("Vui lòng điền đầy đủ các trường có dấu *.");
+      return;
+    }
     setSaving(true);
     try {
       const res = await api.patch("/users/me", {
         fullName,
+        phone,
         dateOfBirth: dob || undefined,
         gender,
         address,
         nationality: nationality || undefined,
         city: city || undefined,
         postalCode: postalCode || undefined,
+        emergencyContactName: emergencyContact.name,
+        emergencyContactRelation: emergencyContact.relation || undefined,
+        emergencyContactPhone: emergencyContact.phone,
+        emergencyContactEmail: emergencyContact.email || undefined,
+        notes: notes || undefined,
       });
       applyProfile(res.data.data);
       if (user && token && role) {
@@ -328,15 +396,56 @@ export default function ProfilePage() {
     }
   }
 
+  async function handleUnlockIdCard(password: string) {
+    try {
+      const res = await api.post("/users/me/id-card/reveal", { password });
+      idCardPasswordRef.current = password;
+      setIdCardValue(res.data.data.idCardNumber ?? "");
+      setIdCardUnlocked(true);
+      setOpenModal(null);
+      showToast("✓ Đã mở khoá số CCCD/Hộ chiếu");
+    } catch (error: unknown) {
+      throw new Error(getErrorMessage(error, "Mật khẩu không đúng."), {
+        cause: error,
+      });
+    }
+  }
+
+  function handleLockIdCard() {
+    setIdCardUnlocked(false);
+    setIdCardValue("");
+    idCardPasswordRef.current = null;
+  }
+
+  async function handleSaveIdCard() {
+    if (!idCardPasswordRef.current) {
+      setOpenModal("idcard-password");
+      return;
+    }
+    setIdCardSaving(true);
+    try {
+      const res = await api.patch("/users/me/id-card", {
+        password: idCardPasswordRef.current,
+        idCardNumber: idCardValue,
+      });
+      const saved = res.data.data.idCardNumber ?? "";
+      setIdCardValue(saved);
+      setProfile((prev) => (prev ? { ...prev, idCardNumber: saved } : prev));
+      showToast("✓ Đã lưu số CCCD/Hộ chiếu");
+    } catch (error: unknown) {
+      // Nếu mật khẩu đã cache không còn đúng (vd. vừa đổi mật khẩu ở tab khác),
+      // khoá lại và yêu cầu xác thực lại thay vì báo lỗi mơ hồ.
+      handleLockIdCard();
+      showToast(getErrorMessage(error, "Lưu số CCCD/Hộ chiếu thất bại."));
+    } finally {
+      setIdCardSaving(false);
+    }
+  }
+
   async function handleSaveContact() {
     setSaving(true);
     try {
       const res = await api.patch("/users/me", {
-        emergencyContactName: emergencyContact.name || undefined,
-        emergencyContactRelation: emergencyContact.relation || undefined,
-        emergencyContactPhone: emergencyContact.phone || undefined,
-        emergencyContactEmail: emergencyContact.email || undefined,
-        notes: notes || undefined,
         notifyPayment,
         notifyService,
         notifyAnniversary,
@@ -395,18 +504,9 @@ export default function ProfilePage() {
       </div>
 
       {profile && !profile.isProfileComplete && (
-        <div
-          className="panel"
-          style={{
-            margin: "0 auto 16px",
-            maxWidth: 1100,
-            border: "1px solid rgba(201,168,76,0.4)",
-            background: "rgba(201,168,76,0.08)",
-          }}
-        >
-          ⚠ Hồ sơ của bạn chưa đầy đủ. Vui lòng điền Họ và tên, Số điện thoại,
-          Ngày sinh, Giới tính và Địa chỉ ở tab &quot;{T.navInfo}&quot; rồi bấm
-          Lưu để có thể sử dụng đầy đủ các chức năng của hệ thống.
+        <div className="incomplete-hint">
+          Một số trường có dấu <span className="required-mark">*</span> ở tab
+          &quot;{T.navInfo}&quot; vẫn chưa được điền.
         </div>
       )}
 
@@ -536,23 +636,55 @@ export default function ProfilePage() {
                 <div className="panel-title">Thông tin cơ bản</div>
                 <div className="form-grid">
                   <div className="field">
-                    <label>Họ và tên</label>
+                    <label>
+                      Họ và tên<span className="required-mark">*</span>
+                    </label>
                     <input
                       type="text"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
+                      className={
+                        attemptedSaveInfo && !fullName.trim()
+                          ? "field-invalid"
+                          : undefined
+                      }
                     />
                   </div>
                   <div className="field">
-                    <label>Ngày sinh</label>
+                    <label>
+                      Số điện thoại<span className="required-mark">*</span>
+                    </label>
+                    <input
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="09xx xxx xxx"
+                      className={
+                        attemptedSaveInfo && !phone.trim()
+                          ? "field-invalid"
+                          : undefined
+                      }
+                    />
+                  </div>
+                  <div className="field">
+                    <label>
+                      Ngày sinh<span className="required-mark">*</span>
+                    </label>
                     <input
                       type="date"
                       value={dob}
                       onChange={(e) => setDob(e.target.value)}
+                      className={
+                        attemptedSaveInfo && !dob.trim()
+                          ? "field-invalid"
+                          : undefined
+                      }
                     />
                   </div>
                   <div className="field">
-                    <label>Giới tính</label>
+                    <label>
+                      Giới tính<span className="required-mark">*</span>
+                    </label>
                     <select
                       value={gender}
                       onChange={(e) => setGender(e.target.value)}
@@ -564,32 +696,83 @@ export default function ProfilePage() {
                   </div>
                   <div className="field">
                     <label>Quốc tịch</label>
-                    <input
-                      type="text"
+                    <select
                       value={nationality}
                       onChange={(e) => setNationality(e.target.value)}
-                    />
+                    >
+                      <option value="">— Chọn quốc tịch —</option>
+                      {COUNTRIES.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div className="field form-full field-verified">
                     <label>Số CCCD / Hộ chiếu</label>
-                    <input
-                      type="text"
-                      value={profile?.idCardNumber ?? ""}
-                      readOnly
-                      disabled
-                    />
-                    <span className="verify-badge">
-                      {profile?.idCardNumber
-                        ? "✓ Đã xác thực"
-                        : "Chưa cập nhật"}
+                    <div className="id-card-row">
+                      <input
+                        type="text"
+                        value={
+                          idCardUnlocked
+                            ? idCardValue
+                            : (profile?.idCardNumber ?? "")
+                        }
+                        onChange={(e) =>
+                          idCardUnlocked && setIdCardValue(e.target.value)
+                        }
+                        readOnly={!idCardUnlocked}
+                        disabled={!idCardUnlocked}
+                        placeholder={
+                          idCardUnlocked ? "9 hoặc 12 chữ số" : undefined
+                        }
+                      />
+                      {idCardUnlocked ? (
+                        <>
+                          <button
+                            type="button"
+                            className="id-card-btn"
+                            onClick={handleSaveIdCard}
+                            disabled={idCardSaving}
+                          >
+                            {idCardSaving ? "Đang lưu…" : "💾 Lưu"}
+                          </button>
+                          <button
+                            type="button"
+                            className="id-card-btn ghost"
+                            onClick={handleLockIdCard}
+                          >
+                            🔒 Khoá lại
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          className="id-card-btn"
+                          onClick={() => setOpenModal("idcard-password")}
+                        >
+                          🔒 Xác thực để xem/sửa
+                        </button>
+                      )}
+                    </div>
+                    <span className="field-note">
+                      Vì đây là dữ liệu nhạy cảm, bạn cần nhập lại mật khẩu đăng
+                      nhập mỗi lần muốn xem hoặc chỉnh sửa số đầy đủ.
                     </span>
                   </div>
                   <div className="field form-full">
-                    <label>Địa chỉ thường trú</label>
+                    <label>
+                      Địa chỉ thường trú<span className="required-mark">*</span>
+                    </label>
                     <input
                       type="text"
                       value={address}
                       onChange={(e) => setAddress(e.target.value)}
+                      className={
+                        attemptedSaveInfo && !address.trim()
+                          ? "field-invalid"
+                          : undefined
+                      }
                     />
                   </div>
                   <div className="field">
@@ -598,6 +781,7 @@ export default function ProfilePage() {
                       value={city}
                       onChange={(e) => setCity(e.target.value)}
                     >
+                      <option value="">— Chọn tỉnh/thành —</option>
                       <option>TP. Hồ Chí Minh</option>
                       <option>Hà Nội</option>
                       <option>Đà Nẵng</option>
@@ -619,7 +803,9 @@ export default function ProfilePage() {
               <div className="panel-title">Thông tin liên hệ khẩn cấp</div>
               <div className="form-grid">
                 <div className="field">
-                  <label>Tên người liên hệ</label>
+                  <label>
+                    Tên người liên hệ<span className="required-mark">*</span>
+                  </label>
                   <input
                     type="text"
                     value={emergencyContact.name}
@@ -628,6 +814,11 @@ export default function ProfilePage() {
                         ...v,
                         name: e.target.value,
                       }))
+                    }
+                    className={
+                      attemptedSaveInfo && !emergencyContact.name.trim()
+                        ? "field-invalid"
+                        : undefined
                     }
                   />
                 </div>
@@ -642,14 +833,15 @@ export default function ProfilePage() {
                       }))
                     }
                   >
-                    <option>Vợ / Chồng</option>
-                    <option>Con</option>
-                    <option>Anh / Em</option>
-                    <option>Khác</option>
+                    {RELATIONS.map((r) => (
+                      <option key={r}>{r}</option>
+                    ))}
                   </select>
                 </div>
                 <div className="field">
-                  <label>Số điện thoại</label>
+                  <label>
+                    Số điện thoại<span className="required-mark">*</span>
+                  </label>
                   <input
                     type="tel"
                     value={emergencyContact.phone}
@@ -658,6 +850,11 @@ export default function ProfilePage() {
                         ...v,
                         phone: e.target.value,
                       }))
+                    }
+                    className={
+                      attemptedSaveInfo && !emergencyContact.phone.trim()
+                        ? "field-invalid"
+                        : undefined
                     }
                   />
                 </div>
@@ -746,7 +943,11 @@ export default function ProfilePage() {
                   </span>
                   <button
                     className="btn-mini"
-                    onClick={() => showToast("Mở liên kết Zalo")}
+                    onClick={() =>
+                      showToast(
+                        "Liên kết Zalo cần đăng ký ứng dụng OAuth với Zalo for Developers (App ID/Secret) — backend chưa được cấu hình nên tạm thời chưa khả dụng.",
+                      )
+                    }
                   >
                     Liên kết
                   </button>
@@ -1283,6 +1484,13 @@ export default function ProfilePage() {
               );
             }
           }}
+        />
+      )}
+
+      {openModal === "idcard-password" && (
+        <IdCardPasswordModal
+          onClose={() => setOpenModal(null)}
+          onSubmit={handleUnlockIdCard}
         />
       )}
 
@@ -1871,6 +2079,81 @@ function PasswordModal({
           disabled={submitting}
         >
           {submitting ? "Đang xử lý…" : "Đổi mật khẩu →"}
+        </button>
+      </div>
+    </ModalShell>
+  );
+}
+
+function IdCardPasswordModal({
+  onClose,
+  onSubmit,
+}: {
+  onClose: () => void;
+  onSubmit: (password: string) => Promise<void>;
+}) {
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit() {
+    if (!password) {
+      setError("Vui lòng nhập mật khẩu.");
+      return;
+    }
+    setError(null);
+    setSubmitting(true);
+    try {
+      await onSubmit(password);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Mật khẩu không đúng.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <ModalShell
+      title="Xác Thực Danh Tính"
+      sub="Nhập lại mật khẩu đăng nhập để xem/chỉnh sửa số CCCD/Hộ chiếu"
+      onClose={onClose}
+    >
+      {error && (
+        <div
+          className="modal-warn"
+          style={{
+            color: "rgba(224,92,92,0.85)",
+            borderColor: "rgba(224,92,92,0.25)",
+            background: "rgba(224,92,92,0.07)",
+          }}
+        >
+          ⚠ {error}
+        </div>
+      )}
+
+      <div className="modal-section">
+        <div className="modal-field">
+          <label>Mật khẩu đăng nhập</label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="••••••••"
+            onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+          />
+        </div>
+      </div>
+
+      <div className="modal-btn-row">
+        <button className="modal-btn-ghost" onClick={onClose}>
+          Hủy
+        </button>
+        <button
+          className="modal-btn-primary"
+          onClick={handleSubmit}
+          disabled={submitting}
+        >
+          {submitting ? "Đang xác thực…" : "Xác nhận →"}
         </button>
       </div>
     </ModalShell>
