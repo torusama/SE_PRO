@@ -9,8 +9,9 @@ import {
 const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)(:[0-5]\d)?$/;
 
 export class BookAppointmentDto {
+  @IsOptional()
   @IsInt()
-  hostUserId: number;
+  hostUserId?: number;
 
   // Optional: if booking directly off a published slot
   @IsOptional()

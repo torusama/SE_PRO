@@ -676,6 +676,18 @@ export default function HomePage() {
               <div className="feature-name">Hợp đồng & Dashboard</div>
               <div className="feature-desc">Quản lý hợp đồng điện tử, hồ sơ sở hữu và dashboard thống kê doanh thu toàn diện.</div>
             </div>
+            <div className="feature-card feature-card-action">
+              <div className="feature-num">HẸN GẶP TRỰC TIẾP</div>
+              <div className="feature-name">Đặt lịch hẹn</div>
+              <div className="feature-desc">Chọn lịch rảnh và gửi yêu cầu hẹn gặp ban quản lý để trao đổi trực tiếp.</div>
+              <button
+                type="button"
+                className="feature-action-btn"
+                onClick={() => navigate(ROUTES.APPOINTMENTS)}
+              >
+                Đặt lịch ngay →
+              </button>
+            </div>
           </div>
         </section>
       </div>

@@ -27,6 +27,7 @@ const MENU: MenuGroup[] = [
     { label: 'Quản lý dịch vụ',   to: ROUTES.ADMIN_SERVICES, badge: 4 },
     { label: 'Thông báo',         to: ROUTES.ADMIN_NOTIFY },
     { label: 'Chuyển nhượng',     to: ROUTES.ADMIN_TRANSFER },
+    { label: 'Phê duyệt lịch hẹn', to: ROUTES.ADMIN_APPOINTMENTS },
   ]},
 ]
 

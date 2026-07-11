@@ -18,6 +18,8 @@ import ProfilePage from "@/pages/customer/profile/ProfilePage";
 import ServicePage from "@/pages/customer/service/ServicePage";
 import MyLotsPage from "@/pages/customer/my-lots/MyLotsPage";
 import NotificationPage from "@/pages/customer/notification/NotificationPage";
+import AvailabilityPage from "@/pages/customer/availability/AvailabilityPage";
+import AppointmentsPage from "@/pages/customer/appointments/AppointmentsPage";
 
 // Admin pages
 import DashboardPage from "@/pages/admin/dashboard/DashboardPage";
@@ -29,6 +31,7 @@ import ContractsPage from "@/pages/admin/contracts/ContractsPage";
 import ServiceManagementPage from "@/pages/admin/service-management/ServiceManagementPage";
 import NotificationManagementPage from "@/pages/admin/notification-management/NotificationManagementPage";
 import TransferPage from "@/pages/admin/transfer/TransferPage";
+import AppointmentManagementPage from "@/pages/admin/appointment-management/AppointmentManagementPage";
 
 // Auth
 import LoginPage from "@/pages/auth/LoginPage";
@@ -60,6 +63,8 @@ const router = createBrowserRouter([
           // Trang Hồ sơ KHÔNG bị chặn bởi RequireCompleteProfile (nếu không sẽ
           // tạo vòng lặp redirect cho chính người dùng cần vào đây để hoàn thiện hồ sơ).
           { path: ROUTES.PROFILE, element: <ProfilePage /> },
+          { path: ROUTES.AVAILABILITY, element: <AvailabilityPage /> },
+          { path: ROUTES.APPOINTMENTS, element: <AppointmentsPage /> },
           {
             element: <RequireCompleteProfile />,
             children: [
@@ -91,6 +96,7 @@ const router = createBrowserRouter([
           { path: "dich-vu", element: <ServiceManagementPage /> },
           { path: "thong-bao", element: <NotificationManagementPage /> },
           { path: "chuyen-nhuong", element: <TransferPage /> },
+          { path: "lich-hen", element: <AppointmentManagementPage /> },
         ],
       },
     ],

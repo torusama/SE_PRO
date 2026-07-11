@@ -53,7 +53,7 @@ CREATE INDEX IF NOT EXISTS idx_availability_slots_user
 --    a host). Kept intentionally simple: one row per requested/confirmed
 --    meeting between a requester and a host user.
 -- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS appointments (
+CREATE TABLE IF NOT EXISTS schedule_appointments (
   appointment_id   SERIAL PRIMARY KEY,
   slot_id          INT REFERENCES availability_slots(slot_id) ON DELETE SET NULL,
   host_user_id     INT NOT NULL REFERENCES users(user_id),
@@ -69,9 +69,9 @@ CREATE TABLE IF NOT EXISTS appointments (
   CONSTRAINT chk_appt_time CHECK (end_time > start_time)
 );
 
-CREATE INDEX IF NOT EXISTS idx_appointments_host_date
-  ON appointments(host_user_id, appointment_date);
-CREATE INDEX IF NOT EXISTS idx_appointments_requester
-  ON appointments(requester_id);
+CREATE INDEX IF NOT EXISTS idx_schedule_appointments_host_date
+  ON schedule_appointments(host_user_id, appointment_date);
+CREATE INDEX IF NOT EXISTS idx_schedule_appointments_requester
+  ON schedule_appointments(requester_id);
 
 COMMIT;

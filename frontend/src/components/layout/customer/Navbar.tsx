@@ -12,6 +12,7 @@ const TXT = {
   brandMain: 'VĨNH PHÚC',
   brandAccent: 'VIÊN',
   profile: 'Hồ sơ của tôi',
+  appointments: 'Đặt và xem lịch hẹn',
   admin: 'Trang quản trị',
   logout: 'Đăng xuất',
   login: 'Đăng nhập',
@@ -53,6 +54,9 @@ export default function Navbar() {
                 }}
               >
                 {TXT.profile}
+              </button>
+              <button type="button" onClick={() => { setMenuOpen(false); navigate(ROUTES.APPOINTMENTS) }}>
+                {TXT.appointments}
               </button>
               {role === 'admin' && (
                 <button

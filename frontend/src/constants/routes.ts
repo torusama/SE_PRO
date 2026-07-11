@@ -16,6 +16,8 @@ export const ROUTES = {
   SERVICE_BOOK: '/dich-vu/dat/:lotId',
   PROFILE:      '/ho-so',
   NOTIFICATION: '/thong-bao',
+  AVAILABILITY: '/lich-ranh',
+  APPOINTMENTS: '/lich-hen',
 
   // === Admin ===
   ADMIN_DASHBOARD:    '/admin',
@@ -27,4 +29,5 @@ export const ROUTES = {
   ADMIN_SERVICES:     '/admin/dich-vu',
   ADMIN_NOTIFY:       '/admin/thong-bao',
   ADMIN_TRANSFER:     '/admin/chuyen-nhuong',
+  ADMIN_APPOINTMENTS: '/admin/lich-hen',
 } as const

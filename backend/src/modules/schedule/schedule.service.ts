@@ -87,6 +87,17 @@ export class ScheduleService {
     );
   }
 
+  async listAvailableHosts(currentUserId: number) {
+    return this.database.query(
+      `SELECT u.user_id AS id, u.full_name AS "fullName", LOWER(u.role) AS role
+       FROM users u
+       WHERE u.user_id <> $1 AND LOWER(u.role) = 'admin'
+         AND u.is_active = TRUE AND u.is_deleted = FALSE
+       ORDER BY u.full_name`,
+      [currentUserId],
+    );
+  }
+
   async updateSlot(userId: number, id: number, dto: UpdateAvailabilitySlotDto) {
     const owned = await this.getOwnedSlot(userId, id);
     const startTime = dto.startTime ?? owned.startTime;
@@ -111,7 +122,7 @@ export class ScheduleService {
   async deleteSlot(userId: number, id: number) {
     await this.getOwnedSlot(userId, id);
     const upcoming = await this.database.queryOne(
-      `SELECT appointment_id FROM appointments
+      `SELECT appointment_id FROM schedule_appointments
        WHERE slot_id = $1 AND status IN ('pending', 'confirmed')
          AND appointment_date >= CURRENT_DATE
        LIMIT 1`,
@@ -154,9 +165,22 @@ export class ScheduleService {
     }
 
     return this.database.transaction(async (client) => {
+      let hostUserId = dto.hostUserId;
+      if (!hostUserId) {
+        const admin = await client.query(
+          `SELECT user_id FROM users
+           WHERE LOWER(role) = 'admin' AND is_active = TRUE AND is_deleted = FALSE
+           ORDER BY user_id LIMIT 1`,
+        );
+        if (!admin.rows.length) {
+          throw new BadRequestException('No active admin is available to receive this request');
+        }
+        hostUserId = admin.rows[0].user_id;
+      }
+
       const host = await client.query(
         `SELECT user_id FROM users WHERE user_id = $1 AND is_deleted = FALSE AND is_active = TRUE`,
-        [dto.hostUserId],
+        [hostUserId],
       );
       if (!host.rows.length) throw new NotFoundException('Host user not found');
 
@@ -164,34 +188,34 @@ export class ScheduleService {
         const slot = await client.query(
           `SELECT slot_id FROM availability_slots
            WHERE slot_id = $1 AND user_id = $2 AND is_active = TRUE`,
-          [dto.slotId, dto.hostUserId],
+          [dto.slotId, requesterId],
         );
         if (!slot.rows.length) {
-          throw new BadRequestException('Slot not found or not available for this host');
+          throw new BadRequestException('Availability slot does not belong to the requester');
         }
       }
 
       // Prevent double-booking: lock overlapping rows for this host/date first.
       const overlap = await client.query(
-        `SELECT appointment_id FROM appointments
+        `SELECT appointment_id FROM schedule_appointments
          WHERE host_user_id = $1 AND appointment_date = $2
            AND status IN ('pending', 'confirmed')
            AND start_time < $4 AND end_time > $3
          FOR UPDATE`,
-        [dto.hostUserId, dto.appointmentDate, dto.startTime, dto.endTime],
+        [hostUserId, dto.appointmentDate, dto.startTime, dto.endTime],
       );
       if (overlap.rows.length) {
         throw new BadRequestException('Host already has an appointment in that time range');
       }
 
       const inserted = await client.query(
-        `INSERT INTO appointments
+        `INSERT INTO schedule_appointments
            (slot_id, host_user_id, requester_id, appointment_date, start_time, end_time, note, status)
          VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
          RETURNING appointment_id AS id`,
         [
           dto.slotId ?? null,
-          dto.hostUserId,
+          hostUserId,
           requesterId,
           dto.appointmentDate,
           dto.startTime,
@@ -207,12 +231,24 @@ export class ScheduleService {
   async listMyAppointments(userId: number) {
     return this.database.query(
       `SELECT ${APPOINTMENT_SELECT}
-       FROM appointments a
+       FROM schedule_appointments a
        JOIN users host ON host.user_id = a.host_user_id
        JOIN users requester ON requester.user_id = a.requester_id
        WHERE a.host_user_id = $1 OR a.requester_id = $1
        ORDER BY a.appointment_date DESC, a.start_time DESC`,
       [userId],
+    );
+  }
+
+  async listAllAppointments(userRole: string) {
+    if (userRole.toLowerCase() !== 'admin') throw new ForbiddenException('Admin access required');
+    return this.database.query(
+      `SELECT ${APPOINTMENT_SELECT}
+       FROM schedule_appointments a
+       JOIN users host ON host.user_id = a.host_user_id
+       JOIN users requester ON requester.user_id = a.requester_id
+       ORDER BY CASE WHEN a.status = 'pending' THEN 0 ELSE 1 END,
+                a.appointment_date DESC, a.start_time DESC`,
     );
   }
 
@@ -230,7 +266,7 @@ export class ScheduleService {
     }>(
       `SELECT appointment_id AS id, host_user_id AS "hostUserId",
               requester_id AS "requesterId", status
-       FROM appointments WHERE appointment_id = $1`,
+       FROM schedule_appointments WHERE appointment_id = $1`,
       [id],
     );
     if (!appointment) throw new NotFoundException('Appointment not found');
@@ -249,7 +285,7 @@ export class ScheduleService {
     }
 
     const updated = await this.database.queryOne(
-      `UPDATE appointments
+      `UPDATE schedule_appointments
        SET status = $2, note = COALESCE($3, note), updated_at = NOW()
        WHERE appointment_id = $1
        RETURNING appointment_id AS id, status`,
@@ -261,7 +297,7 @@ export class ScheduleService {
   private async getAppointment(client: PoolClient, id: number) {
     const result = await client.query(
       `SELECT ${APPOINTMENT_SELECT}
-       FROM appointments a
+       FROM schedule_appointments a
        JOIN users host ON host.user_id = a.host_user_id
        JOIN users requester ON requester.user_id = a.requester_id
        WHERE a.appointment_id = $1`,
