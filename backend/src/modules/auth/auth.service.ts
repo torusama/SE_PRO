@@ -25,11 +25,17 @@ export class AuthService {
     );
     if (existing) throw new ConflictException('Email already exists');
 
+    // Chỉ lưu những gì người dùng đã nhập khi đăng ký (fullName bắt buộc,
+    // phone tuỳ chọn). Mọi trường hồ sơ khác (address, dateOfBirth, gender,
+    // avatar, liên hệ khẩn cấp, ghi chú...) để trống/NULL theo mặc định của
+    // bảng `users` — KHÔNG gán giá trị mẫu nào ở đây. Người dùng phải tự bổ
+    // sung ở trang Hồ sơ trước khi dùng các chức năng chính (xem isProfileComplete).
     const passwordHash = await bcrypt.hash(dto.password, 10);
     const user = await this.database.queryOne(
       `INSERT INTO users (email, password_hash, role, full_name, phone_number)
        VALUES ($1, $2, 'Customer', $3, $4)
-       RETURNING user_id, email, role, full_name, phone_number, is_active, created_at`,
+       RETURNING user_id, email, role, full_name, phone_number, address,
+                 date_of_birth, gender, is_active, created_at`,
       [dto.email.toLowerCase(), passwordHash, dto.fullName, dto.phone ?? null],
     );
 
@@ -38,7 +44,8 @@ export class AuthService {
 
   async login(dto: LoginDto) {
     const user = await this.database.queryOne(
-      `SELECT user_id, email, password_hash, role, full_name, phone_number, is_active
+      `SELECT user_id, email, password_hash, role, full_name, phone_number,
+              address, date_of_birth, gender, is_active
        FROM users
        WHERE email = $1 AND is_deleted = FALSE`,
       [dto.email.toLowerCase()],
@@ -78,6 +85,14 @@ export class AuthService {
       expiresIn: (this.config.get<string>('jwtExpiresIn') ?? '1d') as any,
     });
 
+    const isProfileComplete = Boolean(
+      user.full_name &&
+      user.phone_number &&
+      user.address &&
+      user.date_of_birth &&
+      user.gender,
+    );
+
     return {
       accessToken,
       user: {
@@ -87,6 +102,7 @@ export class AuthService {
         fullName: user.full_name,
         phone: user.phone_number,
         isActive: user.is_active,
+        isProfileComplete,
       },
     };
   }

@@ -8,7 +8,7 @@ const result = (rows: unknown[] = [], rowCount = rows.length) => ({
   rowCount,
 });
 
-function createService(handler?: QueryHandler) {
+function createService(handler?: QueryHandler, adjacency?: any) {
   const client = {
     query: jest.fn((sql: string, params?: unknown[]) =>
       handler ? handler(sql, params) : result(),
@@ -27,7 +27,7 @@ function createService(handler?: QueryHandler) {
   return {
     client,
     database,
-    service: new ReservationsService(database as never),
+    service: new ReservationsService(database as never, adjacency),
   };
 }
 
@@ -118,6 +118,119 @@ describe('ReservationsService', () => {
           String(sql).includes('INSERT INTO reservation_requests'),
         ),
       ).toBe(false);
+    });
+
+    it('creates a pending adjacent multi-plot reservation with adjacency metadata', async () => {
+      const adjacency = {
+        validateAdjacent: jest.fn(() => ({ valid: true, method: 'map' })),
+      };
+      const { client, service } = createService((sql) => {
+        if (sql.includes('FROM plots') && sql.includes('FOR UPDATE')) {
+          return result([
+            {
+              id: 1,
+              code: 'A-01-001',
+              status: 'available',
+              price: 100,
+              mapX: 0,
+              mapY: 0,
+              mapWidth: 40,
+              mapHeight: 40,
+            },
+            {
+              id: 2,
+              code: 'A-01-002',
+              status: 'available',
+              price: 150,
+              mapX: 40,
+              mapY: 0,
+              mapWidth: 40,
+              mapHeight: 40,
+            },
+          ]);
+        }
+        if (sql.includes('INSERT INTO reservation_requests')) {
+          return result([{ id: 10 }]);
+        }
+        if (sql.includes('UPDATE plots')) {
+          return result([], 2);
+        }
+        if (sql.includes('FROM reservation_requests rr')) {
+          return result([
+            {
+              id: 10,
+              type: 'purchase',
+              status: 'pending',
+              totalPrice: 250,
+              createdAt: new Date('2026-07-03T00:00:00Z'),
+            },
+          ]);
+        }
+        if (
+          sql.includes('FROM request_plots rp') &&
+          !sql.includes('FOR UPDATE')
+        ) {
+          return result([
+            { id: 1, code: 'A-01-001', status: 'pending', price: 100 },
+            { id: 2, code: 'A-01-002', status: 'pending', price: 150 },
+          ]);
+        }
+        return result();
+      }, adjacency);
+
+      await expect(
+        service.createMultiple(7, {
+          type: 'purchase',
+          plotIds: [1, 2],
+          note: 'family',
+        }),
+      ).resolves.toMatchObject({
+        id: 10,
+        plotCount: 2,
+        adjacency: { valid: true, method: 'map' },
+      });
+      expect(adjacency.validateAdjacent).toHaveBeenCalledTimes(1);
+      expect(client.query).toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE plots'),
+        [[1, 2]],
+      );
+    });
+
+    it('rejects non-adjacent multi-plot requests without partial writes', async () => {
+      const adjacency = {
+        validateAdjacent: jest.fn(() => {
+          throw new BadRequestException(
+            'Selected plots must be adjacent or near each other',
+          );
+        }),
+      };
+      const { client, service } = createService((sql) => {
+        if (sql.includes('FROM plots') && sql.includes('FOR UPDATE')) {
+          return result([
+            { id: 1, code: 'A-01-001', status: 'available', price: 100 },
+            { id: 2, code: 'B-01-001', status: 'available', price: 150 },
+          ]);
+        }
+        return result();
+      }, adjacency);
+
+      await expect(
+        service.createMultiple(7, { type: 'reserve', plotIds: [1, 2] }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(
+        client.query.mock.calls.some(([sql]) =>
+          String(sql).includes('INSERT INTO reservation_requests'),
+        ),
+      ).toBe(false);
+    });
+
+    it('requires at least two plots for multi-plot requests before transaction', async () => {
+      const { database, service } = createService();
+
+      await expect(
+        service.createMultiple(7, { type: 'reserve', plotIds: [1] }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(database.transaction).not.toHaveBeenCalled();
     });
   });
 
@@ -317,13 +430,23 @@ describe('ReservationsService', () => {
         totalPrice: '100',
       });
       database.query.mockResolvedValue([
-        { id: 1, code: 'A-01-001', status: 'pending', price: '100' },
+        {
+          id: 1,
+          code: 'A-01-001',
+          status: 'pending',
+          price: '100',
+          mapX: '10',
+          mapY: '20',
+          mapWidth: '40',
+          mapHeight: '40',
+        },
       ]);
 
       await expect(service.myOne(7, 10)).resolves.toMatchObject({
         id: 10,
         plotCount: 1,
         plotCodes: ['A-01-001'],
+        plots: [{ mapX: 10, mapY: 20 }],
       });
     });
 

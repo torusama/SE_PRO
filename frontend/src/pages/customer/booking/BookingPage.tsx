@@ -24,6 +24,8 @@ interface ReservationResult {
   totalPrice: number
 }
 
+type ReservationType = 'reserve' | 'purchase'
+
 function formatVnd(value?: number) {
   if (!value) return 'Liên hệ'
   return new Intl.NumberFormat('vi-VN').format(value) + ' ₫'
@@ -40,6 +42,7 @@ export default function BookingPage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [reservation, setReservation] = useState<ReservationResult | null>(null)
+  const [requestType, setRequestType] = useState<ReservationType>('reserve')
 
   useEffect(() => {
     let cancelled = false
@@ -73,9 +76,9 @@ export default function BookingPage() {
     setError('')
     try {
       const createResponse = await api.post('/reservations', {
-        type: 'reserve',
+        type: requestType,
         plotIds: [plot.id],
-        note: `Customer selected plot ${plot.plotCode} from 2D map`,
+        note: `Customer selected plot ${plot.plotCode} for ${requestType} from booking page`,
       })
       const created = createResponse.data.data as ReservationResult
       setReservation(created)
@@ -120,6 +123,29 @@ export default function BookingPage() {
               {plot.description ?? 'Yêu cầu giữ chỗ sẽ được lưu vào tài khoản của bạn và chờ nhân viên duyệt.'}
             </div>
 
+            <div style={styles.typeSwitch}>
+              <button
+                type="button"
+                style={{
+                  ...styles.typeButton,
+                  ...(requestType === 'reserve' ? styles.typeButtonActive : {}),
+                }}
+                onClick={() => setRequestType('reserve')}
+              >
+                Giữ chỗ
+              </button>
+              <button
+                type="button"
+                style={{
+                  ...styles.typeButton,
+                  ...(requestType === 'purchase' ? styles.typeButtonActive : {}),
+                }}
+                onClick={() => setRequestType('purchase')}
+              >
+                Mua lô
+              </button>
+            </div>
+
             {!token && (
               <div style={styles.warning}>
                 Bạn cần đăng nhập trước khi tạo yêu cầu giữ chỗ.
@@ -134,7 +160,7 @@ export default function BookingPage() {
 
             {reservation && (
               <div style={styles.success}>
-                Đã lưu yêu cầu giữ chỗ #{reservation.id} cho {user?.name ?? 'tài khoản của bạn'}.
+                Đã lưu yêu cầu {requestType === 'purchase' ? 'mua lô' : 'giữ chỗ'} #{reservation.id} cho {user?.name ?? 'tài khoản của bạn'}.
               </div>
             )}
 
@@ -147,7 +173,7 @@ export default function BookingPage() {
               disabled={!token || plot.status !== 'available' || submitting}
               onClick={confirmReservation}
             >
-              {submitting ? 'Đang lưu yêu cầu...' : 'Xác nhận giữ chỗ'}
+              {submitting ? 'Đang lưu yêu cầu...' : requestType === 'purchase' ? 'Gửi yêu cầu mua lô' : 'Xác nhận giữ chỗ'}
             </button>
           </>
         )}
@@ -231,6 +257,26 @@ const styles: Record<string, CSSProperties> = {
     color: '#eadcb5',
     background: 'rgba(201,168,76,0.06)',
     lineHeight: 1.6,
+  },
+  typeSwitch: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: 8,
+    marginTop: 16,
+  },
+  typeButton: {
+    border: '1px solid rgba(0,229,196,0.18)',
+    borderRadius: 8,
+    background: 'rgba(4,6,14,0.42)',
+    color: '#7a9a90',
+    padding: '11px 12px',
+    fontWeight: 700,
+    cursor: 'pointer',
+  },
+  typeButtonActive: {
+    borderColor: 'rgba(201,168,76,0.55)',
+    background: 'rgba(201,168,76,0.12)',
+    color: '#f0c060',
   },
   warning: {
     marginTop: 14,

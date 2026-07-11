@@ -1,0 +1,17 @@
+.admin-theme {
+  --color-bg-primary: #F5F3EE;
+  --color-bg-secondary: #FFFFFF;
+  --color-bg-elevated: #FFFFFF;
+  --color-bg-card: #FFFFFF;
+
+  --color-accent-teal: #008573;
+  --color-accent-teal-hover: #006E5F;
+  --color-accent-gold: #D4A843;
+
+  --color-text-primary: #1A1A1A;
+  --color-text-secondary: #4A4A4A;
+  --color-text-muted: #888888;
+
+  --color-border: #E5E2DA;
+  --color-border-focus: #008573;
+}

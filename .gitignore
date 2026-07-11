@@ -15,6 +15,9 @@ vinh-hang-frontend/.env
 vinh-hang-frontend/.env.*
 !vinh-hang-frontend/.env.example
 
+# Local uploads (avatars, etc.)
+backend/uploads/
+
 # Build outputs
 dist/
 build/
@@ -44,3 +47,8 @@ Thumbs.db
 .npm/
 tmp/
 temp/
+
+# Local Spec Kit / agent artifacts
+.agents/
+.specify/
+specs/

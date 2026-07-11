@@ -50,3 +50,30 @@ body {
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: var(--color-bg-secondary); }
 ::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
+/* ===== Sidebar ===== */
+
+.sidebar-item {
+  text-decoration: none;
+}
+
+/* Hover */
+.sidebar-item:hover {
+  background: #E7F5F3 !important;
+  color: #008573 !important;
+}
+
+/* Chữ khi hover */
+.sidebar-item:hover span {
+  color: #008573 !important;
+}
+
+/* Active */
+.sidebar-item.active {
+  background: #008573 !important;
+  color: #ffffff !important;
+}
+
+/* Chữ khi active */
+.sidebar-item.active span {
+  color: #ffffff !important;
+}

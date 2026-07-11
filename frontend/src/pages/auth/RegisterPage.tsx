@@ -1,74 +1,85 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { useAuthStore } from '@/store/authStore'
-import { registerRequest } from '@/lib/authService'
-import { ROUTES } from '@/constants/routes'
-import './RegisterPage.css'
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuthStore } from "@/store/authStore";
+import { registerRequest } from "@/lib/authService";
+import { ROUTES } from "@/constants/routes";
+import "./RegisterPage.css";
 
 export default function RegisterPage() {
   // Đăng ký công khai chỉ tạo tài khoản khách hàng.
   // Tài khoản admin phải được tạo bởi admin khác (route riêng có bảo vệ),
   // không cho phép người dùng tự chọn role admin ở đây vì lý do bảo mật.
-  const role = 'customer' as const
-  const [firstName, setFirstName] = useState('')
-  const [lastName, setLastName] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [agree, setAgree] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
+  const role = "customer" as const;
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [agree, setAgree] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const navigate = useNavigate()
-  const setAuth = useAuthStore.getState().setAuth
+  const navigate = useNavigate();
+  const setAuth = useAuthStore.getState().setAuth;
 
   async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setError(null)
+    e.preventDefault();
+    setError(null);
 
     if (!firstName || !lastName || !email || !password) {
-      setError('Vui lòng điền đầy đủ thông tin.')
-      return
+      setError("Vui lòng điền đầy đủ thông tin.");
+      return;
     }
     if (password.length < 8) {
-      setError('Mật khẩu phải có ít nhất 8 ký tự.')
-      return
+      setError("Mật khẩu phải có ít nhất 8 ký tự.");
+      return;
     }
     if (password !== confirmPassword) {
-      setError('Mật khẩu xác nhận không khớp.')
-      return
+      setError("Mật khẩu xác nhận không khớp.");
+      return;
     }
     if (!agree) {
-      setError('Vui lòng đồng ý với Điều khoản sử dụng và Chính sách bảo mật.')
-      return
+      setError("Vui lòng đồng ý với Điều khoản sử dụng và Chính sách bảo mật.");
+      return;
     }
 
-    setLoading(true)
+    setLoading(true);
     try {
-      const { user, token, role: returnedRole } = await registerRequest({
+      const {
+        user,
+        token,
+        role: returnedRole,
+        profileComplete,
+      } = await registerRequest({
         role,
         firstName,
         lastName,
         email,
         password,
-      })
-      setAuth(user, token, returnedRole)
-      navigate(ROUTES.HOME)
+      });
+      setAuth(user, token, returnedRole, profileComplete);
+      // Tài khoản vừa tạo luôn thiếu hồ sơ (chưa có SĐT/ngày sinh/giới tính/địa chỉ)
+      // -> đưa thẳng vào trang Hồ sơ để người dùng bổ sung trước khi dùng hệ thống.
+      navigate(profileComplete ? ROUTES.HOME : ROUTES.PROFILE);
     } catch (err: any) {
-      let message: string
+      let message: string;
 
       if (err?.response) {
         // Backend có phản hồi (400/409/500...) -> dùng đúng message backend trả về
-        message = err.response.data?.message ?? `Đăng ký thất bại (mã lỗi ${err.response.status}).`
+        message =
+          err.response.data?.message ??
+          `Đăng ký thất bại (mã lỗi ${err.response.status}).`;
       } else if (err?.request) {
         // Gửi được request nhưng không nhận được phản hồi -> backend chưa chạy / sai URL / CORS
-        message = 'Không thể kết nối đến máy chủ. Vui lòng kiểm tra backend đã chạy chưa (xem VITE_API_URL trong .env).'
+        message =
+          "Không thể kết nối đến máy chủ. Vui lòng kiểm tra backend đã chạy chưa (xem VITE_API_URL trong .env).";
       } else {
-        message = err?.message ?? 'Đã xảy ra lỗi không xác định, vui lòng thử lại.'
+        message =
+          err?.message ?? "Đã xảy ra lỗi không xác định, vui lòng thử lại.";
       }
-      setError(message)
+      setError(message);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
@@ -94,9 +105,33 @@ export default function RegisterPage() {
             </defs>
 
             {/* Large ink wash blobs */}
-            <ellipse cx="500" cy="200" rx="280" ry="220" fill="#C9BFA8" opacity="0.22" filter="url(#registerBlur1)" />
-            <ellipse cx="100" cy="650" rx="200" ry="180" fill="#BFB49C" opacity="0.18" filter="url(#registerBlur1)" />
-            <ellipse cx="400" cy="800" rx="250" ry="150" fill="#C5BAA2" opacity="0.15" filter="url(#registerBlur1)" />
+            <ellipse
+              cx="500"
+              cy="200"
+              rx="280"
+              ry="220"
+              fill="#C9BFA8"
+              opacity="0.22"
+              filter="url(#registerBlur1)"
+            />
+            <ellipse
+              cx="100"
+              cy="650"
+              rx="200"
+              ry="180"
+              fill="#BFB49C"
+              opacity="0.18"
+              filter="url(#registerBlur1)"
+            />
+            <ellipse
+              cx="400"
+              cy="800"
+              rx="250"
+              ry="150"
+              fill="#C5BAA2"
+              opacity="0.15"
+              filter="url(#registerBlur1)"
+            />
 
             {/* Mountain silhouettes */}
             <path
@@ -112,18 +147,55 @@ export default function RegisterPage() {
 
             {/* Bamboo stalks */}
             <g opacity="0.1" stroke="#1A1410" fill="none">
-              <line x1="520" y1="0" x2="510" y2="900" strokeWidth="3" strokeLinecap="round" />
-              <line x1="535" y1="0" x2="525" y2="900" strokeWidth="1.5" strokeLinecap="round" />
-              <line x1="548" y1="50" x2="540" y2="900" strokeWidth="2" strokeLinecap="round" />
+              <line
+                x1="520"
+                y1="0"
+                x2="510"
+                y2="900"
+                strokeWidth="3"
+                strokeLinecap="round"
+              />
+              <line
+                x1="535"
+                y1="0"
+                x2="525"
+                y2="900"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+              <line
+                x1="548"
+                y1="50"
+                x2="540"
+                y2="900"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
               <line x1="506" y1="180" x2="530" y2="175" strokeWidth="1.5" />
               <line x1="506" y1="320" x2="530" y2="316" strokeWidth="1.5" />
               <line x1="506" y1="460" x2="530" y2="455" strokeWidth="1.5" />
               <line x1="506" y1="600" x2="530" y2="597" strokeWidth="1.5" />
               <line x1="506" y1="740" x2="530" y2="737" strokeWidth="1.5" />
-              <path d="M510 170 Q530 140 560 160" strokeWidth="1.5" strokeLinecap="round" />
-              <path d="M510 310 Q490 280 465 295" strokeWidth="1.5" strokeLinecap="round" />
-              <path d="M525 450 Q548 420 572 435" strokeWidth="1.5" strokeLinecap="round" />
-              <path d="M510 590 Q488 562 460 578" strokeWidth="1.5" strokeLinecap="round" />
+              <path
+                d="M510 170 Q530 140 560 160"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+              <path
+                d="M510 310 Q490 280 465 295"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+              <path
+                d="M525 450 Q548 420 572 435"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+              <path
+                d="M510 590 Q488 562 460 578"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
             </g>
 
             {/* Cloud wisps */}
@@ -140,8 +212,16 @@ export default function RegisterPage() {
                 strokeWidth="2.5"
                 strokeLinecap="round"
               />
-              <path d="M160 380 Q140 420 150 460" strokeWidth="2" strokeLinecap="round" />
-              <path d="M220 360 Q250 400 240 440" strokeWidth="1.5" strokeLinecap="round" />
+              <path
+                d="M160 380 Q140 420 150 460"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+              <path
+                d="M220 360 Q250 400 240 440"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
               <circle cx="260" cy="320" r="6" fill="#8B4A2C" opacity="0.3" />
               <circle cx="320" cy="240" r="5" fill="#8B4A2C" opacity="0.25" />
               <circle cx="150" cy="460" r="4" fill="#8B4A2C" opacity="0.2" />
@@ -169,7 +249,8 @@ export default function RegisterPage() {
             <em>vượt thời gian.</em>
           </p>
           <p className="left-sub">
-            Hệ thống quản lý nghĩa trang thế hệ mới — trang trọng, thông minh, và đầy tâm.
+            Hệ thống quản lý nghĩa trang thế hệ mới — trang trọng, thông minh,
+            và đầy tâm.
           </p>
         </div>
 
@@ -186,15 +267,19 @@ export default function RegisterPage() {
           永
           <br />
           福
-          <br />
-          苑
+          <br />苑
         </div>
       </div>
 
       {/* RIGHT PANEL */}
       <div className="right">
         <div className="right-bg">
-          <svg width="100%" height="100%" viewBox="0 0 500 900" xmlns="http://www.w3.org/2000/svg">
+          <svg
+            width="100%"
+            height="100%"
+            viewBox="0 0 500 900"
+            xmlns="http://www.w3.org/2000/svg"
+          >
             <defs>
               <filter id="registerWb">
                 <feGaussianBlur stdDeviation="22" />
@@ -225,7 +310,12 @@ export default function RegisterPage() {
 
         {/* Back link */}
         <Link className="back" to="/">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+          >
             <path d="M19 12H5M5 12l7-7M5 12l7 7" />
           </svg>
           Trang chủ
@@ -244,11 +334,12 @@ export default function RegisterPage() {
           <div className="panel active">
             <div className="form-header">
               <h1 className="form-title">Tạo tài khoản</h1>
-              <p className="form-desc">Đăng ký để truy cập đầy đủ tính năng của hệ thống.</p>
+              <p className="form-desc">
+                Đăng ký để truy cập đầy đủ tính năng của hệ thống.
+              </p>
             </div>
 
             <form onSubmit={handleSubmit}>
-
               <div className="field-row">
                 <div className="field">
                   <label>Họ</label>
@@ -298,7 +389,7 @@ export default function RegisterPage() {
                 />
               </div>
 
-              <div className="check-row" style={{ marginBottom: '16px' }}>
+              <div className="check-row" style={{ marginBottom: "16px" }}>
                 <input
                   type="checkbox"
                   id="agree"
@@ -306,19 +397,25 @@ export default function RegisterPage() {
                   onChange={(e) => setAgree(e.target.checked)}
                 />
                 <span>
-                  Tôi đồng ý với <a href="#">Điều khoản sử dụng</a> và{' '}
+                  Tôi đồng ý với <a href="#">Điều khoản sử dụng</a> và{" "}
                   <a href="#">Chính sách bảo mật</a> của Vĩnh Phúc Viên.
                 </span>
               </div>
 
               {error && (
-                <div style={{ color: '#d4453a', fontSize: '12px', marginBottom: '12px' }}>
+                <div
+                  style={{
+                    color: "#d4453a",
+                    fontSize: "12px",
+                    marginBottom: "12px",
+                  }}
+                >
                   {error}
                 </div>
               )}
 
               <button className="submit" type="submit" disabled={loading}>
-                {loading ? 'Đang tạo tài khoản...' : 'Tạo tài khoản'}
+                {loading ? "Đang tạo tài khoản..." : "Tạo tài khoản"}
               </button>
             </form>
 
@@ -329,5 +426,5 @@ export default function RegisterPage() {
         </div>
       </div>
     </div>
-  )
+  );
 }

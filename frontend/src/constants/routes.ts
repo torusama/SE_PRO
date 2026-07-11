@@ -19,6 +19,7 @@ export const ROUTES = {
 
   // === Admin ===
   ADMIN_DASHBOARD:    '/admin',
+  ADMIN_ACTIVITY:     '/admin/hoat-dong',
   ADMIN_MAP:          '/admin/ban-do',
   ADMIN_LOTS:         '/admin/lo-dat',
   ADMIN_REQUESTS:     '/admin/yeu-cau',

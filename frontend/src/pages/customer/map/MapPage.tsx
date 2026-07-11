@@ -1,5 +1,5 @@
 // src/pages/customer/map/MapPage.tsx
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ROUTES } from '@/constants/routes'
 import { API_BASE_URL, api } from '@/lib/api'
@@ -9,6 +9,8 @@ import './MapPage.css'
 type PlotStatus = 'available' | 'pending' | 'reserved' | 'sold' | 'locked'
 type StatusFilter = 'all' | PlotStatus
 type SelectionMode = 'single' | 'cluster'
+type ReservationType = 'reserve' | 'purchase'
+type CustomerReservationStatus = 'draft' | 'submitted' | 'pending' | 'approved' | 'rejected' | 'cancelled'
 
 interface BackendMapPlot {
   id?: string | number
@@ -46,6 +48,16 @@ interface MapPlot {
   width: number
   height: number
   isPlaceholder?: boolean
+}
+
+interface CustomerReservation {
+  id: number
+  type: ReservationType
+  status: CustomerReservationStatus
+  plotCodes?: string[]
+  plotCount?: number
+  createdAt?: string
+  reviewedAt?: string | null
 }
 
 const T = {
@@ -94,8 +106,12 @@ const T = {
   hideRoute: '\u1ea8n \u0111\u01b0\u1eddng \u0111i',
   continuePlot: 'G\u1eedi y\u00eau c\u1ea7u gi\u1eef ch\u1ed7',
   submitSelected: 'G\u1eedi y\u00eau c\u1ea7u cho c\u00e1c l\u00f4 \u0111\u00e3 ch\u1ecdn',
+  reserveAction: 'Gi\u1eef ch\u1ed7',
+  purchaseAction: 'Mua l\u00f4',
+  purchaseSelected: 'G\u1eedi y\u00eau c\u1ea7u mua c\u00e1c l\u00f4 \u0111\u00e3 ch\u1ecdn',
   submitting: '\u0110ang g\u1eedi y\u00eau c\u1ea7u...',
   submitted: '\u0110\u00e3 g\u1eedi y\u00eau c\u1ea7u ch\u1edd duy\u1ec7t.',
+  clusterMin: 'Vui l\u00f2ng ch\u1ecdn \u00edt nh\u1ea5t 2 l\u00f4 li\u1ec1n k\u1ec1 cho nh\u00f3m gia \u0111\u00ecnh.',
   loginRequired: 'B\u1ea1n c\u1ea7n \u0111\u0103ng nh\u1eadp \u0111\u1ec3 g\u1eedi y\u00eau c\u1ea7u gi\u1eef ch\u1ed7.',
   submitFailed: 'Kh\u00f4ng th\u1ec3 g\u1eedi y\u00eau c\u1ea7u gi\u1eef ch\u1ed7.',
   unavailable: 'L\u00f4 n\u00e0y hi\u1ec7n kh\u00f4ng th\u1ec3 ch\u1ecdn.',
@@ -110,6 +126,10 @@ const T = {
   totalPrice: 'T\u1ed5ng gi\u00e1 d\u1ef1 ki\u1ebfn',
   clear: 'X\u00f3a l\u1ef1a ch\u1ecdn',
   contact: 'Li\u00ean h\u1ec7 nh\u00e2n vi\u00ean',
+  myPlot: 'L\u00f4 c\u1ee7a t\u00f4i',
+  myPending: 'Y\u00eau c\u1ea7u c\u1ee7a b\u1ea1n \u0111ang ch\u1edd duy\u1ec7t',
+  myApprovedReserve: 'L\u00f4 n\u00e0y \u0111\u00e3 \u0111\u01b0\u1ee3c gi\u1eef cho b\u1ea1n',
+  myApprovedPurchase: 'L\u00f4 n\u00e0y \u0111\u00e3 \u0111\u01b0\u1ee3c duy\u1ec7t mua cho b\u1ea1n',
 }
 
 const STATUS_OPTIONS: Array<{ value: StatusFilter; label: string }> = [
@@ -135,6 +155,15 @@ const STATUS_COLOR: Record<PlotStatus, { fill: string; stroke: string; text: str
   reserved: { fill: 'rgba(201,168,76,0.36)', stroke: 'rgba(240,192,96,0.9)', text: '#ffe2a7' },
   sold: { fill: 'rgba(171,62,62,0.46)', stroke: 'rgba(232,74,74,0.9)', text: '#ffd1d1' },
   locked: { fill: 'rgba(116,124,137,0.32)', stroke: 'rgba(154,164,180,0.68)', text: '#d5d9df' },
+}
+
+function getMyReservationLabel(reservation?: CustomerReservation) {
+  if (!reservation) return ''
+  if (['pending', 'submitted', 'draft'].includes(reservation.status)) return T.myPending
+  if (reservation.status === 'approved') {
+    return reservation.type === 'purchase' ? T.myApprovedPurchase : T.myApprovedReserve
+  }
+  return T.myPlot
 }
 
 const ZONES = [
@@ -526,6 +555,8 @@ export default function MapPage() {
   const token = useAuthStore((state) => state.token)
   const starsRef = useRef<HTMLDivElement>(null)
   const tooltipRef = useRef<HTMLDivElement>(null)
+  const dragModeRef = useRef<'add' | 'remove' | null>(null)
+  const dragVisitedRef = useRef<Set<string>>(new Set())
 
   const [plots, setPlots] = useState<MapPlot[]>(INITIAL_PLANNED_PLOTS)
   const [isLoading, setIsLoading] = useState(false)
@@ -543,6 +574,8 @@ export default function MapPage() {
   const [submitting, setSubmitting] = useState(false)
   const [submitMessage, setSubmitMessage] = useState('')
   const [submitError, setSubmitError] = useState('')
+  const [requestType, setRequestType] = useState<ReservationType>('reserve')
+  const [myReservations, setMyReservations] = useState<CustomerReservation[]>([])
 
   useEffect(() => {
     const el = starsRef.current
@@ -556,6 +589,15 @@ export default function MapPage() {
       const gold = Math.random() < 0.08
       d.style.cssText = `width:${size}px;height:${size}px;left:${Math.random() * 100}%;top:${Math.random() * 65}%;--d:${2 + Math.random() * 5}s;--delay:${-Math.random() * 6}s;background:${teal ? '#00e5c4' : gold ? '#c9a84c' : '#fff'}`
       el.appendChild(d)
+    }
+  }, [])
+
+  useEffect(() => {
+    window.addEventListener('pointerup', endClusterDrag)
+    window.addEventListener('pointercancel', endClusterDrag)
+    return () => {
+      window.removeEventListener('pointerup', endClusterDrag)
+      window.removeEventListener('pointercancel', endClusterDrag)
     }
   }, [])
 
@@ -592,6 +634,26 @@ export default function MapPage() {
       controller.abort()
     }
   }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!token) {
+      setMyReservations([])
+      return
+    }
+
+    api.get<{ data?: CustomerReservation[] }>('/my/reservations')
+      .then((response) => {
+        if (!cancelled) setMyReservations(response.data.data ?? [])
+      })
+      .catch(() => {
+        if (!cancelled) setMyReservations([])
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [token])
 
   const zones = useMemo(() => {
     return ZONES.filter((zone) => zone.mode === selectionMode).map((zone) => ({
@@ -644,6 +706,16 @@ export default function MapPage() {
   const selectedIsAvailable = selectedPlot?.status === 'available' && !selectedPlot.isPlaceholder
   const routePlot = selectedPlot && routePlotId === selectedPlot.id ? selectedPlot : null
   const clusterIds = new Set(clusterPlots.map((p) => p.id))
+  const myPlotByCode = useMemo(() => {
+    const byCode = new Map<string, CustomerReservation>()
+    myReservations
+      .filter((reservation) => ['draft', 'pending', 'submitted', 'approved'].includes(reservation.status))
+      .forEach((reservation) => {
+        ;(reservation.plotCodes ?? []).forEach((code) => byCode.set(code, reservation))
+      })
+    return byCode
+  }, [myReservations])
+  const selectedMyReservation = selectedPlot ? myPlotByCode.get(selectedPlot.plotCode) : undefined
 
   function handleModeChange(mode: SelectionMode) {
     setSelectionMode(mode)
@@ -655,7 +727,8 @@ export default function MapPage() {
     if (mode === 'single') setClusterPlots([])
   }
 
-  function handlePlotClick(plot: MapPlot) {
+  function handlePlotPointerDown(event: ReactPointerEvent<SVGGElement>, plot: MapPlot) {
+    event.preventDefault()
     setAdjacencyWarning('')
     setRoutePlotId(null)
     setSubmitMessage('')
@@ -663,20 +736,45 @@ export default function MapPage() {
     setSelectedPlot(plot)
 
     if (selectionMode === 'single') return
-    if (plot.isPlaceholder || plot.status !== 'available') return
 
     const alreadySelected = clusterPlots.some((p) => p.id === plot.id)
-    if (alreadySelected) {
+    dragModeRef.current = alreadySelected ? 'remove' : 'add'
+    dragVisitedRef.current = new Set()
+    applyClusterDrag(plot, dragModeRef.current)
+  }
+
+  function handlePlotPointerEnter(plot: MapPlot) {
+    if (selectionMode !== 'cluster' || !dragModeRef.current) return
+    applyClusterDrag(plot, dragModeRef.current)
+  }
+
+  function endClusterDrag() {
+    dragModeRef.current = null
+    dragVisitedRef.current.clear()
+  }
+
+  function applyClusterDrag(plot: MapPlot, mode: 'add' | 'remove') {
+    if (dragVisitedRef.current.has(plot.id)) return
+    dragVisitedRef.current.add(plot.id)
+    setSelectedPlot(plot)
+
+    if (mode === 'remove') {
       setClusterPlots((prev) => prev.filter((p) => p.id !== plot.id))
+      setAdjacencyWarning('')
       return
     }
 
-    if (!isAdjacentToCluster(plot, clusterPlots)) {
-      setAdjacencyWarning('Vui l\u00f2ng ch\u1ecdn c\u00e1c l\u00f4 li\u1ec1n k\u1ec1 nhau cho nh\u00f3m gia \u0111\u00ecnh.')
-      return
-    }
+    if (plot.isPlaceholder || plot.status !== 'available') return
 
-    setClusterPlots((prev) => [...prev, plot])
+    setClusterPlots((prev) => {
+      if (prev.some((p) => p.id === plot.id)) return prev
+      if (!isAdjacentToCluster(plot, prev)) {
+        setAdjacencyWarning('Vui l\u00f2ng ch\u1ecdn c\u00e1c l\u00f4 li\u1ec1n k\u1ec1 nhau cho nh\u00f3m gia \u0111\u00ecnh.')
+        return prev
+      }
+      setAdjacencyWarning('')
+      return [...prev, plot]
+    })
   }
 
   function removeFromCluster(plotId: string) {
@@ -708,9 +806,13 @@ export default function MapPage() {
     if (tooltipRef.current) tooltipRef.current.style.display = 'none'
   }
 
-  async function submitReservation(targetPlots: MapPlot[]) {
+  async function submitReservation(targetPlots: MapPlot[], multiPlot = false, type: ReservationType = requestType) {
     const realAvailablePlots = targetPlots.filter((plot) => !plot.isPlaceholder && plot.status === 'available')
     if (realAvailablePlots.length === 0) return
+    if (multiPlot && realAvailablePlots.length < 2) {
+      setSubmitError(T.clusterMin)
+      return
+    }
     if (!token) {
       setSubmitError(T.loginRequired)
       navigate(ROUTES.LOGIN)
@@ -722,13 +824,19 @@ export default function MapPage() {
     setSubmitMessage('')
     try {
       const plotIds = realAvailablePlots.map((plot) => Number(plot.id))
-      const createResponse = await api.post('/reservations', {
-        type: 'reserve',
+      const createResponse = await api.post(multiPlot ? '/reservations/multiple' : '/reservations', {
+        type,
         plotIds,
-        note: `Customer selected ${plotIds.length} plot(s) from 2D map demo`,
+        note: multiPlot
+          ? `Customer selected ${plotIds.length} adjacent family plot(s) for ${type} from 2D map`
+          : `Customer selected ${plotIds.length} plot(s) for ${type} from 2D map`,
       })
       const created = createResponse.data.data
       setSubmitMessage(`${T.submitted} #${created.id}`)
+      setMyReservations((current) => [
+        created as CustomerReservation,
+        ...current.filter((reservation) => reservation.id !== created.id),
+      ])
       setPlots((current) => current.map((plot) => (plotIds.includes(Number(plot.id)) ? { ...plot, status: 'pending' } : plot)))
       setClusterPlots([])
       if (selectedPlot && plotIds.includes(Number(selectedPlot.id))) {
@@ -741,17 +849,19 @@ export default function MapPage() {
     }
   }
 
-  function getPlotClassName(plot: MapPlot) {
+  function getPlotClassName(plot: MapPlot, myReservation?: CustomerReservation) {
     const parts = ['plot-cell']
     if (plot.isPlaceholder) parts.push('placeholder')
+    if (myReservation) parts.push('mine')
     if (selectedPlot?.id === plot.id) parts.push('selected')
     if (selectionMode === 'cluster' && clusterIds.has(plot.id)) parts.push('cluster-selected')
     return parts.join(' ')
   }
 
-  function getPlotStroke(plot: MapPlot) {
+  function getPlotStroke(plot: MapPlot, myReservation?: CustomerReservation) {
     if (clusterIds.has(plot.id)) return '#00e5c4'
     if (selectedPlot?.id === plot.id) return '#f0c060'
+    if (myReservation) return '#00e5c4'
     return STATUS_COLOR[plot.status].stroke
   }
 
@@ -856,7 +966,7 @@ export default function MapPage() {
               <text x="20" y="8" textAnchor="middle" fill="rgba(232,74,74,0.8)" fontSize="6" fontFamily="Be Vietnam Pro">N</text>
             </svg>
 
-            <svg id="cemetery-map" viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg" style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }}>
+            <svg id="cemetery-map" viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg" style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }} onPointerUp={endClusterDrag} onPointerLeave={endClusterDrag}>
               <defs>
                 <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
                   <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(0,229,196,0.05)" strokeWidth="0.5" />
@@ -883,11 +993,16 @@ export default function MapPage() {
 
               {filteredPlots.map((plot) => {
                 const color = STATUS_COLOR[plot.status]
+                const myReservation = myPlotByCode.get(plot.plotCode)
+                const displayLabel = myReservation ? getMyReservationLabel(myReservation) : getStatusLabel(plot)
                 return (
-                  <g key={plot.id} className={getPlotClassName(plot)} onClick={() => handlePlotClick(plot)} onMouseEnter={(event) => handleMouseEnter(event, plot)} onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}>
-                    <rect className="lot-rect" x={plot.x} y={plot.y} width={plot.width} height={plot.height} rx="2" fill={color.fill} stroke={getPlotStroke(plot)} strokeWidth={selectedPlot?.id === plot.id || clusterIds.has(plot.id) ? 2 : 0.8} data-id={plot.id} data-zone={plot.zoneName} data-status={plot.status} />
-                    <title>{plot.plotCode} - {plot.zoneName} - {getStatusLabel(plot)}</title>
+                  <g key={plot.id} className={getPlotClassName(plot, myReservation)} onPointerDown={(event) => handlePlotPointerDown(event, plot)} onPointerEnter={() => handlePlotPointerEnter(plot)} onMouseEnter={(event) => handleMouseEnter(event, plot)} onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}>
+                    <rect className="lot-rect" x={plot.x} y={plot.y} width={plot.width} height={plot.height} rx="2" fill={myReservation ? 'rgba(0,229,196,0.24)' : color.fill} stroke={getPlotStroke(plot, myReservation)} strokeWidth={selectedPlot?.id === plot.id || clusterIds.has(plot.id) || myReservation ? 2 : 0.8} data-id={plot.id} data-zone={plot.zoneName} data-status={plot.status} />
+                    <title>{plot.plotCode} - {plot.zoneName} - {displayLabel}</title>
                     <text x={plot.x + plot.width / 2} y={plot.y + Math.min(16, plot.height / 2 + 3)} textAnchor="middle" className="plot-code" fill={color.text}>{plot.plotNumber}</text>
+                    {myReservation && (
+                      <text x={plot.x + plot.width - 5} y={plot.y + 8} textAnchor="middle" className="plot-mine-mark">✓</text>
+                    )}
                   </g>
                 )
               })}
@@ -923,8 +1038,18 @@ export default function MapPage() {
               <div className="detail-zone">{selectedPlot.zoneName} - {selectedPlot.rowCode} - {T.plotNumber} {selectedPlot.plotNumber}</div>
               <div className={`status-badge ${selectedPlot.status}`}>
                 <span className="status-badge-dot" style={{ background: selectedColor?.stroke }} />
-                {getStatusLabel(selectedPlot)}
+                {selectedMyReservation ? getMyReservationLabel(selectedMyReservation) : getStatusLabel(selectedPlot)}
               </div>
+
+              {selectedMyReservation && (
+                <div className="my-plot-box">
+                  <div className="box-label">{T.myPlot}</div>
+                  <div className="my-plot-title">Yêu cầu #{selectedMyReservation.id}</div>
+                  <div className="my-plot-note">
+                    {selectedMyReservation.type === 'purchase' ? T.purchaseAction : T.reserveAction} · {getMyReservationLabel(selectedMyReservation)}
+                  </div>
+                </div>
+              )}
 
               {!selectedPlot.isPlaceholder && (
                 <div className="detail-actions route-actions">
@@ -938,7 +1063,7 @@ export default function MapPage() {
               <div className="detail-row"><span className="detail-row-label">{T.plotCode}</span><span className="detail-row-val">{selectedPlot.plotCode}</span></div>
               <div className="detail-row"><span className="detail-row-label">{T.zone}</span><span className="detail-row-val">{selectedPlot.zoneName}</span></div>
               <div className="detail-row"><span className="detail-row-label">{T.row}</span><span className="detail-row-val">{selectedPlot.rowCode}</span></div>
-              <div className="detail-row"><span className="detail-row-label">{T.status}</span><span className="detail-row-val highlight">{getStatusLabel(selectedPlot)}</span></div>
+              <div className="detail-row"><span className="detail-row-label">{T.status}</span><span className="detail-row-val highlight">{selectedMyReservation ? getMyReservationLabel(selectedMyReservation) : getStatusLabel(selectedPlot)}</span></div>
               <div className="detail-row"><span className="detail-row-label">{T.price}</span><span className="detail-row-val">{formatVnd(selectedPlot.price)}</span></div>
               <div className="detail-row"><span className="detail-row-label">{T.area}</span><span className="detail-row-val">{selectedPlot.area} m2</span></div>
               <div className="detail-row"><span className="detail-row-label">{T.size}</span><span className="detail-row-val">{selectedPlot.size}</span></div>
@@ -966,6 +1091,14 @@ export default function MapPage() {
                 </div>
               )}
 
+              <div className="request-type-switch" aria-label="Loại yêu cầu">
+                <button type="button" className={`request-type-btn ${requestType === 'reserve' ? 'active' : ''}`} onClick={() => setRequestType('reserve')}>
+                  {T.reserveAction}
+                </button>
+                <button type="button" className={`request-type-btn ${requestType === 'purchase' ? 'active' : ''}`} onClick={() => setRequestType('purchase')}>
+                  {T.purchaseAction}
+                </button>
+              </div>
 
               {selectionMode === 'single' && (
                 <div className="detail-actions">
@@ -975,7 +1108,7 @@ export default function MapPage() {
                     <>
                       {selectedIsAvailable ? (
                         <button className="btn-primary" type="button" disabled={submitting} onClick={() => submitReservation([selectedPlot])}>
-                          {submitting ? T.submitting : T.continuePlot}
+                          {submitting ? T.submitting : requestType === 'purchase' ? T.purchaseAction : T.continuePlot}
                         </button>
                       ) : (
                         <div className="selection-message">{getUnavailableMessage(selectedPlot)}</div>
@@ -1012,8 +1145,8 @@ export default function MapPage() {
                     <div className="cluster-summary-row"><span className="cluster-summary-label">{T.totalPrice}</span><span className="cluster-summary-val total">{formatVnd(clusterTotalPrice)}</span></div>
                   </div>
                   <div className="detail-actions" style={{ marginTop: 14 }}>
-                    <button className="btn-primary" type="button" disabled={submitting} onClick={() => submitReservation(clusterPlots)}>
-                      {submitting ? T.submitting : T.submitSelected}
+                    <button className="btn-primary" type="button" disabled={submitting} onClick={() => submitReservation(clusterPlots, true)}>
+                      {submitting ? T.submitting : requestType === 'purchase' ? T.purchaseSelected : T.submitSelected}
                     </button>
                     <button className="btn-secondary" type="button" onClick={clearCluster}>{T.clear}</button>
                   </div>
@@ -1027,7 +1160,7 @@ export default function MapPage() {
       <div className="map-tooltip" ref={tooltipRef}>
         <div className="tooltip-id">{hoverPlot?.plotCode}</div>
         <div className="tooltip-status" style={{ color: hoverPlot ? STATUS_COLOR[hoverPlot.status].text : undefined }}>
-          {hoverPlot ? `${hoverPlot.zoneName} - ${getStatusLabel(hoverPlot)}` : ''}
+          {hoverPlot ? `${hoverPlot.zoneName} - ${myPlotByCode.get(hoverPlot.plotCode) ? getMyReservationLabel(myPlotByCode.get(hoverPlot.plotCode)) : getStatusLabel(hoverPlot)}` : ''}
         </div>
         <div className="tooltip-price">{hoverPlot ? formatVnd(hoverPlot.price) : ''}</div>
       </div>
