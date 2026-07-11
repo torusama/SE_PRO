@@ -35,7 +35,8 @@ export class AuthService {
       `INSERT INTO users (email, password_hash, role, full_name, phone_number)
        VALUES ($1, $2, 'Customer', $3, $4)
        RETURNING user_id, email, role, full_name, phone_number, address,
-                 date_of_birth, gender, is_active, created_at`,
+                 date_of_birth, gender, emergency_contact_name,
+                 emergency_contact_phone, is_active, created_at`,
       [dto.email.toLowerCase(), passwordHash, dto.fullName, dto.phone ?? null],
     );
 
@@ -45,7 +46,8 @@ export class AuthService {
   async login(dto: LoginDto) {
     const user = await this.database.queryOne(
       `SELECT user_id, email, password_hash, role, full_name, phone_number,
-              address, date_of_birth, gender, is_active
+              address, date_of_birth, gender,
+              emergency_contact_name, emergency_contact_phone, is_active
        FROM users
        WHERE email = $1 AND is_deleted = FALSE`,
       [dto.email.toLowerCase()],
@@ -90,7 +92,9 @@ export class AuthService {
       user.phone_number &&
       user.address &&
       user.date_of_birth &&
-      user.gender,
+      user.gender &&
+      user.emergency_contact_name &&
+      user.emergency_contact_phone,
     );
 
     return {

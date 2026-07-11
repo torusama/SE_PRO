@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { DatabaseService } from '../../database/database.service';
@@ -15,6 +16,8 @@ const REQUIRED_PROFILE_FIELDS = [
   'dateOfBirth',
   'gender',
   'address',
+  'emergencyContactName',
+  'emergencyContactPhone',
 ] as const;
 
 function computeIsProfileComplete(row: Record<string, unknown>): boolean {
@@ -22,6 +25,15 @@ function computeIsProfileComplete(row: Record<string, unknown>): boolean {
     const value = row[field];
     return value !== null && value !== undefined && String(value).trim() !== '';
   });
+}
+
+// CCCD/CMND là dữ liệu nhạy cảm: mặc định chỉ trả về dạng che (4 số cuối).
+// Số đầy đủ chỉ lộ ra qua endpoint riêng, sau khi xác thực lại mật khẩu
+// đăng nhập (xem revealIdCard/updateIdCard bên dưới) — kể cả khi JWT còn hiệu lực.
+function maskIdCard(value: unknown): string | null {
+  if (typeof value !== 'string' || value.length === 0) return null;
+  if (value.length <= 4) return '•'.repeat(value.length);
+  return `•••• •••• ${value.slice(-4)}`;
 }
 
 const USER_SELECT_COLUMNS = `
@@ -67,7 +79,11 @@ export class UsersService {
       [id],
     );
     if (!user) throw new NotFoundException('User not found');
-    return { ...user, isProfileComplete: computeIsProfileComplete(user) };
+    return {
+      ...user,
+      idCardNumber: maskIdCard(user.idCardNumber),
+      isProfileComplete: computeIsProfileComplete(user),
+    };
   }
 
   async updateStatus(id: number, isActive: boolean) {
@@ -127,9 +143,46 @@ export class UsersService {
       ],
     );
     if (!user) throw new NotFoundException('User not found');
-    return { ...user, isProfileComplete: computeIsProfileComplete(user) };
+    return {
+      ...user,
+      idCardNumber: maskIdCard(user.idCardNumber),
+      isProfileComplete: computeIsProfileComplete(user),
+    };
   }
 
+  async revealIdCard(userId: number, password: string) {
+    const row = await this.database.queryOne<{
+      password_hash: string;
+      id_card_number: string | null;
+    }>(
+      `SELECT password_hash, id_card_number FROM users
+       WHERE user_id = $1 AND is_deleted = FALSE`,
+      [userId],
+    );
+    if (!row) throw new NotFoundException('User not found');
+    const matches = await bcrypt.compare(password, row.password_hash);
+    if (!matches) throw new UnauthorizedException('Mật khẩu không đúng');
+    return { idCardNumber: row.id_card_number };
+  }
+
+  async updateIdCard(userId: number, password: string, idCardNumber: string) {
+    const row = await this.database.queryOne<{ password_hash: string }>(
+      `SELECT password_hash FROM users WHERE user_id = $1 AND is_deleted = FALSE`,
+      [userId],
+    );
+    if (!row) throw new NotFoundException('User not found');
+    const matches = await bcrypt.compare(password, row.password_hash);
+    if (!matches) throw new UnauthorizedException('Mật khẩu không đúng');
+    const updated = await this.database.queryOne<{
+      id_card_number: string | null;
+    }>(
+      `UPDATE users SET id_card_number = $2, updated_at = NOW()
+       WHERE user_id = $1
+       RETURNING id_card_number`,
+      [userId, idCardNumber],
+    );
+    return { idCardNumber: updated?.id_card_number ?? null };
+  }
   async updateAvatar(userId: number, avatarUrl: string) {
     const user = await this.database.queryOne(
       `UPDATE users SET avatar_url = $2, updated_at = NOW()
