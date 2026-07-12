@@ -1,4 +1,14 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -30,6 +40,13 @@ export class PlotsController {
     return { success: true, data: await this.plotsService.map() };
   }
 
+  @Get('admin/plot-zones')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  async zones() {
+    return { success: true, data: await this.plotsService.zones() };
+  }
+
   @Get('plots/:id')
   async findOne(@Param('id') id: string) {
     return { success: true, data: await this.plotsService.findOne(Number(id)) };
@@ -39,41 +56,83 @@ export class PlotsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   async create(@Body() dto: CreatePlotDto) {
-    return { success: true, message: 'Plot created', data: await this.plotsService.create(dto) };
+    return {
+      success: true,
+      message: 'Plot created',
+      data: await this.plotsService.create(dto),
+    };
   }
 
   @Patch('admin/plots/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   async update(@Param('id') id: string, @Body() dto: UpdatePlotDto) {
-    return { success: true, message: 'Plot updated', data: await this.plotsService.update(Number(id), dto) };
+    return {
+      success: true,
+      message: 'Plot updated',
+      data: await this.plotsService.update(Number(id), dto),
+    };
   }
 
   @Patch('admin/plots/:id/status')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
-  async updateStatus(@Param('id') id: string, @Body() dto: UpdatePlotStatusDto) {
-    return { success: true, message: 'Plot status updated', data: await this.plotsService.updateStatus(Number(id), dto.status) };
+  async updateStatus(
+    @Param('id') id: string,
+    @Body() dto: UpdatePlotStatusDto,
+  ) {
+    return {
+      success: true,
+      message: 'Plot status updated',
+      data: await this.plotsService.updateStatus(Number(id), dto.status),
+    };
+  }
+
+  @Patch('admin/plots/:id/price')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  async updatePrice(@Param('id') id: string, @Body() dto: UpdatePlotPriceDto) {
+    return {
+      success: true,
+      message: 'Plot price updated',
+      data: await this.plotsService.updatePrice(Number(id), dto.price),
+    };
   }
 
   @Post('admin/plots/:id/lock')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
-  async lock(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string, @Body() dto: LockPlotDto) {
-    return { success: true, message: 'Plot locked', data: await this.plotsService.lock(Number(id), user.id, dto.reason) };
+  async lock(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: LockPlotDto,
+  ) {
+    return {
+      success: true,
+      message: 'Plot locked',
+      data: await this.plotsService.lock(Number(id), user.id, dto.reason),
+    };
   }
 
   @Post('admin/plots/:id/unlock')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   async unlock(@Param('id') id: string) {
-    return { success: true, message: 'Plot unlocked', data: await this.plotsService.unlock(Number(id)) };
+    return {
+      success: true,
+      message: 'Plot unlocked',
+      data: await this.plotsService.unlock(Number(id)),
+    };
   }
 
   @Delete('admin/plots/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   async remove(@Param('id') id: string) {
-    return { success: true, message: 'Plot deleted', data: await this.plotsService.remove(Number(id)) };
+    return {
+      success: true,
+      message: 'Plot deleted',
+      data: await this.plotsService.remove(Number(id)),
+    };
   }
 }

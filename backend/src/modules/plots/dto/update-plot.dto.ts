@@ -36,6 +36,22 @@ export class UpdatePlotDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @IsOptional()
+  @IsNumber()
+  mapX?: number;
+
+  @IsOptional()
+  @IsNumber()
+  mapY?: number;
+
+  @IsOptional()
+  @IsNumber()
+  mapWidth?: number;
+
+  @IsOptional()
+  @IsNumber()
+  mapHeight?: number;
 }
 
 export class UpdatePlotStatusDto {

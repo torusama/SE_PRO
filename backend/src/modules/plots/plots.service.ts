@@ -31,7 +31,8 @@ export class PlotsService {
 
   async map() {
     return this.database.query(
-      `SELECT plot_id AS id, plot_code AS "plotCode", zone_name AS "zoneName",
+      `SELECT plot_id AS id, plot_code AS "plotCode", zone_id AS "zoneId",
+              zone_code AS "zoneCode", zone_name AS "zoneName",
               row_number AS "rowCode", column_number AS "plotNumber",
               status, price::float, area_sqm::float AS area,
               map_x AS "mapX", map_y AS "mapY", map_width AS "mapWidth",
@@ -39,6 +40,16 @@ export class PlotsService {
               plot_type AS "plotType", description
        FROM vw_plots_map
        ORDER BY zone_code, row_number, column_number`,
+    );
+  }
+
+  async zones() {
+    return this.database.query(
+      `SELECT zone_id AS id, zone_code AS code, zone_name AS name,
+              color_hex AS color, sort_order AS "sortOrder"
+       FROM cemetery_zones
+       WHERE is_active = TRUE
+       ORDER BY sort_order, zone_code`,
     );
   }
 
@@ -60,8 +71,14 @@ export class PlotsService {
 
   async create(dto: CreatePlotDto) {
     return this.database.queryOne(
-      `INSERT INTO plots (plot_code, zone_id, row_number, column_number, price, area_sqm, direction, plot_type)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, 'single'))
+      `INSERT INTO plots (
+         plot_code, zone_id, row_number, column_number, price, area_sqm,
+         direction, plot_type, description, map_x, map_y, map_width, map_height
+       )
+       VALUES (
+         $1, $2, $3, $4, $5, $6, $7, COALESCE($8, 'single'), $9,
+         COALESCE($10, 0), COALESCE($11, 0), COALESCE($12, 40), COALESCE($13, 40)
+       )
        RETURNING plot_id AS id, plot_code AS "plotCode", status`,
       [
         dto.plotCode,
@@ -72,6 +89,11 @@ export class PlotsService {
         dto.area ?? null,
         dto.direction ?? null,
         dto.plotType ?? null,
+        dto.description ?? null,
+        dto.mapX ?? null,
+        dto.mapY ?? null,
+        dto.mapWidth ?? null,
+        dto.mapHeight ?? null,
       ],
     );
   }
@@ -88,6 +110,10 @@ export class PlotsService {
           direction = COALESCE($8, direction),
           plot_type = COALESCE($9, plot_type),
           description = COALESCE($10, description),
+          map_x = COALESCE($11, map_x),
+          map_y = COALESCE($12, map_y),
+          map_width = COALESCE($13, map_width),
+          map_height = COALESCE($14, map_height),
           updated_at = NOW()
        WHERE plot_id = $1 AND is_deleted = FALSE
        RETURNING plot_id AS id, plot_code AS "plotCode", status`,
@@ -102,6 +128,10 @@ export class PlotsService {
         dto.direction ?? null,
         dto.plotType ?? null,
         dto.description ?? null,
+        dto.mapX ?? null,
+        dto.mapY ?? null,
+        dto.mapWidth ?? null,
+        dto.mapHeight ?? null,
       ],
     );
     if (!plot) throw new NotFoundException('Plot not found');

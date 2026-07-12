@@ -29,4 +29,24 @@ export class CreatePlotDto {
   @IsOptional()
   @IsIn(['single', 'double', 'family'])
   plotType?: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsOptional()
+  @IsNumber()
+  mapX?: number;
+
+  @IsOptional()
+  @IsNumber()
+  mapY?: number;
+
+  @IsOptional()
+  @IsNumber()
+  mapWidth?: number;
+
+  @IsOptional()
+  @IsNumber()
+  mapHeight?: number;
 }

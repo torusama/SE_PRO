@@ -137,6 +137,12 @@ CREATE TABLE plots (
     -- Backend cÅ©ng cÃ³ thá»ƒ set thá»§ cÃ´ng náº¿u cáº§n
     reserved_until  TIMESTAMPTZ,            -- NULL = khÃ´ng lock
 
+    -- Audit khi admin khÃ³a/má»Ÿ khÃ³a lÃ´ tá»« báº£n Ä‘á»“ quáº£n trá»‹
+    previous_status VARCHAR(20),
+    locked_at       TIMESTAMPTZ,
+    locked_by       INT REFERENCES users(user_id),
+    lock_reason     TEXT,
+
     is_deleted      BOOLEAN         NOT NULL DEFAULT FALSE,
     -- last_updated Ä‘Ã£ gá»™p vÃ o updated_at (trigger fn_update_updated_at xá»­ lÃ½)
     created_at      TIMESTAMPTZ     NOT NULL DEFAULT NOW(),

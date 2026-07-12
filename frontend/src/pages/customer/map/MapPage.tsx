@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEven
 import { useNavigate } from 'react-router-dom'
 import { ROUTES } from '@/constants/routes'
 import { API_BASE_URL, api } from '@/lib/api'
+import { CEMETERY_ZONES, CEMETERY_ZONE_LAYOUT, getCemeteryCoordinates } from '@/lib/cemeteryMapLayout'
 import { useAuthStore } from '@/store/authStore'
 import './MapPage.css'
 
@@ -166,35 +167,8 @@ function getMyReservationLabel(reservation?: CustomerReservation) {
   return T.myPlot
 }
 
-const ZONES = [
-  { key: 'A', name: 'Khu A - Cao c\u1ea5p', dot: '#00b89e', labelX: 155, labelY: 33, mode: 'single' },
-  { key: 'B', name: 'Khu B - Ti\u00eau chu\u1ea9n', dot: '#c9a84c', labelX: 400, labelY: 33, mode: 'single' },
-  { key: 'D', name: 'Khu D - B\u00ecnh d\u00e2n', dot: '#4da6ff', labelX: 645, labelY: 33, mode: 'single' },
-  { key: 'C', name: 'Khu C - L\u00f4 gia t\u1ed9c', dot: '#7b6bcc', labelX: 400, labelY: 33, mode: 'cluster' },
-]
-
-const ZONE_LAYOUT: Record<string, {
-  name: string
-  x: number
-  width: number
-  cols: number
-  rows: number
-  topRows: number
-  midRows: number
-  bottomRows: number
-  gap: number
-}> = {
-  A: { name: ZONES[0].name, x: 60, width: 190, cols: 5, rows: 14, topRows: 4, midRows: 5, bottomRows: 5, gap: 6 },
-  B: { name: ZONES[1].name, x: 305, width: 190, cols: 5, rows: 14, topRows: 4, midRows: 5, bottomRows: 5, gap: 6 },
-  D: { name: ZONES[2].name, x: 550, width: 190, cols: 5, rows: 14, topRows: 4, midRows: 5, bottomRows: 5, gap: 6 },
-  C: { name: ZONES[3].name, x: 60, width: 680, cols: 12, rows: 12, topRows: 4, midRows: 4, bottomRows: 4, gap: 8 },
-}
-
-const LAND_BANDS = {
-  top: { y: 48, height: 110 },
-  mid: { y: 204, height: 140 },
-  bottom: { y: 414, height: 140 },
-}
+const ZONES = CEMETERY_ZONES
+const ZONE_LAYOUT = CEMETERY_ZONE_LAYOUT
 
 const TEXT_FIXES: Array<[RegExp, string]> = [
   [/Khu A .+ Cao C.+p/gi, ZONE_LAYOUT.A.name],
@@ -247,66 +221,8 @@ function getZoneCode(plotCode: string, zoneName?: string) {
   return fromName && ZONE_LAYOUT[fromName] ? fromName : 'A'
 }
 
-function getCodeParts(plotCode: string) {
-  const [, rowPart, plotPart] = plotCode.match(/^[A-D]-(\d{2})-(\d{3})$/i) || []
-  return {
-    row: Number(rowPart || 1),
-    col: Number(plotPart || 1),
-  }
-}
-
 function getCoordinates(item: BackendMapPlot, plotCode: string, zoneCode: string) {
-  const layout = ZONE_LAYOUT[zoneCode] || ZONE_LAYOUT.A
-  const parts = getCodeParts(plotCode)
-  const row = Number(item.rowCode || parts.row || 1)
-  const col = Number(item.plotNumber || parts.col || 1)
-  if (zoneCode === 'C') {
-    const familyBlocks = [ZONE_LAYOUT.A, ZONE_LAYOUT.B, ZONE_LAYOUT.D]
-    const colsPerBlock = 4
-    const block = familyBlocks[Math.floor((col - 1) / colsPerBlock)] || familyBlocks[0]
-    const localCol = (col - 1) % colsPerBlock
-    const colGap = layout.gap
-    const width = (block.width - colGap * (colsPerBlock - 1)) / colsPerBlock
-    const bandIndex = row <= layout.topRows
-      ? 0
-      : row <= layout.topRows + layout.midRows
-        ? 1
-        : 2
-    const localRow = bandIndex === 0
-      ? row - 1
-      : bandIndex === 1
-        ? row - layout.topRows - 1
-        : row - layout.topRows - layout.midRows - 1
-    const rowGap = layout.gap
-    const height = 27
-    const bandStartY = [40, 214, 418][bandIndex] ?? 418
-
-    return {
-      x: Number((block.x + localCol * (width + colGap)).toFixed(2)),
-      y: Number((bandStartY + localRow * (height + rowGap)).toFixed(2)),
-      width: Number(width.toFixed(2)),
-      height: Number(height.toFixed(2)),
-      rowCode: String(row).padStart(2, '0'),
-      plotNumber: col,
-    }
-  }
-
-  const band = row <= layout.topRows
-    ? { ...LAND_BANDS.top, localRow: row - 1, rows: layout.topRows }
-    : row <= layout.topRows + layout.midRows
-      ? { ...LAND_BANDS.mid, localRow: row - layout.topRows - 1, rows: layout.midRows }
-      : { ...LAND_BANDS.bottom, localRow: row - layout.topRows - layout.midRows - 1, rows: layout.bottomRows }
-  const width = (layout.width - layout.gap * (layout.cols - 1)) / layout.cols
-  const height = (band.height - layout.gap * (band.rows - 1)) / band.rows
-
-  return {
-    x: Number((layout.x + (col - 1) * (width + layout.gap)).toFixed(2)),
-    y: Number((band.y + band.localRow * (height + layout.gap)).toFixed(2)),
-    width: Number(width.toFixed(2)),
-    height: Number(height.toFixed(2)),
-    rowCode: String(row).padStart(2, '0'),
-    plotNumber: col,
-  }
+  return getCemeteryCoordinates(item, plotCode, zoneCode)
 }
 
 function makePlaceholderPlot(zoneCode: string, row: number, col: number): MapPlot {
@@ -605,8 +521,9 @@ export default function MapPage() {
     let cancelled = false
     const controller = new AbortController()
 
-    setLoadError('')
-    fetch(`${API_BASE_URL}/plots/map`, { signal: controller.signal })
+    const refreshMap = () => {
+      setLoadError('')
+      fetch(`${API_BASE_URL}/plots/map`, { signal: controller.signal })
       .then((response) => {
         if (!response.ok) throw new Error(`HTTP ${response.status}`)
         return response.json() as Promise<BackendMapPlot[] | { data?: BackendMapPlot[] }>
@@ -617,7 +534,7 @@ export default function MapPage() {
         const mapped = (raw || []).map(mapBackendPlot)
         const fullMap = buildFullMapPlots(mapped)
         setPlots(fullMap)
-        setSelectedPlot((current) => current || fullMap[0] || null)
+        setSelectedPlot((current) => fullMap.find((plot) => plot.id === current?.id) || current || fullMap[0] || null)
       })
       .catch((error: Error) => {
         if (cancelled || error.name === 'AbortError') return
@@ -628,9 +545,14 @@ export default function MapPage() {
       .finally(() => {
         if (!cancelled) setIsLoading(false)
       })
+    }
+
+    refreshMap()
+    const interval = window.setInterval(refreshMap, 30000)
 
     return () => {
       cancelled = true
+      window.clearInterval(interval)
       controller.abort()
     }
   }, [])

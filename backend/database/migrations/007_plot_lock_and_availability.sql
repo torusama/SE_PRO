@@ -1,4 +1,4 @@
--- 002_plot_lock_and_availability.sql
+-- 007_plot_lock_and_availability.sql
 -- Additive, non-destructive migration.
 -- Does NOT touch plot geometry/map columns (map_x, map_y, map_width, map_height,
 -- zone_color, etc.) or any existing view definitions.
@@ -17,7 +17,7 @@ BEGIN;
 -- ---------------------------------------------------------------------------
 ALTER TABLE plots
   ADD COLUMN IF NOT EXISTS previous_status VARCHAR(20),
-  ADD COLUMN IF NOT EXISTS locked_at TIMESTAMP,
+  ADD COLUMN IF NOT EXISTS locked_at TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS locked_by INT REFERENCES users(user_id),
   ADD COLUMN IF NOT EXISTS lock_reason TEXT;
 

@@ -1,3 +1,5 @@
+-- Historical follow-up for schedule tables. Kept as an idempotent migration.
+-- The canonical migration directory is backend/database/migrations.
 BEGIN;
 
 -- The base schema already owns an `appointments` table for legacy scheduled

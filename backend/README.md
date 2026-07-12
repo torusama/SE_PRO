@@ -2,6 +2,10 @@
 
 NestJS + TypeScript backend for the cemetery management system. The API uses PostgreSQL through raw `pg.Pool` queries and keeps the existing schema in `database/DBase.sql`.
 
+All additive SQL migrations live in `database/migrations`. See
+`database/migrations/README.md` for ordering and execution notes. No migration
+files should be added under `src`.
+
 ## Requirements
 
 - Node.js 24+
