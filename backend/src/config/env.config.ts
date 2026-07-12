@@ -10,4 +10,12 @@ export const envConfig = () => ({
   contractSellerAddress: process.env.CONTRACT_SELLER_ADDRESS ?? '',
   contractSellerRepresentative: process.env.CONTRACT_SELLER_REPRESENTATIVE ?? '',
   contractSellerTitle: process.env.CONTRACT_SELLER_TITLE ?? '',
+  smtp: {
+    host: process.env.SMTP_HOST ?? 'smtp.gmail.com',
+    port: Number(process.env.SMTP_PORT) || 465,
+    secure: (process.env.SMTP_SECURE ?? 'true') === 'true',
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+    from: process.env.SMTP_FROM ?? process.env.SMTP_USER,
+  },
 });

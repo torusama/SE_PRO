@@ -64,6 +64,8 @@ interface BackendUser {
   notifyService: boolean;
   notifyAnniversary: boolean;
   notifyAnnouncement: boolean;
+  isEmailVerified: boolean;
+  isEmergencyEmailVerified: boolean;
   isActive: boolean;
   isProfileComplete: boolean;
   createdAt: string;
@@ -214,6 +216,26 @@ export default function ProfilePage() {
   const [idCardSaving, setIdCardSaving] = useState(false);
   const idCardPasswordRef = useRef<string | null>(null);
 
+  // --- Xác thực email bằng OTP (email đăng nhập + email người liên hệ khẩn cấp) ---
+  const [ownOtpRequested, setOwnOtpRequested] = useState(false);
+  const [ownOtpCode, setOwnOtpCode] = useState("");
+  const [ownOtpCooldown, setOwnOtpCooldown] = useState(0);
+  const [ownOtpBusy, setOwnOtpBusy] = useState(false);
+
+  const [emgOtpRequested, setEmgOtpRequested] = useState(false);
+  const [emgOtpCode, setEmgOtpCode] = useState("");
+  const [emgOtpCooldown, setEmgOtpCooldown] = useState(0);
+  const [emgOtpBusy, setEmgOtpBusy] = useState(false);
+
+  useEffect(() => {
+    if (ownOtpCooldown <= 0 && emgOtpCooldown <= 0) return;
+    const t = setInterval(() => {
+      setOwnOtpCooldown((v) => Math.max(0, v - 1));
+      setEmgOtpCooldown((v) => Math.max(0, v - 1));
+    }, 1000);
+    return () => clearInterval(t);
+  }, [ownOtpCooldown, emgOtpCooldown]);
+
   const [emergencyContact, setEmergencyContact] = useState({
     name: "",
     relation: "Vợ / Chồng",
@@ -274,7 +296,16 @@ export default function ProfilePage() {
     setNotifyService(data.notifyService ?? true);
     setNotifyAnniversary(data.notifyAnniversary ?? true);
     setNotifyAnnouncement(data.notifyAnnouncement ?? false);
-    setProfileComplete(Boolean(data.isProfileComplete));
+    // Cổng truy cập tổng khớp công thức ở backend (auth.service.withToken):
+    // phải vừa đủ hồ sơ, vừa xác thực OTP cả email đăng nhập lẫn email người
+    // liên hệ khẩn cấp.
+    setProfileComplete(
+      Boolean(
+        data.isProfileComplete &&
+          data.isEmailVerified &&
+          data.isEmergencyEmailVerified,
+      ),
+    );
   }
 
   useEffect(() => {
@@ -551,6 +582,80 @@ export default function ProfilePage() {
     }
   }
 
+  async function handleSendOwnOtp() {
+    setOwnOtpBusy(true);
+    try {
+      await api.post("/users/me/email/send-otp");
+      setOwnOtpRequested(true);
+      setOwnOtpCooldown(60);
+      showToast(`✓ Đã gửi mã OTP đến ${profile?.email ?? "email của bạn"}`);
+    } catch (error: unknown) {
+      showToast(getErrorMessage(error, "Gửi mã OTP thất bại."));
+    } finally {
+      setOwnOtpBusy(false);
+    }
+  }
+
+  async function handleVerifyOwnOtp() {
+    if (ownOtpCode.trim().length !== 6) {
+      showToast("Vui lòng nhập đủ 6 chữ số.");
+      return;
+    }
+    setOwnOtpBusy(true);
+    try {
+      await api.post("/users/me/email/verify-otp", {
+        code: ownOtpCode.trim(),
+      });
+      setOwnOtpCode("");
+      setOwnOtpRequested(false);
+      const res = await api.get("/users/me");
+      applyProfile(res.data.data);
+      showToast("✓ Đã xác thực email đăng nhập");
+    } catch (error: unknown) {
+      showToast(getErrorMessage(error, "Mã OTP không đúng."));
+    } finally {
+      setOwnOtpBusy(false);
+    }
+  }
+
+  async function handleSendEmergencyOtp() {
+    setEmgOtpBusy(true);
+    try {
+      await api.post("/users/me/emergency-contact/send-otp");
+      setEmgOtpRequested(true);
+      setEmgOtpCooldown(60);
+      showToast(
+        `✓ Đã gửi mã OTP đến ${profile?.emergencyContactEmail ?? "email người liên hệ"}`,
+      );
+    } catch (error: unknown) {
+      showToast(getErrorMessage(error, "Gửi mã OTP thất bại."));
+    } finally {
+      setEmgOtpBusy(false);
+    }
+  }
+
+  async function handleVerifyEmergencyOtp() {
+    if (emgOtpCode.trim().length !== 6) {
+      showToast("Vui lòng nhập đủ 6 chữ số.");
+      return;
+    }
+    setEmgOtpBusy(true);
+    try {
+      await api.post("/users/me/emergency-contact/verify-otp", {
+        code: emgOtpCode.trim(),
+      });
+      setEmgOtpCode("");
+      setEmgOtpRequested(false);
+      const res = await api.get("/users/me");
+      applyProfile(res.data.data);
+      showToast("✓ Đã xác thực email người liên hệ khẩn cấp");
+    } catch (error: unknown) {
+      showToast(getErrorMessage(error, "Mã OTP không đúng."));
+    } finally {
+      setEmgOtpBusy(false);
+    }
+  }
+
   async function handleSaveContact() {
     setSaving(true);
     try {
@@ -618,6 +723,14 @@ export default function ProfilePage() {
           &quot;{T.navInfo}&quot; vẫn chưa được điền.
         </div>
       )}
+      {profile &&
+        profile.isProfileComplete &&
+        (!profile.isEmailVerified || !profile.isEmergencyEmailVerified) && (
+          <div className="incomplete-hint">
+            Vui lòng xác thực email ở mục &quot;Xác thực Email&quot; (tab
+            &quot;{T.navInfo}&quot;) để sử dụng đầy đủ chức năng.
+          </div>
+        )}
 
       <div className="page-wrap">
         <div>
@@ -872,8 +985,8 @@ export default function ProfilePage() {
                       )}
                     </div>
                     <span className="field-note">
-                      Vì đây là dữ liệu nhạy cảm, bạn cần nhập lại mật khẩu đăng
-                      nhập mỗi lần muốn xem hoặc chỉnh sửa số đầy đủ.
+                      Vì đây là dữ liệu nhạy cảm, bạn cần nhập lại mật khẩu
+                      đăng nhập mỗi lần muốn xem hoặc chỉnh sửa số đầy đủ.
                     </span>
                   </div>
                   <div className="field form-full">
@@ -987,6 +1100,104 @@ export default function ProfilePage() {
                     }
                   />
                 </div>
+              </div>
+            </div>
+
+            <div className="panel">
+              <div className="panel-title">Xác thực Email</div>
+              <div className="otp-row">
+                <div className="otp-info">
+                  <div className="otp-label">Email đăng nhập</div>
+                  <div className="otp-email">{profile?.email ?? "—"}</div>
+                </div>
+                {profile?.isEmailVerified ? (
+                  <span className="otp-badge verified">✓ Đã xác thực</span>
+                ) : ownOtpRequested ? (
+                  <div className="otp-verify-box">
+                    <input
+                      inputMode="numeric"
+                      maxLength={6}
+                      placeholder="Mã 6 số"
+                      value={ownOtpCode}
+                      onChange={(e) =>
+                        setOwnOtpCode(e.target.value.replace(/\D/g, ""))
+                      }
+                    />
+                    <button
+                      className="otp-btn"
+                      onClick={handleVerifyOwnOtp}
+                      disabled={ownOtpBusy}
+                    >
+                      Xác nhận
+                    </button>
+                    <button
+                      className="otp-btn ghost"
+                      onClick={handleSendOwnOtp}
+                      disabled={ownOtpBusy || ownOtpCooldown > 0}
+                    >
+                      {ownOtpCooldown > 0
+                        ? `Gửi lại (${ownOtpCooldown}s)`
+                        : "Gửi lại mã"}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    className="otp-btn"
+                    onClick={handleSendOwnOtp}
+                    disabled={ownOtpBusy}
+                  >
+                    {ownOtpBusy ? "Đang gửi…" : "Gửi mã xác thực"}
+                  </button>
+                )}
+              </div>
+
+              <div className="otp-row">
+                <div className="otp-info">
+                  <div className="otp-label">Email người liên hệ khẩn cấp</div>
+                  <div className="otp-email">
+                    {profile?.emergencyContactEmail ||
+                      "Chưa có — điền ở trên rồi bấm Lưu thay đổi"}
+                  </div>
+                </div>
+                {profile?.isEmergencyEmailVerified ? (
+                  <span className="otp-badge verified">✓ Đã xác thực</span>
+                ) : emgOtpRequested ? (
+                  <div className="otp-verify-box">
+                    <input
+                      inputMode="numeric"
+                      maxLength={6}
+                      placeholder="Mã 6 số"
+                      value={emgOtpCode}
+                      onChange={(e) =>
+                        setEmgOtpCode(e.target.value.replace(/\D/g, ""))
+                      }
+                    />
+                    <button
+                      className="otp-btn"
+                      onClick={handleVerifyEmergencyOtp}
+                      disabled={emgOtpBusy}
+                    >
+                      Xác nhận
+                    </button>
+                    <button
+                      className="otp-btn ghost"
+                      onClick={handleSendEmergencyOtp}
+                      disabled={emgOtpBusy || emgOtpCooldown > 0}
+                    >
+                      {emgOtpCooldown > 0
+                        ? `Gửi lại (${emgOtpCooldown}s)`
+                        : "Gửi lại mã"}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    className="otp-btn"
+                    onClick={handleSendEmergencyOtp}
+                    disabled={emgOtpBusy || !profile?.emergencyContactEmail}
+                  >
+                    {emgOtpBusy ? "Đang gửi…" : "Gửi mã xác thực"}
+                  </button>
+                )}
               </div>
             </div>
 
@@ -1669,9 +1880,7 @@ export default function ProfilePage() {
               setOpenModal(null);
               showToast("✓ Đã cập nhật số điện thoại");
             } catch (error: unknown) {
-              showToast(
-                getErrorMessage(error, "Cập nhật số điện thoại thất bại."),
-              );
+              showToast(getErrorMessage(error, "Cập nhật số điện thoại thất bại."));
             }
           }}
         />

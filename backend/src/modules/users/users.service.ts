@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { DatabaseService } from '../../database/database.service';
+import { EmailService } from '../email/email.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 
 // Các trường bắt buộc để coi hồ sơ là "đã hoàn thiện". Dùng để chặn
@@ -48,12 +49,25 @@ const USER_SELECT_COLUMNS = `
   notes,
   notify_payment AS "notifyPayment", notify_service AS "notifyService",
   notify_anniversary AS "notifyAnniversary", notify_announcement AS "notifyAnnouncement",
+  (email_verified_at IS NOT NULL) AS "isEmailVerified",
+  (emergency_contact_email_verified_at IS NOT NULL) AS "isEmergencyEmailVerified",
   is_active AS "isActive", created_at AS "createdAt"
 `;
 
+const OTP_TTL_MINUTES = 10;
+const OTP_RESEND_COOLDOWN_SECONDS = 60;
+const OTP_MAX_ATTEMPTS = 5;
+
+function generateOtpCode(): string {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
 @Injectable()
 export class UsersService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly emailService: EmailService,
+  ) {}
 
   async me(userId: number) {
     const user = await this.findById(userId);
@@ -241,5 +255,180 @@ export class UsersService {
       years,
       memberSince,
     };
+  }
+
+  // ---------------------------------------------------------------------
+  // Xác thực email bằng OTP — dùng chung logic cho cả 2 trường hợp:
+  //  - email đăng nhập của chính chủ tài khoản (cột email_*)
+  //  - email người liên hệ khẩn cấp (cột emergency_contact_*)
+  // ---------------------------------------------------------------------
+
+  async sendOwnEmailOtp(userId: number) {
+    const row = await this.database.queryOne<{
+      email: string;
+      email_otp_last_sent_at: Date | null;
+    }>(
+      `SELECT email, email_otp_last_sent_at FROM users
+       WHERE user_id = $1 AND is_deleted = FALSE`,
+      [userId],
+    );
+    if (!row) throw new NotFoundException('User not found');
+    this.assertCooldownElapsed(row.email_otp_last_sent_at);
+
+    const code = generateOtpCode();
+    const hash = await bcrypt.hash(code, 10);
+    await this.database.query(
+      `UPDATE users
+       SET email_otp_hash = $2, email_otp_expires_at = NOW() + INTERVAL '${OTP_TTL_MINUTES} minutes',
+           email_otp_attempts = 0, email_otp_last_sent_at = NOW()
+       WHERE user_id = $1`,
+      [userId, hash],
+    );
+    await this.emailService.sendOtpEmail(row.email, code, 'tài khoản của bạn');
+    return { sent: true, expiresInMinutes: OTP_TTL_MINUTES };
+  }
+
+  async verifyOwnEmailOtp(userId: number, code: string) {
+    const row = await this.database.queryOne<{
+      email_otp_hash: string | null;
+      email_otp_expires_at: Date | null;
+      email_otp_attempts: number;
+    }>(
+      `SELECT email_otp_hash, email_otp_expires_at, email_otp_attempts
+       FROM users WHERE user_id = $1 AND is_deleted = FALSE`,
+      [userId],
+    );
+    if (!row) throw new NotFoundException('User not found');
+
+    await this.assertOtpMatches(
+      row.email_otp_hash,
+      row.email_otp_expires_at,
+      row.email_otp_attempts,
+      code,
+      async () => {
+        await this.database.query(
+          `UPDATE users SET email_otp_attempts = email_otp_attempts + 1 WHERE user_id = $1`,
+          [userId],
+        );
+      },
+    );
+
+    await this.database.query(
+      `UPDATE users
+       SET email_verified_at = NOW(), email_otp_hash = NULL,
+           email_otp_expires_at = NULL, email_otp_attempts = 0
+       WHERE user_id = $1`,
+      [userId],
+    );
+    return { verified: true };
+  }
+
+  async sendEmergencyEmailOtp(userId: number) {
+    const row = await this.database.queryOne<{
+      emergency_contact_email: string | null;
+      emergency_contact_otp_last_sent_at: Date | null;
+    }>(
+      `SELECT emergency_contact_email, emergency_contact_otp_last_sent_at
+       FROM users WHERE user_id = $1 AND is_deleted = FALSE`,
+      [userId],
+    );
+    if (!row) throw new NotFoundException('User not found');
+    if (!row.emergency_contact_email) {
+      throw new BadRequestException(
+        'Chưa có email người liên hệ khẩn cấp — vui lòng nhập ở tab "Thông tin cá nhân" trước.',
+      );
+    }
+    this.assertCooldownElapsed(row.emergency_contact_otp_last_sent_at);
+
+    const code = generateOtpCode();
+    const hash = await bcrypt.hash(code, 10);
+    await this.database.query(
+      `UPDATE users
+       SET emergency_contact_otp_hash = $2,
+           emergency_contact_otp_expires_at = NOW() + INTERVAL '${OTP_TTL_MINUTES} minutes',
+           emergency_contact_otp_attempts = 0, emergency_contact_otp_last_sent_at = NOW()
+       WHERE user_id = $1`,
+      [userId, hash],
+    );
+    await this.emailService.sendOtpEmail(
+      row.emergency_contact_email,
+      code,
+      'người liên hệ khẩn cấp',
+    );
+    return { sent: true, expiresInMinutes: OTP_TTL_MINUTES };
+  }
+
+  async verifyEmergencyEmailOtp(userId: number, code: string) {
+    const row = await this.database.queryOne<{
+      emergency_contact_otp_hash: string | null;
+      emergency_contact_otp_expires_at: Date | null;
+      emergency_contact_otp_attempts: number;
+    }>(
+      `SELECT emergency_contact_otp_hash, emergency_contact_otp_expires_at,
+              emergency_contact_otp_attempts
+       FROM users WHERE user_id = $1 AND is_deleted = FALSE`,
+      [userId],
+    );
+    if (!row) throw new NotFoundException('User not found');
+
+    await this.assertOtpMatches(
+      row.emergency_contact_otp_hash,
+      row.emergency_contact_otp_expires_at,
+      row.emergency_contact_otp_attempts,
+      code,
+      async () => {
+        await this.database.query(
+          `UPDATE users SET emergency_contact_otp_attempts = emergency_contact_otp_attempts + 1 WHERE user_id = $1`,
+          [userId],
+        );
+      },
+    );
+
+    await this.database.query(
+      `UPDATE users
+       SET emergency_contact_email_verified_at = NOW(), emergency_contact_otp_hash = NULL,
+           emergency_contact_otp_expires_at = NULL, emergency_contact_otp_attempts = 0
+       WHERE user_id = $1`,
+      [userId],
+    );
+    return { verified: true };
+  }
+
+  private assertCooldownElapsed(lastSentAt: Date | null) {
+    if (!lastSentAt) return;
+    const elapsedSeconds = (Date.now() - new Date(lastSentAt).getTime()) / 1000;
+    if (elapsedSeconds < OTP_RESEND_COOLDOWN_SECONDS) {
+      const wait = Math.ceil(OTP_RESEND_COOLDOWN_SECONDS - elapsedSeconds);
+      throw new BadRequestException(
+        `Vui lòng đợi ${wait} giây trước khi gửi lại mã.`,
+      );
+    }
+  }
+
+  private async assertOtpMatches(
+    hash: string | null,
+    expiresAt: Date | null,
+    attempts: number,
+    code: string,
+    onMismatch: () => Promise<void>,
+  ) {
+    if (!hash || !expiresAt) {
+      throw new BadRequestException(
+        'Chưa có mã OTP nào được gửi, hoặc mã đã được sử dụng. Vui lòng bấm gửi lại mã.',
+      );
+    }
+    if (new Date(expiresAt).getTime() < Date.now()) {
+      throw new BadRequestException('Mã OTP đã hết hạn, vui lòng gửi lại mã.');
+    }
+    if (attempts >= OTP_MAX_ATTEMPTS) {
+      throw new BadRequestException(
+        'Bạn đã nhập sai quá số lần cho phép. Vui lòng bấm gửi lại mã.',
+      );
+    }
+    const matches = await bcrypt.compare(code, hash);
+    if (!matches) {
+      await onMismatch();
+      throw new UnauthorizedException('Mã OTP không đúng.');
+    }
   }
 }
