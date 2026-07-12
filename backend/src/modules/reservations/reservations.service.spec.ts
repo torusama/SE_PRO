@@ -306,15 +306,31 @@ describe('ReservationsService', () => {
         if (sql.includes('UPDATE plots')) {
           return result([], 1);
         }
+        if (sql.includes('SELECT full_name')) {
+          return result([{
+            full_name: 'Nguyen Van A',
+            id_card_number: '012345678901',
+            phone_number: '0900000000',
+            address: 'Ha Noi',
+          }]);
+        }
+        if (sql.includes('INSERT INTO contracts')) {
+          return result([{ id: 99, contractCode: 'HD-2026-10-1' }]);
+        }
         return result();
       });
 
       await expect(service.approve(1, 10)).resolves.toMatchObject({
         plotStatus: 'sold',
+        contracts: [{ id: 99, contractCode: 'HD-2026-10-1' }],
       });
       expect(client.query).toHaveBeenCalledWith(
         expect.stringContaining('UPDATE plots'),
         [[1], 'sold'],
+      );
+      expect(client.query).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO contracts'),
+        expect.arrayContaining([expect.stringMatching(/^HD-\d{4}-10-1$/), 10, 7, 1]),
       );
     });
 

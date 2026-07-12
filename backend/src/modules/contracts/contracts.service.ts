@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { createHash } from 'crypto';
 import { DatabaseService } from '../../database/database.service';
 
 @Injectable()
@@ -69,6 +70,114 @@ export class ContractsService {
     return contract;
   }
 
+  async updateInheritance(id: number, content: string, adminId: number) {
+    const contract = await this.database.queryOne(
+      `UPDATE contracts
+       SET inheritance_content = $2, inheritance_updated_by = $3,
+           inheritance_updated_at = NOW(), updated_at = NOW()
+       WHERE contract_id = $1 AND is_deleted = FALSE
+       RETURNING contract_id AS id, contract_code AS "contractCode",
+                 inheritance_content AS "inheritanceContent",
+                 inheritance_updated_at AS "inheritanceUpdatedAt"`,
+      [id, content.trim() || null, adminId],
+    );
+    if (!contract) throw new NotFoundException('Contract not found');
+    return contract;
+  }
+
+  async signAsBuyer(userId: number, id: number, signatureName: string) {
+    return this.sign(id, userId, signatureName, 'b');
+  }
+
+  async signAsAdmin(adminId: number, id: number, signatureName: string) {
+    return this.sign(id, adminId, signatureName, 'a');
+  }
+
+  private async sign(
+    id: number,
+    signerId: number,
+    signatureName: string,
+    party: 'a' | 'b',
+  ) {
+    const contract = await this.database.queryOne<any>(
+      `SELECT contract_id, user_id, status, contract_content,
+              inheritance_content, party_${party}_signed_at
+       FROM contracts WHERE contract_id = $1 AND is_deleted = FALSE`,
+      [id],
+    );
+    if (!contract) throw new NotFoundException('Contract not found');
+    if (party === 'b' && Number(contract.user_id) !== signerId) {
+      throw new NotFoundException('Contract not found');
+    }
+    if (contract.status !== 'active') {
+      throw new BadRequestException('Only active contracts can be signed');
+    }
+    if (contract[`party_${party}_signed_at`]) {
+      throw new BadRequestException('This party has already signed');
+    }
+
+    const signedAt = new Date();
+    const cleanName = signatureName.trim();
+    const hash = createHash('sha256')
+      .update(
+        [
+          id,
+          signerId,
+          party,
+          cleanName,
+          signedAt.toISOString(),
+          contract.contract_content ?? '',
+          contract.inheritance_content ?? '',
+        ].join('|'),
+      )
+      .digest('hex');
+    return this.database.queryOne(
+      `UPDATE contracts SET
+         party_${party}_signed_by = $2,
+         party_${party}_signature_name = $3,
+         party_${party}_signed_at = $4,
+         party_${party}_signature_hash = $5,
+         updated_at = NOW()
+       WHERE contract_id = $1
+       RETURNING contract_id AS id,
+         party_${party}_signature_name AS "signatureName",
+         party_${party}_signed_at AS "signedAt",
+         party_${party}_signature_hash AS "signatureHash"`,
+      [id, signerId, cleanName, signedAt, hash],
+    );
+  }
+
+  async savePdf(
+    id: number,
+    actorId: number,
+    relativeUrl: string,
+    isAdmin: boolean,
+  ) {
+    const row = await this.database.queryOne(
+      `UPDATE contracts SET pdf_url = $3, pdf_uploaded_by = $2,
+              pdf_uploaded_at = NOW(), updated_at = NOW()
+       WHERE contract_id = $1 AND is_deleted = FALSE
+         AND ($4::boolean = TRUE OR user_id = $2)
+       RETURNING contract_id AS id, pdf_url AS "pdfUrl",
+                 pdf_uploaded_at AS "pdfUploadedAt"`,
+      [id, actorId, relativeUrl, isAdmin],
+    );
+    if (!row) throw new NotFoundException('Contract not found');
+    return row;
+  }
+
+  async getPdf(id: number, actorId: number, isAdmin: boolean) {
+    const row = await this.database.queryOne<{ pdfUrl: string | null }>(
+      `SELECT pdf_url AS "pdfUrl" FROM contracts
+       WHERE contract_id = $1 AND is_deleted = FALSE
+         AND ($3::boolean = TRUE OR user_id = $2)`,
+      [id, actorId, isAdmin],
+    );
+    if (!row) throw new NotFoundException('Contract not found');
+    if (!row.pdfUrl) throw new NotFoundException('Contract PDF not found');
+    return row.pdfUrl;
+  }
+
   async addPayment(id: number, body: any, adminId: number) {
     return this.database.transaction(async (client) => {
       const payment = await client.query(
@@ -102,8 +211,18 @@ export class ContractsService {
                    (c.total_amount - c.paid_amount)::float AS "remainingAmount",
                    c.payment_status AS "paymentStatus", c.contract_date AS "contractDate",
                    c.effective_date AS "effectiveDate", c.expiry_date AS "expiryDate",
-                   c.pdf_url AS "pdfUrl",
-                   u.full_name AS "customerName",
+                   c.pdf_url AS "pdfUrl", c.contract_content AS "contractContent",
+                   c.inheritance_content AS "inheritanceContent",
+                   c.inheritance_updated_at AS "inheritanceUpdatedAt",
+                   c.party_a_signature_name AS "partyASignatureName",
+                   c.party_a_signed_at AS "partyASignedAt",
+                   c.party_a_signature_hash AS "partyASignatureHash",
+                   c.party_b_signature_name AS "partyBSignatureName",
+                   c.party_b_signed_at AS "partyBSignedAt",
+                   c.party_b_signature_hash AS "partyBSignatureHash",
+                   c.pdf_uploaded_at AS "pdfUploadedAt",
+                   u.full_name AS "customerName", u.id_card_number AS "customerIdCard",
+                   u.address AS "customerAddress", u.phone_number AS "customerPhone",
                    p.plot_id AS "plotId", p.plot_code AS "plotCode", p.area_sqm::float AS "areaSqm",
                    p.direction, p.plot_type AS "plotType", p.row_number AS "rowNumber",
                    p.column_number AS "columnNumber",

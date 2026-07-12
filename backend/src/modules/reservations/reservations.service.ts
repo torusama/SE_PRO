@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PoolClient, QueryResultRow } from 'pg';
+import { ConfigService } from '@nestjs/config';
 import { DatabaseService } from '../../database/database.service';
 import {
   PlotAdjacencyResult,
@@ -43,6 +44,7 @@ interface PlotRow extends QueryResultRow {
   mapY?: number | string | null;
   mapWidth?: number | string | null;
   mapHeight?: number | string | null;
+  areaSqm?: number | string | null;
 }
 
 interface LockedReservationRow extends QueryResultRow {
@@ -73,6 +75,7 @@ export class ReservationsService {
   constructor(
     private readonly database: DatabaseService,
     private readonly plotAdjacency?: PlotAdjacencyService,
+    private readonly config?: ConfigService,
   ) {}
 
   async create(userId: number, dto: CreateReservationDto, isAiDraft = false) {
@@ -273,6 +276,10 @@ export class ReservationsService {
          WHERE request_id = $1`,
         [id, adminId, adminNote || null],
       );
+      const contracts =
+        request.request_type === 'purchase'
+          ? await this.createPurchaseContracts(client, request, plots, adminId)
+          : [];
       await this.notify(
         client,
         request.user_id,
@@ -287,8 +294,142 @@ export class ReservationsService {
         status: 'approved',
         plotStatus: finalPlotStatus,
         notificationCreated: true,
+        ...(request.request_type === 'purchase' ? { contracts } : {}),
       };
     });
+  }
+
+  private async createPurchaseContracts(
+    client: PoolClient,
+    request: LockedReservationRow,
+    plots: PlotRow[],
+    adminId: number,
+  ) {
+    const buyerResult = await client.query<{
+      full_name: string;
+      id_card_number: string | null;
+      phone_number: string | null;
+      address: string | null;
+    }>(
+      `SELECT full_name, id_card_number, phone_number, address
+       FROM users WHERE user_id = $1`,
+      [request.user_id],
+    );
+    const buyer = buyerResult.rows[0] ?? {
+      full_name: '',
+      id_card_number: null,
+      phone_number: null,
+      address: null,
+    };
+    const seller = {
+      name:
+        this.config?.get<string>('contractSellerName') ??
+        'ĐƠN VỊ QUẢN LÝ NGHĨA TRANG',
+      taxCode: this.config?.get<string>('contractSellerTaxCode') ?? '',
+      address: this.config?.get<string>('contractSellerAddress') ?? '',
+      representative:
+        this.config?.get<string>('contractSellerRepresentative') ?? '',
+      title: this.config?.get<string>('contractSellerTitle') ?? '',
+    };
+    const groupCode = `GRP-${request.request_id}-${new Date()
+      .toISOString()
+      .slice(0, 10)
+      .replaceAll('-', '')}`;
+    const created: Array<{ id: number; contractCode: string }> = [];
+
+    for (const plot of plots) {
+      const code = `HD-${new Date().getFullYear()}-${request.request_id}-${plot.id}`;
+      const content = this.renderPurchaseContract(code, seller, buyer, plot);
+      const inserted = await client.query<{
+        id: number;
+        contractCode: string;
+      }>(
+        `INSERT INTO contracts
+           (contract_code, request_id, user_id, plot_id, total_amount,
+            created_by, group_contract_code, ownership_source, contract_content,
+            inheritance_content)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'purchase', $8, NULL)
+         ON CONFLICT DO NOTHING
+         RETURNING contract_id AS id, contract_code AS "contractCode"`,
+        [
+          code,
+          request.request_id,
+          request.user_id,
+          plot.id,
+          Number(plot.price),
+          adminId,
+          groupCode,
+          content,
+        ],
+      );
+      if (inserted.rows[0]) created.push(inserted.rows[0]);
+    }
+    return created;
+  }
+
+  private renderPurchaseContract(
+    code: string,
+    seller: {
+      name: string;
+      taxCode: string;
+      address: string;
+      representative: string;
+      title: string;
+    },
+    buyer: {
+      full_name: string;
+      id_card_number: string | null;
+      phone_number: string | null;
+      address: string | null;
+    },
+    plot: PlotRow,
+  ) {
+    const money = Number(plot.price).toLocaleString('vi-VN');
+    return `CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM
+Độc lập - Tự do - Hạnh phúc
+
+HỢP ĐỒNG CUNG CẤP QUYỀN SỬ DỤNG VỊ TRÍ PHẦN MỘ VÀ DỊCH VỤ NGHĨA TRANG
+Số: ${code}
+
+Căn cứ Bộ luật Dân sự số 91/2015/QH13 và pháp luật Việt Nam có liên quan;
+Căn cứ nhu cầu của Bên B và khả năng cung cấp dịch vụ của Bên A;
+
+BÊN A - ĐƠN VỊ QUẢN LÝ/CUNG CẤP DỊCH VỤ
+Tên: ${seller.name}
+Mã số thuế: ${seller.taxCode || '................................'}
+Địa chỉ: ${seller.address || '................................'}
+Đại diện: ${seller.representative || '................................'}
+Chức vụ: ${seller.title || '................................'}
+
+BÊN B - NGƯỜI SỬ DỤNG DỊCH VỤ
+Họ tên: ${buyer.full_name}
+CCCD/CMND: ${buyer.id_card_number || '................................'}
+Địa chỉ: ${buyer.address || '................................'}
+Điện thoại: ${buyer.phone_number || '................................'}
+
+ĐIỀU 1. ĐỐI TƯỢNG HỢP ĐỒNG
+Bên A cung cấp cho Bên B quyền sử dụng vị trí phần mộ mã ${plot.code}, diện tích ${plot.areaSqm ?? '...'} m², theo quy hoạch và quy chế quản lý nghĩa trang. Hợp đồng này không mặc nhiên là hợp đồng chuyển nhượng quyền sử dụng đất.
+
+ĐIỀU 2. GIÁ TRỊ VÀ THANH TOÁN
+Giá trị hợp đồng: ${money} đồng. Thời hạn, phương thức và chứng từ thanh toán thực hiện theo thỏa thuận/phiếu thu hợp lệ của hai bên.
+
+ĐIỀU 3. QUYỀN VÀ NGHĨA VỤ CỦA BÊN A
+Bàn giao đúng vị trí, cung cấp thông tin quy chế; quản lý, bảo vệ hạ tầng chung; tôn trọng quyền hợp pháp của Bên B; thông báo các khoản phí và thay đổi có liên quan theo hợp đồng và pháp luật.
+
+ĐIỀU 4. QUYỀN VÀ NGHĨA VỤ CỦA BÊN B
+Thanh toán đầy đủ; sử dụng đúng mục đích mai táng, đúng quy hoạch, nội quy, vệ sinh và môi trường; không tự ý chuyển giao, thay đổi hiện trạng hoặc sử dụng vị trí vào mục đích khác khi chưa được chấp thuận hợp lệ.
+
+ĐIỀU 5. THỜI HẠN, CHẤM DỨT VÀ GIẢI QUYẾT TRANH CHẤP
+Thời hạn và thời điểm có hiệu lực được ghi tại phần ký kết. Hai bên ưu tiên thương lượng; nếu không thành, tranh chấp được giải quyết tại cơ quan có thẩm quyền theo pháp luật Việt Nam.
+
+ĐIỀU 6. THÔNG TIN/NGUYỆN VỌNG VỀ THỪA KẾ
+[ĐỂ TRỐNG - CHỈ ADMIN CẬP NHẬT BẰNG VĂN BẢN SAU KHI KIỂM TRA HỒ SƠ, Ý CHÍ CỦA BÊN B VÀ QUY ĐỊNH PHÁP LUẬT. Nội dung này không thay thế di chúc, văn bản khai nhận/phân chia di sản hoặc thủ tục thừa kế bắt buộc.]
+
+ĐIỀU 7. ĐIỀU KHOẢN CHUNG
+Hai bên đã đọc, hiểu, tự nguyện ký và chịu trách nhiệm về thông tin cung cấp. Hợp đồng được lập thành các bản có giá trị như nhau.
+
+ĐẠI DIỆN BÊN A                              BÊN B
+(Ký, ghi rõ họ tên, chức vụ, đóng dấu)       (Ký, ghi rõ họ tên)`;
   }
 
   async reject(adminId: number, id: number, adminNote?: string) {

@@ -1,239 +1,226 @@
-// src/pages/admin/contracts/ContractsPage.tsx
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { api } from '@/lib/api'
+import { downloadContractPdf } from '@/lib/contractPdf'
 
-type ContractType = 'purchase' | 'transfer' | 'service' | 'inheritance'
-type ContractStatus = 'active' | 'pending' | 'expiring' | 'expired'
-
-interface ContractRow {
-  id: string
-  type: ContractType
-  owner: string
-  ownerInitials: string
-  lot: string
-  value: number
-  signedAt: string
-  expiresAt: string
-  expiring?: boolean
-  status: ContractStatus
-  partyA: { name: string; code: string }
-  partyB: { name: string; code: string }
-  fees: number
-  submittedAt: string
-  files: string[]
+interface Contract {
+  id: number
+  contractCode: string
+  status: 'active' | 'expired' | 'transferred' | 'cancelled'
+  totalAmount: number
+  paidAmount: number
+  paymentStatus: string
+  contractDate: string
+  customerName: string
+  customerIdCard?: string
+  customerAddress?: string
+  plotCode: string
+  zoneName: string
+  contractContent?: string
+  inheritanceContent?: string
+  inheritanceUpdatedAt?: string
+  pdfUrl?: string
+  partyASignatureName?: string
+  partyASignedAt?: string
+  partyBSignatureName?: string
+  partyBSignedAt?: string
 }
 
-const TYPE_META: Record<ContractType, { label: string; color: string; bg: string }> = {
-  purchase:     { label: 'Mua lô', color: '#4A9EFF', bg: 'rgba(74,158,255,0.14)' },
-  transfer:     { label: 'Chuyển nhượng', color: '#B497F0', bg: 'rgba(180,151,240,0.14)' },
-  service:      { label: 'Dịch vụ', color: '#00C8A0', bg: 'rgba(0,200,160,0.14)' },
-  inheritance:  { label: 'Thừa kế', color: '#F5A623', bg: 'rgba(245,166,35,0.16)' },
-}
-
-const STATUS_META: Record<ContractStatus, { label: string; color: string; bg: string }> = {
-  active:   { label: 'Hiệu lực', color: '#00C8A0', bg: 'rgba(0,200,160,0.14)' },
-  pending:  { label: 'Chờ duyệt', color: '#F5A623', bg: 'rgba(245,166,35,0.16)' },
-  expiring: { label: 'Sắp hết hạn', color: '#FF5C5C', bg: 'rgba(255,92,92,0.14)' },
-  expired:  { label: 'Hết hạn', color: '#8DA5C0', bg: 'rgba(141,165,192,0.14)' },
-}
-
-const CONTRACTS: ContractRow[] = [
-  { id: 'HD-2025-0089', type: 'transfer', owner: 'Nguyễn Văn Thành', ownerInitials: 'NT', lot: 'A-12', value: 28500000, signedAt: '—', expiresAt: '2075', status: 'pending', partyA: { name: 'Nguyễn Văn Thành', code: 'KH-0142' }, partyB: { name: 'Nguyễn Thị Mai', code: '079 987 654 321' }, fees: 500000, submittedAt: '28/06/2025', files: ['CCCD_NguyenVanThanh.pdf', 'CCCD_NguyenThiMai.pdf', 'HopDong_Goc.pdf'] },
-  { id: 'HD-2025-0082', type: 'purchase', owner: 'Lê Thị Hương', ownerInitials: 'LH', lot: 'B-05', value: 25000000, signedAt: '15/06/2025', expiresAt: '2075', status: 'active', partyA: { name: 'Vĩnh Phúc Viên', code: 'Chủ đầu tư' }, partyB: { name: 'Lê Thị Hương', code: 'KH-0138' }, fees: 0, submittedAt: '15/06/2025', files: ['CCCD_LeThiHuong.pdf', 'HopDong_Goc.pdf'] },
-  { id: 'HD-2022-0031', type: 'service', owner: 'Phạm Văn Tuấn', ownerInitials: 'PT', lot: 'C-18', value: 6000000, signedAt: '01/07/2022', expiresAt: '31/07/2025', expiring: true, status: 'expiring', partyA: { name: 'Vĩnh Phúc Viên', code: 'Chủ đầu tư' }, partyB: { name: 'Phạm Văn Tuấn', code: 'KH-0155' }, fees: 0, submittedAt: '01/07/2022', files: ['HopDong_DichVu.pdf'] },
-  { id: 'HD-2025-0079', type: 'inheritance', owner: 'Trần Văn Long', ownerInitials: 'TL', lot: 'D-07', value: 0, signedAt: '10/06/2025', expiresAt: '2072', status: 'active', partyA: { name: 'Trần Văn Long (cũ)', code: 'KH-0140' }, partyB: { name: 'Trần Văn Long', code: 'KH-0193' }, fees: 500000, submittedAt: '10/06/2025', files: ['DiChuc_CongChung.pdf', 'CCCD.pdf'] },
-  { id: 'HD-2025-0071', type: 'purchase', owner: 'Nguyễn Bích Chi', ownerInitials: 'NB', lot: 'A-31', value: 28500000, signedAt: '02/06/2025', expiresAt: '2075', status: 'active', partyA: { name: 'Vĩnh Phúc Viên', code: 'Chủ đầu tư' }, partyB: { name: 'Nguyễn Bích Chi', code: 'KH-0127' }, fees: 0, submittedAt: '02/06/2025', files: ['CCCD_NguyenBichChi.pdf', 'HopDong_Goc.pdf'] },
-]
-
-const panelStyle: React.CSSProperties = {
+const panel: React.CSSProperties = {
   background: 'var(--color-bg-card)',
   border: '1px solid var(--color-border)',
   borderRadius: 12,
 }
 
-const inputStyle: React.CSSProperties = {
-  background: 'var(--color-bg-secondary)',
-  border: '1px solid var(--color-border)',
-  color: 'var(--color-text-primary)',
-  borderRadius: 7,
-  padding: '7px 10px',
-  fontSize: 12,
-}
-
-function Pill({ label, color, bg }: { label: string; color: string; bg: string }) {
-  return (
-    <span style={{ background: bg, color, borderRadius: 20, padding: '3px 9px', fontSize: 11, fontWeight: 600 }}>{label}</span>
-  )
-}
-
 export default function ContractsPage() {
+  const [contracts, setContracts] = useState<Contract[]>([])
+  const [selectedId, setSelectedId] = useState<number>()
   const [search, setSearch] = useState('')
-  const [typeFilter, setTypeFilter] = useState<'all' | ContractType>('all')
-  const [statusFilter, setStatusFilter] = useState<'all' | ContractStatus>('all')
-  const [selectedId, setSelectedId] = useState(CONTRACTS[0].id)
+  const [inheritance, setInheritance] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState('')
+  const [signatureName, setSignatureName] = useState('')
+  const [accepted, setAccepted] = useState(false)
+
+  const load = async () => {
+    setLoading(true)
+    try {
+      const response = await api.get('/admin/contracts')
+      const rows: Contract[] = response.data.data
+      setContracts(rows)
+      setSelectedId((current) => current ?? rows[0]?.id)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { void load() }, [])
 
   const filtered = useMemo(() => {
-    return CONTRACTS.filter((c) => {
-      const matchesSearch =
-        !search.trim() ||
-        c.id.toLowerCase().includes(search.trim().toLowerCase()) ||
-        c.owner.toLowerCase().includes(search.trim().toLowerCase()) ||
-        c.lot.toLowerCase().includes(search.trim().toLowerCase())
-      const matchesType = typeFilter === 'all' || c.type === typeFilter
-      const matchesStatus = statusFilter === 'all' || c.status === statusFilter
-      return matchesSearch && matchesType && matchesStatus
-    })
-  }, [search, typeFilter, statusFilter])
+    const keyword = search.trim().toLocaleLowerCase('vi')
+    if (!keyword) return contracts
+    return contracts.filter((item) =>
+      [item.contractCode, item.customerName, item.plotCode]
+        .some((value) => value?.toLocaleLowerCase('vi').includes(keyword)),
+    )
+  }, [contracts, search])
 
-  const selected = CONTRACTS.find((c) => c.id === selectedId) ?? filtered[0] ?? CONTRACTS[0]
+  const selected = contracts.find((item) => item.id === selectedId)
 
-  const total = CONTRACTS.length
-  const activeCount = CONTRACTS.filter((c) => c.status === 'active').length
-  const pendingCount = CONTRACTS.filter((c) => c.status === 'pending').length
-  const transferCount = CONTRACTS.filter((c) => c.type === 'transfer').length
+  useEffect(() => {
+    setInheritance(selected?.inheritanceContent ?? '')
+    setMessage('')
+  }, [selected])
+
+  const saveInheritance = async () => {
+    if (!selected) return
+    setSaving(true)
+    setMessage('')
+    try {
+      await api.patch(`/admin/contracts/${selected.id}/inheritance`, { content: inheritance })
+      setContracts((items) => items.map((item) =>
+        item.id === selected.id ? { ...item, inheritanceContent: inheritance } : item,
+      ))
+      setMessage('Đã lưu nội dung thừa kế.')
+    } catch {
+      setMessage('Không thể lưu. Vui lòng kiểm tra lại.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const printContract = () => {
+    if (!selected) return
+    const printable = `${selected.contractContent ?? ''}\n\nPHỤ LỤC/THÔNG TIN THỪA KẾ DO ADMIN XÁC NHẬN\n${selected.inheritanceContent || '[Chưa có nội dung]'}`
+    const popup = window.open('', '_blank', 'width=900,height=700')
+    if (!popup) return
+    popup.document.write(`<html><head><title>${selected.contractCode}</title><style>body{font-family:"Times New Roman",serif;max-width:800px;margin:40px auto;line-height:1.6;white-space:pre-wrap} @media print{body{margin:20mm}}</style></head><body></body></html>`)
+    popup.document.body.textContent = printable
+    popup.document.close()
+    popup.print()
+  }
+
+  const saveContractToDevice = async () => {
+    if (!selected) return
+    setSaving(true)
+    setMessage('')
+    try {
+      await downloadContractPdf(selected)
+      setMessage('Đã tải PDF hợp đồng về máy.')
+    } catch {
+      setMessage('Không thể tạo file PDF.')
+    } finally { setSaving(false) }
+  }
+
+  const signAdmin = async () => {
+    if (!selected || !accepted || signatureName.trim().length < 2) return
+    setSaving(true)
+    try {
+      await api.post(`/admin/contracts/${selected.id}/sign`, { signatureName, accepted })
+      await load()
+      setMessage('Đã ký điện tử với tư cách Bên A.')
+    } catch {
+      setMessage('Không thể ký hợp đồng.')
+    } finally { setSaving(false) }
+  }
+
+  const uploadPdf = async (file: File) => {
+    if (!selected) return
+    const form = new FormData()
+    form.append('pdf', file)
+    setSaving(true)
+    try {
+      await api.post(`/admin/contracts/${selected.id}/pdf`, form, { headers: { 'Content-Type': 'multipart/form-data' } })
+      await load()
+      setMessage('Đã lưu PDF hợp đồng.')
+    } catch {
+      setMessage('Không thể lưu PDF.')
+    } finally { setSaving(false) }
+  }
+
+  const openPdf = async () => {
+    if (!selected) return
+    try {
+      const response = await api.get(`/admin/contracts/${selected.id}/pdf`, { responseType: 'blob' })
+      const url = URL.createObjectURL(response.data)
+      window.open(url, '_blank')
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    } catch { setMessage('Không thể mở PDF.') }
+  }
 
   return (
     <div style={{ display: 'grid', gap: 18 }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 24, color: 'var(--color-text-primary)' }}>Hợp đồng &amp; Sổ hữu</h1>
-          <p style={{ margin: '4px 0 0', color: 'var(--color-text-secondary)', fontSize: 13 }}>
-            FR-12 · Hồ sơ sở hữu &amp; giao dịch · {activeCount} hợp đồng đang hiệu lực
-          </p>
-        </div>
-        <button style={{ background: 'var(--color-accent-teal)', color: '#0A1628', fontWeight: 600, border: 'none', borderRadius: 7, padding: '9px 16px', fontSize: 13, cursor: 'pointer' }}>
-          + Tạo hợp đồng
-        </button>
+      <header>
+        <h1 style={{ margin: 0, color: 'var(--color-text-primary)' }}>Hợp đồng tự động</h1>
+        <p style={{ color: 'var(--color-text-secondary)', margin: '5px 0 0' }}>
+          Hợp đồng được sinh khi admin duyệt yêu cầu mua lô phần mộ.
+        </p>
       </header>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
-        <div style={{ ...panelStyle, padding: 16, textAlign: 'center' }}>
-          <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--color-text-primary)' }}>{total}</div>
-          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Tổng hợp đồng</div>
-        </div>
-        <div style={{ ...panelStyle, padding: 16, textAlign: 'center' }}>
-          <div style={{ fontSize: 20, fontWeight: 700, color: '#00C8A0' }}>{activeCount}</div>
-          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Đang hiệu lực</div>
-        </div>
-        <div style={{ ...panelStyle, padding: 16, textAlign: 'center' }}>
-          <div style={{ fontSize: 20, fontWeight: 700, color: '#FF5C5C' }}>{pendingCount}</div>
-          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Chờ duyệt hôm nay</div>
-        </div>
-        <div style={{ ...panelStyle, padding: 16, textAlign: 'center' }}>
-          <div style={{ fontSize: 20, fontWeight: 700, color: '#F5A623' }}>{transferCount}</div>
-          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Chuyển nhượng</div>
-        </div>
-      </div>
+      <input
+        value={search}
+        onChange={(event) => setSearch(event.target.value)}
+        placeholder="Tìm mã hợp đồng, khách hàng hoặc mã lô..."
+        style={{ ...panel, padding: '10px 12px', color: 'var(--color-text-primary)', maxWidth: 420 }}
+      />
 
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="🔍 Tìm mã HĐ, tên KH, số lô..." style={{ ...inputStyle, minWidth: 240 }} />
-        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value as typeof typeFilter)} style={inputStyle}>
-          <option value="all">Loại HĐ: Tất cả</option>
-          <option value="purchase">Mua lô</option>
-          <option value="transfer">Chuyển nhượng</option>
-          <option value="service">Dịch vụ</option>
-          <option value="inheritance">Thừa kế</option>
-        </select>
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)} style={inputStyle}>
-          <option value="all">Trạng thái: Tất cả</option>
-          <option value="active">Hiệu lực</option>
-          <option value="pending">Chờ duyệt</option>
-          <option value="expiring">Sắp hết hạn</option>
-          <option value="expired">Hết hạn</option>
-        </select>
-      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(340px, .8fr) minmax(480px, 1.2fr)', gap: 16 }}>
+        <section style={{ ...panel, overflow: 'hidden' }}>
+          <div style={{ padding: 16, borderBottom: '1px solid var(--color-border)', fontWeight: 600 }}>Danh sách ({filtered.length})</div>
+          {loading && <div style={{ padding: 20 }}>Đang tải...</div>}
+          {!loading && filtered.length === 0 && <div style={{ padding: 20 }}>Chưa có hợp đồng.</div>}
+          {filtered.map((item) => (
+            <button key={item.id} onClick={() => setSelectedId(item.id)} style={{ width: '100%', textAlign: 'left', padding: 14, border: 0, borderBottom: '1px solid var(--color-border)', cursor: 'pointer', background: item.id === selectedId ? 'rgba(0,200,160,.1)' : 'transparent', color: 'var(--color-text-primary)' }}>
+              <strong style={{ color: 'var(--color-accent-teal)' }}>{item.contractCode}</strong>
+              <div style={{ marginTop: 5 }}>{item.customerName} · {item.plotCode}</div>
+              <small style={{ color: 'var(--color-text-secondary)' }}>{item.totalAmount.toLocaleString('vi-VN')} đ · {item.status}</small>
+            </button>
+          ))}
+        </section>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(360px, 1.3fr) minmax(320px, 1fr)', gap: 16 }}>
-        <div style={{ ...panelStyle, overflow: 'hidden' }}>
-          <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--color-border)', fontSize: 14, fontWeight: 600, color: 'var(--color-text-primary)' }}>
-            Danh sách hợp đồng
-          </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr>
-                {['Mã HĐ', 'Loại', 'Chủ sở hữu', 'Lô đất', 'Giá trị', 'Hết hạn'].map((h) => (
-                  <th key={h} style={{ padding: '10px 16px', fontSize: 11, color: 'var(--color-text-muted)', textAlign: 'left', borderBottom: '1px solid var(--color-border)' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((c) => (
-                <tr
-                  key={c.id}
-                  onClick={() => setSelectedId(c.id)}
-                  style={{ cursor: 'pointer', borderBottom: '1px solid var(--color-border)', background: selectedId === c.id ? 'rgba(0,200,160,0.08)' : 'transparent' }}>
-                  <td style={{ padding: '12px 16px', color: 'var(--color-accent-teal)', fontWeight: 600 }}>{c.id}</td>
-                  <td style={{ padding: '12px 16px' }}><Pill label={TYPE_META[c.type].label} color={TYPE_META[c.type].color} bg={TYPE_META[c.type].bg} /></td>
-                  <td style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ width: 26, height: 26, borderRadius: '50%', background: 'rgba(0,200,160,0.14)', color: 'var(--color-accent-teal)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700 }}>{c.ownerInitials}</span>
-                    <span style={{ color: 'var(--color-text-primary)' }}>{c.owner}</span>
-                  </td>
-                  <td style={{ padding: '12px 16px', color: 'var(--color-text-secondary)' }}>{c.lot}</td>
-                  <td style={{ padding: '12px 16px', color: 'var(--color-text-primary)' }}>{c.value.toLocaleString('vi-VN')} đ</td>
-                  <td style={{ padding: '12px 16px', color: c.expiring ? '#FF5C5C' : 'var(--color-text-secondary)' }}>{c.expiresAt}{c.expiring ? ' ⚠' : ''}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div style={{ padding: '12px 18px', fontSize: 12, color: 'var(--color-text-muted)', borderTop: '1px solid var(--color-border)' }}>
-            Hiển thị 1–{filtered.length} / {total} hợp đồng
-          </div>
-        </div>
-
-        <div style={{ ...panelStyle, padding: 20, alignSelf: 'start' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>Mã hợp đồng</div>
-              <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-accent-teal)' }}>{selected.id}</div>
-            </div>
-            <Pill label={STATUS_META[selected.status].label} color={STATUS_META[selected.status].color} bg={STATUS_META[selected.status].bg} />
-          </div>
-
-          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', marginBottom: 10 }}>Thông tin chung</div>
-          <div style={{ display: 'grid', gap: 8, fontSize: 12.5, marginBottom: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: 'var(--color-text-secondary)' }}>Loại hợp đồng</span><span style={{ color: 'var(--color-text-primary)' }}>{TYPE_META[selected.type].label}</span></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: 'var(--color-text-secondary)' }}>Lô phần mộ</span><span style={{ color: 'var(--color-text-primary)' }}>{selected.lot}</span></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: 'var(--color-text-secondary)' }}>Giá trị giao dịch</span><span style={{ color: 'var(--color-accent-teal)' }}>{selected.value.toLocaleString('vi-VN')} đ</span></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: 'var(--color-text-secondary)' }}>Phí thủ tục</span><span style={{ color: 'var(--color-text-primary)' }}>{selected.fees.toLocaleString('vi-VN')} đ</span></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: 'var(--color-text-secondary)' }}>Ngày nộp hồ sơ</span><span style={{ color: 'var(--color-text-primary)' }}>{selected.submittedAt}</span></div>
-          </div>
-
-          <hr style={{ border: 'none', borderTop: '1px solid var(--color-border)', margin: '0 0 16px' }} />
-          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', marginBottom: 10 }}>Bên A → Bên B</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
-            <div style={{ padding: 10, background: 'var(--color-bg-secondary)', borderRadius: 7, fontSize: 12 }}>
-              <div style={{ fontSize: 10, color: 'var(--color-text-muted)', marginBottom: 3 }}>Bên A</div>
-              <div style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>{selected.partyA.name}</div>
-              <div style={{ color: 'var(--color-text-secondary)', marginTop: 2 }}>{selected.partyA.code}</div>
-            </div>
-            <div style={{ padding: 10, background: 'var(--color-bg-secondary)', borderRadius: 7, fontSize: 12 }}>
-              <div style={{ fontSize: 10, color: 'var(--color-text-muted)', marginBottom: 3 }}>Bên B</div>
-              <div style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>{selected.partyB.name}</div>
-              <div style={{ color: 'var(--color-text-secondary)', marginTop: 2 }}>{selected.partyB.code}</div>
-            </div>
-          </div>
-
-          <hr style={{ border: 'none', borderTop: '1px solid var(--color-border)', margin: '0 0 16px' }} />
-          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', marginBottom: 10 }}>Hồ sơ đính kèm</div>
-          <div style={{ display: 'grid', gap: 6, marginBottom: 18 }}>
-            {selected.files.map((file) => (
-              <div key={file} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', border: '1px solid var(--color-border)', borderRadius: 7, fontSize: 12 }}>
-                <span style={{ color: 'var(--color-text-secondary)' }}>📄 {file}</span>
-                <span style={{ color: 'var(--color-accent-teal)', cursor: 'pointer' }}>Xem</span>
+        <section style={{ ...panel, padding: 20, color: '#000000' }}>
+          {!selected && <div>Chọn một hợp đồng để xem.</div>}
+          {selected && <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+              <div><small>Mã hợp đồng</small><h2 style={{ margin: '3px 0', color: 'var(--color-accent-teal)' }}>{selected.contractCode}</h2></div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={printContract} style={{ height: 38, padding: '0 16px', cursor: 'pointer' }}>In hợp đồng</button>
+                <button disabled={saving} onClick={saveContractToDevice} style={{ height: 38, padding: '0 16px', cursor: 'pointer' }}>Tải PDF về máy</button>
               </div>
-            ))}
-          </div>
-
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              disabled={selected.status !== 'pending'}
-              style={{ flex: 1, background: 'var(--color-accent-teal)', color: '#0A1628', fontWeight: 600, border: 'none', borderRadius: 7, padding: '9px 0', fontSize: 13, cursor: selected.status === 'pending' ? 'pointer' : 'not-allowed', opacity: selected.status === 'pending' ? 1 : 0.5 }}>
-              ✓ Phê duyệt
-            </button>
-            <button style={{ flex: 1, background: 'transparent', border: '1px solid var(--color-border)', color: 'var(--color-text-secondary)', borderRadius: 7, padding: '9px 0', fontSize: 13, cursor: 'pointer' }}>
-              In HĐ
-            </button>
-          </div>
-        </div>
+            </div>
+            <p><b>Bên B:</b> {selected.customerName} — CCCD: {selected.customerIdCard || 'chưa cập nhật'}</p>
+            <p><b>Vị trí:</b> {selected.plotCode}, {selected.zoneName}</p>
+            <details open style={{ marginTop: 18 }}>
+              <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Nội dung hợp đồng đã sinh</summary>
+              <pre style={{ whiteSpace: 'pre-wrap', fontFamily: '"Times New Roman", serif', fontSize: 15, lineHeight: 1.65, padding: 18, background: '#ffffff', color: '#000000', border: '1px solid #d1d5db', borderRadius: 8, maxHeight: 430, overflow: 'auto' }}>{selected.contractContent || 'Hợp đồng cũ chưa có nội dung snapshot.'}</pre>
+            </details>
+            <div style={{ marginTop: 18 }}>
+              <label htmlFor="inheritance"><b>Thông tin/nguyện vọng thừa kế (chỉ admin)</b></label>
+              <p style={{ fontSize: 12, color: '#000000' }}>Để trống nếu người mua chưa cung cấp. Nội dung này không thay thế di chúc hoặc thủ tục thừa kế theo pháp luật.</p>
+              <textarea id="inheritance" value={inheritance} maxLength={10000} onChange={(event) => setInheritance(event.target.value)} rows={8} style={{ width: '100%', boxSizing: 'border-box', padding: 12, borderRadius: 8, background: '#ffffff', color: '#000000', border: '1px solid #d1d5db' }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10 }}>
+                <button disabled={saving} onClick={saveInheritance} style={{ padding: '9px 18px', background: 'var(--color-accent-teal)', border: 0, borderRadius: 7, cursor: 'pointer' }}>{saving ? 'Đang lưu...' : 'Lưu bằng văn bản'}</button>
+                <span style={{ fontSize: 12 }}>{message}</span>
+              </div>
+            </div>
+            <div style={{ marginTop: 22, borderTop: '1px solid var(--color-border)', paddingTop: 18 }}>
+              <b>Chữ ký điện tử</b>
+              <p style={{ fontSize: 12 }}>Bên A: {selected.partyASignatureName || 'Chưa ký'} · Bên B: {selected.partyBSignatureName || 'Chưa ký'}</p>
+              {!selected.partyASignatureName && <div style={{ display: 'grid', gap: 8 }}>
+                <input value={signatureName} onChange={(event) => setSignatureName(event.target.value)} placeholder="Họ tên người đại diện Bên A" style={{ padding: 9, background: '#ffffff', color: '#000000', border: '1px solid #d1d5db', borderRadius: 6 }} />
+                <label style={{ fontSize: 12, color: '#000000' }}><input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} /> Tôi đã kiểm tra nội dung và đồng ý ký với tư cách Bên A.</label>
+                <button disabled={saving || !accepted} onClick={signAdmin} style={{ padding: 9 }}>Xác nhận ký điện tử</button>
+              </div>}
+            </div>
+            <div style={{ marginTop: 22, borderTop: '1px solid var(--color-border)', paddingTop: 18 }}>
+              <b>Lưu bản PDF</b>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 10 }}>
+                <label style={{ border: '1px solid var(--color-border)', borderRadius: 6, padding: '8px 12px', cursor: 'pointer' }}>Tải PDF lên<input type="file" accept="application/pdf,.pdf" disabled={saving} style={{ display: 'none' }} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadPdf(file); event.target.value = '' }} /></label>
+                {selected.pdfUrl && <button onClick={openPdf} style={{ padding: '8px 12px', color: 'var(--color-accent-teal)' }}>Xem PDF đã lưu</button>}
+              </div>
+            </div>
+          </>}
+        </section>
       </div>
     </div>
   )

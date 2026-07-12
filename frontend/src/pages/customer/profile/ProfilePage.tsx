@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ROUTES } from "@/constants/routes";
 import { API_BASE_URL, api } from "@/lib/api";
+import { downloadContractPdf } from "@/lib/contractPdf";
 import { useAuthStore } from "@/store/authStore";
 import "./ProfilePage.css";
 
@@ -23,12 +24,13 @@ const T = {
   navInfo: "Thông tin cá nhân",
   navContact: "Liên hệ & thông báo",
   navLots: "Lô đất của tôi",
+  navContracts: "Hợp đồng của tôi",
   navSecurity: "Bảo mật tài khoản",
   logout: "Đăng xuất",
   save: "Lưu thay đổi",
 };
 
-type TabId = "info" | "contact" | "lots" | "security";
+type TabId = "info" | "contact" | "lots" | "contracts" | "security";
 type ModalId =
   | "transfer"
   | "status-lot"
@@ -103,6 +105,15 @@ interface BackendLot {
     referenceCode: string | null;
     note: string | null;
   }[];
+  contractContent?: string | null;
+  inheritanceContent?: string | null;
+  partyASignatureName?: string | null;
+  partyASignedAt?: string | null;
+  partyASignatureHash?: string | null;
+  partyBSignatureName?: string | null;
+  partyBSignedAt?: string | null;
+  partyBSignatureHash?: string | null;
+  pdfUploadedAt?: string | null;
 }
 
 function formatCurrency(v: number) {
@@ -222,6 +233,11 @@ export default function ProfilePage() {
   const [lots, setLots] = useState<BackendLot[] | null>(null);
   const [lotsError, setLotsError] = useState<string | null>(null);
   const [lotDetail, setLotDetail] = useState<BackendLot | null>(null);
+  const [activeContract, setActiveContract] = useState<number | null>(null);
+  const [contractDetail, setContractDetail] = useState<BackendLot | null>(null);
+  const [signatureName, setSignatureName] = useState("");
+  const [signatureAccepted, setSignatureAccepted] = useState(false);
+  const [contractBusy, setContractBusy] = useState(false);
   const lotsLoading = activeTab === "lots" && lots === null && !lotsError;
   const lotDetailLoading =
     activeLot !== null && (lotDetail === null || lotDetail.id !== activeLot);
@@ -292,7 +308,7 @@ export default function ProfilePage() {
   }, []);
 
   useEffect(() => {
-    if (activeTab !== "lots" || lots !== null) return;
+    if (!["lots", "contracts"].includes(activeTab) || lots !== null) return;
     api
       .get("/my/contracts")
       .then((res) => setLots(res.data.data))
@@ -301,6 +317,21 @@ export default function ProfilePage() {
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
+
+  useEffect(() => {
+    if (activeContract === null) return;
+    let cancelled = false;
+    api.get(`/my/contracts/${activeContract}`)
+      .then((res) => {
+        if (!cancelled) {
+          setContractDetail(res.data.data);
+          setSignatureName(profile?.fullName ?? "");
+          setSignatureAccepted(false);
+        }
+      })
+      .catch((error: unknown) => showToast(getErrorMessage(error, "Không thể tải hợp đồng.")));
+    return () => { cancelled = true; };
+  }, [activeContract, profile?.fullName]);
 
   useEffect(() => {
     if (activeLot === null) return;
@@ -341,6 +372,84 @@ export default function ProfilePage() {
   function switchTab(tab: TabId) {
     setActiveTab(tab);
     if (tab === "lots") setActiveLot(null);
+    if (tab === "contracts") setActiveContract(null);
+  }
+
+  async function signContract() {
+    if (!contractDetail || !signatureAccepted || signatureName.trim().length < 2) {
+      showToast("Vui lòng nhập họ tên và xác nhận đồng ý ký.");
+      return;
+    }
+    setContractBusy(true);
+    try {
+      await api.post(`/my/contracts/${contractDetail.id}/sign`, {
+        signatureName,
+        accepted: signatureAccepted,
+      });
+      const res = await api.get(`/my/contracts/${contractDetail.id}`);
+      setContractDetail(res.data.data);
+      setLots((items) => items?.map((item) => item.id === res.data.data.id ? res.data.data : item) ?? null);
+      showToast("✓ Đã ký điện tử hợp đồng");
+    } catch (error: unknown) {
+      showToast(getErrorMessage(error, "Không thể ký hợp đồng."));
+    } finally {
+      setContractBusy(false);
+    }
+  }
+
+  async function uploadContractPdf(file: File) {
+    if (!contractDetail) return;
+    const form = new FormData();
+    form.append("pdf", file);
+    setContractBusy(true);
+    try {
+      await api.post(`/my/contracts/${contractDetail.id}/pdf`, form, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      const res = await api.get(`/my/contracts/${contractDetail.id}`);
+      setContractDetail(res.data.data);
+      showToast("✓ Đã lưu bản PDF hợp đồng");
+    } catch (error: unknown) {
+      showToast(getErrorMessage(error, "Không thể tải PDF lên."));
+    } finally {
+      setContractBusy(false);
+    }
+  }
+
+  function printCustomerContract() {
+    if (!contractDetail) return;
+    const popup = window.open("", "_blank", "width=900,height=700");
+    if (!popup) return;
+    popup.document.write(`<html><head><title>${contractDetail.contractCode}</title><style>body{font-family:"Times New Roman",serif;max-width:800px;margin:40px auto;line-height:1.6;white-space:pre-wrap}.signature{margin-top:30px;border-top:1px solid #aaa;padding-top:15px}@media print{body{margin:20mm}}</style></head><body></body></html>`);
+    const signatures = `\n\nXÁC NHẬN CHỮ KÝ ĐIỆN TỬ\nBên A: ${contractDetail.partyASignatureName || "Chưa ký"} ${contractDetail.partyASignedAt ? `- ${formatDate(contractDetail.partyASignedAt)}` : ""}\nBên B: ${contractDetail.partyBSignatureName || "Chưa ký"} ${contractDetail.partyBSignedAt ? `- ${formatDate(contractDetail.partyBSignedAt)}` : ""}\n\nTHÔNG TIN THỪA KẾ\n${contractDetail.inheritanceContent || "[Chưa có nội dung]"}`;
+    popup.document.body.textContent = `${contractDetail.contractContent ?? ""}${signatures}`;
+    popup.document.close();
+    popup.print();
+  }
+
+  async function openContractPdf() {
+    if (!contractDetail) return;
+    try {
+      const response = await api.get(`/my/contracts/${contractDetail.id}/pdf`, { responseType: "blob" });
+      const url = URL.createObjectURL(response.data);
+      window.open(url, "_blank");
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (error: unknown) {
+      showToast(getErrorMessage(error, "Không thể mở PDF."));
+    }
+  }
+
+  async function saveCustomerContractPdf() {
+    if (!contractDetail) return;
+    setContractBusy(true);
+    try {
+      await downloadContractPdf(contractDetail);
+      showToast("✓ Đã tải PDF hợp đồng về máy");
+    } catch {
+      showToast("Không thể tạo file PDF.");
+    } finally {
+      setContractBusy(false);
+    }
   }
 
   // Các trường bắt buộc hiển thị dấu * đỏ trên UI tab "Thông tin cá nhân"
@@ -594,6 +703,13 @@ export default function ProfilePage() {
               >
                 <span className="icon">📍</span>
                 {T.navLots}
+              </button>
+              <button
+                className={`side-nav-item ${activeTab === "contracts" ? "active" : ""}`}
+                onClick={() => switchTab("contracts")}
+              >
+                <span className="icon">📄</span>
+                {T.navContracts}
               </button>
               <button
                 className={`side-nav-item ${activeTab === "security" ? "active" : ""}`}
@@ -1235,6 +1351,80 @@ export default function ProfilePage() {
                 onOpenModal={(id) => setOpenModal(id)}
                 showToast={showToast}
               />
+            )}
+          </div>
+
+          <div className={`panel-section ${activeTab === "contracts" ? "active" : ""}`}>
+            <div className="section-header">
+              <div className="section-title">Hợp Đồng Của Tôi</div>
+            </div>
+            {activeContract === null ? (
+              <div className="panel">
+                <div className="panel-title">Danh sách hợp đồng ({(lots ?? []).length})</div>
+                {lots === null && !lotsError && <div>Đang tải hợp đồng…</div>}
+                {lotsError && <div className="modal-warn">⚠ {lotsError}</div>}
+                {lots?.length === 0 && <div>Bạn chưa có hợp đồng nào.</div>}
+                <div className="lot-cards">
+                  {(lots ?? []).map((contract) => (
+                    <button
+                      type="button"
+                      className="lot-card contract-card-button"
+                      key={contract.id}
+                      onClick={() => setActiveContract(contract.id)}
+                    >
+                      <div className="lot-card-top">
+                        <div>
+                          <div className="lot-name">{contract.contractCode}</div>
+                          <div className="lot-zone">Lô {contract.plotCode} · {contract.zoneName}</div>
+                        </div>
+                        <span className={`lot-status ${contract.partyBSignatureName ? "active" : "reserved"}`}>
+                          {contract.partyBSignatureName ? "Đã ký" : "Chờ bạn ký"}
+                        </span>
+                      </div>
+                      <div className="lot-meta">
+                        <div className="lot-row"><span className="lk">Ngày hợp đồng</span><span className="lv">{formatDate(contract.contractDate)}</span></div>
+                        <div className="lot-row"><span className="lk">Giá trị</span><span className="lv">{formatCurrency(contract.totalAmount)}</span></div>
+                        <div className="lot-row"><span className="lk">Bản PDF</span><span className="lv">{contract.pdfUrl ? "Đã lưu" : "Chưa có"}</span></div>
+                      </div>
+                      <div className="lot-action">Xem nội dung hợp đồng →</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div>
+                <button className="back-to-lots" onClick={() => setActiveContract(null)}>← Danh sách hợp đồng</button>
+                {!contractDetail || contractDetail.id !== activeContract ? <div className="panel">Đang tải…</div> : <>
+                  <div className="panel">
+                    <div className="panel-title">{contractDetail.contractCode}</div>
+                    <div className="contract-document">{contractDetail.contractContent || "Hợp đồng cũ chưa có nội dung điện tử."}</div>
+                    <div className="contract-inheritance"><b>Thông tin thừa kế:</b><br />{contractDetail.inheritanceContent || "Chưa có nội dung."}</div>
+                  </div>
+                  <div className="panel">
+                    <div className="panel-title">Chữ ký điện tử</div>
+                    <p className="contract-note">Đây là chữ ký điện tử xác nhận bằng tài khoản và dấu vết SHA-256, không phải chữ ký số sử dụng chứng thư số CA.</p>
+                    <div className="signature-grid">
+                      <div className="signature-box"><b>Bên A</b><br />{contractDetail.partyASignatureName || "Chưa ký"}<br /><small>{formatDate(contractDetail.partyASignedAt)}</small></div>
+                      <div className="signature-box"><b>Bên B</b><br />{contractDetail.partyBSignatureName || "Chưa ký"}<br /><small>{formatDate(contractDetail.partyBSignedAt)}</small></div>
+                    </div>
+                    {!contractDetail.partyBSignatureName && <div className="contract-sign-form">
+                      <label>Họ tên thể hiện trên chữ ký</label>
+                      <input value={signatureName} onChange={(event) => setSignatureName(event.target.value)} maxLength={150} />
+                      <label className="contract-consent"><input type="checkbox" checked={signatureAccepted} onChange={(event) => setSignatureAccepted(event.target.checked)} /> Tôi đã đọc, đồng ý nội dung và xác nhận ký hợp đồng này.</label>
+                      <button className="btn-save" disabled={contractBusy || !signatureAccepted} onClick={signContract}>Xác nhận ký điện tử</button>
+                    </div>}
+                  </div>
+                  <div className="panel">
+                    <div className="panel-title">Bản PDF</div>
+                    <div className="contract-actions">
+                      <button className="btn-outline" onClick={printCustomerContract}>In hợp đồng</button>
+                      <button className="btn-outline" disabled={contractBusy} onClick={saveCustomerContractPdf}>Tải PDF về máy</button>
+                      <label className="btn-outline contract-upload">Tải PDF đã ký lên<input type="file" accept="application/pdf,.pdf" disabled={contractBusy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadContractPdf(file); event.target.value = ""; }} /></label>
+                      {contractDetail.pdfUrl && <button className="btn-outline" onClick={openContractPdf}>Xem PDF đã lưu</button>}
+                    </div>
+                  </div>
+                </>}
+              </div>
             )}
           </div>
 
