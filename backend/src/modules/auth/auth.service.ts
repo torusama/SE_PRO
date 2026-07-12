@@ -36,7 +36,8 @@ export class AuthService {
        VALUES ($1, $2, 'Customer', $3, $4)
        RETURNING user_id, email, role, full_name, phone_number, address,
                  date_of_birth, gender, emergency_contact_name,
-                 emergency_contact_phone, is_active, created_at`,
+                 emergency_contact_phone, email_verified_at,
+                 emergency_contact_email_verified_at, is_active, created_at`,
       [dto.email.toLowerCase(), passwordHash, dto.fullName, dto.phone ?? null],
     );
 
@@ -47,7 +48,8 @@ export class AuthService {
     const user = await this.database.queryOne(
       `SELECT user_id, email, password_hash, role, full_name, phone_number,
               address, date_of_birth, gender,
-              emergency_contact_name, emergency_contact_phone, is_active
+              emergency_contact_name, emergency_contact_phone,
+              email_verified_at, emergency_contact_email_verified_at, is_active
        FROM users
        WHERE email = $1 AND is_deleted = FALSE`,
       [dto.email.toLowerCase()],
@@ -96,6 +98,15 @@ export class AuthService {
       user.emergency_contact_name &&
       user.emergency_contact_phone,
     );
+    // "profileComplete" trả về cho frontend là cổng truy cập TỔNG (dùng để
+    // quyết định có chặn vào các chức năng chính hay không): phải vừa điền đủ
+    // hồ sơ, vừa xác thực OTP cho cả email đăng nhập lẫn email người liên hệ
+    // khẩn cấp. Trang Hồ sơ vẫn hiển thị riêng isProfileComplete/isEmailVerified/
+    // isEmergencyEmailVerified (từ GET /users/me) để biết chính xác bước nào còn thiếu.
+    const canAccessMainFeatures =
+      isProfileComplete &&
+      Boolean(user.email_verified_at) &&
+      Boolean(user.emergency_contact_email_verified_at);
 
     return {
       accessToken,
@@ -106,7 +117,7 @@ export class AuthService {
         fullName: user.full_name,
         phone: user.phone_number,
         isActive: user.is_active,
-        isProfileComplete,
+        isProfileComplete: canAccessMainFeatures,
       },
     };
   }

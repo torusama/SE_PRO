@@ -21,6 +21,7 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { UpdateIdCardDto } from './dto/update-id-card.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { VerifyPasswordDto } from './dto/verify-password.dto';
 import { UsersService } from './users.service';
 
@@ -159,6 +160,46 @@ export class  UsersController {
         dto.password,
         dto.idCardNumber,
       ),
+    };
+  }
+
+  // --- Xác thực email đăng nhập của chính chủ tài khoản ---
+  @Post('users/me/email/send-otp')
+  async sendOwnEmailOtp(@CurrentUser() user: AuthUser) {
+    return {
+      success: true,
+      data: await this.usersService.sendOwnEmailOtp(user.id),
+    };
+  }
+
+  @Post('users/me/email/verify-otp')
+  async verifyOwnEmailOtp(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: VerifyOtpDto,
+  ) {
+    return {
+      success: true,
+      data: await this.usersService.verifyOwnEmailOtp(user.id, dto.code),
+    };
+  }
+
+  // --- Xác thực email của người liên hệ khẩn cấp ---
+  @Post('users/me/emergency-contact/send-otp')
+  async sendEmergencyEmailOtp(@CurrentUser() user: AuthUser) {
+    return {
+      success: true,
+      data: await this.usersService.sendEmergencyEmailOtp(user.id),
+    };
+  }
+
+  @Post('users/me/emergency-contact/verify-otp')
+  async verifyEmergencyEmailOtp(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: VerifyOtpDto,
+  ) {
+    return {
+      success: true,
+      data: await this.usersService.verifyEmergencyEmailOtp(user.id, dto.code),
     };
   }
 
