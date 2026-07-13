@@ -1,6 +1,7 @@
 -- Xác thực email bằng OTP: cho cả email đăng nhập của chủ tài khoản VÀ email
 -- người liên hệ khẩn cấp. Mã OTP chỉ lưu dạng hash (bcrypt), không lưu plaintext.
 
+-- Canonical migration order: 009_email_otp_verification.sql
 ALTER TABLE users
     ADD COLUMN IF NOT EXISTS email_verified_at              TIMESTAMP,
     ADD COLUMN IF NOT EXISTS email_otp_hash                 VARCHAR(255),

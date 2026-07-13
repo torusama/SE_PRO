@@ -15,7 +15,6 @@ interface SystemNotif {
 
 const INITIAL_NOTIFS: SystemNotif[] = [
   { id: 'n1', icon: '🚨', iconBg: 'rgba(255,92,92,0.14)', title: 'Hợp đồng HD-2022-0031 sắp hết hạn', desc: 'Hợp đồng dịch vụ của Phạm Văn Tuấn (lô C-18) hết hạn 31/07/2025. Cần liên hệ gia hạn.', time: '09:00', unread: true, action: 'Liên hệ KH' },
-  { id: 'n2', icon: '📄', iconBg: 'rgba(0,200,160,0.14)', title: 'Hồ sơ mới cần duyệt — HD-2025-0089', desc: 'Nguyễn Văn Thành vừa nộp hồ sơ chuyển nhượng lô A-12. AI đã xác minh đầy đủ.', time: '09:15', unread: true },
   { id: 'n3', icon: '💰', iconBg: 'rgba(212,168,67,0.14)', title: 'Thanh toán thành công — 28.500.000 đ', desc: 'Nguyễn Bích Chi (KH-0127) đã thanh toán hợp đồng HD-2025-0071. Biên lai đã gửi email.', time: 'Hôm qua' },
   { id: 'n4', icon: '📢', iconBg: 'rgba(74,158,255,0.14)', title: 'Broadcast đã gửi — 247 khách hàng', desc: 'Thông báo lịch bảo trì khu A đã gửi thành công. Tỷ lệ đọc: 84%.', time: '25/06', broadcast: true },
 ]

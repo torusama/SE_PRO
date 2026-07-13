@@ -18,7 +18,6 @@
 --   6.  contracts
 --   7.  payment_transactions
 --   8.  ownership_records
---   9.  transfer_requests
 --   10. service_types
 --   11. service_orders
 --   12. notifications
@@ -260,7 +259,6 @@ CREATE TABLE contracts (
 
     -- Trace nguá»“n gá»‘c náº¿u contract Ä‘Æ°á»£c táº¡o tá»« transfer/inheritance (nullable)
     -- FK tá»›i transfer_requests Ä‘Æ°á»£c thÃªm sau báº±ng ALTER TABLE (vÃ¬ transfer_requests táº¡o sau contracts)
-    source_transfer_id  INT,
 
     is_deleted          BOOLEAN         NOT NULL DEFAULT FALSE,
     created_at          TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
@@ -337,6 +335,8 @@ CREATE UNIQUE INDEX idx_own_one_current_per_plot
 -- ================================================================
 -- 8. TRANSFER / INHERITANCE REQUESTS (FR-05)
 -- ================================================================
+/* LEGACY TRANSFER WORKFLOW DISABLED.
+   Application transfers are implemented by migration 010 and the TransfersModule.
 CREATE TABLE transfer_requests (
     transfer_id             SERIAL          PRIMARY KEY,
     request_type            VARCHAR(20)     NOT NULL
@@ -384,6 +384,7 @@ CREATE INDEX idx_tr_status      ON transfer_requests(status);
 ALTER TABLE contracts
     ADD CONSTRAINT fk_contracts_source_transfer
     FOREIGN KEY (source_transfer_id) REFERENCES transfer_requests(transfer_id);
+*/
 
 -- ================================================================
 -- 9. SERVICE TYPES (FR-06, FR-11)
@@ -646,10 +647,6 @@ CREATE TRIGGER trg_so_updated_at
 
 CREATE TRIGGER trg_st_updated_at
     BEFORE UPDATE ON service_types
-    FOR EACH ROW EXECUTE FUNCTION fn_update_updated_at();
-
-CREATE TRIGGER trg_tr_updated_at
-    BEFORE UPDATE ON transfer_requests
     FOR EACH ROW EXECUTE FUNCTION fn_update_updated_at();
 
 CREATE TRIGGER trg_rem_updated_at

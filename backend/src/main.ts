@@ -17,6 +17,7 @@ async function bootstrap() {
   const uploadsDir = join(process.cwd(), 'uploads', 'avatars');
   fs.mkdirSync(uploadsDir, { recursive: true });
   fs.mkdirSync(join(process.cwd(), 'uploads', 'contracts'), { recursive: true });
+  fs.mkdirSync(join(process.cwd(), 'uploads', 'transfers'), { recursive: true });
 
   app.setGlobalPrefix('api');
   // Static files are served OUTSIDE the /api prefix, e.g. http://localhost:3001/uploads/avatars/xxx.jpg

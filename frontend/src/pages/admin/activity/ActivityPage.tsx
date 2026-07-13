@@ -1,7 +1,7 @@
 // src/pages/admin/activity/ActivityPage.tsx
 import { useMemo, useState } from 'react'
 
-type EventType = 'Hợp đồng' | 'Dịch vụ' | 'Thanh toán' | 'Chuyển nhượng' | 'Hệ thống'
+type EventType = 'Hợp đồng' | 'Dịch vụ' | 'Thanh toán' | 'Hệ thống'
 
 interface ActivityEvent {
   id: number
@@ -15,15 +15,13 @@ interface ActivityEvent {
 }
 
 const EVENTS: ActivityEvent[] = [
-  { id: 1, date: '28/06/2025', time: '09:15', type: 'Hợp đồng', icon: '📄', active: true, title: 'Khách hàng nộp hồ sơ hợp đồng HD-2025-0089', desc: 'Nguyễn Văn Thành · KH-0142 · Chuyển nhượng lô A-12' },
   { id: 2, date: '28/06/2025', time: '08:52', type: 'Hệ thống', icon: '✅', active: true, title: 'Hệ thống AI xác nhận hồ sơ tự động', desc: 'Auto-check · Đầy đủ hồ sơ · Chờ admin duyệt' },
   { id: 3, date: '28/06/2025', time: '08:30', type: 'Dịch vụ', icon: '🛠️', title: 'Yêu cầu dịch vụ lau dọn lô B-05', desc: 'Lê Thị Hương · KH-0138 · Ngày thực hiện: 02/07' },
   { id: 4, date: '27/06/2025', time: '16:40', type: 'Thanh toán', icon: '💰', title: 'Thanh toán hợp đồng HD-2025-0071 — 28.500.000 đ', desc: 'Nguyễn Bích Chi · KH-0127 · Chuyển khoản VietinBank' },
-  { id: 5, date: '27/06/2025', time: '14:12', type: 'Chuyển nhượng', icon: '🔄', title: 'Yêu cầu chuyển nhượng lô D-07', desc: 'Trần Văn Long · KH-0193 → Người nhận mới' },
   { id: 6, date: '26/06/2025', time: '11:00', type: 'Hợp đồng', icon: '📄', active: true, title: 'Ký hợp đồng HD-2025-0082 hoàn tất', desc: 'Lê Thị Hương · KH-0138 · Mua lô B-05 · 25.000.000 đ' },
 ]
 
-const TYPE_OPTIONS: (EventType | 'Tất cả')[] = ['Tất cả', 'Hợp đồng', 'Dịch vụ', 'Thanh toán', 'Chuyển nhượng', 'Hệ thống']
+const TYPE_OPTIONS: (EventType | 'Tất cả')[] = ['Tất cả', 'Hợp đồng', 'Dịch vụ', 'Thanh toán', 'Hệ thống']
 const RANGE_OPTIONS = ['Hôm nay', '7 ngày', '30 ngày', 'Tất cả'] as const
 
 const panelStyle: React.CSSProperties = {

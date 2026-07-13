@@ -14,7 +14,7 @@ import { AiAgentModule } from './modules/ai-agent/ai-agent.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { ScheduleModule } from './modules/schedule/schedule.module';
 import { AppointmentsModule } from './modules/appointments/appointments.module';
-import { ChangeRightCasesModule } from './modules/change-right-cases/change-right-cases.module';
+import { TransfersModule } from './modules/transfers/transfers.module';
 
 @Module({
   imports: [
@@ -32,7 +32,7 @@ import { ChangeRightCasesModule } from './modules/change-right-cases/change-righ
     UploadsModule,
     ScheduleModule,
     AppointmentsModule,
-    ChangeRightCasesModule,
+    TransfersModule,
   ],
 })
 export class AppModule {}

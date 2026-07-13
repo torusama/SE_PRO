@@ -66,7 +66,6 @@ const lotStatusBreakdown = [
 const recentActivity: { time: string; type: string; typeColor: string; typeBg: string; content: string; user: string; status: string; statusColor: string; statusBg: string }[] = [
   { time: '09:15', type: 'Hợp đồng', typeColor: '#00C8A0', typeBg: 'rgba(0,200,160,0.14)', content: 'Nộp hồ sơ HD-2025-0089', user: 'Nguyễn Văn Thành', status: 'Chờ duyệt', statusColor: '#F5A623', statusBg: 'rgba(245,166,35,0.16)' },
   { time: '08:52', type: 'Dịch vụ', typeColor: '#4A9EFF', typeBg: 'rgba(74,158,255,0.14)', content: 'Đặt dịch vụ lau dọn lô A-22', user: 'Lê Thị Hương', status: 'Đã xác nhận', statusColor: '#00C8A0', statusBg: 'rgba(0,200,160,0.14)' },
-  { time: '08:30', type: 'Chuyển nhượng', typeColor: '#B497F0', typeBg: 'rgba(180,151,240,0.14)', content: 'Yêu cầu chuyển nhượng lô B-05', user: 'Phạm Văn Tuấn', status: 'Đang xử lý', statusColor: '#F5A623', statusBg: 'rgba(245,166,35,0.16)' },
   { time: 'Hôm qua', type: 'Hợp đồng', typeColor: '#00C8A0', typeBg: 'rgba(0,200,160,0.14)', content: 'Ký hợp đồng HD-2025-0082', user: 'KH-0138', status: 'Hoàn thành', statusColor: '#00C8A0', statusBg: 'rgba(0,200,160,0.14)' },
   { time: 'Hôm qua', type: 'Thanh toán', typeColor: '#FF5C5C', typeBg: 'rgba(255,92,92,0.14)', content: 'Quá hạn thanh toán lô C-18', user: 'Phạm Văn Tuấn', status: 'Cần xử lý', statusColor: '#FF5C5C', statusBg: 'rgba(255,92,92,0.14)' },
 ]

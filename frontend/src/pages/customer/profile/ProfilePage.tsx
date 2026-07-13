@@ -5,7 +5,7 @@
 // GET /my/contracts, /my/contracts/:id). Xem API_DOCUMENTATION.md ở backend để biết chi tiết.
 // Các phần sau vẫn là placeholder UI (chưa có bảng/API tương ứng ở backend):
 // liên hệ khẩn cấp, ghi chú đặc biệt, tuỳ chọn nhận thông báo, đổi email/SĐT (cần OTP),
-// người được uỷ quyền, 2FA/Authenticator, lịch sử phiên đăng nhập, chuyển nhượng/thừa kế.
+// người được uỷ quyền, 2FA/Authenticator và lịch sử phiên đăng nhập.
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ROUTES } from "@/constants/routes";
@@ -32,7 +32,6 @@ const T = {
 
 type TabId = "info" | "contact" | "lots" | "contracts" | "security";
 type ModalId =
-  | "transfer"
   | "status-lot"
   | "avatar"
   | "password"
@@ -1893,17 +1892,6 @@ export default function ProfilePage() {
         />
       )}
 
-      {openModal === "transfer" && (
-        <TransferModal
-          lot={lotDetail}
-          onClose={() => setOpenModal(null)}
-          onSubmit={() => {
-            setOpenModal(null);
-            showToast("✓ Đã nộp hồ sơ chuyển nhượng — Đang chờ xét duyệt");
-          }}
-        />
-      )}
-
       {openModal === "status-lot" && lotDetail && (
         <StatusModal
           lot={lotDetail}
@@ -2049,12 +2037,6 @@ function LotDetail({
               <div className="lot-actions-grid">
                 {isPaid ? (
                   <>
-                    <ActionBtn
-                      icon="🔄"
-                      title="Chuyển nhượng / Thừa kế"
-                      sub="Sang tên chủ sở hữu mới"
-                      onClick={() => onOpenModal("transfer")}
-                    />
                     <ActionBtn
                       icon="📋"
                       title="Xem trạng thái lô"
@@ -2740,100 +2722,6 @@ function PhoneModal({
             Xác nhận →
           </button>
         )}
-      </div>
-    </ModalShell>
-  );
-}
-
-function TransferModal({
-  lot,
-  onClose,
-  onSubmit,
-}: {
-  lot: BackendLot | null;
-  onClose: () => void;
-  onSubmit: () => void;
-}) {
-  return (
-    <ModalShell
-      title="Chuyển Nhượng / Thừa Kế"
-      sub={lot ? `Lô ${lot.plotCode} · ${lot.zoneName}` : ""}
-      onClose={onClose}
-    >
-      <div className="modal-warn">
-        ⚠ Yêu cầu chuyển nhượng sẽ được ban quản lý xét duyệt trong 5–7 ngày làm
-        việc. Hai bên cần có mặt hoặc ký số điện tử để hoàn tất.
-      </div>
-
-      <div className="modal-section">
-        <div className="modal-section-title">Loại giao dịch</div>
-        <div className="modal-field">
-          <select>
-            <option>Chuyển nhượng (mua bán)</option>
-            <option>Thừa kế (không có phí giao dịch)</option>
-            <option>Tặng cho / Hiến tặng</option>
-          </select>
-        </div>
-      </div>
-
-      <div className="modal-section">
-        <div className="modal-section-title">Thông tin bên nhận (Bên B)</div>
-        <div className="modal-field">
-          <label>Họ và tên</label>
-          <input type="text" placeholder="Nguyễn Thị B" />
-        </div>
-        <div className="modal-field">
-          <label>Số CCCD / Hộ chiếu</label>
-          <input type="text" placeholder="0791780…" />
-        </div>
-        <div className="modal-field">
-          <label>Số điện thoại</label>
-          <input type="tel" placeholder="09xx xxx xxx" />
-        </div>
-        <div className="modal-field">
-          <label>Quan hệ với bên A</label>
-          <select>
-            <option>Vợ / Chồng</option>
-            <option>Con</option>
-            <option>Anh / Em</option>
-            <option>Bên thứ ba (mua bán)</option>
-          </select>
-        </div>
-      </div>
-
-      <div className="modal-section">
-        <div className="modal-section-title">Giấy tờ cần nộp</div>
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 8,
-            fontSize: 12,
-            color: "var(--text-muted)",
-          }}
-        >
-          <div>📎 CCCD hai bên (bản scan)</div>
-          <div>📎 Hợp đồng gốc lô đất</div>
-          <div>📎 Giấy tờ chứng minh quan hệ (nếu thừa kế)</div>
-          <div style={{ marginTop: 8 }}>
-            <button
-              className="btn-outline"
-              style={{ fontSize: 12 }}
-              type="button"
-            >
-              + Tải lên hồ sơ
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="modal-btn-row">
-        <button className="modal-btn-ghost" onClick={onClose}>
-          Hủy
-        </button>
-        <button className="modal-btn-primary gold" onClick={onSubmit}>
-          Nộp hồ sơ →
-        </button>
       </div>
     </ModalShell>
   );

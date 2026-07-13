@@ -19,6 +19,8 @@ Current order:
 5. `006_change_usage_right_foundation.sql`
 6. `007_plot_lock_and_availability.sql`
 7. `008_schedule_appointments.sql`
+8. `009_email_otp_verification.sql`
+9. `010_admin_direct_plot_transfers.sql`
 
 `008_schedule_appointments.sql` is retained as an idempotent historical
 follow-up to `007`; both use `IF NOT EXISTS` for shared schedule objects.
