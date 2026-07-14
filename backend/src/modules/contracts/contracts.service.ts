@@ -223,6 +223,7 @@ export class ContractsService {
                    c.pdf_uploaded_at AS "pdfUploadedAt",
                    u.full_name AS "customerName", u.id_card_number AS "customerIdCard",
                    u.address AS "customerAddress", u.phone_number AS "customerPhone",
+                   u.notes AS "customerNotes",
                    p.plot_id AS "plotId", p.plot_code AS "plotCode", p.area_sqm::float AS "areaSqm",
                    p.direction, p.plot_type AS "plotType", p.row_number AS "rowNumber",
                    p.column_number AS "columnNumber",
@@ -234,5 +235,4 @@ export class ContractsService {
             JOIN cemetery_zones z ON z.zone_id = p.zone_id
             LEFT JOIN ownership_records o ON o.plot_id = p.plot_id AND o.is_current = TRUE
             ${suffix}`;
-  }
 }

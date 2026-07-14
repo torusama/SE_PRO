@@ -54,6 +54,10 @@
 .profile-page .profile-card { background: rgba(8, 13, 26, 0.7); border: 1px solid var(--border-dim); border-radius: 12px; padding: 32px 24px; text-align: center; position: sticky; top: 24px; }
 .profile-page .avatar-wrap { position: relative; display: inline-block; margin-bottom: 20px; }
 .profile-page .avatar-ring { width: 90px; height: 90px; border-radius: 50%; border: 2px solid var(--teal-soft); display: flex; align-items: center; justify-content: center; font-family: 'Playfair Display', serif; font-size: 32px; color: var(--teal-glow); background: rgba(0, 229, 196, 0.06); box-shadow: 0 0 28px rgba(0, 229, 196, 0.15); margin: 0 auto; }
+.profile-page .avatar-crop-viewport { position: relative; overflow: hidden; border-radius: 50%; border: 2px solid var(--teal-soft); box-shadow: 0 0 28px rgba(0, 229, 196, 0.15); cursor: grab; background: rgba(0,0,0,0.3); touch-action: none; }
+.profile-page .avatar-crop-viewport:active { cursor: grabbing; }
+.profile-page .avatar-zoom-row { display: flex; align-items: center; gap: 10px; width: 100%; max-width: 260px; font-size: 14px; }
+.profile-page .avatar-zoom-row input[type="range"] { flex: 1; accent-color: var(--teal-soft); }
 .profile-page .avatar-edit-btn { position: absolute; bottom: 2px; right: 2px; width: 26px; height: 26px; border-radius: 50%; background: var(--ink-deep); border: 1px solid var(--border-soft); cursor: pointer; font-size: 12px; color: var(--text-muted); display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
 .profile-page .avatar-edit-btn:hover { border-color: var(--teal-glow); color: var(--teal-glow); }
 .profile-page .profile-name { font-family: 'Playfair Display', serif; font-size: 20px; color: var(--text-main); margin-bottom: 4px; }
@@ -130,7 +134,7 @@
 .profile-page .otp-btn.ghost { background: transparent; color: var(--text-muted); border: 1px solid var(--border-dim); }
 .profile-page .otp-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .profile-page .otp-verify-box { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.profile-page .otp-verify-box input { width: 110px; letter-spacing: 4px; text-align: center; padding: 9px 10px; border-radius: 6px; border: 1px solid var(--border-dim); background: var(--panel-bg, transparent); color: inherit; }
+.profile-page .otp-verify-box input { width: 190px; min-width: 190px; letter-spacing: 3px; text-align: center; padding: 9px 10px; border-radius: 6px; border: 1px solid var(--border-dim); background: var(--panel-bg, transparent); color: inherit; font-size: 14px; }
 .profile-page .field-verified .verify-badge { position: absolute; right: 12px; top: 22px; font-size: 11px; color: var(--teal-soft); background: rgba(0, 229, 196, 0.08); border: 1px solid var(--border-dim); border-radius: 20px; padding: 2px 10px; pointer-events: none; }
 
 /* CONTACT METHODS */

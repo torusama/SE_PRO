@@ -27,6 +27,7 @@ interface ReservationRow extends QueryResultRow {
   customerName?: string;
   customerEmail?: string;
   customerPhone?: string | null;
+  customerNotes?: string | null;
   adminName?: string | null;
   plotCodes?: string[];
   plotCount?: number | string;
@@ -586,7 +587,8 @@ Hai bên đã đọc, hiểu, tự nguyện ký và chịu trách nhiệm về t
                    rr.admin_note AS "adminNote", rr.reviewed_at AS "reviewedAt",
                    rr.created_at AS "createdAt",
                    u.full_name AS "customerName", u.email AS "customerEmail",
-                   u.phone_number AS "customerPhone", adm.full_name AS "adminName"
+                   u.phone_number AS "customerPhone", u.notes AS "customerNotes",
+                   adm.full_name AS "adminName"
             FROM reservation_requests rr
             JOIN users u ON u.user_id = rr.user_id
             LEFT JOIN users adm ON adm.user_id = rr.admin_id

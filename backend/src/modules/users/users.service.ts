@@ -41,7 +41,7 @@ const USER_SELECT_COLUMNS = `
   user_id AS id, email, LOWER(role) AS role, full_name AS "fullName",
   phone_number AS phone, address, id_card_number AS "idCardNumber",
   date_of_birth AS "dateOfBirth", gender, avatar_url AS "avatarUrl",
-  nationality, city, postal_code AS "postalCode",
+  nationality, city, ward, postal_code AS "postalCode",
   emergency_contact_name AS "emergencyContactName",
   emergency_contact_relation AS "emergencyContactRelation",
   emergency_contact_phone AS "emergencyContactPhone",
@@ -51,6 +51,7 @@ const USER_SELECT_COLUMNS = `
   notify_anniversary AS "notifyAnniversary", notify_announcement AS "notifyAnnouncement",
   (email_verified_at IS NOT NULL) AS "isEmailVerified",
   (emergency_contact_email_verified_at IS NOT NULL) AS "isEmergencyEmailVerified",
+  password_changed_at AS "passwordChangedAt",
   is_active AS "isActive", created_at AS "createdAt"
 `;
 
@@ -122,6 +123,7 @@ export class UsersService {
            phone_number                = COALESCE($6, phone_number),
            nationality                 = COALESCE($7, nationality),
            city                        = COALESCE($8, city),
+           ward                        = COALESCE($19, ward),
            postal_code                 = COALESCE($9, postal_code),
            emergency_contact_name      = COALESCE($10, emergency_contact_name),
            emergency_contact_relation  = COALESCE($11, emergency_contact_relation),
@@ -154,6 +156,7 @@ export class UsersService {
         dto.notifyService ?? null,
         dto.notifyAnniversary ?? null,
         dto.notifyAnnouncement ?? null,
+        dto.ward ?? null,
       ],
     );
     if (!user) throw new NotFoundException('User not found');
@@ -208,13 +211,45 @@ export class UsersService {
     return user;
   }
 
+  async sendPasswordChangeOtp(userId: number) {
+    const row = await this.database.queryOne<{
+      email: string;
+      password_otp_last_sent_at: Date | null;
+    }>(
+      `SELECT email, password_otp_last_sent_at FROM users
+       WHERE user_id = $1 AND is_deleted = FALSE`,
+      [userId],
+    );
+    if (!row) throw new NotFoundException('User not found');
+    this.assertCooldownElapsed(row.password_otp_last_sent_at);
+
+    const code = generateOtpCode();
+    const hash = await bcrypt.hash(code, 10);
+    await this.database.query(
+      `UPDATE users
+       SET password_otp_hash = $2, password_otp_expires_at = NOW() + INTERVAL '${OTP_TTL_MINUTES} minutes',
+           password_otp_attempts = 0, password_otp_last_sent_at = NOW()
+       WHERE user_id = $1`,
+      [userId, hash],
+    );
+    await this.emailService.sendOtpEmail(row.email, code, 'đổi mật khẩu');
+    return { sent: true, expiresInMinutes: OTP_TTL_MINUTES };
+  }
+
   async changePassword(
     userId: number,
     currentPassword: string,
     newPassword: string,
+    otpCode: string,
   ) {
-    const user = await this.database.queryOne<{ password_hash: string }>(
-      `SELECT password_hash FROM users WHERE user_id = $1 AND is_deleted = FALSE`,
+    const user = await this.database.queryOne<{
+      password_hash: string;
+      password_otp_hash: string | null;
+      password_otp_expires_at: Date | null;
+      password_otp_attempts: number;
+    }>(
+      `SELECT password_hash, password_otp_hash, password_otp_expires_at, password_otp_attempts
+       FROM users WHERE user_id = $1 AND is_deleted = FALSE`,
       [userId],
     );
     if (!user) throw new NotFoundException('User not found');
@@ -223,9 +258,25 @@ export class UsersService {
     if (!matches)
       throw new BadRequestException('Current password is incorrect');
 
+    await this.assertOtpMatches(
+      user.password_otp_hash,
+      user.password_otp_expires_at,
+      user.password_otp_attempts,
+      otpCode,
+      async () => {
+        await this.database.query(
+          `UPDATE users SET password_otp_attempts = password_otp_attempts + 1 WHERE user_id = $1`,
+          [userId],
+        );
+      },
+    );
+
     const newHash = await bcrypt.hash(newPassword, 10);
     await this.database.query(
-      `UPDATE users SET password_hash = $2, updated_at = NOW() WHERE user_id = $1`,
+      `UPDATE users
+       SET password_hash = $2, password_changed_at = NOW(), updated_at = NOW(),
+           password_otp_hash = NULL, password_otp_expires_at = NULL, password_otp_attempts = 0
+       WHERE user_id = $1`,
       [userId, newHash],
     );
     return { changed: true };

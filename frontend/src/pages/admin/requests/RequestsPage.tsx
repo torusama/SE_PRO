@@ -1,444 +1,650 @@
-import { useEffect, useMemo, useState } from 'react'
-import Button from '@/components/ui/Button'
-import { api } from '@/lib/api'
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Button from "@/components/ui/Button";
+import { api } from "@/lib/api";
 
-type ReservationType = 'reserve' | 'purchase'
-type ReservationStatus = 'pending' | 'submitted' | 'approved' | 'rejected' | 'cancelled' | 'draft'
+type ReservationType = "reserve" | "purchase";
+type ReservationStatus =
+  | "pending"
+  | "submitted"
+  | "approved"
+  | "rejected"
+  | "cancelled"
+  | "draft";
 
 interface ApiResponse<T> {
-  success: boolean
-  message: string
-  data: T
+  success: boolean;
+  message: string;
+  data: T;
 }
 
 interface ReservationSummary {
-  id: number
-  type: ReservationType
-  status: ReservationStatus
-  customerName?: string
-  customerEmail?: string
-  totalPrice?: number
-  plotCodes?: string[]
-  plotCount?: number
-  createdAt?: string
-  reviewedAt?: string | null
+  id: number;
+  type: ReservationType;
+  status: ReservationStatus;
+  customerName?: string;
+  customerEmail?: string;
+  totalPrice?: number;
+  plotCodes?: string[];
+  plotCount?: number;
+  createdAt?: string;
+  reviewedAt?: string | null;
 }
 
 interface ReservationPlot {
-  id: number
-  code: string
-  status: string
-  price: number
+  id: number;
+  code: string;
+  status: string;
+  price: number;
 }
 
 interface ReservationDetail extends ReservationSummary {
-  note?: string | null
-  adminNote?: string | null
-  customerPhone?: string | null
-  adminName?: string | null
-  plots?: ReservationPlot[]
+  note?: string | null;
+  adminNote?: string | null;
+  customerPhone?: string | null;
+  customerNotes?: string | null;
+  adminName?: string | null;
+  plots?: ReservationPlot[];
 }
 
-type AppointmentStatus = 'scheduled' | 'completed' | 'cancelled' | 'no_show'
+type AppointmentStatus = "scheduled" | "completed" | "cancelled" | "no_show";
 
 interface Appointment {
-  id: number
-  reservationRequestId: number
-  customerName?: string | null
-  scheduledAt: string
-  location: string
-  assignedStaffName?: string | null
-  status: AppointmentStatus
-  note?: string | null
-  statusNote?: string | null
+  id: number;
+  reservationRequestId: number;
+  customerName?: string | null;
+  scheduledAt: string;
+  location: string;
+  assignedStaffName?: string | null;
+  status: AppointmentStatus;
+  note?: string | null;
+  statusNote?: string | null;
 }
 
-type DecisionAction = 'approve' | 'reject'
+type DecisionAction = "approve" | "reject";
 
-const statusMeta: Record<string, { label: string; color: string; bg: string }> = {
-  pending: { label: 'Chờ duyệt', color: '#F5A623', bg: 'rgba(245,166,35,0.16)' },
-  submitted: { label: 'Chờ duyệt', color: '#F5A623', bg: 'rgba(245,166,35,0.16)' },
-  approved: { label: 'Đã duyệt', color: '#00C8A0', bg: 'rgba(0,200,160,0.14)' },
-  rejected: { label: 'Đã từ chối', color: '#FF5C5C', bg: 'rgba(255,92,92,0.14)' },
-  cancelled: { label: 'Đã hủy', color: '#8DA5C0', bg: 'rgba(141,165,192,0.14)' },
-  draft: { label: 'Nháp', color: '#8DA5C0', bg: 'rgba(141,165,192,0.14)' },
-}
+const statusMeta: Record<string, { label: string; color: string; bg: string }> =
+  {
+    pending: {
+      label: "Chờ duyệt",
+      color: "#F5A623",
+      bg: "rgba(245,166,35,0.16)",
+    },
+    submitted: {
+      label: "Chờ duyệt",
+      color: "#F5A623",
+      bg: "rgba(245,166,35,0.16)",
+    },
+    approved: {
+      label: "Đã duyệt",
+      color: "#00C8A0",
+      bg: "rgba(0,200,160,0.14)",
+    },
+    rejected: {
+      label: "Đã từ chối",
+      color: "#FF5C5C",
+      bg: "rgba(255,92,92,0.14)",
+    },
+    cancelled: {
+      label: "Đã hủy",
+      color: "#8DA5C0",
+      bg: "rgba(141,165,192,0.14)",
+    },
+    draft: { label: "Nháp", color: "#8DA5C0", bg: "rgba(141,165,192,0.14)" },
+  };
 
 const typeLabel: Record<ReservationType, string> = {
-  reserve: 'Giữ chỗ',
-  purchase: 'Mua lô',
-}
+  reserve: "Giữ chỗ",
+  purchase: "Mua lô",
+};
 
-const money = new Intl.NumberFormat('vi-VN', {
-  style: 'currency',
-  currency: 'VND',
+const money = new Intl.NumberFormat("vi-VN", {
+  style: "currency",
+  currency: "VND",
   maximumFractionDigits: 0,
-})
+});
 
 const pageStyle: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'minmax(360px, 1fr) minmax(420px, 0.9fr)',
+  display: "grid",
+  gridTemplateColumns: "minmax(360px, 1fr) minmax(420px, 0.9fr)",
   gap: 18,
-  minHeight: '100%',
-}
+  minHeight: "100%",
+};
 
 const panelStyle: React.CSSProperties = {
-  background: 'var(--color-bg-card)',
-  border: '1px solid var(--color-border)',
+  background: "var(--color-bg-card)",
+  border: "1px solid var(--color-border)",
   borderRadius: 8,
-}
+};
 
 const labelStyle: React.CSSProperties = {
-  color: 'var(--color-text-muted)',
+  color: "var(--color-text-muted)",
   fontSize: 12,
-  textTransform: 'uppercase',
+  textTransform: "uppercase",
   letterSpacing: 0,
-}
+};
 
 function getErrorMessage(error: unknown) {
-  if (typeof error === 'object' && error !== null && 'response' in error) {
-    const response = (error as { response?: { data?: { message?: string } } }).response
-    if (response?.data?.message) return response.data.message
+  if (typeof error === "object" && error !== null && "response" in error) {
+    const response = (error as { response?: { data?: { message?: string } } })
+      .response;
+    if (response?.data?.message) return response.data.message;
   }
-  return 'Không thể xử lý yêu cầu. Vui lòng thử lại.'
+  return "Không thể xử lý yêu cầu. Vui lòng thử lại.";
 }
 
 function formatDate(value?: string | null) {
-  if (!value) return '-'
-  return new Intl.DateTimeFormat('vi-VN', {
-    dateStyle: 'short',
-    timeStyle: 'short',
-  }).format(new Date(value))
+  if (!value) return "-";
+  return new Intl.DateTimeFormat("vi-VN", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(new Date(value));
 }
 
 function StatusPill({ status }: { status: string }) {
-  const meta = statusMeta[status] ?? { label: status, color: '#8DA5C0', bg: 'rgba(141,165,192,0.14)' }
+  const meta = statusMeta[status] ?? {
+    label: status,
+    color: "#8DA5C0",
+    bg: "rgba(141,165,192,0.14)",
+  };
   return (
     <span
       style={{
-        display: 'inline-flex',
-        alignItems: 'center',
+        display: "inline-flex",
+        alignItems: "center",
         minHeight: 24,
-        padding: '3px 10px',
+        padding: "3px 10px",
         borderRadius: 999,
         background: meta.bg,
         color: meta.color,
         fontSize: 12,
         fontWeight: 700,
-        whiteSpace: 'nowrap',
-      }}>
+        whiteSpace: "nowrap",
+      }}
+    >
       {meta.label}
     </span>
-  )
+  );
 }
 
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div style={{ display: 'grid', gap: 5 }}>
+    <div style={{ display: "grid", gap: 5 }}>
       <span style={labelStyle}>{label}</span>
-      <span style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>{value}</span>
+      <span style={{ color: "var(--color-text-primary)", fontWeight: 600 }}>
+        {value}
+      </span>
     </div>
-  )
+  );
 }
 
 function isVisibleRequest(request: ReservationSummary) {
-  return !['rejected', 'cancelled'].includes(request.status)
+  return !["rejected", "cancelled"].includes(request.status);
 }
 
 export default function RequestsPage() {
-  const [requests, setRequests] = useState<ReservationSummary[]>([])
-  const [selectedId, setSelectedId] = useState<number | null>(null)
-  const [detail, setDetail] = useState<ReservationDetail | null>(null)
-  const [adminNote, setAdminNote] = useState('')
-  const [loadingList, setLoadingList] = useState(true)
-  const [loadingDetail, setLoadingDetail] = useState(false)
-  const [error, setError] = useState('')
-  const [successMessage, setSuccessMessage] = useState('')
-  const [decisionLoading, setDecisionLoading] = useState<DecisionAction | null>(null)
-  const [appointments, setAppointments] = useState<Appointment[]>([])
-  const [appointmentLoading, setAppointmentLoading] = useState(false)
+  const [requests, setRequests] = useState<ReservationSummary[]>([]);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [detail, setDetail] = useState<ReservationDetail | null>(null);
+  const [adminNote, setAdminNote] = useState("");
+  const [loadingList, setLoadingList] = useState(true);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+  const [decisionLoading, setDecisionLoading] = useState<DecisionAction | null>(
+    null,
+  );
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [appointmentLoading, setAppointmentLoading] = useState(false);
   const [appointmentForm, setAppointmentForm] = useState({
-    scheduledAt: '',
-    location: 'Văn phòng nghĩa trang Vĩnh Phúc Viên',
-    assignedStaffName: '',
-    note: '',
-  })
+    scheduledAt: "",
+    location: "Văn phòng nghĩa trang Vĩnh Phúc Viên",
+    assignedStaffName: "",
+    note: "",
+  });
 
-  const visibleRequests = useMemo(() => requests.filter(isVisibleRequest), [requests])
+  // Giữ selectedId mới nhất trong ref để loadRequests không cần phụ thuộc vào nó
+  const selectedIdRef = useRef<number | null>(null);
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
+
+  const visibleRequests = useMemo(
+    () => requests.filter(isVisibleRequest),
+    [requests],
+  );
 
   const selectedSummary = useMemo(
     () => visibleRequests.find((request) => request.id === selectedId) ?? null,
     [visibleRequests, selectedId],
-  )
+  );
 
-  const current = detail ?? selectedSummary
-  const canDecide = current ? ['pending', 'submitted'].includes(current.status) : false
+  // Derive thay vì lưu "không có gì được chọn" bằng setState riêng
+  const current = selectedId ? (detail ?? selectedSummary) : null;
+
+  const canDecide = current
+    ? ["pending", "submitted"].includes(current.status)
+    : false;
   const currentAppointment = current
-    ? appointments.find((appointment) => appointment.reservationRequestId === current.id && appointment.status === 'scheduled') ?? null
-    : null
-  const canScheduleAppointment = current?.status === 'approved' && !currentAppointment
+    ? (appointments.find(
+        (appointment) =>
+          appointment.reservationRequestId === current.id &&
+          appointment.status === "scheduled",
+      ) ?? null)
+    : null;
+  const canScheduleAppointment =
+    current?.status === "approved" && !currentAppointment;
 
-  async function loadRequests(nextSelectedId?: number) {
-    setLoadingList(true)
-    setError('')
+  const loadRequests = useCallback(async (nextSelectedId?: number) => {
+    setLoadingList(true);
+    setError("");
     try {
-      const response = await api.get<ApiResponse<ReservationSummary[]>>('/admin/reservations')
-      const rows = response.data.data ?? []
-      const visibleRows = rows.filter(isVisibleRequest)
-      setRequests(rows)
-      const preferredId = nextSelectedId ?? selectedId
+      const response = await api.get<ApiResponse<ReservationSummary[]>>(
+        "/admin/reservations",
+      );
+      const rows = response.data.data ?? [];
+      const visibleRows = rows.filter(isVisibleRequest);
+      setRequests(rows);
+      const preferredId = nextSelectedId ?? selectedIdRef.current;
       const nextId = visibleRows.some((row) => row.id === preferredId)
-        ? preferredId ?? null
-        : visibleRows[0]?.id ?? null
-      setSelectedId(nextId)
-      if (!nextId) setDetail(null)
-      return nextId
+        ? (preferredId ?? null)
+        : (visibleRows[0]?.id ?? null);
+      setSelectedId(nextId);
+      return nextId;
     } catch (err) {
-      setError(getErrorMessage(err))
-      return null
+      setError(getErrorMessage(err));
+      return null;
     } finally {
-      setLoadingList(false)
+      setLoadingList(false);
     }
-  }
+  }, []);
 
-  async function loadDetail(id: number) {
-    setLoadingDetail(true)
-    setError('')
+  const loadDetail = useCallback(async (id: number) => {
+    setLoadingDetail(true);
+    setError("");
     try {
-      const response = await api.get<ApiResponse<ReservationDetail>>(`/admin/reservations/${id}`)
-      setDetail(response.data.data)
-      setAdminNote(response.data.data.adminNote ?? '')
+      const response = await api.get<ApiResponse<ReservationDetail>>(
+        `/admin/reservations/${id}`,
+      );
+      setDetail(response.data.data);
+      setAdminNote(response.data.data.adminNote ?? "");
     } catch (err) {
-      setError(getErrorMessage(err))
-      setDetail(null)
+      setError(getErrorMessage(err));
+      setDetail(null);
     } finally {
-      setLoadingDetail(false)
+      setLoadingDetail(false);
     }
-  }
+  }, []);
 
-  async function loadAppointments() {
+  const loadAppointments = useCallback(async () => {
     try {
-      const response = await api.get<ApiResponse<Appointment[]>>('/admin/appointments')
-      setAppointments(response.data.data ?? [])
+      const response = await api.get<ApiResponse<Appointment[]>>(
+        "/admin/appointments",
+      );
+      setAppointments(response.data.data ?? []);
     } catch {
-      setAppointments([])
+      setAppointments([]);
     }
-  }
+  }, []);
 
   async function decide(action: DecisionAction) {
-    if (!current || !canDecide) return
-    const isReject = action === 'reject'
+    if (!current || !canDecide) return;
+    const isReject = action === "reject";
     const ok = window.confirm(
       isReject
         ? `Từ chối yêu cầu #${current.id}? Lô pending sẽ được mở lại nếu không còn yêu cầu hợp lệ khác.`
-        : `Duyệt yêu cầu #${current.id}? Lô sẽ chuyển sang ${current.type === 'purchase' ? 'đã bán' : 'đã giữ chỗ'}.`,
-    )
-    if (!ok) return
+        : `Duyệt yêu cầu #${current.id}? Lô sẽ chuyển sang ${current.type === "purchase" ? "đã bán" : "đã giữ chỗ"}.`,
+    );
+    if (!ok) return;
 
-    setDecisionLoading(action)
-    setError('')
-    setSuccessMessage('')
+    setDecisionLoading(action);
+    setError("");
+    setSuccessMessage("");
     try {
       await api.patch(`/admin/reservations/${current.id}/${action}`, {
         adminNote: adminNote.trim() || undefined,
-      })
-      setSuccessMessage(isReject ? `Đã từ chối yêu cầu #${current.id}.` : `Đã duyệt yêu cầu #${current.id}.`)
-      const nextId = await loadRequests(current.id)
-      if (nextId) await loadDetail(nextId)
-      await loadAppointments()
+      });
+      setSuccessMessage(
+        isReject
+          ? `Đã từ chối yêu cầu #${current.id}.`
+          : `Đã duyệt yêu cầu #${current.id}.`,
+      );
+      const nextId = await loadRequests(current.id);
+      if (nextId) await loadDetail(nextId);
+      await loadAppointments();
     } catch (err) {
-      setError(getErrorMessage(err))
+      setError(getErrorMessage(err));
     } finally {
-      setDecisionLoading(null)
+      setDecisionLoading(null);
     }
   }
 
   async function createAppointment() {
-    if (!current || !canScheduleAppointment) return
-    if (!appointmentForm.scheduledAt || !appointmentForm.location.trim() || !appointmentForm.assignedStaffName.trim()) {
-      setError('Vui lòng nhập đủ thời gian, địa điểm và nhân viên phụ trách lịch hẹn.')
-      return
+    if (!current || !canScheduleAppointment) return;
+    if (
+      !appointmentForm.scheduledAt ||
+      !appointmentForm.location.trim() ||
+      !appointmentForm.assignedStaffName.trim()
+    ) {
+      setError(
+        "Vui lòng nhập đủ thời gian, địa điểm và nhân viên phụ trách lịch hẹn.",
+      );
+      return;
     }
 
-    setAppointmentLoading(true)
-    setError('')
-    setSuccessMessage('')
+    setAppointmentLoading(true);
+    setError("");
+    setSuccessMessage("");
     try {
-      await api.post('/admin/appointments', {
+      await api.post("/admin/appointments", {
         reservationRequestId: current.id,
         scheduledAt: new Date(appointmentForm.scheduledAt).toISOString(),
         location: appointmentForm.location.trim(),
         assignedStaffName: appointmentForm.assignedStaffName.trim(),
         note: appointmentForm.note.trim() || undefined,
-      })
-      setSuccessMessage(`Đã tạo lịch hẹn ký hợp đồng cho yêu cầu #${current.id}.`)
+      });
+      setSuccessMessage(
+        `Đã tạo lịch hẹn ký hợp đồng cho yêu cầu #${current.id}.`,
+      );
       setAppointmentForm({
-        scheduledAt: '',
-        location: 'Văn phòng nghĩa trang Vĩnh Phúc Viên',
-        assignedStaffName: '',
-        note: '',
-      })
-      await loadAppointments()
+        scheduledAt: "",
+        location: "Văn phòng nghĩa trang Vĩnh Phúc Viên",
+        assignedStaffName: "",
+        note: "",
+      });
+      await loadAppointments();
     } catch (err) {
-      setError(getErrorMessage(err))
+      setError(getErrorMessage(err));
     } finally {
-      setAppointmentLoading(false)
+      setAppointmentLoading(false);
     }
   }
 
   useEffect(() => {
-    void loadRequests()
-    void loadAppointments()
-  }, [])
+    queueMicrotask(() => {
+      void loadRequests();
+      void loadAppointments();
+    });
+  }, [loadRequests, loadAppointments]);
 
   useEffect(() => {
-    if (!selectedId) {
-      setDetail(null)
-      return
-    }
-    void loadDetail(selectedId)
-  }, [selectedId])
+    if (!selectedId) return;
+    void loadDetail(selectedId);
+  }, [selectedId, loadDetail]);
 
   return (
-    <div style={{ display: 'grid', gap: 18 }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start' }}>
+    <div style={{ display: "grid", gap: 18 }}>
+      <header
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 16,
+          alignItems: "flex-start",
+        }}
+      >
         <div>
-          <h1 style={{ margin: 0, fontSize: 28, color: 'var(--color-text-primary)' }}>Xử lý yêu cầu</h1>
-          <p style={{ margin: '6px 0 0', color: 'var(--color-text-secondary)', fontSize: 14 }}>
+          <h1
+            style={{
+              margin: 0,
+              fontSize: 28,
+              color: "var(--color-text-primary)",
+            }}
+          >
+            Xử lý yêu cầu
+          </h1>
+          <p
+            style={{
+              margin: "6px 0 0",
+              color: "var(--color-text-secondary)",
+              fontSize: 14,
+            }}
+          >
             Duyệt hoặc từ chối các yêu cầu giữ chỗ và mua lô đang chờ xử lý.
           </p>
         </div>
-        <Button variant="secondary" onClick={() => void loadRequests(selectedId ?? undefined)} loading={loadingList}>
+        <Button
+          variant="secondary"
+          onClick={() => void loadRequests(selectedId ?? undefined)}
+          loading={loadingList}
+        >
           Làm mới
         </Button>
       </header>
 
       {error ? (
-        <div style={{ ...panelStyle, padding: 14, borderColor: 'rgba(255,92,92,0.45)', color: '#FFB3B3' }}>
+        <div
+          style={{
+            ...panelStyle,
+            padding: 14,
+            borderColor: "rgba(255,92,92,0.45)",
+            color: "#FFB3B3",
+          }}
+        >
           {error}
         </div>
       ) : null}
 
       {successMessage ? (
-        <div style={{ ...panelStyle, padding: 14, borderColor: 'rgba(0,200,160,0.45)', color: '#B8FFF0' }}>
+        <div
+          style={{
+            ...panelStyle,
+            padding: 14,
+            borderColor: "rgba(0,200,160,0.45)",
+            color: "#B8FFF0",
+          }}
+        >
           {successMessage}
         </div>
       ) : null}
 
       <section style={pageStyle}>
-        <div style={{ ...panelStyle, overflow: 'hidden' }}>
+        <div style={{ ...panelStyle, overflow: "hidden" }}>
           <div
             style={{
-              padding: '16px 18px',
-              borderBottom: '1px solid var(--color-border)',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-            }}>
+              padding: "16px 18px",
+              borderBottom: "1px solid var(--color-border)",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
             <h2 style={{ margin: 0, fontSize: 18 }}>Danh sách yêu cầu</h2>
-            <span style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>{visibleRequests.length} yêu cầu</span>
+            <span style={{ color: "var(--color-text-muted)", fontSize: 13 }}>
+              {visibleRequests.length} yêu cầu
+            </span>
           </div>
 
           {loadingList ? (
-            <div style={{ padding: 18, color: 'var(--color-text-secondary)' }}>Đang tải yêu cầu...</div>
+            <div style={{ padding: 18, color: "var(--color-text-secondary)" }}>
+              Đang tải yêu cầu...
+            </div>
           ) : visibleRequests.length === 0 ? (
-            <div style={{ padding: 18, color: 'var(--color-text-secondary)' }}>Chưa có yêu cầu nào.</div>
+            <div style={{ padding: 18, color: "var(--color-text-secondary)" }}>
+              Chưa có yêu cầu nào.
+            </div>
           ) : (
-            <div style={{ display: 'grid' }}>
+            <div style={{ display: "grid" }}>
               {visibleRequests.map((request) => {
-                const active = request.id === selectedId
+                const active = request.id === selectedId;
                 return (
                   <button
                     key={request.id}
                     type="button"
                     onClick={() => setSelectedId(request.id)}
                     style={{
-                      display: 'grid',
+                      display: "grid",
                       gap: 10,
-                      textAlign: 'left',
+                      textAlign: "left",
                       padding: 16,
-                      border: 'none',
-                      borderBottom: '1px solid var(--color-border)',
-                      borderLeft: active ? '3px solid var(--color-accent-teal)' : '3px solid transparent',
-                      background: active ? 'rgba(0,200,160,0.08)' : 'transparent',
-                      color: 'var(--color-text-primary)',
-                      cursor: 'pointer',
-                      fontFamily: 'var(--font-body)',
-                    }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                      <strong>#{request.id} - {typeLabel[request.type]}</strong>
+                      border: "none",
+                      borderBottom: "1px solid var(--color-border)",
+                      borderLeft: active
+                        ? "3px solid var(--color-accent-teal)"
+                        : "3px solid transparent",
+                      background: active
+                        ? "rgba(0,200,160,0.08)"
+                        : "transparent",
+                      color: "var(--color-text-primary)",
+                      cursor: "pointer",
+                      fontFamily: "var(--font-body)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: 12,
+                      }}
+                    >
+                      <strong>
+                        #{request.id} - {typeLabel[request.type]}
+                      </strong>
                       <StatusPill status={request.status} />
                     </div>
-                    <div style={{ color: 'var(--color-text-secondary)', fontSize: 13 }}>
-                      {request.customerName || request.customerEmail || 'Khách hàng'}
+                    <div
+                      style={{
+                        color: "var(--color-text-secondary)",
+                        fontSize: 13,
+                      }}
+                    >
+                      {request.customerName ||
+                        request.customerEmail ||
+                        "Khách hàng"}
                     </div>
-                    <div style={{ color: 'var(--color-text-muted)', fontSize: 12 }}>
-                      {(request.plotCodes ?? []).join(', ') || `${request.plotCount ?? 0} lô`} · {formatDate(request.createdAt)}
+                    <div
+                      style={{ color: "var(--color-text-muted)", fontSize: 12 }}
+                    >
+                      {(request.plotCodes ?? []).join(", ") ||
+                        `${request.plotCount ?? 0} lô`}{" "}
+                      · {formatDate(request.createdAt)}
                     </div>
                   </button>
-                )
+                );
               })}
             </div>
           )}
         </div>
 
-        <aside style={{ ...panelStyle, padding: 18, alignSelf: 'start' }}>
+        <aside style={{ ...panelStyle, padding: 18, alignSelf: "start" }}>
           {!current ? (
-            <div style={{ color: 'var(--color-text-secondary)' }}>Chọn một yêu cầu để xem chi tiết.</div>
+            <div style={{ color: "var(--color-text-secondary)" }}>
+              Chọn một yêu cầu để xem chi tiết.
+            </div>
           ) : loadingDetail ? (
-            <div style={{ color: 'var(--color-text-secondary)' }}>Đang tải chi tiết...</div>
+            <div style={{ color: "var(--color-text-secondary)" }}>
+              Đang tải chi tiết...
+            </div>
           ) : (
-            <div style={{ display: 'grid', gap: 18 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+            <div style={{ display: "grid", gap: 18 }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  alignItems: "center",
+                }}
+              >
                 <div>
-                  <h2 style={{ margin: 0, fontSize: 20 }}>Yêu cầu #{current.id}</h2>
-                  <p style={{ margin: '6px 0 0', color: 'var(--color-text-secondary)' }}>{typeLabel[current.type]}</p>
+                  <h2 style={{ margin: 0, fontSize: 20 }}>
+                    Yêu cầu #{current.id}
+                  </h2>
+                  <p
+                    style={{
+                      margin: "6px 0 0",
+                      color: "var(--color-text-secondary)",
+                    }}
+                  >
+                    {typeLabel[current.type]}
+                  </p>
                 </div>
                 <StatusPill status={current.status} />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                <InfoRow label="Khách hàng" value={current.customerName || '-'} />
-                <InfoRow label="Email" value={current.customerEmail || '-'} />
-                <InfoRow label="Số điện thoại" value={detail?.customerPhone || '-'} />
-                <InfoRow label="Tổng tiền" value={money.format(Number(current.totalPrice ?? 0))} />
-                <InfoRow label="Ngày gửi" value={formatDate(current.createdAt)} />
-                <InfoRow label="Ngày xử lý" value={formatDate(current.reviewedAt)} />
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 14,
+                }}
+              >
+                <InfoRow
+                  label="Khách hàng"
+                  value={current.customerName || "-"}
+                />
+                <InfoRow label="Email" value={current.customerEmail || "-"} />
+                <InfoRow
+                  label="Số điện thoại"
+                  value={detail?.customerPhone || "-"}
+                />
+                <InfoRow
+                  label="Tổng tiền"
+                  value={money.format(Number(current.totalPrice ?? 0))}
+                />
+                <InfoRow
+                  label="Ngày gửi"
+                  value={formatDate(current.createdAt)}
+                />
+                <InfoRow
+                  label="Ngày xử lý"
+                  value={formatDate(current.reviewedAt)}
+                />
               </div>
 
-              <div style={{ display: 'grid', gap: 10 }}>
+              {detail?.customerNotes && (
+                <div
+                  style={{
+                    display: "grid",
+                    gap: 6,
+                    padding: "10px 12px",
+                    border: "1px solid rgba(245,166,35,0.35)",
+                    borderRadius: 8,
+                    background: "rgba(245,166,35,0.08)",
+                  }}
+                >
+                  <span style={{ ...labelStyle, color: "#F5A623" }}>
+                    ⚠ Ghi chú đặc biệt của khách (từ hồ sơ cá nhân)
+                  </span>
+                  <span style={{ fontSize: 13, whiteSpace: "pre-wrap" }}>
+                    {detail.customerNotes}
+                  </span>
+                </div>
+              )}
+
+              <div style={{ display: "grid", gap: 10 }}>
                 <span style={labelStyle}>Danh sách lô</span>
-                <div style={{ display: 'grid', gap: 8 }}>
+                <div style={{ display: "grid", gap: 8 }}>
                   {(detail?.plots ?? []).length > 0 ? (
                     detail?.plots?.map((plot) => (
                       <div
                         key={plot.id}
                         style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
+                          display: "flex",
+                          justifyContent: "space-between",
                           gap: 12,
-                          padding: '10px 12px',
-                          border: '1px solid var(--color-border)',
+                          padding: "10px 12px",
+                          border: "1px solid var(--color-border)",
                           borderRadius: 8,
-                          background: 'rgba(255,255,255,0.03)',
-                        }}>
+                          background: "rgba(255,255,255,0.03)",
+                        }}
+                      >
                         <strong>{plot.code}</strong>
-                        <span style={{ color: 'var(--color-text-secondary)' }}>
-                          {plot.status} · {money.format(Number(plot.price ?? 0))}
+                        <span style={{ color: "var(--color-text-secondary)" }}>
+                          {plot.status} ·{" "}
+                          {money.format(Number(plot.price ?? 0))}
                         </span>
                       </div>
                     ))
                   ) : (
-                    <div style={{ color: 'var(--color-text-secondary)' }}>
-                      {(current.plotCodes ?? []).join(', ') || 'Không có dữ liệu lô'}
+                    <div style={{ color: "var(--color-text-secondary)" }}>
+                      {(current.plotCodes ?? []).join(", ") ||
+                        "Không có dữ liệu lô"}
                     </div>
                   )}
                 </div>
               </div>
 
-              <InfoRow label="Ghi chú khách hàng" value={detail?.note || '-'} />
+              <InfoRow label="Ghi chú khách hàng" value={detail?.note || "-"} />
 
-              <label style={{ display: 'grid', gap: 8 }}>
+              <label style={{ display: "grid", gap: 8 }}>
                 <span style={labelStyle}>Ghi chú admin</span>
                 <textarea
                   value={adminNote}
@@ -447,101 +653,169 @@ export default function RequestsPage() {
                   disabled={!canDecide}
                   placeholder="Nhập lý do hoặc ghi chú xử lý..."
                   style={{
-                    width: '100%',
-                    resize: 'vertical',
-                    border: '1px solid var(--color-border)',
+                    width: "100%",
+                    resize: "vertical",
+                    border: "1px solid var(--color-border)",
                     borderRadius: 8,
-                    background: 'var(--color-bg-secondary)',
-                    color: 'var(--color-text-primary)',
+                    background: "var(--color-bg-secondary)",
+                    color: "var(--color-text-primary)",
                     padding: 12,
-                    fontFamily: 'var(--font-body)',
-                    outline: 'none',
+                    fontFamily: "var(--font-body)",
+                    outline: "none",
                   }}
                 />
               </label>
 
-              {current?.status === 'approved' ? (
-                <div style={{ display: 'grid', gap: 12, padding: 14, border: '1px solid var(--color-border)', borderRadius: 8, background: 'rgba(255,255,255,0.03)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+              {current?.status === "approved" ? (
+                <div
+                  style={{
+                    display: "grid",
+                    gap: 12,
+                    padding: 14,
+                    border: "1px solid var(--color-border)",
+                    borderRadius: 8,
+                    background: "rgba(255,255,255,0.03)",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 12,
+                      alignItems: "center",
+                    }}
+                  >
                     <div>
-                      <div style={{ ...labelStyle, marginBottom: 4 }}>Lịch hẹn ký hợp đồng</div>
+                      <div style={{ ...labelStyle, marginBottom: 4 }}>
+                        Lịch hẹn ký hợp đồng
+                      </div>
                       {currentAppointment ? (
-                        <div style={{ color: 'var(--color-text-primary)', fontWeight: 700 }}>
-                          {formatDate(currentAppointment.scheduledAt)} · {currentAppointment.location}
+                        <div
+                          style={{
+                            color: "var(--color-text-primary)",
+                            fontWeight: 700,
+                          }}
+                        >
+                          {formatDate(currentAppointment.scheduledAt)} ·{" "}
+                          {currentAppointment.location}
                         </div>
                       ) : (
-                        <div style={{ color: 'var(--color-text-secondary)', fontSize: 13 }}>
+                        <div
+                          style={{
+                            color: "var(--color-text-secondary)",
+                            fontSize: 13,
+                          }}
+                        >
                           Tạo lịch hẹn offline để khách hoàn tất ký hợp đồng.
                         </div>
                       )}
                     </div>
-                    {currentAppointment ? <StatusPill status={currentAppointment.status} /> : null}
+                    {currentAppointment ? (
+                      <StatusPill status={currentAppointment.status} />
+                    ) : null}
                   </div>
 
                   {currentAppointment ? (
-                    <div style={{ color: 'var(--color-text-secondary)', fontSize: 13 }}>
-                      Phụ trách: {currentAppointment.assignedStaffName || '-'}
-                      {currentAppointment.note ? ` · ${currentAppointment.note}` : ''}
+                    <div
+                      style={{
+                        color: "var(--color-text-secondary)",
+                        fontSize: 13,
+                      }}
+                    >
+                      Phụ trách: {currentAppointment.assignedStaffName || "-"}
+                      {currentAppointment.note
+                        ? ` · ${currentAppointment.note}`
+                        : ""}
                     </div>
                   ) : (
-                    <div style={{ display: 'grid', gap: 10 }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <div style={{ display: "grid", gap: 10 }}>
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1fr 1fr",
+                          gap: 10,
+                        }}
+                      >
                         <input
                           type="datetime-local"
                           value={appointmentForm.scheduledAt}
-                          onChange={(event) => setAppointmentForm((form) => ({ ...form, scheduledAt: event.target.value }))}
+                          onChange={(event) =>
+                            setAppointmentForm((form) => ({
+                              ...form,
+                              scheduledAt: event.target.value,
+                            }))
+                          }
                           style={{
-                            border: '1px solid var(--color-border)',
+                            border: "1px solid var(--color-border)",
                             borderRadius: 8,
-                            background: 'var(--color-bg-secondary)',
-                            color: 'var(--color-text-primary)',
+                            background: "var(--color-bg-secondary)",
+                            color: "var(--color-text-primary)",
                             padding: 10,
-                            fontFamily: 'var(--font-body)',
+                            fontFamily: "var(--font-body)",
                           }}
                         />
                         <input
                           value={appointmentForm.assignedStaffName}
-                          onChange={(event) => setAppointmentForm((form) => ({ ...form, assignedStaffName: event.target.value }))}
+                          onChange={(event) =>
+                            setAppointmentForm((form) => ({
+                              ...form,
+                              assignedStaffName: event.target.value,
+                            }))
+                          }
                           placeholder="Nhân viên phụ trách"
                           style={{
-                            border: '1px solid var(--color-border)',
+                            border: "1px solid var(--color-border)",
                             borderRadius: 8,
-                            background: 'var(--color-bg-secondary)',
-                            color: 'var(--color-text-primary)',
+                            background: "var(--color-bg-secondary)",
+                            color: "var(--color-text-primary)",
                             padding: 10,
-                            fontFamily: 'var(--font-body)',
+                            fontFamily: "var(--font-body)",
                           }}
                         />
                       </div>
                       <input
                         value={appointmentForm.location}
-                        onChange={(event) => setAppointmentForm((form) => ({ ...form, location: event.target.value }))}
+                        onChange={(event) =>
+                          setAppointmentForm((form) => ({
+                            ...form,
+                            location: event.target.value,
+                          }))
+                        }
                         placeholder="Địa điểm ký hợp đồng"
                         style={{
-                          border: '1px solid var(--color-border)',
+                          border: "1px solid var(--color-border)",
                           borderRadius: 8,
-                          background: 'var(--color-bg-secondary)',
-                          color: 'var(--color-text-primary)',
+                          background: "var(--color-bg-secondary)",
+                          color: "var(--color-text-primary)",
                           padding: 10,
-                          fontFamily: 'var(--font-body)',
+                          fontFamily: "var(--font-body)",
                         }}
                       />
                       <textarea
                         value={appointmentForm.note}
-                        onChange={(event) => setAppointmentForm((form) => ({ ...form, note: event.target.value }))}
+                        onChange={(event) =>
+                          setAppointmentForm((form) => ({
+                            ...form,
+                            note: event.target.value,
+                          }))
+                        }
                         rows={2}
                         placeholder="Ghi chú lịch hẹn"
                         style={{
-                          border: '1px solid var(--color-border)',
+                          border: "1px solid var(--color-border)",
                           borderRadius: 8,
-                          background: 'var(--color-bg-secondary)',
-                          color: 'var(--color-text-primary)',
+                          background: "var(--color-bg-secondary)",
+                          color: "var(--color-text-primary)",
                           padding: 10,
-                          fontFamily: 'var(--font-body)',
-                          resize: 'vertical',
+                          fontFamily: "var(--font-body)",
+                          resize: "vertical",
                         }}
                       />
-                      <Button onClick={() => void createAppointment()} loading={appointmentLoading} disabled={!canScheduleAppointment}>
+                      <Button
+                        onClick={() => void createAppointment()}
+                        loading={appointmentLoading}
+                        disabled={!canScheduleAppointment}
+                      >
                         Tạo lịch hẹn
                       </Button>
                     </div>
@@ -549,37 +823,49 @@ export default function RequestsPage() {
                 </div>
               ) : null}
 
-              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+              <div
+                style={{
+                  display: "flex",
+                  gap: 10,
+                  justifyContent: "flex-end",
+                  flexWrap: "wrap",
+                }}
+              >
                 <Button
                   variant="danger"
                   style={{
-                    background: canDecide ? '#dc3545' : 'rgba(220,53,69,0.35)',
-                    color: '#fff',
-                    border: '1px solid #dc3545',
+                    background: canDecide ? "#dc3545" : "rgba(220,53,69,0.35)",
+                    color: "#fff",
+                    border: "1px solid #dc3545",
                     minWidth: 110,
                   }}
-                  onClick={() => void decide('reject')}
-                  loading={decisionLoading === 'reject'}
-                  disabled={!canDecide || decisionLoading !== null}>
+                  onClick={() => void decide("reject")}
+                  loading={decisionLoading === "reject"}
+                  disabled={!canDecide || decisionLoading !== null}
+                >
                   Từ chối
                 </Button>
                 <Button
                   style={{
-                    background: canDecide ? 'var(--color-accent-teal)' : 'rgba(0,150,130,0.35)',
-                    color: '#0A1628',
-                    border: '1px solid var(--color-accent-teal)',
+                    background: canDecide
+                      ? "var(--color-accent-teal)"
+                      : "rgba(0,150,130,0.35)",
+                    color: "#0A1628",
+                    border: "1px solid var(--color-accent-teal)",
                     minWidth: 110,
                   }}
-                  onClick={() => void decide('approve')}
-                  loading={decisionLoading === 'approve'}
-                  disabled={!canDecide || decisionLoading !== null}>
+                  onClick={() => void decide("approve")}
+                  loading={decisionLoading === "approve"}
+                  disabled={!canDecide || decisionLoading !== null}
+                >
                   Duyệt
                 </Button>
               </div>
 
               {!canDecide ? (
-                <div style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>
-                  Yêu cầu này đã được xử lý nên không thể duyệt hoặc từ chối lại.
+                <div style={{ color: "var(--color-text-muted)", fontSize: 13 }}>
+                  Yêu cầu này đã được xử lý nên không thể duyệt hoặc từ chối
+                  lại.
                 </div>
               ) : null}
             </div>
@@ -587,5 +873,5 @@ export default function RequestsPage() {
         </aside>
       </section>
     </div>
-  )
+  );
 }

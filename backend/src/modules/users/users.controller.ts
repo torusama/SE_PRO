@@ -68,7 +68,7 @@ const avatarFileFilter = (
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller()
-export class  UsersController {
+export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get('users/me')
@@ -117,6 +117,14 @@ export class  UsersController {
     };
   }
 
+  @Post('users/me/password/send-otp')
+  async sendPasswordChangeOtp(@CurrentUser() user: AuthUser) {
+    return {
+      success: true,
+      data: await this.usersService.sendPasswordChangeOtp(user.id),
+    };
+  }
+
   @Patch('users/me/password')
   async changePassword(
     @CurrentUser() user: AuthUser,
@@ -129,6 +137,7 @@ export class  UsersController {
         user.id,
         dto.currentPassword,
         dto.newPassword,
+        dto.otpCode,
       ),
     };
   }

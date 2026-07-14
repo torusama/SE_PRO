@@ -53,6 +53,7 @@ interface BackendUser {
   avatarUrl: string | null;
   nationality: string | null;
   city: string | null;
+  ward: string | null;
   postalCode: string | null;
   emergencyContactName: string | null;
   emergencyContactRelation: string | null;
@@ -65,6 +66,7 @@ interface BackendUser {
   notifyAnnouncement: boolean;
   isEmailVerified: boolean;
   isEmergencyEmailVerified: boolean;
+  passwordChangedAt: string | null;
   isActive: boolean;
   isProfileComplete: boolean;
   createdAt: string;
@@ -124,6 +126,20 @@ function formatCurrency(v: number) {
 function formatDate(d: string | null | undefined) {
   if (!d) return "—";
   return new Date(d).toLocaleDateString("vi-VN");
+}
+
+function formatRelativeTime(dateStr: string | null): string {
+  if (!dateStr) return "Chưa có dữ liệu";
+  const then = new Date(dateStr).getTime();
+  if (Number.isNaN(then)) return "Chưa có dữ liệu";
+  const diffMs = Date.now() - then;
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  if (diffDays <= 0) return "Hôm nay";
+  if (diffDays === 1) return "Hôm qua";
+  if (diffDays < 30) return `${diffDays} ngày trước`;
+  const diffMonths = Math.floor(diffDays / 30);
+  if (diffMonths < 12) return `${diffMonths} tháng trước`;
+  return `${Math.floor(diffMonths / 12)} năm trước`;
 }
 
 function getErrorMessage(error: unknown, fallback: string): string {
@@ -199,8 +215,50 @@ export default function ProfilePage() {
   const [gender, setGender] = useState("male");
   const [address, setAddress] = useState("");
   const [nationality, setNationality] = useState("");
-  const [city, setCity] = useState("");
   const [postalCode, setPostalCode] = useState("");
+
+  // --- Địa chỉ theo mô hình hành chính 2 cấp (từ 1/7/2025: bỏ cấp huyện) ---
+  // Tỉnh/Thành + Xã/Phường chọn qua dropdown; chỉ số nhà/tên đường (biến `address`)
+  // là free text. Bộ dữ liệu tải 1 lần từ /data/vn-address-data.json (34 tỉnh,
+  // 3.321 xã/phường — theo Nghị quyết 202/2025/QH15).
+  const [addressData, setAddressData] = useState<{
+    provinces: { id: string; name: string }[];
+    wards: { id: string; name: string; provinceId: string }[];
+  }>({ provinces: [], wards: [] });
+  const [provinceId, setProvinceId] = useState("");
+  const [wardId, setWardId] = useState("");
+
+  useEffect(() => {
+    fetch("/data/vn-address-data.json")
+      .then((res) => res.json())
+      .then((data) => setAddressData(data))
+      .catch(() => {
+        // Không chặn cả trang nếu tải dữ liệu địa chỉ thất bại — chỉ dropdown
+        // tỉnh/thành, xã/phường sẽ rỗng, các phần khác vẫn dùng được bình thường.
+      });
+  }, []);
+
+  // Khớp lại provinceId/wardId từ tên đã lưu (backend lưu dạng text, không lưu mã)
+  // mỗi khi hồ sơ hoặc bộ dữ liệu địa chỉ thay đổi.
+  useEffect(() => {
+    if (!profile || addressData.provinces.length === 0) return;
+    const matchedProvince = addressData.provinces.find(
+      (p) => p.name === profile.city,
+    );
+    setProvinceId(matchedProvince?.id ?? "");
+    if (matchedProvince) {
+      const matchedWard = addressData.wards.find(
+        (w) => w.provinceId === matchedProvince.id && w.name === profile.ward,
+      );
+      setWardId(matchedWard?.id ?? "");
+    } else {
+      setWardId("");
+    }
+  }, [profile, addressData]);
+
+  const wardOptions = addressData.wards.filter(
+    (w) => w.provinceId === provinceId,
+  );
 
   // true sau khi người dùng bấm "Lưu thay đổi" ở tab Thông tin cá nhân ít nhất
   // một lần — dùng để quyết định có tô đỏ các trường bắt buộc còn trống hay không
@@ -282,7 +340,6 @@ export default function ProfilePage() {
     setGender(data.gender ?? "male");
     setAddress(data.address ?? "");
     setNationality(data.nationality ?? "");
-    setCity(data.city ?? "");
     setPostalCode(data.postalCode ?? "");
     setEmergencyContact({
       name: data.emergencyContactName ?? "",
@@ -503,6 +560,10 @@ export default function ProfilePage() {
     }
     setSaving(true);
     try {
+      const selectedProvince = addressData.provinces.find(
+        (p) => p.id === provinceId,
+      );
+      const selectedWard = wardOptions.find((w) => w.id === wardId);
       const res = await api.patch("/users/me", {
         fullName,
         phone,
@@ -510,7 +571,8 @@ export default function ProfilePage() {
         gender,
         address,
         nationality: nationality || undefined,
-        city: city || undefined,
+        city: selectedProvince?.name || undefined,
+        ward: selectedWard?.name || undefined,
         postalCode: postalCode || undefined,
         emergencyContactName: emergencyContact.name,
         emergencyContactRelation: emergencyContact.relation || undefined,
@@ -990,12 +1052,13 @@ export default function ProfilePage() {
                   </div>
                   <div className="field form-full">
                     <label>
-                      Địa chỉ thường trú<span className="required-mark">*</span>
+                      Số nhà, tên đường<span className="required-mark">*</span>
                     </label>
                     <input
                       type="text"
                       value={address}
                       onChange={(e) => setAddress(e.target.value)}
+                      placeholder="Ví dụ: 12 Nguyễn Huệ"
                       className={
                         attemptedSaveInfo && !address.trim()
                           ? "field-invalid"
@@ -1006,13 +1069,35 @@ export default function ProfilePage() {
                   <div className="field">
                     <label>Tỉnh / Thành phố</label>
                     <select
-                      value={city}
-                      onChange={(e) => setCity(e.target.value)}
+                      value={provinceId}
+                      onChange={(e) => {
+                        setProvinceId(e.target.value);
+                        setWardId("");
+                      }}
                     >
                       <option value="">— Chọn tỉnh/thành —</option>
-                      <option>TP. Hồ Chí Minh</option>
-                      <option>Hà Nội</option>
-                      <option>Đà Nẵng</option>
+                      {addressData.provinces.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="field">
+                    <label>Xã / Phường</label>
+                    <select
+                      value={wardId}
+                      onChange={(e) => setWardId(e.target.value)}
+                      disabled={!provinceId}
+                    >
+                      <option value="">
+                        {provinceId ? "— Chọn xã/phường —" : "Chọn tỉnh/thành trước"}
+                      </option>
+                      {wardOptions.map((w) => (
+                        <option key={w.id} value={w.id}>
+                          {w.name}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div className="field">
@@ -1236,7 +1321,11 @@ export default function ProfilePage() {
                     <div className="c-label">Email</div>
                     <div className="c-value">{profile?.email ?? "—"}</div>
                   </div>
-                  <span className="contact-status verified">✓ Đã xác thực</span>
+                  <span
+                    className={`contact-status ${profile?.isEmailVerified ? "verified" : "unverified"}`}
+                  >
+                    {profile?.isEmailVerified ? "✓ Đã xác thực" : "Chưa xác thực"}
+                  </span>
                   <button
                     className="btn-mini"
                     onClick={() => setOpenModal("email")}
@@ -1250,7 +1339,9 @@ export default function ProfilePage() {
                     <div className="c-label">Số điện thoại</div>
                     <div className="c-value">{profile?.phone ?? "—"}</div>
                   </div>
-                  <span className="contact-status verified">✓ Đã xác thực</span>
+                  <span className="contact-status unverified">
+                    Chưa xác thực (SMS OTP chưa khả dụng)
+                  </span>
                   <button
                     className="btn-mini"
                     onClick={() => setOpenModal("phone")}
@@ -1653,7 +1744,11 @@ export default function ProfilePage() {
                     <div className="sec-icon">🔑</div>
                     <div className="sec-info">
                       <h4>Mật khẩu</h4>
-                      <p>Đã thay đổi 4 tháng trước</p>
+                      <p>
+                        {profile?.passwordChangedAt
+                          ? `Đã đổi ${formatRelativeTime(profile.passwordChangedAt)}`
+                          : "Chưa có dữ liệu lần đổi gần nhất"}
+                      </p>
                     </div>
                   </div>
                   <button
@@ -1667,28 +1762,11 @@ export default function ProfilePage() {
                   <div className="sec-left">
                     <div className="sec-icon">📱</div>
                     <div className="sec-info">
-                      <h4>Xác thực 2 bước (OTP SMS)</h4>
-                      <p>Gửi mã OTP đến 0912 *** 678</p>
+                      <h4>Xác thực bằng số điện thoại (OTP SMS)</h4>
+                      <p>Chưa khả dụng — hệ thống chưa tích hợp SMS gateway</p>
                     </div>
                   </div>
-                  <span className="sec-status on">Đang bật</span>
-                </div>
-                <div className="security-item">
-                  <div className="sec-left">
-                    <div className="sec-icon">🔐</div>
-                    <div className="sec-info">
-                      <h4>Ứng dụng xác thực (Authenticator)</h4>
-                      <p>Chưa thiết lập</p>
-                    </div>
-                  </div>
-                  <span className="sec-status off">Chưa bật</span>
-                  <button
-                    className="btn-mini"
-                    style={{ marginLeft: 8 }}
-                    onClick={() => showToast("Mở hướng dẫn cài Authenticator")}
-                  >
-                    Thiết lập
-                  </button>
+                  <span className="sec-status off">Chưa khả dụng</span>
                 </div>
               </div>
             </div>
@@ -1833,14 +1911,27 @@ export default function ProfilePage() {
 
       {openModal === "password" && (
         <PasswordModal
+          email={profile?.email ?? ""}
           onClose={() => setOpenModal(null)}
-          onSubmit={async (currentPassword, newPassword) => {
+          onSendOtp={async () => {
+            try {
+              await api.post("/users/me/password/send-otp");
+            } catch (error: unknown) {
+              throw new Error(getErrorMessage(error, "Gửi mã OTP thất bại."), {
+                cause: error,
+              });
+            }
+          }}
+          onSubmit={async (currentPassword, newPassword, otpCode) => {
             try {
               await api.patch("/users/me/password", {
                 currentPassword,
                 newPassword,
+                otpCode,
               });
               setOpenModal(null);
+              const res = await api.get("/users/me");
+              applyProfile(res.data.data);
               showToast("✓ Đã đổi mật khẩu");
             } catch (error: unknown) {
               throw new Error(
@@ -2221,6 +2312,9 @@ function ModalShell({
   );
 }
 
+const AVATAR_VIEWPORT = 260; // px hiển thị vùng cắt tròn
+const AVATAR_OUTPUT = 480; // px ảnh xuất ra sau khi cắt
+
 function AvatarModal({
   initials,
   currentAvatarUrl,
@@ -2238,21 +2332,136 @@ function AvatarModal({
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // --- Trạng thái cắt/zoom ảnh ---
+  const imgRef = useRef<HTMLImageElement | null>(null);
+  const [imgLoaded, setImgLoaded] = useState(false);
+  const [zoom, setZoom] = useState(1);
+  const [pos, setPos] = useState({ x: 0, y: 0 }); // toạ độ góc trên-trái ảnh, trong hệ viewport (px)
+  const dragRef = useRef<{
+    startX: number;
+    startY: number;
+    startPosX: number;
+    startPosY: number;
+  } | null>(null);
+
+  function getBaseScale() {
+    const img = imgRef.current;
+    if (!img || !img.naturalWidth || !img.naturalHeight) return 1;
+    return AVATAR_VIEWPORT / Math.min(img.naturalWidth, img.naturalHeight);
+  }
+
+  function clampPos(nextX: number, nextY: number, currentZoom: number) {
+    const img = imgRef.current;
+    if (!img) return { x: nextX, y: nextY };
+    const scale = getBaseScale() * currentZoom;
+    const dispW = img.naturalWidth * scale;
+    const dispH = img.naturalHeight * scale;
+    const minX = AVATAR_VIEWPORT - dispW;
+    const minY = AVATAR_VIEWPORT - dispH;
+    return {
+      x: Math.min(0, Math.max(minX, nextX)),
+      y: Math.min(0, Math.max(minY, nextY)),
+    };
+  }
+
+  function centerImage(currentZoom: number) {
+    const img = imgRef.current;
+    if (!img) return;
+    const scale = getBaseScale() * currentZoom;
+    const dispW = img.naturalWidth * scale;
+    const dispH = img.naturalHeight * scale;
+    setPos({
+      x: (AVATAR_VIEWPORT - dispW) / 2,
+      y: (AVATAR_VIEWPORT - dispH) / 2,
+    });
+  }
+
   function handleFile(file: File | undefined) {
     if (!file) return;
     setSelectedFile(file);
     setError(null);
+    setImgLoaded(false);
+    setZoom(1);
     const reader = new FileReader();
     reader.onload = () => setPreview(reader.result as string);
     reader.readAsDataURL(file);
   }
 
+  function handleImgLoad() {
+    setImgLoaded(true);
+    centerImage(1);
+  }
+
+  function handleZoomChange(nextZoom: number) {
+    setZoom(nextZoom);
+    setPos((p) => clampPos(p.x, p.y, nextZoom));
+  }
+
+  function startDrag(clientX: number, clientY: number) {
+    dragRef.current = {
+      startX: clientX,
+      startY: clientY,
+      startPosX: pos.x,
+      startPosY: pos.y,
+    };
+  }
+
+  function moveDrag(clientX: number, clientY: number) {
+    if (!dragRef.current) return;
+    const dx = clientX - dragRef.current.startX;
+    const dy = clientY - dragRef.current.startY;
+    setPos(
+      clampPos(dragRef.current.startPosX + dx, dragRef.current.startPosY + dy, zoom),
+    );
+  }
+
+  function endDrag() {
+    dragRef.current = null;
+  }
+
+  function cropToFile(): Promise<File> {
+    return new Promise((resolve, reject) => {
+      const img = imgRef.current;
+      if (!img || !selectedFile) {
+        reject(new Error("Chưa có ảnh để cắt."));
+        return;
+      }
+      const scale = getBaseScale() * zoom;
+      const sx = -pos.x / scale;
+      const sy = -pos.y / scale;
+      const sSize = AVATAR_VIEWPORT / scale;
+
+      const canvas = document.createElement("canvas");
+      canvas.width = AVATAR_OUTPUT;
+      canvas.height = AVATAR_OUTPUT;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        reject(new Error("Trình duyệt không hỗ trợ cắt ảnh."));
+        return;
+      }
+      ctx.drawImage(img, sx, sy, sSize, sSize, 0, 0, AVATAR_OUTPUT, AVATAR_OUTPUT);
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            reject(new Error("Không thể xử lý ảnh."));
+            return;
+          }
+          const name = selectedFile.name.replace(/\.\w+$/, "") + "_cropped.jpg";
+          resolve(new File([blob], name, { type: "image/jpeg" }));
+        },
+        "image/jpeg",
+        0.92,
+      );
+    });
+  }
+
   async function handleSubmit() {
-    if (!selectedFile) return;
     setUploading(true);
     setError(null);
     try {
-      await onSubmit(selectedFile);
+      const fileToUpload = preview && imgLoaded ? await cropToFile() : selectedFile;
+      if (!fileToUpload) return;
+      await onSubmit(fileToUpload);
     } catch (err: unknown) {
       setError(
         err instanceof Error ? err.message : "Cập nhật ảnh đại diện thất bại.",
@@ -2262,12 +2471,10 @@ function AvatarModal({
     }
   }
 
-  const shownImage = preview ?? currentAvatarUrl ?? undefined;
-
   return (
     <ModalShell
       title="Đổi Ảnh Đại Diện"
-      sub="Ảnh JPG hoặc PNG, tối đa 5MB"
+      sub="Ảnh JPG hoặc PNG, tối đa 5MB — kéo để di chuyển, dùng thanh trượt để zoom"
       onClose={onClose}
     >
       {error && (
@@ -2291,20 +2498,82 @@ function AvatarModal({
           marginBottom: 8,
         }}
       >
-        <div
-          className="avatar-ring"
-          style={{
-            width: 120,
-            height: 120,
-            fontSize: 40,
-            margin: 0,
-            backgroundImage: shownImage ? `url(${shownImage})` : undefined,
-            backgroundSize: "cover",
-            backgroundPosition: "center",
-          }}
-        >
-          {!shownImage && initials}
-        </div>
+        {preview ? (
+          <div
+            className="avatar-crop-viewport"
+            style={{ width: AVATAR_VIEWPORT, height: AVATAR_VIEWPORT }}
+            onMouseDown={(e) => {
+              e.preventDefault();
+              startDrag(e.clientX, e.clientY);
+            }}
+            onMouseMove={(e) => {
+              if (dragRef.current) moveDrag(e.clientX, e.clientY);
+            }}
+            onMouseUp={endDrag}
+            onMouseLeave={endDrag}
+            onTouchStart={(e) => {
+              const t = e.touches[0];
+              if (t) startDrag(t.clientX, t.clientY);
+            }}
+            onTouchMove={(e) => {
+              const t = e.touches[0];
+              if (t) moveDrag(t.clientX, t.clientY);
+            }}
+            onTouchEnd={endDrag}
+          >
+            {/* eslint-disable-next-line jsx-a11y/alt-text -- ảnh xem trước để cắt, không cần alt mô tả */}
+            <img
+              ref={imgRef}
+              src={preview}
+              onLoad={handleImgLoad}
+              draggable={false}
+              style={{
+                position: "absolute",
+                left: pos.x,
+                top: pos.y,
+                width: imgRef.current?.naturalWidth
+                  ? imgRef.current.naturalWidth * getBaseScale() * zoom
+                  : "auto",
+                height: imgRef.current?.naturalHeight
+                  ? imgRef.current.naturalHeight * getBaseScale() * zoom
+                  : "auto",
+                userSelect: "none",
+                pointerEvents: "none",
+              }}
+            />
+          </div>
+        ) : (
+          <div
+            className="avatar-ring"
+            style={{
+              width: AVATAR_VIEWPORT,
+              height: AVATAR_VIEWPORT,
+              fontSize: 40,
+              margin: 0,
+              backgroundImage: currentAvatarUrl
+                ? `url(${currentAvatarUrl})`
+                : undefined,
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+            }}
+          >
+            {!currentAvatarUrl && initials}
+          </div>
+        )}
+
+        {preview && imgLoaded && (
+          <div className="avatar-zoom-row">
+            <span>🔍</span>
+            <input
+              type="range"
+              min={1}
+              max={3}
+              step={0.01}
+              value={zoom}
+              onChange={(e) => handleZoomChange(Number(e.target.value))}
+            />
+          </div>
+        )}
 
         <input
           ref={fileInputRef}
@@ -2335,6 +2604,8 @@ function AvatarModal({
               onClick={() => {
                 setPreview(null);
                 setSelectedFile(null);
+                setImgLoaded(false);
+                setZoom(1);
               }}
             >
               Xóa ảnh đã chọn
@@ -2365,17 +2636,49 @@ function AvatarModal({
 }
 
 function PasswordModal({
+  email,
   onClose,
+  onSendOtp,
   onSubmit,
 }: {
+  email: string;
   onClose: () => void;
-  onSubmit: (currentPassword: string, newPassword: string) => Promise<void>;
+  onSendOtp: () => Promise<void>;
+  onSubmit: (
+    currentPassword: string,
+    newPassword: string,
+    otpCode: string,
+  ) => Promise<void>;
 }) {
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpCooldown, setOtpCooldown] = useState(0);
+  const [otpSending, setOtpSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (otpCooldown <= 0) return;
+    const t = setInterval(() => setOtpCooldown((v) => Math.max(0, v - 1)), 1000);
+    return () => clearInterval(t);
+  }, [otpCooldown]);
+
+  async function handleSendOtp() {
+    setError(null);
+    setOtpSending(true);
+    try {
+      await onSendOtp();
+      setOtpSent(true);
+      setOtpCooldown(60);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Gửi mã OTP thất bại.");
+    } finally {
+      setOtpSending(false);
+    }
+  }
 
   async function handleSubmit() {
     if (!current || !next || !confirm) {
@@ -2390,10 +2693,14 @@ function PasswordModal({
       setError("Xác nhận mật khẩu không khớp.");
       return;
     }
+    if (otpCode.trim().length !== 6) {
+      setError("Vui lòng nhập đủ mã OTP 6 số đã gửi đến email của bạn.");
+      return;
+    }
     setError(null);
     setSubmitting(true);
     try {
-      await onSubmit(current, next);
+      await onSubmit(current, next, otpCode.trim());
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Đổi mật khẩu thất bại.");
     } finally {
@@ -2447,6 +2754,32 @@ function PasswordModal({
             onChange={(e) => setConfirm(e.target.value)}
             placeholder="••••••••"
           />
+        </div>
+        <div className="modal-field">
+          <label>Mã OTP xác nhận (gửi tới {email || "email của bạn"})</label>
+          <div className="otp-verify-box">
+            <input
+              inputMode="numeric"
+              maxLength={6}
+              placeholder="Mã 6 số"
+              value={otpCode}
+              onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
+            />
+            <button
+              type="button"
+              className="otp-btn"
+              onClick={handleSendOtp}
+              disabled={otpSending || otpCooldown > 0}
+            >
+              {otpSending
+                ? "Đang gửi…"
+                : otpCooldown > 0
+                  ? `Gửi lại (${otpCooldown}s)`
+                  : otpSent
+                    ? "Gửi lại mã"
+                    : "Gửi mã OTP"}
+            </button>
+          </div>
         </div>
       </div>
 
