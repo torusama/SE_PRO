@@ -5,12 +5,11 @@
 // GET /my/contracts, /my/contracts/:id). Xem API_DOCUMENTATION.md ở backend để biết chi tiết.
 // Các phần sau vẫn là placeholder UI (chưa có bảng/API tương ứng ở backend):
 // liên hệ khẩn cấp, ghi chú đặc biệt, tuỳ chọn nhận thông báo, đổi email/SĐT (cần OTP),
-// người được uỷ quyền, 2FA/Authenticator và lịch sử phiên đăng nhập.
+// người được uỷ quyền, 2FA/Authenticator, lịch sử phiên đăng nhập, chuyển nhượng/thừa kế.
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { ROUTES } from "@/constants/routes";
 import { API_BASE_URL, api } from "@/lib/api";
-import { downloadContractPdf } from "@/lib/contractPdf";
 import { useAuthStore } from "@/store/authStore";
 import "./ProfilePage.css";
 
@@ -24,14 +23,14 @@ const T = {
   navInfo: "Thông tin cá nhân",
   navContact: "Liên hệ & thông báo",
   navLots: "Lô đất của tôi",
-  navContracts: "Hợp đồng của tôi",
   navSecurity: "Bảo mật tài khoản",
   logout: "Đăng xuất",
   save: "Lưu thay đổi",
 };
 
-type TabId = "info" | "contact" | "lots" | "contracts" | "security";
+type TabId = "info" | "contact" | "lots" | "security";
 type ModalId =
+  | "transfer"
   | "status-lot"
   | "avatar"
   | "password"
@@ -66,6 +65,7 @@ interface BackendUser {
   notifyAnnouncement: boolean;
   isEmailVerified: boolean;
   isEmergencyEmailVerified: boolean;
+  isPhoneVerified: boolean;
   passwordChangedAt: string | null;
   isActive: boolean;
   isProfileComplete: boolean;
@@ -108,15 +108,6 @@ interface BackendLot {
     referenceCode: string | null;
     note: string | null;
   }[];
-  contractContent?: string | null;
-  inheritanceContent?: string | null;
-  partyASignatureName?: string | null;
-  partyASignedAt?: string | null;
-  partyASignatureHash?: string | null;
-  partyBSignatureName?: string | null;
-  partyBSignedAt?: string | null;
-  partyBSignatureHash?: string | null;
-  pdfUploadedAt?: string | null;
 }
 
 function formatCurrency(v: number) {
@@ -140,6 +131,28 @@ function formatRelativeTime(dateStr: string | null): string {
   const diffMonths = Math.floor(diffDays / 30);
   if (diffMonths < 12) return `${diffMonths} tháng trước`;
   return `${Math.floor(diffMonths / 12)} năm trước`;
+}
+
+interface AuthorizedPerson {
+  id: number;
+  fullName: string;
+  relation: string | null;
+  phone: string | null;
+  email: string | null;
+  permission: "view" | "view_and_service";
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface SessionRow {
+  id: number;
+  deviceLabel: string | null;
+  browser: string | null;
+  os: string | null;
+  ipAddress: string | null;
+  createdAt: string;
+  lastActiveAt: string;
+  isCurrent: boolean;
 }
 
 function getErrorMessage(error: unknown, fallback: string): string {
@@ -194,6 +207,8 @@ export default function ProfilePage() {
   const token = useAuthStore((s) => s.token);
   const role = useAuthStore((s) => s.role);
   const setProfileComplete = useAuthStore((s) => s.setProfileComplete);
+  const storeLogout = useAuthStore((s) => s.logout);
+  const navigate = useNavigate();
   const starsRef = useRef<HTMLDivElement>(null);
 
   const [activeTab, setActiveTab] = useState<TabId>("info");
@@ -284,14 +299,25 @@ export default function ProfilePage() {
   const [emgOtpCooldown, setEmgOtpCooldown] = useState(0);
   const [emgOtpBusy, setEmgOtpBusy] = useState(false);
 
+  // --- Xác thực số điện thoại bằng OTP SMS ---
+  const [phoneOtpRequested, setPhoneOtpRequested] = useState(false);
+  const [phoneOtpCode, setPhoneOtpCode] = useState("");
+  const [phoneOtpCooldown, setPhoneOtpCooldown] = useState(0);
+  const [phoneOtpBusy, setPhoneOtpBusy] = useState(false);
+  // Chỉ có giá trị khi backend CHƯA cấu hình SMS gateway thật (dev-fallback) —
+  // hiện trực tiếp mã cho dev/tester thay vì phải đọc log server.
+  const [phoneOtpDevCode, setPhoneOtpDevCode] = useState<string | null>(null);
+
   useEffect(() => {
-    if (ownOtpCooldown <= 0 && emgOtpCooldown <= 0) return;
+    if (ownOtpCooldown <= 0 && emgOtpCooldown <= 0 && phoneOtpCooldown <= 0)
+      return;
     const t = setInterval(() => {
       setOwnOtpCooldown((v) => Math.max(0, v - 1));
       setEmgOtpCooldown((v) => Math.max(0, v - 1));
+      setPhoneOtpCooldown((v) => Math.max(0, v - 1));
     }, 1000);
     return () => clearInterval(t);
-  }, [ownOtpCooldown, emgOtpCooldown]);
+  }, [ownOtpCooldown, emgOtpCooldown, phoneOtpCooldown]);
 
   const [emergencyContact, setEmergencyContact] = useState({
     name: "",
@@ -312,11 +338,6 @@ export default function ProfilePage() {
   const [lots, setLots] = useState<BackendLot[] | null>(null);
   const [lotsError, setLotsError] = useState<string | null>(null);
   const [lotDetail, setLotDetail] = useState<BackendLot | null>(null);
-  const [activeContract, setActiveContract] = useState<number | null>(null);
-  const [contractDetail, setContractDetail] = useState<BackendLot | null>(null);
-  const [signatureName, setSignatureName] = useState("");
-  const [signatureAccepted, setSignatureAccepted] = useState(false);
-  const [contractBusy, setContractBusy] = useState(false);
   const lotsLoading = activeTab === "lots" && lots === null && !lotsError;
   const lotDetailLoading =
     activeLot !== null && (lotDetail === null || lotDetail.id !== activeLot);
@@ -358,8 +379,8 @@ export default function ProfilePage() {
     setProfileComplete(
       Boolean(
         data.isProfileComplete &&
-          data.isEmailVerified &&
-          data.isEmergencyEmailVerified,
+        data.isEmailVerified &&
+        data.isEmergencyEmailVerified,
       ),
     );
   }
@@ -394,8 +415,43 @@ export default function ProfilePage() {
     };
   }, []);
 
+  // --- Người thân được ủy quyền (bảng user_authorized_persons ở backend) ---
+  const [authorizedPersons, setAuthorizedPersons] = useState<
+    AuthorizedPerson[] | null
+  >(null);
+  const [authorizedError, setAuthorizedError] = useState<string | null>(null);
+  const [editingPerson, setEditingPerson] = useState<AuthorizedPerson | null>(
+    null,
+  );
+  const [showPersonModal, setShowPersonModal] = useState(false);
+
   useEffect(() => {
-    if (!["lots", "contracts"].includes(activeTab) || lots !== null) return;
+    if (activeTab !== "lots" || authorizedPersons !== null) return;
+    api
+      .get("/users/me/authorized-persons")
+      .then((res) => setAuthorizedPersons(res.data.data))
+      .catch((error: unknown) => {
+        setAuthorizedError(
+          getErrorMessage(error, "Không thể tải danh sách người ủy quyền."),
+        );
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  async function handleDeleteAuthorizedPerson(id: number) {
+    try {
+      await api.delete(`/users/me/authorized-persons/${id}`);
+      setAuthorizedPersons((prev) =>
+        prev ? prev.filter((p) => p.id !== id) : prev,
+      );
+      showToast("✓ Đã xoá người ủy quyền");
+    } catch (error: unknown) {
+      showToast(getErrorMessage(error, "Xoá thất bại."));
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab !== "lots" || lots !== null) return;
     api
       .get("/my/contracts")
       .then((res) => setLots(res.data.data))
@@ -405,20 +461,55 @@ export default function ProfilePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
+  // --- Phiên đăng nhập thật (bảng user_sessions ở backend) ---
+  const [sessions, setSessions] = useState<SessionRow[] | null>(null);
+  const [sessionsError, setSessionsError] = useState<string | null>(null);
+  const [sessionActionBusy, setSessionActionBusy] = useState<
+    number | "all" | null
+  >(null);
+
+  function loadSessions() {
+    api
+      .get("/users/me/sessions")
+      .then((res) => setSessions(res.data.data))
+      .catch((error: unknown) => {
+        setSessionsError(
+          getErrorMessage(error, "Không thể tải danh sách phiên đăng nhập."),
+        );
+      });
+  }
+
   useEffect(() => {
-    if (activeContract === null) return;
-    let cancelled = false;
-    api.get(`/my/contracts/${activeContract}`)
-      .then((res) => {
-        if (!cancelled) {
-          setContractDetail(res.data.data);
-          setSignatureName(profile?.fullName ?? "");
-          setSignatureAccepted(false);
-        }
-      })
-      .catch((error: unknown) => showToast(getErrorMessage(error, "Không thể tải hợp đồng.")));
-    return () => { cancelled = true; };
-  }, [activeContract, profile?.fullName]);
+    if (activeTab !== "security" || sessions !== null) return;
+    loadSessions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  async function handleRevokeSession(id: number) {
+    setSessionActionBusy(id);
+    try {
+      await api.delete(`/users/me/sessions/${id}`);
+      setSessions((prev) => (prev ? prev.filter((s) => s.id !== id) : prev));
+      showToast("✓ Đã đăng xuất thiết bị đó");
+    } catch (error: unknown) {
+      showToast(getErrorMessage(error, "Đăng xuất thiết bị thất bại."));
+    } finally {
+      setSessionActionBusy(null);
+    }
+  }
+
+  async function handleRevokeOtherSessions() {
+    setSessionActionBusy("all");
+    try {
+      await api.post("/users/me/sessions/revoke-others");
+      setSessions((prev) => (prev ? prev.filter((s) => s.isCurrent) : prev));
+      showToast("✓ Đã đăng xuất tất cả thiết bị khác");
+    } catch (error: unknown) {
+      showToast(getErrorMessage(error, "Thao tác thất bại."));
+    } finally {
+      setSessionActionBusy(null);
+    }
+  }
 
   useEffect(() => {
     if (activeLot === null) return;
@@ -459,84 +550,6 @@ export default function ProfilePage() {
   function switchTab(tab: TabId) {
     setActiveTab(tab);
     if (tab === "lots") setActiveLot(null);
-    if (tab === "contracts") setActiveContract(null);
-  }
-
-  async function signContract() {
-    if (!contractDetail || !signatureAccepted || signatureName.trim().length < 2) {
-      showToast("Vui lòng nhập họ tên và xác nhận đồng ý ký.");
-      return;
-    }
-    setContractBusy(true);
-    try {
-      await api.post(`/my/contracts/${contractDetail.id}/sign`, {
-        signatureName,
-        accepted: signatureAccepted,
-      });
-      const res = await api.get(`/my/contracts/${contractDetail.id}`);
-      setContractDetail(res.data.data);
-      setLots((items) => items?.map((item) => item.id === res.data.data.id ? res.data.data : item) ?? null);
-      showToast("✓ Đã ký điện tử hợp đồng");
-    } catch (error: unknown) {
-      showToast(getErrorMessage(error, "Không thể ký hợp đồng."));
-    } finally {
-      setContractBusy(false);
-    }
-  }
-
-  async function uploadContractPdf(file: File) {
-    if (!contractDetail) return;
-    const form = new FormData();
-    form.append("pdf", file);
-    setContractBusy(true);
-    try {
-      await api.post(`/my/contracts/${contractDetail.id}/pdf`, form, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      const res = await api.get(`/my/contracts/${contractDetail.id}`);
-      setContractDetail(res.data.data);
-      showToast("✓ Đã lưu bản PDF hợp đồng");
-    } catch (error: unknown) {
-      showToast(getErrorMessage(error, "Không thể tải PDF lên."));
-    } finally {
-      setContractBusy(false);
-    }
-  }
-
-  function printCustomerContract() {
-    if (!contractDetail) return;
-    const popup = window.open("", "_blank", "width=900,height=700");
-    if (!popup) return;
-    popup.document.write(`<html><head><title>${contractDetail.contractCode}</title><style>body{font-family:"Times New Roman",serif;max-width:800px;margin:40px auto;line-height:1.6;white-space:pre-wrap}.signature{margin-top:30px;border-top:1px solid #aaa;padding-top:15px}@media print{body{margin:20mm}}</style></head><body></body></html>`);
-    const signatures = `\n\nXÁC NHẬN CHỮ KÝ ĐIỆN TỬ\nBên A: ${contractDetail.partyASignatureName || "Chưa ký"} ${contractDetail.partyASignedAt ? `- ${formatDate(contractDetail.partyASignedAt)}` : ""}\nBên B: ${contractDetail.partyBSignatureName || "Chưa ký"} ${contractDetail.partyBSignedAt ? `- ${formatDate(contractDetail.partyBSignedAt)}` : ""}\n\nTHÔNG TIN THỪA KẾ\n${contractDetail.inheritanceContent || "[Chưa có nội dung]"}`;
-    popup.document.body.textContent = `${contractDetail.contractContent ?? ""}${signatures}`;
-    popup.document.close();
-    popup.print();
-  }
-
-  async function openContractPdf() {
-    if (!contractDetail) return;
-    try {
-      const response = await api.get(`/my/contracts/${contractDetail.id}/pdf`, { responseType: "blob" });
-      const url = URL.createObjectURL(response.data);
-      window.open(url, "_blank");
-      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    } catch (error: unknown) {
-      showToast(getErrorMessage(error, "Không thể mở PDF."));
-    }
-  }
-
-  async function saveCustomerContractPdf() {
-    if (!contractDetail) return;
-    setContractBusy(true);
-    try {
-      await downloadContractPdf(contractDetail);
-      showToast("✓ Đã tải PDF hợp đồng về máy");
-    } catch {
-      showToast("Không thể tạo file PDF.");
-    } finally {
-      setContractBusy(false);
-    }
   }
 
   // Các trường bắt buộc hiển thị dấu * đỏ trên UI tab "Thông tin cá nhân"
@@ -717,6 +730,50 @@ export default function ProfilePage() {
     }
   }
 
+  async function handleSendPhoneOtp() {
+    setPhoneOtpBusy(true);
+    setPhoneOtpDevCode(null);
+    try {
+      const res = await api.post("/users/me/phone/send-otp");
+      setPhoneOtpRequested(true);
+      setPhoneOtpCooldown(60);
+      if (res.data.data?.devOtpCode) {
+        // Dev-fallback: backend chưa cấu hình SMS gateway thật.
+        setPhoneOtpDevCode(res.data.data.devOtpCode);
+      }
+      showToast(
+        `✓ Đã gửi mã OTP đến ${profile?.phone ?? "số điện thoại của bạn"}`,
+      );
+    } catch (error: unknown) {
+      showToast(getErrorMessage(error, "Gửi mã OTP thất bại."));
+    } finally {
+      setPhoneOtpBusy(false);
+    }
+  }
+
+  async function handleVerifyPhoneOtp() {
+    if (phoneOtpCode.trim().length !== 6) {
+      showToast("Vui lòng nhập đủ 6 chữ số.");
+      return;
+    }
+    setPhoneOtpBusy(true);
+    try {
+      await api.post("/users/me/phone/verify-otp", {
+        code: phoneOtpCode.trim(),
+      });
+      setPhoneOtpCode("");
+      setPhoneOtpRequested(false);
+      setPhoneOtpDevCode(null);
+      const res = await api.get("/users/me");
+      applyProfile(res.data.data);
+      showToast("✓ Đã xác thực số điện thoại");
+    } catch (error: unknown) {
+      showToast(getErrorMessage(error, "Mã OTP không đúng."));
+    } finally {
+      setPhoneOtpBusy(false);
+    }
+  }
+
   async function handleSaveContact() {
     setSaving(true);
     try {
@@ -778,18 +835,12 @@ export default function ProfilePage() {
         <span className="current">{T.pageTitle}</span>
       </div>
 
-      {profile && !profile.isProfileComplete && (
-        <div className="incomplete-hint">
-          Một số trường có dấu <span className="required-mark">*</span> ở tab
-          &quot;{T.navInfo}&quot; vẫn chưa được điền.
-        </div>
-      )}
       {profile &&
         profile.isProfileComplete &&
         (!profile.isEmailVerified || !profile.isEmergencyEmailVerified) && (
           <div className="incomplete-hint">
-            Vui lòng xác thực email ở mục &quot;Xác thực Email&quot; (tab
-            &quot;{T.navInfo}&quot;) để sử dụng đầy đủ chức năng.
+            Vui lòng xác thực email ở mục &quot;Xác thực Email&quot; (tab &quot;
+            {T.navInfo}&quot;) để sử dụng đầy đủ chức năng.
           </div>
         )}
 
@@ -879,13 +930,6 @@ export default function ProfilePage() {
                 {T.navLots}
               </button>
               <button
-                className={`side-nav-item ${activeTab === "contracts" ? "active" : ""}`}
-                onClick={() => switchTab("contracts")}
-              >
-                <span className="icon">📄</span>
-                {T.navContracts}
-              </button>
-              <button
                 className={`side-nav-item ${activeTab === "security" ? "active" : ""}`}
                 onClick={() => switchTab("security")}
               >
@@ -897,7 +941,15 @@ export default function ProfilePage() {
 
             <button
               className="logout-btn"
-              onClick={() => showToast("Đã đăng xuất")}
+              onClick={async () => {
+                try {
+                  await api.post("/auth/logout");
+                } catch {
+                  // vẫn đăng xuất ở client dù request thu hồi phiên lỗi (vd. mất mạng)
+                }
+                storeLogout();
+                navigate(ROUTES.LOGIN);
+              }}
             >
               {T.logout}
             </button>
@@ -1046,8 +1098,8 @@ export default function ProfilePage() {
                       )}
                     </div>
                     <span className="field-note">
-                      Vì đây là dữ liệu nhạy cảm, bạn cần nhập lại mật khẩu
-                      đăng nhập mỗi lần muốn xem hoặc chỉnh sửa số đầy đủ.
+                      Vì đây là dữ liệu nhạy cảm, bạn cần nhập lại mật khẩu đăng
+                      nhập mỗi lần muốn xem hoặc chỉnh sửa số đầy đủ.
                     </span>
                   </div>
                   <div className="field form-full">
@@ -1091,7 +1143,9 @@ export default function ProfilePage() {
                       disabled={!provinceId}
                     >
                       <option value="">
-                        {provinceId ? "— Chọn xã/phường —" : "Chọn tỉnh/thành trước"}
+                        {provinceId
+                          ? "— Chọn xã/phường —"
+                          : "Chọn tỉnh/thành trước"}
                       </option>
                       {wardOptions.map((w) => (
                         <option key={w.id} value={w.id}>
@@ -1324,7 +1378,9 @@ export default function ProfilePage() {
                   <span
                     className={`contact-status ${profile?.isEmailVerified ? "verified" : "unverified"}`}
                   >
-                    {profile?.isEmailVerified ? "✓ Đã xác thực" : "Chưa xác thực"}
+                    {profile?.isEmailVerified
+                      ? "✓ Đã xác thực"
+                      : "Chưa xác thực"}
                   </span>
                   <button
                     className="btn-mini"
@@ -1333,15 +1389,72 @@ export default function ProfilePage() {
                     Đổi
                   </button>
                 </div>
-                <div className="contact-method">
+                <div className="contact-method" style={{ flexWrap: "wrap" }}>
                   <div className="contact-icon">📱</div>
                   <div className="contact-info">
                     <div className="c-label">Số điện thoại</div>
                     <div className="c-value">{profile?.phone ?? "—"}</div>
                   </div>
-                  <span className="contact-status unverified">
-                    Chưa xác thực (SMS OTP chưa khả dụng)
-                  </span>
+                  {profile?.isPhoneVerified ? (
+                    <span className="contact-status verified">
+                      ✓ Đã xác thực
+                    </span>
+                  ) : !phoneOtpRequested ? (
+                    <span className="contact-status unverified">
+                      Chưa xác thực
+                    </span>
+                  ) : null}
+                  {profile?.isPhoneVerified ? null : phoneOtpRequested ? (
+                    <div className="otp-verify-box">
+                      <input
+                        inputMode="numeric"
+                        maxLength={6}
+                        placeholder="Mã 6 số"
+                        value={phoneOtpCode}
+                        onChange={(e) =>
+                          setPhoneOtpCode(e.target.value.replace(/\D/g, ""))
+                        }
+                      />
+                      <button
+                        className="otp-btn"
+                        onClick={handleVerifyPhoneOtp}
+                        disabled={phoneOtpBusy}
+                      >
+                        Xác nhận
+                      </button>
+                      <button
+                        className="otp-btn ghost"
+                        onClick={handleSendPhoneOtp}
+                        disabled={phoneOtpBusy || phoneOtpCooldown > 0}
+                      >
+                        {phoneOtpCooldown > 0
+                          ? `Gửi lại (${phoneOtpCooldown}s)`
+                          : "Gửi lại mã"}
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      className="btn-mini"
+                      onClick={handleSendPhoneOtp}
+                      disabled={phoneOtpBusy || !profile?.phone}
+                    >
+                      {phoneOtpBusy ? "Đang gửi…" : "Xác thực"}
+                    </button>
+                  )}
+                  {phoneOtpDevCode && (
+                    <div
+                      style={{
+                        width: "100%",
+                        fontSize: 11,
+                        color: "var(--gold)",
+                        marginTop: 4,
+                      }}
+                    >
+                      ⚠ [DEV] Backend chưa cấu hình SMS gateway thật — mã OTP
+                      test: <b>{phoneOtpDevCode}</b> (xem hướng dẫn cấu hình
+                      SMS_API_URL/SMS_API_KEY trong .env.example)
+                    </div>
+                  )}
                   <button
                     className="btn-mini"
                     onClick={() => setOpenModal("phone")}
@@ -1600,44 +1713,73 @@ export default function ProfilePage() {
 
                 <div className="panel">
                   <div className="panel-title">Người thân được ủy quyền</div>
-                  <div
-                    style={{
-                      fontSize: 12,
-                      color: "var(--text-muted)",
-                      marginBottom: 8,
-                    }}
-                  >
-                    TODO(backend): tính năng ủy quyền chưa có bảng dữ liệu —
-                    phần dưới đây là minh hoạ giao diện.
-                  </div>
-                  <div className="contact-methods">
-                    <div className="contact-method">
-                      <div className="contact-icon">👤</div>
-                      <div className="contact-info">
-                        <div className="c-label">Nguyễn Thị Lan — Vợ</div>
-                        <div className="c-value" style={{ fontSize: 12 }}>
-                          0901 234 567 · Quyền: Xem & đặt dịch vụ
-                        </div>
-                      </div>
-                      <span className="contact-status verified">
-                        Đang hoạt động
-                      </span>
-                      <button
-                        className="btn-mini"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          showToast("Mở form chỉnh sửa ủy quyền");
+                  {authorizedError && (
+                    <p style={{ fontSize: 12, color: "rgba(224,92,92,0.8)" }}>
+                      {authorizedError}
+                    </p>
+                  )}
+                  {authorizedPersons !== null &&
+                    authorizedPersons.length === 0 && (
+                      <p
+                        style={{
+                          fontSize: 12,
+                          color: "var(--text-muted)",
+                          marginBottom: 8,
                         }}
                       >
-                        Sửa
-                      </button>
-                    </div>
+                        Chưa có người thân được ủy quyền nào.
+                      </p>
+                    )}
+                  <div className="contact-methods">
+                    {authorizedPersons?.map((p) => (
+                      <div className="contact-method" key={p.id}>
+                        <div className="contact-icon">👤</div>
+                        <div className="contact-info">
+                          <div className="c-label">
+                            {p.fullName}
+                            {p.relation ? ` — ${p.relation}` : ""}
+                          </div>
+                          <div className="c-value" style={{ fontSize: 12 }}>
+                            {p.phone ?? "Chưa có SĐT"} · Quyền:{" "}
+                            {p.permission === "view_and_service"
+                              ? "Xem & đặt dịch vụ"
+                              : "Chỉ xem"}
+                          </div>
+                        </div>
+                        <button
+                          className="btn-mini"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingPerson(p);
+                            setShowPersonModal(true);
+                          }}
+                        >
+                          Sửa
+                        </button>
+                        <button
+                          className="btn-mini"
+                          style={{
+                            marginLeft: 6,
+                            color: "rgba(224,92,92,0.8)",
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteAuthorizedPerson(p.id);
+                          }}
+                        >
+                          Xoá
+                        </button>
+                      </div>
+                    ))}
                   </div>
                   <div style={{ marginTop: 12 }}>
                     <button
                       className="btn-outline"
                       style={{ fontSize: 12 }}
-                      onClick={() => showToast("Mở form thêm người ủy quyền")}
+                      onClick={() => {
+                        setEditingPerson(null);
+                        setShowPersonModal(true);
+                      }}
                     >
                       + Thêm người ủy quyền
                     </button>
@@ -1652,80 +1794,6 @@ export default function ProfilePage() {
                 onOpenModal={(id) => setOpenModal(id)}
                 showToast={showToast}
               />
-            )}
-          </div>
-
-          <div className={`panel-section ${activeTab === "contracts" ? "active" : ""}`}>
-            <div className="section-header">
-              <div className="section-title">Hợp Đồng Của Tôi</div>
-            </div>
-            {activeContract === null ? (
-              <div className="panel">
-                <div className="panel-title">Danh sách hợp đồng ({(lots ?? []).length})</div>
-                {lots === null && !lotsError && <div>Đang tải hợp đồng…</div>}
-                {lotsError && <div className="modal-warn">⚠ {lotsError}</div>}
-                {lots?.length === 0 && <div>Bạn chưa có hợp đồng nào.</div>}
-                <div className="lot-cards">
-                  {(lots ?? []).map((contract) => (
-                    <button
-                      type="button"
-                      className="lot-card contract-card-button"
-                      key={contract.id}
-                      onClick={() => setActiveContract(contract.id)}
-                    >
-                      <div className="lot-card-top">
-                        <div>
-                          <div className="lot-name">{contract.contractCode}</div>
-                          <div className="lot-zone">Lô {contract.plotCode} · {contract.zoneName}</div>
-                        </div>
-                        <span className={`lot-status ${contract.partyBSignatureName ? "active" : "reserved"}`}>
-                          {contract.partyBSignatureName ? "Đã ký" : "Chờ bạn ký"}
-                        </span>
-                      </div>
-                      <div className="lot-meta">
-                        <div className="lot-row"><span className="lk">Ngày hợp đồng</span><span className="lv">{formatDate(contract.contractDate)}</span></div>
-                        <div className="lot-row"><span className="lk">Giá trị</span><span className="lv">{formatCurrency(contract.totalAmount)}</span></div>
-                        <div className="lot-row"><span className="lk">Bản PDF</span><span className="lv">{contract.pdfUrl ? "Đã lưu" : "Chưa có"}</span></div>
-                      </div>
-                      <div className="lot-action">Xem nội dung hợp đồng →</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div>
-                <button className="back-to-lots" onClick={() => setActiveContract(null)}>← Danh sách hợp đồng</button>
-                {!contractDetail || contractDetail.id !== activeContract ? <div className="panel">Đang tải…</div> : <>
-                  <div className="panel">
-                    <div className="panel-title">{contractDetail.contractCode}</div>
-                    <div className="contract-document">{contractDetail.contractContent || "Hợp đồng cũ chưa có nội dung điện tử."}</div>
-                    <div className="contract-inheritance"><b>Thông tin thừa kế:</b><br />{contractDetail.inheritanceContent || "Chưa có nội dung."}</div>
-                  </div>
-                  <div className="panel">
-                    <div className="panel-title">Chữ ký điện tử</div>
-                    <p className="contract-note">Đây là chữ ký điện tử xác nhận bằng tài khoản và dấu vết SHA-256, không phải chữ ký số sử dụng chứng thư số CA.</p>
-                    <div className="signature-grid">
-                      <div className="signature-box"><b>Bên A</b><br />{contractDetail.partyASignatureName || "Chưa ký"}<br /><small>{formatDate(contractDetail.partyASignedAt)}</small></div>
-                      <div className="signature-box"><b>Bên B</b><br />{contractDetail.partyBSignatureName || "Chưa ký"}<br /><small>{formatDate(contractDetail.partyBSignedAt)}</small></div>
-                    </div>
-                    {!contractDetail.partyBSignatureName && <div className="contract-sign-form">
-                      <label>Họ tên thể hiện trên chữ ký</label>
-                      <input value={signatureName} onChange={(event) => setSignatureName(event.target.value)} maxLength={150} />
-                      <label className="contract-consent"><input type="checkbox" checked={signatureAccepted} onChange={(event) => setSignatureAccepted(event.target.checked)} /> Tôi đã đọc, đồng ý nội dung và xác nhận ký hợp đồng này.</label>
-                      <button className="btn-save" disabled={contractBusy || !signatureAccepted} onClick={signContract}>Xác nhận ký điện tử</button>
-                    </div>}
-                  </div>
-                  <div className="panel">
-                    <div className="panel-title">Bản PDF</div>
-                    <div className="contract-actions">
-                      <button className="btn-outline" onClick={printCustomerContract}>In hợp đồng</button>
-                      <button className="btn-outline" disabled={contractBusy} onClick={saveCustomerContractPdf}>Tải PDF về máy</button>
-                      <label className="btn-outline contract-upload">Tải PDF đã ký lên<input type="file" accept="application/pdf,.pdf" disabled={contractBusy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadContractPdf(file); event.target.value = ""; }} /></label>
-                      {contractDetail.pdfUrl && <button className="btn-outline" onClick={openContractPdf}>Xem PDF đã lưu</button>}
-                    </div>
-                  </div>
-                </>}
-              </div>
             )}
           </div>
 
@@ -1763,56 +1831,87 @@ export default function ProfilePage() {
                     <div className="sec-icon">📱</div>
                     <div className="sec-info">
                       <h4>Xác thực bằng số điện thoại (OTP SMS)</h4>
-                      <p>Chưa khả dụng — hệ thống chưa tích hợp SMS gateway</p>
+                      <p>
+                        {profile?.isPhoneVerified
+                          ? `Đã xác thực · ${profile.phone ?? ""}`
+                          : 'Xác thực ở tab "Liên hệ & thông báo"'}
+                      </p>
                     </div>
                   </div>
-                  <span className="sec-status off">Chưa khả dụng</span>
+                  <span
+                    className={`sec-status ${profile?.isPhoneVerified ? "on" : "off"}`}
+                  >
+                    {profile?.isPhoneVerified ? "Đã bật" : "Chưa xác thực"}
+                  </span>
                 </div>
               </div>
             </div>
 
             <div className="panel">
               <div className="panel-title">Phiên đăng nhập</div>
+              {sessionsError && (
+                <p style={{ fontSize: 13, color: "rgba(224,92,92,0.8)" }}>
+                  {sessionsError}
+                </p>
+              )}
+              {!sessionsError && sessions === null && (
+                <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
+                  Đang tải…
+                </p>
+              )}
+              {sessions !== null && sessions.length === 0 && (
+                <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
+                  Không có phiên đăng nhập nào.
+                </p>
+              )}
               <div className="security-list">
-                <div className="security-item">
-                  <div className="sec-left">
-                    <div className="sec-icon">💻</div>
-                    <div className="sec-info">
-                      <h4>
-                        Chrome · Windows 11{" "}
-                        <span
-                          style={{
-                            background: "rgba(0,229,196,0.1)",
-                            color: "var(--teal-soft)",
-                            fontSize: 10,
-                            padding: "1px 8px",
-                            borderRadius: 10,
-                            marginLeft: 6,
-                            fontWeight: 400,
-                          }}
-                        >
-                          Hiện tại
-                        </span>
-                      </h4>
-                      <p>TP. Hồ Chí Minh · 10:32 SA hôm nay</p>
+                {sessions?.map((s) => (
+                  <div className="security-item" key={s.id}>
+                    <div className="sec-left">
+                      <div className="sec-icon">
+                        {s.os?.toLowerCase().includes("ios") ||
+                        s.os?.toLowerCase().includes("android")
+                          ? "📱"
+                          : "💻"}
+                      </div>
+                      <div className="sec-info">
+                        <h4>
+                          {s.deviceLabel ?? "Thiết bị không xác định"}
+                          {s.isCurrent && (
+                            <span
+                              style={{
+                                background: "rgba(0,229,196,0.1)",
+                                color: "var(--teal-soft)",
+                                fontSize: 10,
+                                padding: "1px 8px",
+                                borderRadius: 10,
+                                marginLeft: 6,
+                                fontWeight: 400,
+                              }}
+                            >
+                              Hiện tại
+                            </span>
+                          )}
+                        </h4>
+                        <p>
+                          {s.ipAddress ? `${s.ipAddress} · ` : ""}
+                          Hoạt động {formatRelativeTime(s.lastActiveAt)}
+                        </p>
+                      </div>
                     </div>
+                    {!s.isCurrent && (
+                      <button
+                        className="btn-mini"
+                        disabled={sessionActionBusy === s.id}
+                        onClick={() => handleRevokeSession(s.id)}
+                      >
+                        {sessionActionBusy === s.id
+                          ? "Đang xử lý…"
+                          : "Đăng xuất"}
+                      </button>
+                    )}
                   </div>
-                </div>
-                <div className="security-item">
-                  <div className="sec-left">
-                    <div className="sec-icon">📱</div>
-                    <div className="sec-info">
-                      <h4>Safari · iPhone 15</h4>
-                      <p>TP. Hồ Chí Minh · Hôm qua, 08:14 SA</p>
-                    </div>
-                  </div>
-                  <button
-                    className="btn-mini"
-                    onClick={() => showToast("Đã đăng xuất thiết bị này")}
-                  >
-                    Đăng xuất
-                  </button>
-                </div>
+                ))}
               </div>
               <div style={{ marginTop: 14 }}>
                 <button
@@ -1822,9 +1921,16 @@ export default function ProfilePage() {
                     color: "rgba(224,92,92,0.8)",
                     borderColor: "rgba(224,92,92,0.2)",
                   }}
-                  onClick={() => showToast("Đã đăng xuất tất cả thiết bị khác")}
+                  disabled={
+                    sessionActionBusy === "all" ||
+                    !sessions ||
+                    sessions.filter((s) => !s.isCurrent).length === 0
+                  }
+                  onClick={handleRevokeOtherSessions}
                 >
-                  Đăng xuất tất cả thiết bị khác
+                  {sessionActionBusy === "all"
+                    ? "Đang xử lý…"
+                    : "Đăng xuất tất cả thiết bị khác"}
                 </button>
               </div>
             </div>
@@ -1970,7 +2076,9 @@ export default function ProfilePage() {
               setOpenModal(null);
               showToast("✓ Đã cập nhật số điện thoại");
             } catch (error: unknown) {
-              showToast(getErrorMessage(error, "Cập nhật số điện thoại thất bại."));
+              showToast(
+                getErrorMessage(error, "Cập nhật số điện thoại thất bại."),
+              );
             }
           }}
         />
@@ -1980,6 +2088,51 @@ export default function ProfilePage() {
         <IdCardPasswordModal
           onClose={() => setOpenModal(null)}
           onSubmit={handleUnlockIdCard}
+        />
+      )}
+
+      {showPersonModal && (
+        <AuthorizedPersonModal
+          person={editingPerson}
+          emergencyContact={emergencyContact}
+          onClose={() => setShowPersonModal(false)}
+          onSubmit={async (payload) => {
+            if (editingPerson) {
+              const res = await api.patch(
+                `/users/me/authorized-persons/${editingPerson.id}`,
+                payload,
+              );
+              setAuthorizedPersons((prev) =>
+                prev
+                  ? prev.map((p) =>
+                      p.id === editingPerson.id ? res.data.data : p,
+                    )
+                  : prev,
+              );
+              showToast("✓ Đã cập nhật người ủy quyền");
+            } else {
+              const res = await api.post(
+                "/users/me/authorized-persons",
+                payload,
+              );
+              setAuthorizedPersons((prev) =>
+                prev ? [...prev, res.data.data] : [res.data.data],
+              );
+              showToast("✓ Đã thêm người ủy quyền");
+            }
+            setShowPersonModal(false);
+          }}
+        />
+      )}
+
+      {openModal === "transfer" && (
+        <TransferModal
+          lot={lotDetail}
+          onClose={() => setOpenModal(null)}
+          onSubmit={() => {
+            setOpenModal(null);
+            showToast("✓ Đã nộp hồ sơ chuyển nhượng — Đang chờ xét duyệt");
+          }}
         />
       )}
 
@@ -2128,6 +2281,12 @@ function LotDetail({
               <div className="lot-actions-grid">
                 {isPaid ? (
                   <>
+                    <ActionBtn
+                      icon="🔄"
+                      title="Chuyển nhượng / Thừa kế"
+                      sub="Sang tên chủ sở hữu mới"
+                      onClick={() => onOpenModal("transfer")}
+                    />
                     <ActionBtn
                       icon="📋"
                       title="Xem trạng thái lô"
@@ -2411,7 +2570,11 @@ function AvatarModal({
     const dx = clientX - dragRef.current.startX;
     const dy = clientY - dragRef.current.startY;
     setPos(
-      clampPos(dragRef.current.startPosX + dx, dragRef.current.startPosY + dy, zoom),
+      clampPos(
+        dragRef.current.startPosX + dx,
+        dragRef.current.startPosY + dy,
+        zoom,
+      ),
     );
   }
 
@@ -2439,7 +2602,17 @@ function AvatarModal({
         reject(new Error("Trình duyệt không hỗ trợ cắt ảnh."));
         return;
       }
-      ctx.drawImage(img, sx, sy, sSize, sSize, 0, 0, AVATAR_OUTPUT, AVATAR_OUTPUT);
+      ctx.drawImage(
+        img,
+        sx,
+        sy,
+        sSize,
+        sSize,
+        0,
+        0,
+        AVATAR_OUTPUT,
+        AVATAR_OUTPUT,
+      );
       canvas.toBlob(
         (blob) => {
           if (!blob) {
@@ -2459,7 +2632,8 @@ function AvatarModal({
     setUploading(true);
     setError(null);
     try {
-      const fileToUpload = preview && imgLoaded ? await cropToFile() : selectedFile;
+      const fileToUpload =
+        preview && imgLoaded ? await cropToFile() : selectedFile;
       if (!fileToUpload) return;
       await onSubmit(fileToUpload);
     } catch (err: unknown) {
@@ -2527,6 +2701,7 @@ function AvatarModal({
               src={preview}
               onLoad={handleImgLoad}
               draggable={false}
+              className="avatar-crop-img"
               style={{
                 position: "absolute",
                 left: pos.x,
@@ -2662,7 +2837,10 @@ function PasswordModal({
 
   useEffect(() => {
     if (otpCooldown <= 0) return;
-    const t = setInterval(() => setOtpCooldown((v) => Math.max(0, v - 1)), 1000);
+    const t = setInterval(
+      () => setOtpCooldown((v) => Math.max(0, v - 1)),
+      1000,
+    );
     return () => clearInterval(t);
   }, [otpCooldown]);
 
@@ -2874,6 +3052,162 @@ function IdCardPasswordModal({
   );
 }
 
+function AuthorizedPersonModal({
+  person,
+  emergencyContact,
+  onClose,
+  onSubmit,
+}: {
+  person: AuthorizedPerson | null;
+  emergencyContact: {
+    name: string;
+    relation: string;
+    phone: string;
+    email: string;
+  };
+  onClose: () => void;
+  onSubmit: (payload: {
+    fullName: string;
+    relation?: string;
+    phone?: string;
+    email?: string;
+    permission: string;
+  }) => Promise<void>;
+}) {
+  const [fullName, setFullName] = useState(person?.fullName ?? "");
+  const [relation, setRelation] = useState(person?.relation ?? "");
+  const [phone, setPhone] = useState(person?.phone ?? "");
+  const [email, setEmail] = useState(person?.email ?? "");
+  const [permission, setPermission] = useState(person?.permission ?? "view");
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  function fillFromProfile() {
+    setFullName(emergencyContact.name);
+    setRelation(emergencyContact.relation);
+    setPhone(emergencyContact.phone);
+    setEmail(emergencyContact.email);
+  }
+
+  async function handleSubmit() {
+    if (!fullName.trim()) {
+      setError("Vui lòng nhập họ tên.");
+      return;
+    }
+    setError(null);
+    setSubmitting(true);
+    try {
+      await onSubmit({
+        fullName: fullName.trim(),
+        relation: relation.trim() || undefined,
+        phone: phone.trim() || undefined,
+        email: email.trim() || undefined,
+        permission,
+      });
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Lưu thất bại.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <ModalShell
+      title={person ? "Sửa Người Ủy Quyền" : "Thêm Người Ủy Quyền"}
+      sub="Người này có thể xem hồ sơ lô đất và (tuỳ quyền) đặt dịch vụ thay bạn"
+      onClose={onClose}
+    >
+      {error && (
+        <div
+          className="modal-warn"
+          style={{
+            color: "rgba(224,92,92,0.85)",
+            borderColor: "rgba(224,92,92,0.25)",
+            background: "rgba(224,92,92,0.07)",
+          }}
+        >
+          ⚠ {error}
+        </div>
+      )}
+
+      {!person && (emergencyContact.name || emergencyContact.phone) && (
+        <button
+          type="button"
+          className="btn-outline"
+          style={{ fontSize: 12, marginBottom: 14 }}
+          onClick={fillFromProfile}
+        >
+          ⤵ Điền từ liên hệ khẩn cấp trong hồ sơ
+        </button>
+      )}
+
+      <div className="modal-section">
+        <div className="modal-field">
+          <label>Họ và tên</label>
+          <input
+            type="text"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            placeholder="Nguyễn Văn A"
+          />
+        </div>
+        <div className="modal-field">
+          <label>Quan hệ</label>
+          <input
+            type="text"
+            value={relation}
+            onChange={(e) => setRelation(e.target.value)}
+            placeholder="Vợ / Chồng, Con, ..."
+          />
+        </div>
+        <div className="modal-field">
+          <label>Số điện thoại</label>
+          <input
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="09xx xxx xxx"
+          />
+        </div>
+        <div className="modal-field">
+          <label>Email</label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="email@vidu.com"
+          />
+        </div>
+        <div className="modal-field">
+          <label>Quyền hạn</label>
+          <select
+            value={permission}
+            onChange={(e) =>
+              setPermission(e.target.value as "view" | "view_and_service")
+            }
+          >
+            <option value="view">Chỉ xem</option>
+            <option value="view_and_service">Xem & đặt dịch vụ</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="modal-btn-row">
+        <button className="modal-btn-ghost" onClick={onClose}>
+          Hủy
+        </button>
+        <button
+          className="modal-btn-primary"
+          onClick={handleSubmit}
+          disabled={submitting}
+        >
+          {submitting ? "Đang lưu…" : "Lưu →"}
+        </button>
+      </div>
+    </ModalShell>
+  );
+}
+
 function EmailModal({
   currentEmail,
   onClose,
@@ -3055,6 +3389,100 @@ function PhoneModal({
             Xác nhận →
           </button>
         )}
+      </div>
+    </ModalShell>
+  );
+}
+
+function TransferModal({
+  lot,
+  onClose,
+  onSubmit,
+}: {
+  lot: BackendLot | null;
+  onClose: () => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <ModalShell
+      title="Chuyển Nhượng / Thừa Kế"
+      sub={lot ? `Lô ${lot.plotCode} · ${lot.zoneName}` : ""}
+      onClose={onClose}
+    >
+      <div className="modal-warn">
+        ⚠ Yêu cầu chuyển nhượng sẽ được ban quản lý xét duyệt trong 5–7 ngày làm
+        việc. Hai bên cần có mặt hoặc ký số điện tử để hoàn tất.
+      </div>
+
+      <div className="modal-section">
+        <div className="modal-section-title">Loại giao dịch</div>
+        <div className="modal-field">
+          <select>
+            <option>Chuyển nhượng (mua bán)</option>
+            <option>Thừa kế (không có phí giao dịch)</option>
+            <option>Tặng cho / Hiến tặng</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="modal-section">
+        <div className="modal-section-title">Thông tin bên nhận (Bên B)</div>
+        <div className="modal-field">
+          <label>Họ và tên</label>
+          <input type="text" placeholder="Nguyễn Thị B" />
+        </div>
+        <div className="modal-field">
+          <label>Số CCCD / Hộ chiếu</label>
+          <input type="text" placeholder="0791780…" />
+        </div>
+        <div className="modal-field">
+          <label>Số điện thoại</label>
+          <input type="tel" placeholder="09xx xxx xxx" />
+        </div>
+        <div className="modal-field">
+          <label>Quan hệ với bên A</label>
+          <select>
+            <option>Vợ / Chồng</option>
+            <option>Con</option>
+            <option>Anh / Em</option>
+            <option>Bên thứ ba (mua bán)</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="modal-section">
+        <div className="modal-section-title">Giấy tờ cần nộp</div>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+            fontSize: 12,
+            color: "var(--text-muted)",
+          }}
+        >
+          <div>📎 CCCD hai bên (bản scan)</div>
+          <div>📎 Hợp đồng gốc lô đất</div>
+          <div>📎 Giấy tờ chứng minh quan hệ (nếu thừa kế)</div>
+          <div style={{ marginTop: 8 }}>
+            <button
+              className="btn-outline"
+              style={{ fontSize: 12 }}
+              type="button"
+            >
+              + Tải lên hồ sơ
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="modal-btn-row">
+        <button className="modal-btn-ghost" onClick={onClose}>
+          Hủy
+        </button>
+        <button className="modal-btn-primary gold" onClick={onSubmit}>
+          Nộp hồ sơ →
+        </button>
       </div>
     </ModalShell>
   );

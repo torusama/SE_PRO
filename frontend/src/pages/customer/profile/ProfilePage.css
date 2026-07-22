@@ -56,6 +56,10 @@
 .profile-page .avatar-ring { width: 90px; height: 90px; border-radius: 50%; border: 2px solid var(--teal-soft); display: flex; align-items: center; justify-content: center; font-family: 'Playfair Display', serif; font-size: 32px; color: var(--teal-glow); background: rgba(0, 229, 196, 0.06); box-shadow: 0 0 28px rgba(0, 229, 196, 0.15); margin: 0 auto; }
 .profile-page .avatar-crop-viewport { position: relative; overflow: hidden; border-radius: 50%; border: 2px solid var(--teal-soft); box-shadow: 0 0 28px rgba(0, 229, 196, 0.15); cursor: grab; background: rgba(0,0,0,0.3); touch-action: none; }
 .profile-page .avatar-crop-viewport:active { cursor: grabbing; }
+/* Tailwind Preflight áp `img { max-width: 100%; height: auto }` toàn cục — nếu
+   không ghi đè, width bị kẹp theo khung 260px trong khi height vẫn tính đúng
+   theo scale zoom, làm ảnh bị méo tỉ lệ + tính sai vùng cắt khi Lưu. */
+.profile-page .avatar-crop-img { position: absolute; max-width: none; max-height: none; }
 .profile-page .avatar-zoom-row { display: flex; align-items: center; gap: 10px; width: 100%; max-width: 260px; font-size: 14px; }
 .profile-page .avatar-zoom-row input[type="range"] { flex: 1; accent-color: var(--teal-soft); }
 .profile-page .avatar-edit-btn { position: absolute; bottom: 2px; right: 2px; width: 26px; height: 26px; border-radius: 50%; background: var(--ink-deep); border: 1px solid var(--border-soft); cursor: pointer; font-size: 12px; color: var(--text-muted); display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
@@ -255,91 +259,5 @@
 .profile-page .modal-btn-ghost:hover { border-color: var(--border-soft); color: var(--text-main); }
 
 /* TOAST */
-.profile-page .toast {
-  position: fixed;
-  bottom: 32px;
-  right: 32px;
-  background: rgba(0, 229, 196, 0.12);
-  border: 1px solid var(--teal-soft);
-  color: var(--teal-glow);
-  font-size: 13px;
-  padding: 12px 20px;
-  border-radius: 8px;
-  z-index: 300;
-  opacity: 0;
-  transform: translateY(12px);
-  transition: all 0.3s;
-  pointer-events: none;
-}
-.profile-page .toast.show {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.profile-page .contract-card-button {
-  width: 100%;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-}
-.profile-page .contract-document {
-  white-space: pre-wrap;
-  line-height: 1.7;
-  max-height: 560px;
-  overflow: auto;
-  padding: 20px;
-  border-radius: 8px;
-  background: rgba(4, 6, 14, 0.55);
-  color: var(--text-main);
-  font-family: "Times New Roman", serif;
-  font-size: 14px;
-}
-.profile-page .contract-inheritance,
-.profile-page .contract-note {
-  margin-top: 14px;
-  color: var(--text-muted);
-  font-size: 12px;
-  line-height: 1.6;
-}
-.profile-page .signature-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-.profile-page .signature-box {
-  border: 1px solid var(--border-dim);
-  border-radius: 8px;
-  padding: 16px;
-  line-height: 1.7;
-}
-.profile-page .contract-sign-form {
-  display: grid;
-  gap: 10px;
-  margin-top: 18px;
-}
-.profile-page .contract-sign-form input[type="text"],
-.profile-page .contract-sign-form > input {
-  border: 1px solid var(--border-dim);
-  background: rgba(4, 6, 14, 0.8);
-  color: var(--text-main);
-  padding: 10px 12px;
-  border-radius: 6px;
-}
-.profile-page .contract-consent {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--text-muted);
-}
-.profile-page .contract-actions {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-.profile-page .contract-actions a { text-decoration: none; }
-.profile-page .contract-upload { cursor: pointer; }
-.profile-page .contract-upload input { display: none; }
-@media (max-width: 640px) {
-  .profile-page .signature-grid { grid-template-columns: 1fr; }
-}
+.profile-page .toast { position: fixed; bottom: 32px; right: 32px; background: rgba(0, 229, 196, 0.12); border: 1px solid var(--teal-soft); color: var(--teal-glow); font-size: 13px; padding: 12px 20px; border-radius: 8px; z-index: 300; opacity: 0; transform: translateY(12px); transition: all 0.3s; pointer-events: none; }
+.profile-page .toast.show { opacity: 1; transform: translateY(0); }

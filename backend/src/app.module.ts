@@ -14,7 +14,7 @@ import { AiAgentModule } from './modules/ai-agent/ai-agent.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { ScheduleModule } from './modules/schedule/schedule.module';
 import { AppointmentsModule } from './modules/appointments/appointments.module';
-import { TransfersModule } from './modules/transfers/transfers.module';
+import { AuthorizedPersonsModule } from './modules/authorized-persons/authorized-persons.module';
 
 @Module({
   imports: [
@@ -32,7 +32,7 @@ import { TransfersModule } from './modules/transfers/transfers.module';
     UploadsModule,
     ScheduleModule,
     AppointmentsModule,
-    TransfersModule,
+    AuthorizedPersonsModule,
   ],
 })
 export class AppModule {}

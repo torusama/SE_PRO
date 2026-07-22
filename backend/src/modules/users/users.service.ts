@@ -7,6 +7,7 @@ import {
 import * as bcrypt from 'bcrypt';
 import { DatabaseService } from '../../database/database.service';
 import { EmailService } from '../email/email.service';
+import { SmsService } from '../sms/sms.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 
 // Các trường bắt buộc để coi hồ sơ là "đã hoàn thiện". Dùng để chặn
@@ -51,6 +52,7 @@ const USER_SELECT_COLUMNS = `
   notify_anniversary AS "notifyAnniversary", notify_announcement AS "notifyAnnouncement",
   (email_verified_at IS NOT NULL) AS "isEmailVerified",
   (emergency_contact_email_verified_at IS NOT NULL) AS "isEmergencyEmailVerified",
+  (phone_verified_at IS NOT NULL) AS "isPhoneVerified",
   password_changed_at AS "passwordChangedAt",
   is_active AS "isActive", created_at AS "createdAt"
 `;
@@ -68,6 +70,7 @@ export class UsersService {
   constructor(
     private readonly database: DatabaseService,
     private readonly emailService: EmailService,
+    private readonly smsService: SmsService,
   ) {}
 
   async me(userId: number) {
@@ -439,6 +442,77 @@ export class UsersService {
       `UPDATE users
        SET emergency_contact_email_verified_at = NOW(), emergency_contact_otp_hash = NULL,
            emergency_contact_otp_expires_at = NULL, emergency_contact_otp_attempts = 0
+       WHERE user_id = $1`,
+      [userId],
+    );
+    return { verified: true };
+  }
+
+  async sendPhoneOtp(userId: number) {
+    const row = await this.database.queryOne<{
+      phone_number: string | null;
+      phone_otp_last_sent_at: Date | null;
+    }>(
+      `SELECT phone_number, phone_otp_last_sent_at FROM users
+       WHERE user_id = $1 AND is_deleted = FALSE`,
+      [userId],
+    );
+    if (!row) throw new NotFoundException('User not found');
+    if (!row.phone_number) {
+      throw new BadRequestException(
+        'Chưa có số điện thoại — vui lòng nhập ở tab "Thông tin cá nhân" trước.',
+      );
+    }
+    this.assertCooldownElapsed(row.phone_otp_last_sent_at);
+
+    const code = generateOtpCode();
+    const hash = await bcrypt.hash(code, 10);
+    await this.database.query(
+      `UPDATE users
+       SET phone_otp_hash = $2, phone_otp_expires_at = NOW() + INTERVAL '${OTP_TTL_MINUTES} minutes',
+           phone_otp_attempts = 0, phone_otp_last_sent_at = NOW()
+       WHERE user_id = $1`,
+      [userId, hash],
+    );
+    const result = await this.smsService.sendOtpSms(row.phone_number, code);
+    return {
+      sent: true,
+      expiresInMinutes: OTP_TTL_MINUTES,
+      // Chỉ có giá trị khi backend CHƯA cấu hình SMS gateway thật (dev-fallback) —
+      // xem sms.service.ts. Ở production field này luôn undefined.
+      devOtpCode: result.devOtpCode,
+    };
+  }
+
+  async verifyPhoneOtp(userId: number, code: string) {
+    const row = await this.database.queryOne<{
+      phone_otp_hash: string | null;
+      phone_otp_expires_at: Date | null;
+      phone_otp_attempts: number;
+    }>(
+      `SELECT phone_otp_hash, phone_otp_expires_at, phone_otp_attempts
+       FROM users WHERE user_id = $1 AND is_deleted = FALSE`,
+      [userId],
+    );
+    if (!row) throw new NotFoundException('User not found');
+
+    await this.assertOtpMatches(
+      row.phone_otp_hash,
+      row.phone_otp_expires_at,
+      row.phone_otp_attempts,
+      code,
+      async () => {
+        await this.database.query(
+          `UPDATE users SET phone_otp_attempts = phone_otp_attempts + 1 WHERE user_id = $1`,
+          [userId],
+        );
+      },
+    );
+
+    await this.database.query(
+      `UPDATE users
+       SET phone_verified_at = NOW(), phone_otp_hash = NULL,
+           phone_otp_expires_at = NULL, phone_otp_attempts = 0
        WHERE user_id = $1`,
       [userId],
     );

@@ -192,6 +192,26 @@ export class UsersController {
     };
   }
 
+  // --- Xác thực số điện thoại ---
+  @Post('users/me/phone/send-otp')
+  async sendPhoneOtp(@CurrentUser() user: AuthUser) {
+    return {
+      success: true,
+      data: await this.usersService.sendPhoneOtp(user.id),
+    };
+  }
+
+  @Post('users/me/phone/verify-otp')
+  async verifyPhoneOtp(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: VerifyOtpDto,
+  ) {
+    return {
+      success: true,
+      data: await this.usersService.verifyPhoneOtp(user.id, dto.code),
+    };
+  }
+
   // --- Xác thực email của người liên hệ khẩn cấp ---
   @Post('users/me/emergency-contact/send-otp')
   async sendEmergencyEmailOtp(@CurrentUser() user: AuthUser) {

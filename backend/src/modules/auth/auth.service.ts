@@ -6,9 +6,16 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import { randomUUID } from 'crypto';
 import { DatabaseService } from '../../database/database.service';
+import { SessionsService } from '../sessions/sessions.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+
+interface RequestInfo {
+  ip?: string;
+  userAgent?: string;
+}
 
 @Injectable()
 export class AuthService {
@@ -16,9 +23,10 @@ export class AuthService {
     private readonly database: DatabaseService,
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
+    private readonly sessionsService: SessionsService,
   ) {}
 
-  async register(dto: RegisterDto) {
+  async register(dto: RegisterDto, requestInfo: RequestInfo = {}) {
     const existing = await this.database.queryOne(
       'SELECT user_id FROM users WHERE email = $1 AND is_deleted = FALSE',
       [dto.email.toLowerCase()],
@@ -41,10 +49,10 @@ export class AuthService {
       [dto.email.toLowerCase(), passwordHash, dto.fullName, dto.phone ?? null],
     );
 
-    return this.withToken(user);
+    return this.withToken(user, requestInfo);
   }
 
-  async login(dto: LoginDto) {
+  async login(dto: LoginDto, requestInfo: RequestInfo = {}) {
     const user = await this.database.queryOne(
       `SELECT user_id, email, password_hash, role, full_name, phone_number,
               address, date_of_birth, gender,
@@ -66,7 +74,7 @@ export class AuthService {
       [user.user_id],
     );
 
-    return this.withToken(user);
+    return this.withToken(user, requestInfo);
   }
 
   async me(userId: number) {
@@ -79,15 +87,23 @@ export class AuthService {
     );
   }
 
-  private withToken(user: any) {
+  async logout(jti: string | undefined) {
+    if (jti) await this.sessionsService.revokeByJti(jti);
+    return { loggedOut: true };
+  }
+
+  private async withToken(user: any, requestInfo: RequestInfo) {
+    const jti = randomUUID();
     const payload = {
       sub: user.user_id,
       email: user.email,
       role: String(user.role).toLowerCase(),
+      jti,
     };
     const accessToken = this.jwtService.sign(payload, {
       expiresIn: (this.config.get<string>('jwtExpiresIn') ?? '1d') as any,
     });
+    await this.sessionsService.createSession(user.user_id, jti, requestInfo);
 
     const isProfileComplete = Boolean(
       user.full_name &&

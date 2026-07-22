@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { createHash } from 'crypto';
 import { DatabaseService } from '../../database/database.service';
 
@@ -235,4 +239,5 @@ export class ContractsService {
             JOIN cemetery_zones z ON z.zone_id = p.zone_id
             LEFT JOIN ownership_records o ON o.plot_id = p.plot_id AND o.is_current = TRUE
             ${suffix}`;
+  }
 }
