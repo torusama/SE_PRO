@@ -7,7 +7,6 @@ import './HomePage.css'
 export default function HomePage() {
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
-  const role = useAuthStore((s) => s.role)
   const logout = useAuthStore((s) => s.logout)
   const [menuOpen, setMenuOpen] = useState(false)
 
@@ -133,9 +132,6 @@ export default function HomePage() {
           <li>
             <a href="#ai">AI Tư vấn</a>
           </li>
-          <li>
-            <a href="#admin">Quản trị</a>
-          </li>
         </ul>
         {user ? (
           <div style={{ position: 'relative' }}>
@@ -170,17 +166,6 @@ export default function HomePage() {
                 >
                   Hồ sơ của tôi
                 </button>
-                {role === 'admin' && (
-                  <button
-                    onClick={() => {
-                      setMenuOpen(false)
-                      navigate(ROUTES.ADMIN_DASHBOARD)
-                    }}
-                    style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 14px', fontSize: '12px', color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer' }}
-                  >
-                    Trang quản trị
-                  </button>
-                )}
                 <button
                   onClick={handleLogout}
                   style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 14px', fontSize: '12px', color: '#ff6b6b', background: 'none', border: 'none', cursor: 'pointer' }}
@@ -406,7 +391,7 @@ export default function HomePage() {
               <div className="stat-label">Chức năng hệ thống</div>
             </div>
             <div className="stat-card">
-              <div className="stat-num">FR-14</div>
+              <div className="stat-num">24/7</div>
               <div className="stat-label">AI Concierge Agent</div>
             </div>
             <div className="stat-card">
@@ -421,7 +406,7 @@ export default function HomePage() {
       <section id="map" className="home-section">
         <div className="map-section">
           <div>
-            <p className="section-eyebrow">FR-02 · Bản đồ nghĩa trang</p>
+            <p className="section-eyebrow">Bản đồ nghĩa trang</p>
             <h2 className="section-title">
               Bản đồ <em>2D tương tác</em>
             </h2>
@@ -636,7 +621,7 @@ export default function HomePage() {
       <div className="wide-bg" id="features">
         <section className="home-section" style={{ paddingTop: '60px', paddingBottom: '60px' }}>
           <p className="section-eyebrow" style={{ textAlign: 'center' }}>
-            Hệ thống FR-01 đến FR-14
+            Chức năng hệ thống
           </p>
           <h2 className="section-title" style={{ textAlign: 'center', maxWidth: '600px', margin: '0 auto 12px' }}>
             Đầy đủ chức năng, <em>một nền tảng</em>
@@ -647,34 +632,79 @@ export default function HomePage() {
 
           <div className="features-grid">
             <div className="feature-card">
-              <div className="feature-num">FR-01</div>
-              <div className="feature-name">Đăng ký & Phân quyền</div>
-              <div className="feature-desc">Hệ thống xác thực JWT, phân quyền RBAC rõ ràng giữa khách hàng và quản trị viên.</div>
+              <div className="feature-num">01</div>
+              <div className="feature-name">Đăng ký tài khoản</div>
+              <div className="feature-desc">Đăng ký, đăng nhập an toàn với xác thực email và bảo mật tài khoản đầy đủ.</div>
             </div>
-            <div className="feature-card">
-              <div className="feature-num">FR-02</div>
+            <div
+              className="feature-card"
+              role="button"
+              tabIndex={0}
+              onClick={() => navigate(ROUTES.MAP)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") navigate(ROUTES.MAP)
+              }}
+              style={{ cursor: 'pointer' }}
+            >
+              <div className="feature-num">02</div>
               <div className="feature-name">Bản đồ 2D tương tác</div>
               <div className="feature-desc">Sơ đồ nghĩa trang đầy đủ, màu sắc phân biệt trạng thái lô, click để xem chi tiết.</div>
             </div>
-            <div className="feature-card">
-              <div className="feature-num">FR-03 · FR-04</div>
+            <div
+              className="feature-card"
+              role="button"
+              tabIndex={0}
+              onClick={() => navigate(ROUTES.MAP)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") navigate(ROUTES.MAP)
+              }}
+              style={{ cursor: 'pointer' }}
+            >
+              <div className="feature-num">03</div>
               <div className="feature-name">Giữ chỗ & Mua lô</div>
               <div className="feature-desc">Gửi yêu cầu giữ chỗ đơn lẻ hoặc nhiều lô liền kề cho gia đình, dòng họ.</div>
             </div>
-            <div className="feature-card">
-              <div className="feature-num">FR-06 · FR-07</div>
+            <div
+              className="feature-card"
+              role="button"
+              tabIndex={0}
+              onClick={() => navigate(ROUTES.SERVICES)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") navigate(ROUTES.SERVICES)
+              }}
+              style={{ cursor: 'pointer' }}
+            >
+              <div className="feature-num">04</div>
               <div className="feature-name">Đặt & theo dõi dịch vụ</div>
               <div className="feature-desc">Chăm sóc mộ, thay hoa, thắp hương, mai táng — đặt dịch vụ và theo dõi tiến độ trực tuyến.</div>
             </div>
-            <div className="feature-card">
-              <div className="feature-num">FR-08 · FR-09</div>
+            <div
+              className="feature-card"
+              role="button"
+              tabIndex={0}
+              onClick={() => navigate(ROUTES.NOTIFICATION)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") navigate(ROUTES.NOTIFICATION)
+              }}
+              style={{ cursor: 'pointer' }}
+            >
+              <div className="feature-num">05</div>
               <div className="feature-name">Nhắc giỗ & Thông báo</div>
               <div className="feature-desc">Hệ thống nhắc ngày giỗ, ngày tưởng niệm và thông báo real-time theo sự kiện.</div>
             </div>
-            <div className="feature-card">
-              <div className="feature-num">FR-12 · FR-13</div>
-              <div className="feature-name">Hợp đồng & Dashboard</div>
-              <div className="feature-desc">Quản lý hợp đồng điện tử, hồ sơ sở hữu và dashboard thống kê doanh thu toàn diện.</div>
+            <div
+              className="feature-card"
+              role="button"
+              tabIndex={0}
+              onClick={() => navigate(ROUTES.MY_LOTS)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") navigate(ROUTES.MY_LOTS)
+              }}
+              style={{ cursor: 'pointer' }}
+            >
+              <div className="feature-num">06</div>
+              <div className="feature-name">Hợp đồng & Sở hữu</div>
+              <div className="feature-desc">Xem hợp đồng điện tử, hồ sơ sở hữu và lịch sử thanh toán của lô đất bạn đang sở hữu.</div>
             </div>
             <div className="feature-card feature-card-action">
               <div className="feature-num">HẸN GẶP TRỰC TIẾP</div>
@@ -696,7 +726,7 @@ export default function HomePage() {
       <section id="ai" className="home-section">
         <div className="ai-section">
           <div>
-            <p className="section-eyebrow">FR-14 · AI Cemetery Concierge</p>
+            <p className="section-eyebrow">AI Cemetery Concierge</p>
             <h2 className="section-title">
               Trợ lý tư vấn <em>thông minh</em>
             </h2>
