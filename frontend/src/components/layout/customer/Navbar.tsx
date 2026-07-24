@@ -3,7 +3,7 @@
 // Toàn bộ trang trong CustomerLayout (Hồ sơ, Bản đồ, Dịch vụ, Lô của tôi...) dùng chung
 // component này nên chỉ cần sửa ở đây là mọi nơi đồng bộ theo.
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ROUTES } from "../../../constants/routes";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
@@ -21,10 +21,14 @@ const TXT = {
 
 export default function Navbar() {
   const navigate = useNavigate();
+  const location = useLocation();
   const user = useAuthStore((s) => s.user);
   const role = useAuthStore((s) => s.role);
   const logout = useAuthStore((s) => s.logout);
   const [menuOpen, setMenuOpen] = useState(false);
+  // Trang Hồ sơ đã tự hiển thị avatar + tên + đăng xuất ở sidebar riêng của nó,
+  // nên bỏ cục avatar này trên nav để khỏi bị lặp lại 2 lần trên cùng 1 trang.
+  const isProfilePage = location.pathname === ROUTES.PROFILE;
 
   function handleLogout() {
     // Thu hồi phiên thật ở backend (bảng user_sessions) — không chặn UI chờ
@@ -41,7 +45,7 @@ export default function Navbar() {
         {TXT.brandMain} <span>{TXT.brandAccent}</span>
       </Link>
 
-      {user ? (
+      {isProfilePage ? null : user ? (
         <div style={{ position: "relative" }}>
           <button
             type="button"
