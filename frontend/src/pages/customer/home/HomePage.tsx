@@ -136,66 +136,42 @@ export default function HomePage() {
           </li>
         </ul>
         {user ? (
-          <div style={{ position: "relative" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "18px" }}>
             <button
-              className="nav-cta"
-              onClick={() => setMenuOpen((v) => !v)}
-              style={{ display: "flex", alignItems: "center", gap: "8px" }}
+              type="button"
+              className="home-bell-btn"
+              title="Thông báo"
+              onClick={() => navigate(ROUTES.NOTIFICATION)}
             >
-              {user.name}
+              🔔
             </button>
 
-            {menuOpen && (
-              <div
-                style={{
-                  position: "absolute",
-                  right: 0,
-                  top: "44px",
-                  background: "var(--deep)",
-                  border: "1px solid var(--teal-dim)",
-                  borderRadius: "8px",
-                  minWidth: "180px",
-                  overflow: "hidden",
-                  zIndex: 200,
-                }}
+            <div style={{ position: "relative" }}>
+              <button
+                type="button"
+                className="home-nav-user"
+                onClick={() => setMenuOpen((v) => !v)}
               >
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    navigate(ROUTES.PROFILE);
-                  }}
-                  style={{
-                    display: "block",
-                    width: "100%",
-                    textAlign: "left",
-                    padding: "10px 14px",
-                    fontSize: "12px",
-                    color: "var(--muted)",
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                  }}
-                >
-                  Hồ sơ của tôi
-                </button>
-                <button
-                  onClick={handleLogout}
-                  style={{
-                    display: "block",
-                    width: "100%",
-                    textAlign: "left",
-                    padding: "10px 14px",
-                    fontSize: "12px",
-                    color: "#ff6b6b",
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                  }}
-                >
-                  Đăng xuất
-                </button>
-              </div>
-            )}
+                <span className="home-nav-avatar">{user.initials}</span>
+                <span className="home-nav-username">{user.name}</span>
+              </button>
+
+              {menuOpen && (
+                <div className="home-nav-menu">
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      navigate(ROUTES.PROFILE);
+                    }}
+                  >
+                    Hồ sơ của tôi
+                  </button>
+                  <button className="danger" onClick={handleLogout}>
+                    Đăng xuất
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         ) : (
           <button className="nav-cta" onClick={() => navigate(ROUTES.LOGIN)}>
@@ -1857,14 +1833,6 @@ export default function HomePage() {
           </p>
 
           <div className="features-grid">
-            <div className="feature-card">
-              <div className="feature-num">01</div>
-              <div className="feature-name">Đăng ký tài khoản</div>
-              <div className="feature-desc">
-                Đăng ký, đăng nhập an toàn với xác thực email và bảo mật tài
-                khoản đầy đủ.
-              </div>
-            </div>
             <div
               className="feature-card"
               role="button"
@@ -1875,7 +1843,7 @@ export default function HomePage() {
               }}
               style={{ cursor: "pointer" }}
             >
-              <div className="feature-num">02</div>
+              <div className="feature-num">01</div>
               <div className="feature-name">Bản đồ 2D tương tác</div>
               <div className="feature-desc">
                 Sơ đồ nghĩa trang đầy đủ, màu sắc phân biệt trạng thái lô, click
@@ -1892,7 +1860,7 @@ export default function HomePage() {
               }}
               style={{ cursor: "pointer" }}
             >
-              <div className="feature-num">03</div>
+              <div className="feature-num">02</div>
               <div className="feature-name">Giữ chỗ & Mua lô</div>
               <div className="feature-desc">
                 Gửi yêu cầu giữ chỗ đơn lẻ hoặc nhiều lô liền kề cho gia đình,
@@ -1910,29 +1878,11 @@ export default function HomePage() {
               }}
               style={{ cursor: "pointer" }}
             >
-              <div className="feature-num">04</div>
+              <div className="feature-num">03</div>
               <div className="feature-name">Đặt & theo dõi dịch vụ</div>
               <div className="feature-desc">
                 Chăm sóc mộ, thay hoa, thắp hương, mai táng — đặt dịch vụ và
                 theo dõi tiến độ trực tuyến.
-              </div>
-            </div>
-            <div
-              className="feature-card"
-              role="button"
-              tabIndex={0}
-              onClick={() => navigate(ROUTES.NOTIFICATION)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ")
-                  navigate(ROUTES.NOTIFICATION);
-              }}
-              style={{ cursor: "pointer" }}
-            >
-              <div className="feature-num">05</div>
-              <div className="feature-name">Thông báo</div>
-              <div className="feature-desc">
-                Thông báo real-time theo trạng thái yêu cầu, hợp đồng và dịch vụ
-                của bạn.
               </div>
             </div>
             <div
@@ -1946,7 +1896,7 @@ export default function HomePage() {
               }}
               style={{ cursor: "pointer" }}
             >
-              <div className="feature-num">06</div>
+              <div className="feature-num">04</div>
               <div className="feature-name">Nhắc lịch ngày giỗ</div>
               <div className="feature-desc">
                 Thiết lập nhắc lịch ngày giỗ, lễ tưởng niệm — hệ thống tự động
@@ -1964,7 +1914,7 @@ export default function HomePage() {
               }}
               style={{ cursor: "pointer" }}
             >
-              <div className="feature-num">07</div>
+              <div className="feature-num">05</div>
               <div className="feature-name">Hợp đồng & Sở hữu</div>
               <div className="feature-desc">
                 Xem hợp đồng điện tử, hồ sơ sở hữu và lịch sử thanh toán của lô
