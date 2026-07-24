@@ -5,10 +5,27 @@ import {
 } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { DatabaseService } from '../../database/database.service';
+import { NotificationsService } from '../notifications/notifications.service';
+
+const money = new Intl.NumberFormat('vi-VN', {
+  style: 'currency',
+  currency: 'VND',
+  maximumFractionDigits: 0,
+});
+
+const CONTRACT_STATUS_LABEL: Record<string, string> = {
+  active: 'đang hiệu lực',
+  completed: 'đã hoàn tất',
+  cancelled: 'đã huỷ',
+  expired: 'đã hết hạn',
+};
 
 @Injectable()
 export class ContractsService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly notificationsService: NotificationsService,
+  ) {}
 
   adminList() {
     return this.database.query(this.baseQuery('ORDER BY c.created_at DESC'));
@@ -64,28 +81,50 @@ export class ContractsService {
   }
 
   async updateStatus(id: number, status: string) {
-    const contract = await this.database.queryOne(
+    const contract = await this.database.queryOne<any>(
       `UPDATE contracts SET status = $2, updated_at = NOW()
        WHERE contract_id = $1 AND is_deleted = FALSE
-       RETURNING contract_id AS id, contract_code AS "contractCode", status`,
+       RETURNING contract_id AS id, contract_code AS "contractCode", status, user_id AS "userId"`,
       [id, status],
     );
     if (!contract) throw new NotFoundException('Contract not found');
+
+    const label = CONTRACT_STATUS_LABEL[status] ?? status;
+    await this.notificationsService.createInApp(
+      contract.userId,
+      'contract_updated',
+      'Hợp đồng đã được cập nhật',
+      `Hợp đồng ${contract.contractCode} hiện ${label}.`,
+      'contract',
+      contract.id,
+    );
+
     return contract;
   }
 
   async updateInheritance(id: number, content: string, adminId: number) {
-    const contract = await this.database.queryOne(
+    const contract = await this.database.queryOne<any>(
       `UPDATE contracts
        SET inheritance_content = $2, inheritance_updated_by = $3,
            inheritance_updated_at = NOW(), updated_at = NOW()
        WHERE contract_id = $1 AND is_deleted = FALSE
        RETURNING contract_id AS id, contract_code AS "contractCode",
                  inheritance_content AS "inheritanceContent",
-                 inheritance_updated_at AS "inheritanceUpdatedAt"`,
+                 inheritance_updated_at AS "inheritanceUpdatedAt",
+                 user_id AS "userId"`,
       [id, content.trim() || null, adminId],
     );
     if (!contract) throw new NotFoundException('Contract not found');
+
+    await this.notificationsService.createInApp(
+      contract.userId,
+      'contract_updated',
+      'Hợp đồng đã được cập nhật',
+      `Nội dung thừa kế/thụ hưởng của hợp đồng ${contract.contractCode} vừa được cập nhật.`,
+      'contract',
+      contract.id,
+    );
+
     return contract;
   }
 
@@ -135,7 +174,7 @@ export class ContractsService {
         ].join('|'),
       )
       .digest('hex');
-    return this.database.queryOne(
+    const result = await this.database.queryOne<any>(
       `UPDATE contracts SET
          party_${party}_signed_by = $2,
          party_${party}_signature_name = $3,
@@ -143,12 +182,24 @@ export class ContractsService {
          party_${party}_signature_hash = $5,
          updated_at = NOW()
        WHERE contract_id = $1
-       RETURNING contract_id AS id,
+       RETURNING contract_id AS id, contract_code AS "contractCode",
          party_${party}_signature_name AS "signatureName",
          party_${party}_signed_at AS "signedAt",
          party_${party}_signature_hash AS "signatureHash"`,
       [id, signerId, cleanName, signedAt, hash],
     );
+
+    const signerLabel = party === 'a' ? 'Ban quản lý nghĩa trang' : 'Bạn';
+    await this.notificationsService.createInApp(
+      contract.user_id,
+      'contract_updated',
+      party === 'a' ? 'Hợp đồng đã được ký xác nhận' : 'Đã ghi nhận chữ ký',
+      `${signerLabel} vừa ký hợp đồng ${result.contractCode}.`,
+      'contract',
+      id,
+    );
+
+    return result;
   }
 
   async savePdf(
@@ -157,16 +208,29 @@ export class ContractsService {
     relativeUrl: string,
     isAdmin: boolean,
   ) {
-    const row = await this.database.queryOne(
+    const row = await this.database.queryOne<any>(
       `UPDATE contracts SET pdf_url = $3, pdf_uploaded_by = $2,
               pdf_uploaded_at = NOW(), updated_at = NOW()
        WHERE contract_id = $1 AND is_deleted = FALSE
          AND ($4::boolean = TRUE OR user_id = $2)
-       RETURNING contract_id AS id, pdf_url AS "pdfUrl",
-                 pdf_uploaded_at AS "pdfUploadedAt"`,
+       RETURNING contract_id AS id, contract_code AS "contractCode",
+                 pdf_url AS "pdfUrl", pdf_uploaded_at AS "pdfUploadedAt",
+                 user_id AS "userId"`,
       [id, actorId, relativeUrl, isAdmin],
     );
     if (!row) throw new NotFoundException('Contract not found');
+
+    if (isAdmin) {
+      await this.notificationsService.createInApp(
+        row.userId,
+        'contract_pdf_ready',
+        'Bản PDF hợp đồng đã sẵn sàng',
+        `Hợp đồng ${row.contractCode} đã có bản PDF, bạn có thể tải về để lưu trữ.`,
+        'contract',
+        row.id,
+      );
+    }
+
     return row;
   }
 
@@ -183,7 +247,7 @@ export class ContractsService {
   }
 
   async addPayment(id: number, body: any, adminId: number) {
-    return this.database.transaction(async (client) => {
+    const result = await this.database.transaction(async (client) => {
       const payment = await client.query(
         `INSERT INTO payment_transactions (contract_id, amount, payment_method, reference_code, note, recorded_by)
          VALUES ($1, $2, $3, $4, $5, $6)
@@ -197,16 +261,34 @@ export class ContractsService {
           adminId,
         ],
       );
-      await client.query(
+      const contract = await client.query(
         `UPDATE contracts
          SET paid_amount = paid_amount + $2,
              payment_status = CASE WHEN paid_amount + $2 >= total_amount THEN 'paid' ELSE 'partial' END,
              updated_at = NOW()
-         WHERE contract_id = $1`,
+         WHERE contract_id = $1
+         RETURNING contract_id AS id, contract_code AS "contractCode", user_id AS "userId",
+                   paid_amount::float AS "paidAmount", total_amount::float AS "totalAmount",
+                   payment_status AS "paymentStatus"`,
         [id, body.amount],
       );
-      return payment.rows[0];
+      return { payment: payment.rows[0], contract: contract.rows[0] };
     });
+
+    const { payment, contract } = result;
+    const isPaidOff = contract.paymentStatus === 'paid';
+    await this.notificationsService.createInApp(
+      contract.userId,
+      'contract_updated',
+      isPaidOff ? 'Hợp đồng đã thanh toán đủ' : 'Đã ghi nhận thanh toán',
+      isPaidOff
+        ? `Hợp đồng ${contract.contractCode} đã được thanh toán đầy đủ ${money.format(contract.totalAmount)}.`
+        : `Hợp đồng ${contract.contractCode} vừa ghi nhận thanh toán ${money.format(payment.amount)}. Còn lại ${money.format(contract.totalAmount - contract.paidAmount)}.`,
+      'contract',
+      contract.id,
+    );
+
+    return payment;
   }
 
   private baseQuery(suffix: string) {

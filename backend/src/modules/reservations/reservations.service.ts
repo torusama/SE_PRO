@@ -139,9 +139,32 @@ export class ReservationsService {
         throw new BadRequestException('Selected plots are no longer available');
       }
 
+      await this.notifyAdmins(
+        client,
+        dto.type === 'purchase' ? 'Yêu cầu mua lô mới' : 'Yêu cầu giữ chỗ mới',
+        `Khách hàng vừa gửi yêu cầu ${dto.type === 'purchase' ? 'mua' : 'giữ chỗ'} ${plots.length} lô, đang chờ duyệt.`,
+        requestId,
+      );
+
       const detail = await this.getDetailForClient(client, requestId, userId);
       return adjacency ? { ...detail, adjacency } : detail;
     });
+  }
+
+  /** Báo cho toàn bộ admin đang hoạt động biết có yêu cầu mới cần xử lý. */
+  private async notifyAdmins(
+    client: PoolClient,
+    title: string,
+    message: string,
+    requestId: number,
+  ) {
+    await client.query(
+      `INSERT INTO notifications (user_id, type, title, message, related_entity_type, related_entity_id)
+       SELECT user_id, 'request_submitted', $1, $2, 'reservation_request', $3
+       FROM users
+       WHERE LOWER(role) = 'admin' AND is_active = TRUE AND is_deleted = FALSE`,
+      [title, message, requestId],
+    );
   }
 
   async submit(userId: number, id: number) {

@@ -3,11 +3,13 @@
    Design tokens match the existing Vĩnh Hằng website theme.
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap");
 
 /* ---------- scope reset ---------- */
 .map-page,
-.map-page * { box-sizing: border-box; }
+.map-page * {
+  box-sizing: border-box;
+}
 
 /* ---------- page shell ---------- */
 .map-page {
@@ -29,30 +31,102 @@
   position: relative;
   background: var(--ink-void);
   color: var(--text-main);
-  font-family: 'Be Vietnam Pro', sans-serif;
+  font-family: "Be Vietnam Pro", sans-serif;
   min-height: 100vh;
   overflow-x: hidden;
 }
 
 /* ---------- animated background ---------- */
-.map-page .bg-canvas { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
+.map-page .bg-canvas {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
 
-.map-page .glow-orb { position: absolute; border-radius: 50%; filter: blur(100px); animation: map-pulse-orb 8s ease-in-out infinite; }
-.map-page .glow-orb-gold { width: 600px; height: 600px; background: radial-gradient(circle, rgba(201,168,76,0.1), transparent 70%); top: -100px; right: -80px; }
-.map-page .glow-orb-teal { width: 500px; height: 500px; background: radial-gradient(circle, rgba(0,229,196,0.07), transparent 70%); bottom: 0; left: -80px; animation-delay: -5s; }
-@keyframes map-pulse-orb { 0%, 100% { opacity: 0.1; } 50% { opacity: 0.18; } }
+.map-page .glow-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(100px);
+  animation: map-pulse-orb 8s ease-in-out infinite;
+}
+.map-page .glow-orb-gold {
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, rgba(201, 168, 76, 0.1), transparent 70%);
+  top: -100px;
+  right: -80px;
+}
+.map-page .glow-orb-teal {
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(0, 229, 196, 0.07), transparent 70%);
+  bottom: 0;
+  left: -80px;
+  animation-delay: -5s;
+}
+@keyframes map-pulse-orb {
+  0%,
+  100% {
+    opacity: 0.1;
+  }
+  50% {
+    opacity: 0.18;
+  }
+}
 
-.map-page .mountain-layer { position: absolute; bottom: 0; left: 0; right: 0; height: 50vh; opacity: 0.1; }
-.map-page .stars { position: absolute; inset: 0; }
-.map-page .star { position: absolute; background: #fff; border-radius: 50%; animation: map-twinkle var(--d, 3s) ease-in-out infinite var(--delay, 0s); }
-@keyframes map-twinkle { 0%, 100% { opacity: 0.1; } 50% { opacity: 0.8; } }
+.map-page .mountain-layer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 50vh;
+  opacity: 0.1;
+}
+.map-page .stars {
+  position: absolute;
+  inset: 0;
+}
+.map-page .star {
+  position: absolute;
+  background: #fff;
+  border-radius: 50%;
+  animation: map-twinkle var(--d, 3s) ease-in-out infinite var(--delay, 0s);
+}
+@keyframes map-twinkle {
+  0%,
+  100% {
+    opacity: 0.1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
 
 /* ---------- breadcrumb ---------- */
-.map-page .breadcrumb { position: relative; z-index: 10; padding: 16px 48px; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted); }
-.map-page .breadcrumb a { color: var(--text-muted); text-decoration: none; }
-.map-page .breadcrumb a:hover { color: var(--teal-glow); }
-.map-page .breadcrumb .sep { opacity: 0.4; }
-.map-page .breadcrumb .current { color: var(--teal-soft); }
+.map-page .breadcrumb {
+  position: relative;
+  z-index: 10;
+  padding: 16px 48px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.map-page .breadcrumb a {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+.map-page .breadcrumb a:hover {
+  color: var(--teal-glow);
+}
+.map-page .breadcrumb .sep {
+  opacity: 0.4;
+}
+.map-page .breadcrumb .current {
+  color: var(--teal-soft);
+}
 
 /* ---------- 3-column layout ---------- */
 .map-page .app-body {
@@ -75,8 +149,12 @@
   overflow-x: hidden;
 }
 
-.map-page .sidebar-section { padding: 20px 20px 0; }
-.map-page .sidebar-section.compact-section { padding-top: 4px; }
+.map-page .sidebar-section {
+  padding: 20px 20px 0;
+}
+.map-page .sidebar-section.compact-section {
+  padding-top: 4px;
+}
 
 .map-page .sidebar-title {
   font-size: 11px;
@@ -88,7 +166,12 @@
   align-items: center;
   gap: 8px;
 }
-.map-page .sidebar-title::after { content: ''; flex: 1; height: 0.5px; background: var(--border-dim); }
+.map-page .sidebar-title::after {
+  content: "";
+  flex: 1;
+  height: 0.5px;
+  background: var(--border-dim);
+}
 
 /* search */
 .map-page .search-box {
@@ -102,13 +185,37 @@
   margin-bottom: 16px;
   transition: border-color 0.2s;
 }
-.map-page .search-box:focus-within { border-color: var(--teal-soft); }
-.map-page .search-label { font-size: 11px; color: var(--gold); letter-spacing: 0.08em; text-transform: uppercase; flex-shrink: 0; }
-.map-page .search-box input { background: none; border: none; outline: none; color: var(--text-main); font-size: 13px; font-family: 'Be Vietnam Pro', sans-serif; width: 100%; min-width: 0; }
-.map-page .search-box input::placeholder { color: var(--text-muted); }
+.map-page .search-box:focus-within {
+  border-color: var(--teal-soft);
+}
+.map-page .search-label {
+  font-size: 11px;
+  color: var(--gold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+.map-page .search-box input {
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--text-main);
+  font-size: 13px;
+  font-family: "Be Vietnam Pro", sans-serif;
+  width: 100%;
+  min-width: 0;
+}
+.map-page .search-box input::placeholder {
+  color: var(--text-muted);
+}
 
 /* filter chips */
-.map-page .filter-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+.map-page .filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+}
 .map-page .chip {
   padding: 6px 11px;
   border-radius: 20px;
@@ -119,13 +226,25 @@
   cursor: pointer;
   transition: all 0.2s;
   letter-spacing: 0.03em;
-  font-family: 'Be Vietnam Pro', sans-serif;
+  font-family: "Be Vietnam Pro", sans-serif;
 }
-.map-page .chip:hover { border-color: var(--border-soft); color: var(--text-main); }
-.map-page .chip.on { border-color: var(--teal-soft); color: var(--teal-glow); background: rgba(0, 229, 196, 0.06); }
+.map-page .chip:hover {
+  border-color: var(--border-soft);
+  color: var(--text-main);
+}
+.map-page .chip.on {
+  border-color: var(--teal-soft);
+  color: var(--teal-glow);
+  background: rgba(0, 229, 196, 0.06);
+}
 
 /* zone list */
-.map-page .zone-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+.map-page .zone-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
 .map-page .zone-item {
   display: flex;
   align-items: center;
@@ -138,19 +257,57 @@
   border: 0.5px solid transparent;
   background: transparent;
   text-align: left;
-  font-family: 'Be Vietnam Pro', sans-serif;
+  font-family: "Be Vietnam Pro", sans-serif;
 }
-.map-page .zone-item:hover { background: rgba(0, 229, 196, 0.03); border-color: var(--border-dim); }
-.map-page .zone-item.active-zone { background: rgba(0, 229, 196, 0.05); border-color: var(--border-soft); }
-.map-page .zone-dot { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; border: 0.5px solid rgba(255, 255, 255, 0.22); }
-.map-page .zone-dot-all { background: linear-gradient(135deg, var(--teal-soft), var(--gold)); }
-.map-page .zone-name { font-size: 13px; color: var(--text-main); flex: 1; }
-.map-page .zone-count { font-size: 11px; color: var(--text-muted); }
+.map-page .zone-item:hover {
+  background: rgba(0, 229, 196, 0.03);
+  border-color: var(--border-dim);
+}
+.map-page .zone-item.active-zone {
+  background: rgba(0, 229, 196, 0.05);
+  border-color: var(--border-soft);
+}
+.map-page .zone-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  border: 0.5px solid rgba(255, 255, 255, 0.22);
+}
+.map-page .zone-dot-all {
+  background: linear-gradient(135deg, var(--teal-soft), var(--gold));
+}
+.map-page .zone-name {
+  font-size: 13px;
+  color: var(--text-main);
+  flex: 1;
+}
+.map-page .zone-count {
+  font-size: 11px;
+  color: var(--text-muted);
+}
 
 /* legend */
-.map-page .status-legend { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
-.map-page .status-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted); }
-.map-page .status-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; border: 1px solid transparent; }
+.map-page .status-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.map-page .status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.map-page .status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  border: 1px solid transparent;
+}
 
 .map-page .sidebar-empty {
   margin: 0 20px 16px;
@@ -164,13 +321,39 @@
 }
 
 /* stats grid */
-.map-page .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 20px 20px; }
-.map-page .stat-card { background: rgba(4, 6, 14, 0.6); border: 0.5px solid var(--border-dim); border-radius: 8px; padding: 12px; }
-.map-page .stat-num { font-family: 'Playfair Display', serif; font-size: 22px; color: var(--teal-glow); line-height: 1; margin-bottom: 3px; }
-.map-page .stat-num.amber { color: var(--amber); }
-.map-page .stat-num.red { color: var(--red); }
-.map-page .stat-num.gray { color: #aab1bc; }
-.map-page .stat-label { font-size: 11px; color: var(--text-muted); line-height: 1.4; }
+.map-page .stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 0 20px 20px;
+}
+.map-page .stat-card {
+  background: rgba(4, 6, 14, 0.6);
+  border: 0.5px solid var(--border-dim);
+  border-radius: 8px;
+  padding: 12px;
+}
+.map-page .stat-num {
+  font-family: "Playfair Display", serif;
+  font-size: 22px;
+  color: var(--teal-glow);
+  line-height: 1;
+  margin-bottom: 3px;
+}
+.map-page .stat-num.amber {
+  color: var(--amber);
+}
+.map-page .stat-num.red {
+  color: var(--red);
+}
+.map-page .stat-num.gray {
+  color: #aab1bc;
+}
+.map-page .stat-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
 
 /* ---------- map area ---------- */
 .map-page .map-area {
@@ -219,14 +402,14 @@
   background: transparent;
   color: var(--text-muted);
   font-size: 12px;
-  font-family: 'Be Vietnam Pro', sans-serif;
+  font-family: "Be Vietnam Pro", sans-serif;
   cursor: pointer;
   transition: all 0.2s;
   white-space: nowrap;
   position: relative;
 }
 .map-page .mode-btn:not(:last-child)::after {
-  content: '';
+  content: "";
   position: absolute;
   right: 0;
   top: 20%;
@@ -234,7 +417,10 @@
   width: 0.5px;
   background: var(--border-dim);
 }
-.map-page .mode-btn:hover { color: var(--text-main); background: rgba(0, 229, 196, 0.03); }
+.map-page .mode-btn:hover {
+  color: var(--text-main);
+  background: rgba(0, 229, 196, 0.03);
+}
 .map-page .mode-btn.active {
   color: var(--teal-glow);
   background: rgba(0, 229, 196, 0.08);
@@ -248,17 +434,43 @@
   backdrop-filter: blur(8px);
   color: var(--text-muted);
   font-size: 12px;
-  font-family: 'Be Vietnam Pro', sans-serif;
+  font-family: "Be Vietnam Pro", sans-serif;
   cursor: pointer;
   transition: all 0.2s;
 }
-.map-page .map-btn:hover { border-color: var(--border-soft); color: var(--text-main); }
-.map-page .map-btn.active { border-color: var(--teal-soft); color: var(--teal-glow); background: rgba(0, 229, 196, 0.06); }
+.map-page .map-btn:hover {
+  border-color: var(--border-soft);
+  color: var(--text-main);
+}
+.map-page .map-btn.active {
+  border-color: var(--teal-soft);
+  color: var(--teal-glow);
+  background: rgba(0, 229, 196, 0.06);
+}
+
+/* rotate (xoay bản đồ 360°) */
+.map-page .map-rotate {
+  position: absolute;
+  bottom: 24px;
+  right: 60px;
+  z-index: 20;
+  display: flex;
+  gap: 4px;
+}
 
 /* zoom */
-.map-page .map-zoom { position: absolute; bottom: 24px; right: 16px; z-index: 20; display: flex; flex-direction: column; gap: 4px; }
+.map-page .map-zoom {
+  position: absolute;
+  bottom: 24px;
+  right: 16px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
 .map-page .zoom-btn {
-  width: 36px; height: 36px;
+  width: 36px;
+  height: 36px;
   border-radius: 8px;
   border: 0.5px solid var(--border-dim);
   background: rgba(8, 13, 26, 0.85);
@@ -271,7 +483,10 @@
   justify-content: center;
   transition: all 0.2s;
 }
-.map-page .zoom-btn:hover { border-color: var(--border-soft); color: var(--teal-glow); }
+.map-page .zoom-btn:hover {
+  border-color: var(--border-soft);
+  color: var(--teal-glow);
+}
 
 /* minimap */
 .map-page .map-minimap {
@@ -289,8 +504,23 @@
 }
 
 /* scale */
-.map-page .map-scale { position: absolute; bottom: 80px; left: 16px; z-index: 20; font-size: 10px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
-.map-page .scale-bar { width: 60px; height: 2px; background: var(--text-muted); border-radius: 1px; }
+.map-page .map-scale {
+  position: absolute;
+  bottom: 80px;
+  left: 16px;
+  z-index: 20;
+  font-size: 10px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.map-page .scale-bar {
+  width: 60px;
+  height: 2px;
+  background: var(--text-muted);
+  border-radius: 1px;
+}
 
 /* empty state */
 .map-page .map-empty {
@@ -319,34 +549,146 @@
   transition: transform 0.2s ease;
 }
 
-.map-page .plot-cell { cursor: pointer; }
-.map-page #cemetery-map { user-select: none; touch-action: none; }
-.map-page .lot-rect { transition: filter 0.15s, stroke-width 0.15s; vector-effect: non-scaling-stroke; }
-.map-page .plot-cell:hover .lot-rect { filter: brightness(1.35); }
-.map-page .plot-cell.mine .lot-rect { filter: drop-shadow(0 0 7px rgba(0, 229, 196, 0.7)); }
-.map-page .plot-cell.selected .lot-rect { filter: brightness(1.25) drop-shadow(0 0 5px rgba(240, 192, 96, 0.55)); }
-.map-page .plot-cell.cluster-selected .lot-rect { filter: brightness(1.3) drop-shadow(0 0 6px rgba(0, 229, 196, 0.55)); }
-.map-page .plot-cell.placeholder { cursor: default; }
+.map-page .plot-cell {
+  cursor: pointer;
+}
+.map-page #cemetery-map {
+  user-select: none;
+  touch-action: none;
+}
+.map-page .lot-rect {
+  transition:
+    filter 0.15s,
+    stroke-width 0.15s;
+  vector-effect: non-scaling-stroke;
+}
+.map-page .plot-cell:hover .lot-rect {
+  filter: brightness(1.35);
+}
+.map-page .plot-cell.mine .lot-rect {
+  filter: drop-shadow(0 0 7px rgba(0, 229, 196, 0.7));
+}
+.map-page .plot-cell.selected .lot-rect {
+  filter: brightness(1.25) drop-shadow(0 0 5px rgba(240, 192, 96, 0.55));
+}
+.map-page .plot-cell.cluster-selected .lot-rect {
+  filter: brightness(1.3) drop-shadow(0 0 6px rgba(0, 229, 196, 0.55));
+}
+.map-page .plot-cell.placeholder {
+  cursor: default;
+}
 .map-page .plot-cell.placeholder .lot-rect {
   fill: rgba(116, 124, 137, 0.08);
   stroke: rgba(122, 154, 144, 0.32);
   stroke-dasharray: 3 3;
 }
-.map-page .plot-cell.placeholder:hover .lot-rect { filter: none; }
-.map-page .plot-cell.placeholder .plot-code { fill: rgba(122, 154, 144, 0.42); }
-.map-page .plot-code { font-size: 6.2px; font-family: 'Be Vietnam Pro', sans-serif; font-weight: 600; pointer-events: none; letter-spacing: 0; }
-.map-page .plot-mine-mark { fill: var(--teal-glow); font-size: 9px; font-weight: 700; pointer-events: none; filter: drop-shadow(0 0 3px rgba(0, 229, 196, 0.9)); }
+.map-page .plot-cell.placeholder:hover .lot-rect {
+  filter: none;
+}
+.map-page .plot-cell.placeholder .plot-code {
+  fill: rgba(122, 154, 144, 0.42);
+}
+.map-page .plot-code {
+  font-size: 6.2px;
+  font-family: "Be Vietnam Pro", sans-serif;
+  font-weight: 600;
+  pointer-events: none;
+  letter-spacing: 0;
+}
+.map-page .plot-mine-mark {
+  fill: var(--teal-glow);
+  font-size: 9px;
+  font-weight: 700;
+  pointer-events: none;
+  filter: drop-shadow(0 0 3px rgba(0, 229, 196, 0.9));
+}
+
+/* ranh giới tổng thể khu đất (đa giác thực tế, không phải hình chữ nhật) */
+.map-page .map-land {
+  fill: rgba(0, 229, 196, 0.025);
+  stroke: none;
+}
+.map-page .map-boundary-line {
+  fill: none;
+  stroke: rgba(0, 229, 196, 0.22);
+  stroke-width: 1.2;
+  stroke-dasharray: 7 4;
+  vector-effect: non-scaling-stroke;
+}
+.map-page .map-gate-marker {
+  fill: rgba(240, 192, 96, 0.55);
+}
+.map-page .zone-badge {
+  fill: rgba(4, 6, 14, 0.82);
+  stroke-width: 1;
+}
+.map-page .zone-badge-text {
+  font-size: 8px;
+  font-family: "Be Vietnam Pro", sans-serif;
+  font-weight: 700;
+  pointer-events: none;
+}
 
 /* road / labels */
-.map-page .map-road { fill: rgba(0, 229, 196, 0.05); stroke: rgba(0, 229, 196, 0.15); stroke-width: 0.5; }
+.map-page .map-road {
+  fill: rgba(0, 229, 196, 0.05);
+  stroke: rgba(0, 229, 196, 0.15);
+  stroke-width: 0.5;
+}
 .map-page .map-road-label,
-.map-page .gate-label { fill: rgba(0, 229, 196, 0.36); font-size: 8px; font-family: 'Be Vietnam Pro', sans-serif; letter-spacing: 0; }
-.map-page .zone-label { font-family: 'Playfair Display', serif; font-size: 10px; fill: rgba(255, 255, 255, 0.26); letter-spacing: 0.08em; }
-.map-page .row-label { fill: rgba(240, 192, 96, 0.46); font-size: 8px; font-family: 'Be Vietnam Pro', sans-serif; }
-.map-page .service-label { fill: rgba(0, 229, 196, 0.15); font-size: 10px; font-family: 'Be Vietnam Pro', sans-serif; letter-spacing: 0.1em; }
-.map-page .service-sub-label { fill: rgba(0, 229, 196, 0.22); font-size: 8px; font-family: 'Be Vietnam Pro', sans-serif; }
-.map-page .route-line { fill: none; stroke: rgba(240, 192, 96, 0.72); stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; stroke-dasharray: 8 6; filter: drop-shadow(0 0 4px rgba(240, 192, 96, 0.45)); pointer-events: none; }
-.map-page .compass { position: absolute; top: 60px; right: 16px; z-index: 20; width: 40px; height: 40px; opacity: 0.65; }
+.map-page .gate-label {
+  fill: rgba(0, 229, 196, 0.36);
+  font-size: 8px;
+  font-family: "Be Vietnam Pro", sans-serif;
+  letter-spacing: 0;
+}
+.map-page .zone-label {
+  font-family: "Playfair Display", serif;
+  font-size: 10px;
+  fill: rgba(255, 255, 255, 0.26);
+  letter-spacing: 0.08em;
+}
+.map-page .row-label {
+  fill: rgba(240, 192, 96, 0.46);
+  font-size: 8px;
+  font-family: "Be Vietnam Pro", sans-serif;
+}
+.map-page .service-label {
+  fill: rgba(0, 229, 196, 0.15);
+  font-size: 10px;
+  font-family: "Be Vietnam Pro", sans-serif;
+  letter-spacing: 0.1em;
+}
+.map-page .service-sub-label {
+  fill: rgba(0, 229, 196, 0.22);
+  font-size: 8px;
+  font-family: "Be Vietnam Pro", sans-serif;
+}
+.map-page .route-line {
+  fill: none;
+  stroke: rgba(240, 192, 96, 0.72);
+  stroke-width: 3;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  stroke-dasharray: 8 6;
+  filter: drop-shadow(0 0 4px rgba(240, 192, 96, 0.45));
+  pointer-events: none;
+}
+.map-page .compass {
+  position: absolute;
+  top: 60px;
+  right: 16px;
+  z-index: 20;
+  width: 40px;
+  height: 40px;
+  opacity: 0.65;
+  transition:
+    transform 0.2s ease,
+    opacity 0.2s ease;
+}
+.map-page .compass:hover {
+  opacity: 1;
+}
 
 /* ---------- panel right ---------- */
 .map-page .panel-right {
@@ -359,22 +701,67 @@
 }
 
 .map-page .panel-right::-webkit-scrollbar,
-.map-page .sidebar-left::-webkit-scrollbar { width: 4px; }
+.map-page .sidebar-left::-webkit-scrollbar {
+  width: 4px;
+}
 .map-page .panel-right::-webkit-scrollbar-thumb,
-.map-page .sidebar-left::-webkit-scrollbar-thumb { background: var(--border-dim); }
+.map-page .sidebar-left::-webkit-scrollbar-thumb {
+  background: var(--border-dim);
+}
 
 /* detail empty */
-.map-page .detail-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; padding: 40px 24px; text-align: center; color: var(--text-muted); }
-.map-page .detail-empty-title { font-family: 'Playfair Display', serif; font-size: 24px; color: #e8f4f0; margin-bottom: 8px; }
-.map-page .detail-empty p { font-size: 13px; line-height: 1.7; }
+.map-page .detail-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: 40px 24px;
+  text-align: center;
+  color: var(--text-muted);
+}
+.map-page .detail-empty-title {
+  font-family: "Playfair Display", serif;
+  font-size: 24px;
+  color: #e8f4f0;
+  margin-bottom: 8px;
+}
+.map-page .detail-empty p {
+  font-size: 13px;
+  line-height: 1.7;
+}
 
 /* detail panel */
-.map-page .detail-panel { padding: 24px; display: none; flex-direction: column; gap: 0; }
-.map-page .detail-panel.visible { display: flex; }
+.map-page .detail-panel {
+  padding: 24px;
+  display: none;
+  flex-direction: column;
+  gap: 0;
+}
+.map-page .detail-panel.visible {
+  display: flex;
+}
 
-.map-page .detail-tag { font-size: 11px; letter-spacing: 0.12em; color: var(--gold); text-transform: uppercase; margin-bottom: 6px; opacity: 0.8; }
-.map-page .detail-lot-id { font-family: 'Playfair Display', serif; font-size: 28px; color: #e8f4f0; margin-bottom: 4px; }
-.map-page .detail-zone { font-size: 13px; color: var(--text-muted); margin-bottom: 18px; line-height: 1.5; }
+.map-page .detail-tag {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--gold);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+  opacity: 0.8;
+}
+.map-page .detail-lot-id {
+  font-family: "Playfair Display", serif;
+  font-size: 28px;
+  color: #e8f4f0;
+  margin-bottom: 4px;
+}
+.map-page .detail-zone {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 18px;
+  line-height: 1.5;
+}
 
 /* status badge */
 .map-page .status-badge {
@@ -387,37 +774,147 @@
   font-size: 12px;
   margin-bottom: 18px;
 }
-.map-page .status-badge-dot { width: 8px; height: 8px; border-radius: 2px; }
-.map-page .status-badge.available { background: rgba(0, 229, 196, 0.08); border: 0.5px solid var(--teal-soft); color: var(--teal-glow); }
-.map-page .status-badge.pending   { background: rgba(245, 166, 35, 0.1); border: 0.5px solid var(--amber); color: #ffdca0; }
-.map-page .status-badge.reserved  { background: rgba(201, 168, 76, 0.1); border: 0.5px solid var(--gold); color: var(--gold-bright); }
-.map-page .status-badge.sold      { background: rgba(232, 74, 74, 0.1); border: 0.5px solid var(--red); color: #ffb3b3; }
-.map-page .status-badge.locked    { background: rgba(154, 164, 180, 0.1); border: 0.5px solid rgba(154, 164, 180, 0.6); color: #d5d9df; }
+.map-page .status-badge-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+.map-page .status-badge.available {
+  background: rgba(0, 229, 196, 0.08);
+  border: 0.5px solid var(--teal-soft);
+  color: var(--teal-glow);
+}
+.map-page .status-badge.pending {
+  background: rgba(245, 166, 35, 0.1);
+  border: 0.5px solid var(--amber);
+  color: #ffdca0;
+}
+.map-page .status-badge.reserved {
+  background: rgba(201, 168, 76, 0.1);
+  border: 0.5px solid var(--gold);
+  color: var(--gold-bright);
+}
+.map-page .status-badge.sold {
+  background: rgba(232, 74, 74, 0.1);
+  border: 0.5px solid var(--red);
+  color: #ffb3b3;
+}
+.map-page .status-badge.locked {
+  background: rgba(154, 164, 180, 0.1);
+  border: 0.5px solid rgba(154, 164, 180, 0.6);
+  color: #d5d9df;
+}
 
 /* detail rows */
-.map-page .detail-divider { height: 0.5px; background: var(--border-dim); margin: 16px 0; }
-.map-page .detail-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 8px 0; }
-.map-page .detail-row-label { font-size: 12px; color: var(--text-muted); }
-.map-page .detail-row-val { font-size: 13px; color: var(--text-main); text-align: right; max-width: 170px; line-height: 1.5; }
-.map-page .detail-row-val.highlight { color: var(--teal-glow); }
+.map-page .detail-divider {
+  height: 0.5px;
+  background: var(--border-dim);
+  margin: 16px 0;
+}
+.map-page .detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 8px 0;
+}
+.map-page .detail-row-label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.map-page .detail-row-val {
+  font-size: 13px;
+  color: var(--text-main);
+  text-align: right;
+  max-width: 170px;
+  line-height: 1.5;
+}
+.map-page .detail-row-val.highlight {
+  color: var(--teal-glow);
+}
 
 /* info boxes */
 .map-page .description-box,
 .map-page .direction-box,
-.map-page .selection-message { border-radius: 8px; padding: 14px 16px; margin: 16px 0 0; line-height: 1.65; font-size: 12px; }
-.map-page .description-box { background: rgba(0, 229, 196, 0.04); border: 0.5px solid var(--border-dim); color: var(--text-main); }
-.map-page .direction-box { background: rgba(201, 168, 76, 0.05); border: 0.5px solid var(--border-gold); color: #eadcb5; }
-.map-page .my-plot-box { background: rgba(0, 229, 196, 0.07); border: 0.5px solid rgba(0, 229, 196, 0.35); border-radius: 8px; padding: 13px 15px; margin-bottom: 18px; color: #bdfdf2; }
-.map-page .my-plot-title { color: var(--teal-glow); font-weight: 700; font-size: 14px; margin-bottom: 4px; }
-.map-page .my-plot-note { color: var(--text-main); font-size: 12px; line-height: 1.5; }
+.map-page .selection-message {
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin: 16px 0 0;
+  line-height: 1.65;
+  font-size: 12px;
+}
+.map-page .description-box {
+  background: rgba(0, 229, 196, 0.04);
+  border: 0.5px solid var(--border-dim);
+  color: var(--text-main);
+}
+.map-page .direction-box {
+  background: rgba(201, 168, 76, 0.05);
+  border: 0.5px solid var(--border-gold);
+  color: #eadcb5;
+}
+.map-page .my-plot-box {
+  background: rgba(0, 229, 196, 0.07);
+  border: 0.5px solid rgba(0, 229, 196, 0.35);
+  border-radius: 8px;
+  padding: 13px 15px;
+  margin-bottom: 18px;
+  color: #bdfdf2;
+}
+.map-page .my-plot-title {
+  color: var(--teal-glow);
+  font-weight: 700;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+.map-page .my-plot-note {
+  color: var(--text-main);
+  font-size: 12px;
+  line-height: 1.5;
+}
 .map-page .description-box p,
-.map-page .direction-box p { margin: 0; }
-.map-page .description-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 9px; }
-.map-page .description-list li { position: relative; padding-left: 13px; line-height: 1.55; }
-.map-page .description-list li::before { content: ''; position: absolute; left: 0; top: 0.72em; width: 5px; height: 5px; border-radius: 50%; background: var(--teal-glow); box-shadow: 0 0 8px rgba(0, 229, 196, 0.55); }
-.map-page .box-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--teal-soft); margin-bottom: 6px; }
-.map-page .direction-box .box-label { color: var(--gold); }
-.map-page .selection-message { border: 0.5px solid rgba(232, 74, 74, 0.35); background: rgba(232, 74, 74, 0.08); color: #ffb3b3; }
+.map-page .direction-box p {
+  margin: 0;
+}
+.map-page .description-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.map-page .description-list li {
+  position: relative;
+  padding-left: 13px;
+  line-height: 1.55;
+}
+.map-page .description-list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.72em;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--teal-glow);
+  box-shadow: 0 0 8px rgba(0, 229, 196, 0.55);
+}
+.map-page .box-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--teal-soft);
+  margin-bottom: 6px;
+}
+.map-page .direction-box .box-label {
+  color: var(--gold);
+}
+.map-page .selection-message {
+  border: 0.5px solid rgba(232, 74, 74, 0.35);
+  background: rgba(232, 74, 74, 0.08);
+  color: #ffb3b3;
+}
 .map-page .submit-success {
   border: 0.5px solid rgba(0, 229, 196, 0.35);
   background: rgba(0, 229, 196, 0.08);
@@ -442,12 +939,23 @@
   animation: warn-flash 0.3s ease;
 }
 @keyframes warn-flash {
-  0% { opacity: 0; transform: translateY(-4px); }
-  100% { opacity: 1; transform: translateY(0); }
+  0% {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* actions */
-.map-page .detail-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+.map-page .detail-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
 
 .map-page .request-type-switch {
   display: grid;
@@ -462,7 +970,7 @@
   border-radius: 8px;
   background: rgba(0, 229, 196, 0.03);
   color: var(--text-muted);
-  font-family: 'Be Vietnam Pro', sans-serif;
+  font-family: "Be Vietnam Pro", sans-serif;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -478,17 +986,24 @@
   width: 100%;
   padding: 12px;
   border-radius: 8px;
-  background: linear-gradient(135deg, rgba(201, 168, 76, 0.15), rgba(0, 229, 196, 0.1));
+  background: linear-gradient(
+    135deg,
+    rgba(201, 168, 76, 0.15),
+    rgba(0, 229, 196, 0.1)
+  );
   border: 0.5px solid var(--border-gold);
   color: var(--gold);
   font-size: 14px;
-  font-family: 'Be Vietnam Pro', sans-serif;
+  font-family: "Be Vietnam Pro", sans-serif;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
   letter-spacing: 0.02em;
 }
-.map-page .btn-primary:hover { background: rgba(201, 168, 76, 0.22); color: var(--gold-bright); }
+.map-page .btn-primary:hover {
+  background: rgba(201, 168, 76, 0.22);
+  color: var(--gold-bright);
+}
 
 .map-page .btn-secondary {
   width: 100%;
@@ -498,11 +1013,14 @@
   border: 0.5px solid var(--border-dim);
   color: var(--text-muted);
   font-size: 13px;
-  font-family: 'Be Vietnam Pro', sans-serif;
+  font-family: "Be Vietnam Pro", sans-serif;
   cursor: pointer;
   transition: all 0.2s;
 }
-.map-page .btn-secondary:hover { border-color: var(--border-soft); color: var(--text-main); }
+.map-page .btn-secondary:hover {
+  border-color: var(--border-soft);
+  color: var(--text-main);
+}
 
 /* ---------- cluster panel (Family/Clan mode) ---------- */
 .map-page .cluster-panel {
@@ -521,7 +1039,12 @@
   align-items: center;
   gap: 8px;
 }
-.map-page .cluster-title::after { content: ''; flex: 1; height: 0.5px; background: var(--border-dim); }
+.map-page .cluster-title::after {
+  content: "";
+  flex: 1;
+  height: 0.5px;
+  background: var(--border-dim);
+}
 
 .map-page .cluster-list {
   display: flex;
@@ -544,8 +1067,14 @@
   font-size: 12px;
 }
 
-.map-page .cluster-item-code { color: var(--teal-glow); font-weight: 500; }
-.map-page .cluster-item-price { color: var(--text-muted); font-size: 11px; }
+.map-page .cluster-item-code {
+  color: var(--teal-glow);
+  font-weight: 500;
+}
+.map-page .cluster-item-price {
+  color: var(--text-muted);
+  font-size: 11px;
+}
 
 .map-page .cluster-remove-btn {
   background: none;
@@ -556,10 +1085,12 @@
   padding: 2px 6px;
   border-radius: 4px;
   transition: all 0.15s;
-  font-family: 'Be Vietnam Pro', sans-serif;
+  font-family: "Be Vietnam Pro", sans-serif;
   line-height: 1;
 }
-.map-page .cluster-remove-btn:hover { background: rgba(232, 74, 74, 0.15); }
+.map-page .cluster-remove-btn:hover {
+  background: rgba(232, 74, 74, 0.15);
+}
 
 .map-page .cluster-summary {
   display: flex;
@@ -575,9 +1106,18 @@
   align-items: center;
   font-size: 13px;
 }
-.map-page .cluster-summary-label { color: var(--text-muted); }
-.map-page .cluster-summary-val { color: var(--text-main); font-weight: 500; }
-.map-page .cluster-summary-val.total { color: var(--gold-bright); font-family: 'Playfair Display', serif; font-size: 18px; }
+.map-page .cluster-summary-label {
+  color: var(--text-muted);
+}
+.map-page .cluster-summary-val {
+  color: var(--text-main);
+  font-weight: 500;
+}
+.map-page .cluster-summary-val.total {
+  color: var(--gold-bright);
+  font-family: "Playfair Display", serif;
+  font-size: 18px;
+}
 
 .map-page .cluster-empty {
   text-align: center;
@@ -601,9 +1141,20 @@
   backdrop-filter: blur(8px);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
 }
-.map-page .tooltip-id { font-family: 'Playfair Display', serif; font-size: 14px; color: #e8f4f0; margin-bottom: 3px; }
-.map-page .tooltip-status { font-size: 11px; }
-.map-page .tooltip-price { font-size: 11px; color: var(--gold); margin-top: 3px; }
+.map-page .tooltip-id {
+  font-family: "Playfair Display", serif;
+  font-size: 14px;
+  color: #e8f4f0;
+  margin-bottom: 3px;
+}
+.map-page .tooltip-status {
+  font-size: 11px;
+}
+.map-page .tooltip-price {
+  font-size: 11px;
+  color: var(--gold);
+  margin-top: 3px;
+}
 
 /* ============================================================
    Responsive
@@ -627,25 +1178,67 @@
 
 /* mobile: single column */
 @media (max-width: 820px) {
-  .map-page .breadcrumb { padding: 14px 18px; }
-  .map-page .app-body { display: flex; flex-direction: column; height: auto; overflow: visible; }
-  .map-page .sidebar-left { border-right: none; border-bottom: 0.5px solid var(--border-dim); max-height: none; }
-  .map-page .map-area { min-height: 520px; }
-  .map-page .map-canvas-wrap { overflow: auto; }
-  .map-page #cemetery-map { width: 800px; height: 600px; }
-  .map-page .map-toolbar { padding: 10px 12px; }
-  .map-page .panel-right { border-left: none; border-top: 0.5px solid var(--border-dim); }
-  .map-page .detail-panel { padding: 20px; }
-  .map-page .mode-btn { padding: 6px 12px; font-size: 11px; }
+  .map-page .breadcrumb {
+    padding: 14px 18px;
+  }
+  .map-page .app-body {
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    overflow: visible;
+  }
+  .map-page .sidebar-left {
+    border-right: none;
+    border-bottom: 0.5px solid var(--border-dim);
+    max-height: none;
+  }
+  .map-page .map-area {
+    min-height: 520px;
+  }
+  .map-page .map-canvas-wrap {
+    overflow: auto;
+  }
+  .map-page #cemetery-map {
+    width: 800px;
+    height: 600px;
+  }
+  .map-page .map-toolbar {
+    padding: 10px 12px;
+  }
+  .map-page .panel-right {
+    border-left: none;
+    border-top: 0.5px solid var(--border-dim);
+  }
+  .map-page .detail-panel {
+    padding: 20px;
+  }
+  .map-page .mode-btn {
+    padding: 6px 12px;
+    font-size: 11px;
+  }
 }
 
 /* small mobile */
 @media (max-width: 520px) {
-  .map-page .stats-grid { grid-template-columns: 1fr; }
+  .map-page .stats-grid {
+    grid-template-columns: 1fr;
+  }
   .map-page .map-minimap,
-  .map-page .map-scale { display: none; }
-  .map-page .map-zoom { bottom: 16px; }
-  .map-page .detail-row { flex-direction: column; gap: 2px; }
-  .map-page .detail-row-val { text-align: left; max-width: none; }
-  .map-page .cluster-summary-val.total { font-size: 16px; }
+  .map-page .map-scale {
+    display: none;
+  }
+  .map-page .map-zoom {
+    bottom: 16px;
+  }
+  .map-page .detail-row {
+    flex-direction: column;
+    gap: 2px;
+  }
+  .map-page .detail-row-val {
+    text-align: left;
+    max-width: none;
+  }
+  .map-page .cluster-summary-val.total {
+    font-size: 16px;
+  }
 }
