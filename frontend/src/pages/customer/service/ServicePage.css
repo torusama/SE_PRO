@@ -1,0 +1,296 @@
+/* src/pages/customer/service/ServicePage.css
+   Chuyển thể 1:1 từ mockup fr05_dich_vu_chinh.html (hub + danh mục),
+   fr06_dat_dich_vu.html (đặt dịch vụ) và fr07_theo_doi_dich_vu.html (theo dõi đơn).
+   Gộp cả 3 làm tab trong 1 trang vì luồng thực tế đi chung 1 route /dich-vu.
+   Mọi selector được bọc trong .service-page để không đụng class với trang khác
+   (dự án không dùng CSS Modules, mọi CSS được bundle chung). */
+
+.service-page {
+  --ink-void: #04060e;
+  --ink-deep: #080d1a;
+  --teal-glow: #00e5c4;
+  --teal-soft: #00b89e;
+  --teal-dim: #065a50;
+  --gold: #c9a84c;
+  --gold-dim: #7a5f28;
+  --gold-bright: #f0c060;
+  --blue-glow: #4da6ff;
+  --amber: #d4850a;
+  --purple: #7b6bcc;
+  --red: #c05050;
+  --text-main: #d4e8e0;
+  --text-muted: #7a9a90;
+  --border-dim: rgba(0, 229, 196, 0.12);
+  --border-soft: rgba(0, 229, 196, 0.25);
+  --border-gold: rgba(201, 168, 76, 0.25);
+
+  position: relative;
+  background: var(--ink-void);
+  color: var(--text-main);
+  font-family: 'Be Vietnam Pro', sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* BG */
+.service-page .bg-canvas { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
+.service-page .glow-orb { position: absolute; border-radius: 50%; filter: blur(100px); animation: svc-pulse-orb 8s ease-in-out infinite; }
+@keyframes svc-pulse-orb { 0%, 100% { opacity: 0.1; } 50% { opacity: 0.18; } }
+.service-page .mountain-layer { position: absolute; bottom: 0; left: 0; right: 0; height: 45vh; opacity: 0.12; }
+.service-page .lotus-float { position: absolute; font-size: 60px; opacity: 0.04; animation: svc-float-lotus 12s ease-in-out infinite; }
+@keyframes svc-float-lotus { 0%, 100% { transform: translateY(0) rotate(-5deg); } 50% { transform: translateY(-20px) rotate(5deg); } }
+.service-page .stars { position: absolute; inset: 0; }
+.service-page .star { position: absolute; background: #fff; border-radius: 50%; animation: svc-twinkle var(--d, 3s) ease-in-out infinite var(--delay, 0s); }
+@keyframes svc-twinkle { 0%, 100% { opacity: 0.1; } 50% { opacity: 0.8; } }
+
+/* BREADCRUMB */
+.service-page .breadcrumb { position: relative; z-index: 10; padding: 16px 48px; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted); }
+.service-page .breadcrumb a { color: var(--text-muted); text-decoration: none; cursor: pointer; }
+.service-page .breadcrumb a:hover { color: var(--teal-glow); }
+.service-page .breadcrumb .sep { opacity: 0.4; }
+.service-page .breadcrumb .current { color: var(--teal-soft); }
+
+/* MAIN */
+.service-page main { position: relative; z-index: 10; padding: 0 48px 80px; max-width: 1200px; margin: 0 auto; }
+
+/* HEADER */
+.service-page .page-header { padding: 8px 0 40px; border-bottom: 0.5px solid var(--border-dim); margin-bottom: 32px; display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+.service-page .page-tag { font-size: 11px; letter-spacing: 0.15em; color: var(--teal-glow); text-transform: uppercase; margin-bottom: 10px; opacity: 0.8; }
+.service-page .page-title { font-family: 'Playfair Display', serif; font-size: 34px; font-weight: 600; color: #e8f4f0; margin-bottom: 10px; }
+.service-page .page-desc { font-size: 14px; color: var(--text-muted); line-height: 1.7; max-width: 540px; }
+.service-page .header-cta { display: flex; gap: 10px; flex-shrink: 0; }
+.service-page .btn-outline { padding: 11px 22px; border-radius: 8px; border: 0.5px solid var(--border-soft); background: transparent; color: var(--teal-glow); font-size: 13px; font-family: 'Be Vietnam Pro', sans-serif; cursor: pointer; transition: all 0.2s; letter-spacing: 0.04em; }
+.service-page .btn-outline:hover { background: rgba(0, 229, 196, 0.06); }
+.service-page .btn-gold { padding: 11px 22px; border-radius: 8px; border: 0.5px solid var(--border-gold); background: rgba(201, 168, 76, 0.1); color: var(--gold); font-size: 13px; font-family: 'Be Vietnam Pro', sans-serif; cursor: pointer; transition: all 0.2s; letter-spacing: 0.04em; }
+.service-page .btn-gold:hover { background: rgba(201, 168, 76, 0.18); }
+.service-page .btn-outline:disabled, .service-page .btn-gold:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* NOTICE */
+.service-page .notice-banner { margin-bottom: 24px; padding: 14px 18px; border: 0.5px solid var(--border-gold); border-radius: 10px; color: var(--gold-bright); background: rgba(201, 168, 76, 0.06); font-size: 13px; }
+.service-page .error-banner { margin-bottom: 24px; padding: 14px 18px; border: 0.5px solid rgba(224, 92, 92, 0.35); border-radius: 10px; color: #ffb3b3; background: rgba(224, 92, 92, 0.08); font-size: 13px; }
+
+/* QUICK STATS */
+.service-page .quick-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 40px; }
+.service-page .stat-card { background: rgba(8, 13, 26, 0.55); border: 0.5px solid var(--border-dim); border-radius: 14px; padding: 20px 22px; display: flex; align-items: center; gap: 16px; transition: border-color 0.2s; cursor: default; }
+.service-page .stat-card:hover { border-color: var(--border-soft); }
+.service-page .stat-icon { width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+.service-page .stat-icon.teal { background: rgba(0, 229, 196, 0.08); border: 0.5px solid var(--border-dim); }
+.service-page .stat-icon.gold { background: rgba(201, 168, 76, 0.08); border: 0.5px solid var(--border-gold); }
+.service-page .stat-icon.blue { background: rgba(77, 166, 255, 0.08); border: 0.5px solid rgba(77, 166, 255, 0.2); }
+.service-page .stat-icon.amber { background: rgba(212, 133, 10, 0.08); border: 0.5px solid rgba(212, 133, 10, 0.25); }
+.service-page .stat-val { font-family: 'Playfair Display', serif; font-size: 26px; line-height: 1; margin-bottom: 3px; }
+.service-page .stat-val.c-teal { color: var(--teal-glow); }
+.service-page .stat-val.c-gold { color: var(--gold); }
+.service-page .stat-val.c-blue { color: var(--blue-glow); }
+.service-page .stat-val.c-amber { color: var(--amber); }
+.service-page .stat-lbl { font-size: 12px; color: var(--text-muted); }
+.service-page .stat-sub { font-size: 11px; margin-top: 3px; }
+.service-page .stat-sub.pending { color: var(--amber); }
+
+/* SECTION LABEL */
+.service-page .section-label { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--teal-soft); margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
+.service-page .section-label::after { content: ''; flex: 1; height: 0.5px; background: var(--border-dim); }
+.service-page .section-label a, .service-page .section-label button.linklike { font-size: 11px; color: var(--text-muted); text-decoration: none; letter-spacing: 0.04em; margin-left: auto; background: none; border: none; cursor: pointer; font-family: inherit; }
+.service-page .section-label a:hover, .service-page .section-label button.linklike:hover { color: var(--teal-glow); }
+
+/* ENTRY CARDS */
+.service-page .entry-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 48px; }
+.service-page .entry-card { border-radius: 18px; padding: 36px; position: relative; overflow: hidden; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; display: block; border: 0.5px solid; text-align: left; width: 100%; font-family: inherit; color: inherit; }
+.service-page .entry-card:hover { transform: translateY(-2px); }
+.service-page .entry-card.teal { border-color: var(--border-soft); background: linear-gradient(160deg, rgba(0, 229, 196, 0.05), rgba(8, 13, 26, 0.7)); }
+.service-page .entry-card.gold { border-color: var(--border-gold); background: linear-gradient(160deg, rgba(201, 168, 76, 0.06), rgba(8, 13, 26, 0.7)); }
+.service-page .entry-card-glow { position: absolute; width: 260px; height: 260px; border-radius: 50%; pointer-events: none; }
+.service-page .ec-badge { position: absolute; top: 24px; right: 28px; font-size: 11px; padding: 4px 12px; border-radius: 20px; letter-spacing: 0.04em; }
+.service-page .ec-badge.active { background: rgba(201, 168, 76, 0.12); color: var(--gold); border: 0.5px solid var(--border-gold); }
+.service-page .ec-tag { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; display: block; margin-bottom: 14px; }
+.service-page .ec-tag.teal { color: var(--teal-glow); }
+.service-page .ec-tag.gold { color: var(--gold); }
+.service-page .ec-icon { font-size: 34px; display: block; margin-bottom: 14px; }
+.service-page .ec-title { font-family: 'Playfair Display', serif; font-size: 22px; color: #e8f4f0; margin-bottom: 10px; }
+.service-page .ec-desc { font-size: 13px; color: var(--text-muted); line-height: 1.6; margin-bottom: 18px; max-width: 380px; }
+.service-page .ec-features { display: flex; flex-direction: column; gap: 8px; margin-bottom: 22px; }
+.service-page .ec-feature { font-size: 12px; color: var(--text-muted); padding-left: 16px; position: relative; }
+.service-page .ec-feature::before { content: '✦'; position: absolute; left: 0; font-size: 10px; }
+.service-page .ec-feature.teal::before { color: var(--teal-glow); }
+.service-page .ec-feature.gold::before { color: var(--gold); }
+.service-page .ec-btn { font-size: 13px; font-weight: 600; letter-spacing: 0.04em; }
+.service-page .ec-btn.teal { color: var(--teal-glow); }
+.service-page .ec-btn.gold { color: var(--gold); }
+
+/* CATALOGUE GRID */
+.service-page .catalogue-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; margin-bottom: 48px; }
+.service-page .cat-card { position: relative; overflow: hidden; border: 0.5px solid var(--border-dim); border-radius: 14px; background: rgba(8, 13, 26, 0.55); padding: 22px; cursor: pointer; transition: border-color 0.2s, transform 0.2s; display: flex; flex-direction: column; }
+.service-page .cat-card:hover { border-color: var(--border-soft); transform: translateY(-2px); }
+.service-page .cat-ribbon { position: absolute; top: 0; left: 0; right: 0; height: 3px; }
+.service-page .cat-card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.service-page .cat-icon-wrap { width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 22px; background: rgba(0, 229, 196, 0.06); border: 0.5px solid var(--border-dim); }
+.service-page .cat-price-badge { font-size: 11px; color: var(--gold); border: 0.5px solid var(--border-gold); border-radius: 20px; padding: 4px 12px; white-space: nowrap; }
+.service-page .cat-name { font-family: 'Playfair Display', serif; font-size: 17px; color: #e8f4f0; margin-bottom: 8px; }
+.service-page .cat-desc { font-size: 12px; color: var(--text-muted); line-height: 1.6; flex: 1; margin-bottom: 16px; }
+.service-page .cat-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+.service-page .cat-tag { font-size: 10px; color: var(--teal-soft); background: rgba(0, 229, 196, 0.06); border: 0.5px solid var(--border-dim); border-radius: 20px; padding: 3px 10px; }
+.service-page .cat-footer { display: flex; align-items: center; justify-content: space-between; padding-top: 14px; border-top: 0.5px solid var(--border-dim); }
+.service-page .cat-orders { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-muted); }
+.service-page .cat-action { border: none; background: none; color: var(--gold); font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; }
+
+/* PROMOTIONS */
+.service-page .promo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 48px; }
+.service-page .promo-card { border-radius: 14px; padding: 22px; border: 0.5px solid var(--border-gold); background: linear-gradient(135deg, rgba(80, 55, 10, 0.35), rgba(30, 20, 4, 0.4)); position: relative; overflow: hidden; }
+.service-page .promo-card.blue { border-color: rgba(77, 166, 255, 0.25); background: linear-gradient(135deg, rgba(20, 40, 80, 0.4), rgba(8, 20, 50, 0.4)); }
+.service-page .promo-card.teal { border-color: var(--border-soft); background: linear-gradient(135deg, rgba(0, 70, 60, 0.35), rgba(0, 30, 26, 0.4)); }
+.service-page .promo-label { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 10px; }
+.service-page .promo-label.gold { color: var(--gold); }
+.service-page .promo-label.blue { color: var(--blue-glow); }
+.service-page .promo-label.teal { color: var(--teal-glow); }
+.service-page .promo-title { font-family: 'Playfair Display', serif; font-size: 17px; color: #e8f4f0; margin-bottom: 8px; line-height: 1.35; }
+.service-page .promo-desc { font-size: 12px; color: var(--text-muted); line-height: 1.6; margin-bottom: 14px; }
+.service-page .promo-decor { position: absolute; font-size: 80px; opacity: 0.04; bottom: -10px; right: -10px; pointer-events: none; }
+
+/* SUPPORT BANNER */
+.service-page .support-banner { background: rgba(8, 13, 26, 0.6); border: 0.5px solid var(--border-dim); border-radius: 16px; padding: 28px 36px; display: flex; align-items: center; gap: 28px; flex-wrap: wrap; }
+.service-page .support-icon { font-size: 40px; flex-shrink: 0; opacity: 0.8; }
+.service-page .support-info { flex: 1; min-width: 220px; }
+.service-page .support-title { font-family: 'Playfair Display', serif; font-size: 18px; color: #e8f4f0; margin-bottom: 6px; }
+.service-page .support-desc { font-size: 13px; color: var(--text-muted); line-height: 1.6; }
+.service-page .support-actions { display: flex; gap: 10px; flex-shrink: 0; }
+
+/* TABS */
+.service-page .tab-bar { display: flex; gap: 4px; margin-bottom: 28px; background: rgba(8, 13, 26, 0.5); border: 0.5px solid var(--border-dim); border-radius: 10px; padding: 4px; width: fit-content; }
+.service-page .tab { padding: 8px 20px; border-radius: 7px; font-size: 13px; color: var(--text-muted); cursor: pointer; transition: all 0.2s; border: none; background: none; font-family: 'Be Vietnam Pro', sans-serif; }
+.service-page .tab.active { background: rgba(0, 229, 196, 0.1); border: 0.5px solid var(--border-soft); color: var(--teal-glow); }
+.service-page .tab:hover:not(.active) { color: var(--text-main); }
+
+/* ===== BOOKING TAB (fr06) ===== */
+.service-page .lot-banner { background: rgba(0, 229, 196, 0.05); border: 0.5px solid var(--border-soft); border-radius: 12px; padding: 20px 24px; display: flex; align-items: center; gap: 20px; margin-bottom: 28px; flex-wrap: wrap; }
+.service-page .lot-icon { width: 44px; height: 44px; border-radius: 8px; background: rgba(0, 229, 196, 0.08); border: 0.5px solid var(--border-soft); display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 20px; }
+.service-page .lot-info h3 { font-size: 15px; font-weight: 500; color: var(--text-main); margin-bottom: 4px; }
+.service-page .lot-info p { font-size: 13px; color: var(--text-muted); }
+.service-page .lot-select { margin-left: auto; }
+.service-page .lot-select select { background: rgba(4, 6,14, 0.8); border: 0.5px solid var(--border-soft); border-radius: 20px; padding: 8px 16px; color: var(--gold); font-size: 12px; font-family: 'Be Vietnam Pro', sans-serif; }
+
+.service-page .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; align-items: start; }
+.service-page .form-col { display: flex; flex-direction: column; gap: 24px; }
+.service-page .form-section { background: rgba(8, 13, 26, 0.6); border: 0.5px solid var(--border-dim); border-radius: 16px; padding: 28px; }
+
+.service-page .service-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.service-page .service-card { border: 0.5px solid var(--border-dim); border-radius: 10px; padding: 16px; cursor: pointer; transition: all 0.2s; position: relative; background: transparent; }
+.service-page .service-card:hover { border-color: var(--border-soft); background: rgba(0, 229, 196, 0.03); }
+.service-page .service-card.selected { border-color: var(--teal-glow); background: rgba(0, 229, 196, 0.06); }
+.service-page .service-card.selected::after { content: '✓'; position: absolute; top: 10px; right: 12px; font-size: 12px; color: var(--teal-glow); }
+.service-page .service-icon { font-size: 22px; margin-bottom: 10px; }
+.service-page .service-name { font-size: 13px; font-weight: 500; color: var(--text-main); margin-bottom: 4px; }
+.service-page .service-price { font-size: 12px; color: var(--gold); }
+
+.service-page .field { margin-bottom: 20px; }
+.service-page .field:last-child { margin-bottom: 0; }
+.service-page .field label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 8px; letter-spacing: 0.03em; }
+.service-page .field input, .service-page .field select, .service-page .field textarea {
+  width: 100%; background: rgba(4, 6,14, 0.8); border: 0.5px solid var(--border-dim); border-radius: 8px;
+  padding: 11px 14px; font-size: 14px; color: var(--text-main); font-family: 'Be Vietnam Pro', sans-serif;
+  outline: none; transition: border-color 0.2s;
+}
+.service-page .field input:focus, .service-page .field select:focus, .service-page .field textarea:focus { border-color: var(--teal-soft); }
+.service-page .field textarea { resize: vertical; min-height: 90px; line-height: 1.6; }
+.service-page .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.service-page .field-hint { font-size: 11px; color: var(--text-muted); margin-top: 6px; opacity: 0.75; }
+
+.service-page .summary-card { background: rgba(4, 6,14, 0.9); border: 0.5px solid var(--border-soft); border-radius: 16px; padding: 28px; position: sticky; top: 20px; }
+.service-page .summary-title { font-family: 'Playfair Display', serif; font-size: 18px; color: var(--gold); margin-bottom: 20px; }
+.service-page .summary-item { display: flex; justify-content: space-between; align-items: flex-start; padding: 12px 0; border-bottom: 0.5px solid var(--border-dim); gap: 12px; }
+.service-page .summary-item:last-of-type { border: none; }
+.service-page .summary-item-name { font-size: 13px; color: var(--text-muted); flex-shrink: 0; }
+.service-page .summary-item-val { font-size: 13px; color: var(--text-main); text-align: right; }
+.service-page .summary-total { display: flex; justify-content: space-between; align-items: center; padding-top: 18px; border-top: 0.5px solid var(--border-soft); margin-top: 4px; }
+.service-page .summary-total-label { font-size: 14px; color: var(--text-main); }
+.service-page .summary-total-price { font-family: 'Playfair Display', serif; font-size: 22px; color: var(--gold); }
+.service-page .summary-note { font-size: 11px; color: var(--text-muted); margin-top: 16px; line-height: 1.6; padding: 12px; background: rgba(0, 229, 196, 0.03); border-radius: 8px; border-left: 2px solid var(--teal-dim); }
+.service-page .form-error { margin-top: 14px; padding: 10px 12px; border: 0.5px solid rgba(224, 92, 92, 0.35); border-radius: 8px; color: #ffb3b3; background: rgba(224, 92, 92, 0.08); font-size: 12px; }
+.service-page .form-success { margin-top: 14px; padding: 10px 12px; border: 0.5px solid rgba(0, 200, 160, 0.35); border-radius: 8px; color: #9df0dd; background: rgba(0, 200, 160, 0.08); font-size: 12px; }
+
+.service-page .action-bar { margin-top: 20px; }
+.service-page .btn-primary { width: 100%; background: linear-gradient(135deg, var(--teal-dim), rgba(0, 229, 196, 0.15)); border: 0.5px solid var(--teal-glow); border-radius: 8px; padding: 14px; color: var(--teal-glow); font-size: 14px; font-family: 'Be Vietnam Pro', sans-serif; font-weight: 500; cursor: pointer; letter-spacing: 0.04em; transition: all 0.2s; }
+.service-page .btn-primary:hover:not(:disabled) { background: rgba(0, 229, 196, 0.15); }
+.service-page .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ===== TRACKING TAB (fr07) ===== */
+.service-page .filter-bar { display: flex; gap: 10px; margin-bottom: 24px; align-items: center; flex-wrap: wrap; }
+.service-page .filter-chip { padding: 8px 16px; border-radius: 20px; border: 0.5px solid var(--border-dim); font-size: 13px; color: var(--text-muted); cursor: pointer; transition: all 0.2s; background: transparent; }
+.service-page .filter-chip:hover { border-color: var(--border-soft); color: var(--text-main); }
+.service-page .filter-chip.active { border-color: var(--teal-glow); color: var(--teal-glow); background: rgba(0, 229, 196, 0.06); }
+.service-page .search-box { margin-left: auto; display: flex; align-items: center; gap: 8px; background: rgba(8, 13, 26, 0.6); border: 0.5px solid var(--border-dim); border-radius: 8px; padding: 8px 14px; }
+.service-page .search-box input { background: transparent; border: none; outline: none; color: var(--text-main); font-size: 13px; font-family: 'Be Vietnam Pro', sans-serif; width: 180px; }
+.service-page .search-box input::placeholder { color: var(--text-muted); }
+
+.service-page .services-list { display: flex; flex-direction: column; gap: 16px; }
+.service-page .service-item { background: rgba(8, 13, 26, 0.5); border: 0.5px solid var(--border-dim); border-radius: 14px; padding: 24px; display: grid; grid-template-columns: auto 1fr auto; gap: 20px; align-items: start; transition: border-color 0.2s; cursor: pointer; }
+.service-page .service-item:hover { border-color: var(--border-soft); }
+.service-page .service-item.status-done { border-left: 2px solid var(--teal-glow); }
+.service-page .service-item.status-progress { border-left: 2px solid var(--amber); }
+.service-page .service-item.status-pending { border-left: 2px solid rgba(122, 154, 144, 0.4); }
+.service-page .service-item.status-cancelled { border-left: 2px solid rgba(180, 50, 50, 0.4); opacity: 0.65; }
+
+.service-page .s-icon { width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+.service-page .s-icon.done { background: rgba(0, 229, 196, 0.08); border: 0.5px solid rgba(0, 229, 196, 0.2); }
+.service-page .s-icon.progress { background: rgba(212, 133, 10, 0.08); border: 0.5px solid rgba(212, 133, 10, 0.2); }
+.service-page .s-icon.pending { background: rgba(122, 154, 144, 0.08); border: 0.5px solid var(--border-dim); }
+.service-page .s-icon.cancelled { background: rgba(180, 50, 50, 0.06); border: 0.5px solid rgba(180, 50, 50, 0.15); }
+
+.service-page .s-name { font-size: 15px; font-weight: 500; color: var(--text-main); margin-bottom: 6px; }
+.service-page .s-meta { display: flex; flex-wrap: wrap; gap: 16px; font-size: 12px; color: var(--text-muted); margin-bottom: 12px; }
+
+.service-page .progress-track { display: flex; align-items: center; gap: 0; margin-top: 4px; }
+.service-page .p-step { display: flex; flex-direction: column; align-items: center; gap: 5px; flex: 1; }
+.service-page .p-step-dot { width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9px; }
+.service-page .p-step-dot.done-dot { background: rgba(0, 229, 196, 0.15); border: 1.5px solid var(--teal-glow); color: var(--teal-glow); }
+.service-page .p-step-dot.active-dot { background: rgba(212, 133, 10, 0.15); border: 1.5px solid var(--amber); color: var(--amber); animation: svc-pulse-dot 1.5s ease-in-out infinite; }
+@keyframes svc-pulse-dot { 0%, 100% { box-shadow: 0 0 0 0 rgba(212, 133, 10, 0.4); } 50% { box-shadow: 0 0 0 4px rgba(212, 133, 10, 0); } }
+.service-page .p-step-dot.pending-dot { background: transparent; border: 1px solid var(--border-dim); color: var(--text-muted); }
+.service-page .p-step-dot.cancelled-dot { background: rgba(180, 50, 50, 0.1); border: 1.5px solid rgba(180, 50, 50, 0.4); color: #c05050; }
+.service-page .p-step-label { font-size: 10px; color: var(--text-muted); text-align: center; white-space: nowrap; }
+.service-page .p-line { flex: 1; height: 1px; background: var(--border-dim); margin: 0 -2px; margin-bottom: 18px; }
+.service-page .p-line.filled { background: var(--teal-dim); }
+
+.service-page .s-right { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; flex-shrink: 0; }
+.service-page .status-badge { padding: 5px 12px; border-radius: 20px; font-size: 11px; font-weight: 500; letter-spacing: 0.04em; white-space: nowrap; }
+.service-page .status-badge.done { background: rgba(0, 229, 196, 0.1); color: var(--teal-glow); border: 0.5px solid rgba(0, 229, 196, 0.25); }
+.service-page .status-badge.progress { background: rgba(212, 133, 10, 0.1); color: var(--amber); border: 0.5px solid rgba(212, 133, 10, 0.3); }
+.service-page .status-badge.pending { background: rgba(122, 154, 144, 0.08); color: var(--text-muted); border: 0.5px solid var(--border-dim); }
+.service-page .status-badge.cancelled { background: rgba(180, 50, 50, 0.07); color: #c05050; border: 0.5px solid rgba(180, 50, 50, 0.2); }
+.service-page .s-price { font-family: 'Playfair Display', serif; font-size: 16px; color: var(--gold); }
+.service-page .s-action { font-size: 12px; color: var(--teal-soft); border: 0.5px solid var(--border-dim); padding: 6px 14px; border-radius: 6px; transition: all 0.2s; cursor: pointer; background: transparent; font-family: inherit; }
+.service-page .s-action:hover { border-color: var(--border-soft); color: var(--teal-glow); }
+
+.service-page .detail-panel { grid-column: 1 / -1; border-top: 0.5px solid var(--border-dim); padding-top: 20px; margin-top: 4px; display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.service-page .detail-block h4 { font-size: 12px; letter-spacing: 0.1em; color: var(--teal-soft); text-transform: uppercase; margin-bottom: 14px; }
+.service-page .detail-row { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 0.5px solid rgba(0, 229, 196, 0.06); font-size: 13px; }
+.service-page .detail-row:last-child { border: none; }
+.service-page .detail-row .k { color: var(--text-muted); flex-shrink: 0; }
+.service-page .detail-row .v { color: var(--text-main); text-align: right; }
+.service-page .cancel-btn { width: 100%; padding: 10px; border-radius: 8px; border: 0.5px solid rgba(180, 50, 50, 0.3); background: rgba(180, 50, 50, 0.05); color: #c05050; font-size: 13px; font-family: 'Be Vietnam Pro', sans-serif; cursor: pointer; margin-top: 10px; transition: all 0.2s; }
+.service-page .cancel-btn:hover { background: rgba(180, 50, 50, 0.1); }
+.service-page .cancel-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.service-page .pagination { display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 32px; }
+.service-page .page-btn { min-width: 36px; height: 36px; padding: 0 8px; border-radius: 8px; display: flex; align-items: center; justify-content: center; border: 0.5px solid var(--border-dim); font-size: 14px; color: var(--text-muted); cursor: pointer; transition: all 0.2s; background: transparent; font-family: inherit; }
+.service-page .page-btn.active, .service-page .page-btn:hover:not(:disabled) { border-color: var(--teal-soft); color: var(--teal-glow); }
+.service-page .page-btn.active { background: rgba(0, 229, 196, 0.06); }
+.service-page .page-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* EMPTY STATE */
+.service-page .empty-state { text-align: center; padding: 60px 0; color: var(--text-muted); border: 0.5px solid var(--border-dim); border-radius: 14px; background: rgba(8, 13, 26, 0.4); }
+.service-page .empty-state .empty-icon { font-size: 40px; margin-bottom: 16px; opacity: 0.4; }
+.service-page .empty-state p { font-size: 14px; line-height: 1.8; }
+
+/* RESPONSIVE */
+@media (max-width: 900px) {
+  .service-page main { padding: 0 20px 60px; }
+  .service-page .breadcrumb { padding: 16px 20px; }
+  .service-page .quick-stats { grid-template-columns: repeat(2, 1fr); }
+  .service-page .entry-cards { grid-template-columns: 1fr; }
+  .service-page .catalogue-grid { grid-template-columns: 1fr; }
+  .service-page .form-grid { grid-template-columns: 1fr; }
+  .service-page .service-grid { grid-template-columns: repeat(2, 1fr); }
+  .service-page .service-item { grid-template-columns: auto 1fr; }
+  .service-page .s-right { grid-column: 1 / -1; flex-direction: row; align-items: center; justify-content: space-between; }
+  .service-page .detail-panel { grid-template-columns: 1fr; }
+}

@@ -18,6 +18,7 @@ import ProfilePage from "@/pages/customer/profile/ProfilePage";
 import ServicePage from "@/pages/customer/service/ServicePage";
 import MyLotsPage from "@/pages/customer/my-lots/MyLotsPage";
 import NotificationPage from "@/pages/customer/notification/NotificationPage";
+import RemindersPage from "@/pages/customer/reminder/RemindersPage";
 import AvailabilityPage from "@/pages/customer/availability/AvailabilityPage";
 import AppointmentsPage from "@/pages/customer/appointments/AppointmentsPage";
 
@@ -72,6 +73,7 @@ const router = createBrowserRouter([
               { path: ROUTES.PAYMENT, element: <PaymentPage /> },
               { path: ROUTES.MY_LOTS, element: <MyLotsPage /> },
               { path: ROUTES.NOTIFICATION, element: <NotificationPage /> },
+              { path: ROUTES.REMINDERS, element: <RemindersPage /> },
             ],
           },
         ],

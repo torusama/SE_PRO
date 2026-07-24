@@ -16,6 +16,7 @@ export const ROUTES = {
   SERVICE_BOOK: '/dich-vu/dat/:lotId',
   PROFILE:      '/ho-so',
   NOTIFICATION: '/thong-bao',
+  REMINDERS:    '/nhac-lich',
   AVAILABILITY: '/lich-ranh',
   APPOINTMENTS: '/lich-hen',
 

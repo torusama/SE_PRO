@@ -7,7 +7,7 @@
 // liên hệ khẩn cấp, ghi chú đặc biệt, tuỳ chọn nhận thông báo, đổi email/SĐT (cần OTP),
 // người được uỷ quyền, 2FA/Authenticator, lịch sử phiên đăng nhập, chuyển nhượng/thừa kế.
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ROUTES } from "@/constants/routes";
 import { API_BASE_URL, api } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
@@ -209,9 +209,11 @@ export default function ProfilePage() {
   const setProfileComplete = useAuthStore((s) => s.setProfileComplete);
   const storeLogout = useAuthStore((s) => s.logout);
   const navigate = useNavigate();
+  const location = useLocation();
   const starsRef = useRef<HTMLDivElement>(null);
 
-  const [activeTab, setActiveTab] = useState<TabId>("info");
+  const initialTab = (location.state as { tab?: TabId } | null)?.tab;
+  const [activeTab, setActiveTab] = useState<TabId>(initialTab ?? "info");
   const [activeLot, setActiveLot] = useState<number | null>(null);
   const [openModal, setOpenModal] = useState<ModalId | null>(null);
 
