@@ -16,14 +16,22 @@ Current order:
 2. `003_profile_extended_fields.sql`
 3. `004_automatic_contracts.sql`
 4. `005_contract_signatures_and_pdf.sql`
-5. `006_change_usage_right_foundation.sql`
-6. `007_plot_lock_and_availability.sql`
-7. `008_schedule_appointments.sql`
-8. `009_email_otp_verification.sql`
-9. `010_admin_direct_plot_transfers.sql`
+5. `005_password_security.sql`
+6. `006_change_usage_right_foundation.sql`
+7. `006_ward_address.sql`
+8. `007_plot_lock_and_availability.sql`
+9. `007_user_sessions.sql`
+10. `008_authorized_persons.sql`
+11. `008_schedule_appointments.sql`
+12. `009_email_otp_verification.sql`
+13. `009_phone_otp_verification.sql`
+14. `010_admin_direct_plot_transfers.sql`
+15. `011_cemetery_zones_e_to_h.sql`
+16. `012_service_order_management.sql`
 
-`008_schedule_appointments.sql` is retained as an idempotent historical
-follow-up to `007`; both use `IF NOT EXISTS` for shared schedule objects.
+Các tiền tố `005` đến `009` bị trùng do lịch sử dự án. Danh sách trên là thứ
+tự được kiểm soát; không chạy migration bằng glob. Các migration mới có
+`IF NOT EXISTS` ở những đối tượng dùng chung khi phù hợp.
 
 There is currently no automatic migration runner. A migration file being
 present does not mean it has been applied to a database.

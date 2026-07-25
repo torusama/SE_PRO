@@ -16,12 +16,21 @@ async function bootstrap() {
   // Ensure local upload dirs exist (avatars, documents, etc.)
   const uploadsDir = join(process.cwd(), 'uploads', 'avatars');
   fs.mkdirSync(uploadsDir, { recursive: true });
-  fs.mkdirSync(join(process.cwd(), 'uploads', 'contracts'), { recursive: true });
-  fs.mkdirSync(join(process.cwd(), 'uploads', 'transfers'), { recursive: true });
+  fs.mkdirSync(join(process.cwd(), 'uploads', 'contracts'), {
+    recursive: true,
+  });
+  fs.mkdirSync(join(process.cwd(), 'uploads', 'transfers'), {
+    recursive: true,
+  });
+  fs.mkdirSync(join(process.cwd(), 'uploads', 'service-completions'), {
+    recursive: true,
+  });
 
   app.setGlobalPrefix('api');
   // Static files are served OUTSIDE the /api prefix, e.g. http://localhost:3001/uploads/avatars/xxx.jpg
-  app.useStaticAssets(join(process.cwd(), 'uploads', 'avatars'), { prefix: '/uploads/avatars' });
+  app.useStaticAssets(join(process.cwd(), 'uploads', 'avatars'), {
+    prefix: '/uploads/avatars',
+  });
   app.enableCors({
     origin: frontendUrl.split(',').map((url) => url.trim()),
     credentials: true,

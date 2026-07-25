@@ -1,500 +1,589 @@
-// src/pages/admin/service-management/ServiceManagementPage.tsx
-import { useMemo, useState } from "react";
+import {
+  CalendarDays,
+  CheckCircle2,
+  ChevronRight,
+  ClipboardList,
+  Clock3,
+  Image as ImageIcon,
+  LoaderCircle,
+  Search,
+  UserRound,
+  Wrench,
+  X,
+} from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { api } from '@/lib/api'
+import './ServiceManagementPage.css'
 
-type ServiceCategory = "Lau dọn" | "Trồng hoa" | "Cúng giỗ" | "Chụp ảnh";
-type ServiceStatus = "awaiting" | "inProgress" | "done";
+type OrderStatus =
+  | 'submitted'
+  | 'pending_confirm'
+  | 'confirmed'
+  | 'in_progress'
+  | 'completed'
+  | 'cancelled'
 
-interface ServiceOrder {
-  id: string;
-  category: ServiceCategory;
-  icon: string;
-  customer: string;
-  lot: string;
-  date: string;
-  staff: string;
-  status: ServiceStatus;
+interface ApiResponse<T> {
+  success: boolean
+  message?: string
+  data: T
 }
 
-const STATUS_META: Record<
-  ServiceStatus,
-  { label: string; color: string; bg: string }
-> = {
-  awaiting: {
-    label: "Chờ xác nhận",
-    color: "#F5A623",
-    bg: "rgba(245,166,35,0.16)",
-  },
-  inProgress: {
-    label: "Đang thực hiện",
-    color: "#4A9EFF",
-    bg: "rgba(74,158,255,0.14)",
-  },
-  done: { label: "Hoàn thành", color: "#00C8A0", bg: "rgba(0,200,160,0.14)" },
-};
+interface Assignee {
+  id: number
+  name: string
+}
 
-const INITIAL_ORDERS: ServiceOrder[] = [
-  {
-    id: "DV-2025-0156",
-    category: "Lau dọn",
-    icon: "🧹",
-    customer: "Lê Thị Hương",
-    lot: "B-05",
-    date: "02/07/2025",
-    staff: "—",
-    status: "awaiting",
-  },
-  {
-    id: "DV-2025-0155",
-    category: "Trồng hoa",
-    icon: "🌸",
-    customer: "Nguyễn Bích Chi",
-    lot: "A-31",
-    date: "30/06/2025",
-    staff: "Minh Tuấn",
-    status: "inProgress",
-  },
-  {
-    id: "DV-2025-0154",
-    category: "Chụp ảnh",
-    icon: "📸",
-    customer: "Võ Thanh Hải",
-    lot: "B-22",
-    date: "29/06/2025",
-    staff: "Huy Phát",
-    status: "inProgress",
-  },
-  {
-    id: "DV-2025-0150",
-    category: "Cúng giỗ",
-    icon: "🕯️",
-    customer: "Phạm Văn Tuấn",
-    lot: "C-18",
-    date: "28/06/2025",
-    staff: "—",
-    status: "awaiting",
-  },
-  {
-    id: "DV-2025-0148",
-    category: "Lau dọn",
-    icon: "🧹",
-    customer: "Trần Văn Long",
-    lot: "D-07",
-    date: "25/06/2025",
-    staff: "Minh Tuấn",
-    status: "done",
-  },
-  {
-    id: "DV-2025-0143",
-    category: "Trồng hoa",
-    icon: "🌸",
-    customer: "Nguyễn Văn Thành",
-    lot: "A-12",
-    date: "22/06/2025",
-    staff: "Huy Phát",
-    status: "done",
-  },
-];
+interface OrderHistory {
+  id: number
+  action: string
+  previousStatus?: OrderStatus | null
+  newStatus?: OrderStatus | null
+  note?: string | null
+  createdAt: string
+  changedByName?: string | null
+  assignedToName?: string | null
+}
 
-const CATEGORIES: (ServiceCategory | "Tất cả")[] = [
-  "Tất cả",
-  "Lau dọn",
-  "Trồng hoa",
-  "Cúng giỗ",
-  "Chụp ảnh",
-];
-const STAFF_POOL = ["Minh Tuấn", "Huy Phát", "Lan Anh", "Thu Trang"];
+interface ServiceOrder {
+  id: number
+  status: OrderStatus
+  amount: number
+  requestedDate?: string | null
+  scheduledDate?: string | null
+  createdAt: string
+  updatedAt: string
+  serviceName: string
+  category: string
+  plotCode?: string | null
+  customerName: string
+  customerEmail?: string
+  customerPhone?: string | null
+  note?: string | null
+  adminNote?: string | null
+  assignedTo?: number | null
+  assignedToName?: string | null
+  adminName?: string | null
+  completionNote?: string | null
+  completionImages?: string[] | null
+  completedAt?: string | null
+  history?: OrderHistory[]
+}
 
-const panelStyle: React.CSSProperties = {
-  background: "var(--color-bg-card)",
-  border: "1px solid var(--color-border)",
-  borderRadius: 12,
-};
+const STATUS_META: Record<OrderStatus, { label: string; tone: string }> = {
+  submitted: { label: 'Mới gửi', tone: 'amber' },
+  pending_confirm: { label: 'Chờ xác nhận', tone: 'amber' },
+  confirmed: { label: 'Đã xác nhận', tone: 'teal' },
+  in_progress: { label: 'Đang thực hiện', tone: 'blue' },
+  completed: { label: 'Hoàn thành', tone: 'green' },
+  cancelled: { label: 'Đã huỷ', tone: 'red' },
+}
 
-const inputStyle: React.CSSProperties = {
-  background: "var(--color-bg-secondary)",
-  border: "1px solid var(--color-border)",
-  color: "var(--color-text-primary)",
-  borderRadius: 7,
-  padding: "7px 10px",
-  fontSize: 12,
-};
+const NEXT_STATUSES: Record<OrderStatus, OrderStatus[]> = {
+  submitted: ['submitted', 'pending_confirm', 'confirmed', 'cancelled'],
+  pending_confirm: ['pending_confirm', 'confirmed', 'cancelled'],
+  confirmed: ['confirmed', 'in_progress', 'cancelled'],
+  in_progress: ['in_progress', 'cancelled'],
+  completed: ['completed'],
+  cancelled: ['cancelled'],
+}
+
+const STATUS_FILTERS: Array<{ value: 'all' | OrderStatus; label: string }> = [
+  { value: 'all', label: 'Tất cả' },
+  { value: 'submitted', label: 'Mới gửi' },
+  { value: 'confirmed', label: 'Đã xác nhận' },
+  { value: 'in_progress', label: 'Đang thực hiện' },
+  { value: 'completed', label: 'Hoàn thành' },
+  { value: 'cancelled', label: 'Đã huỷ' },
+]
+
+const money = new Intl.NumberFormat('vi-VN', {
+  style: 'currency',
+  currency: 'VND',
+  maximumFractionDigits: 0,
+})
+
+function formatDate(value?: string | null, withTime = false) {
+  if (!value) return '—'
+  return new Intl.DateTimeFormat('vi-VN', withTime
+    ? { dateStyle: 'medium', timeStyle: 'short' }
+    : { dateStyle: 'medium' }).format(new Date(value))
+}
+
+function orderCode(id: number) {
+  return `DV-${String(id).padStart(5, '0')}`
+}
+
+function getErrorMessage(error: unknown) {
+  if (typeof error === 'object' && error !== null && 'response' in error) {
+    const response = (error as { response?: { data?: { message?: string } } }).response
+    if (response?.data?.message) return response.data.message
+  }
+  return 'Không thể thực hiện yêu cầu. Vui lòng thử lại.'
+}
 
 export default function ServiceManagementPage() {
-  const [orders, setOrders] = useState(INITIAL_ORDERS);
-  const [search, setSearch] = useState("");
-  const [category, setCategory] =
-    useState<(typeof CATEGORIES)[number]>("Tất cả");
+  const [orders, setOrders] = useState<ServiceOrder[]>([])
+  const [assignees, setAssignees] = useState<Assignee[]>([])
+  const [selected, setSelected] = useState<ServiceOrder | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'all' | OrderStatus>('all')
 
-  const filtered = useMemo(
-    () =>
-      orders.filter(
-        (o) =>
-          (category === "Tất cả" || o.category === category) &&
-          (!search.trim() ||
-            o.id.toLowerCase().includes(search.trim().toLowerCase()) ||
-            o.customer.toLowerCase().includes(search.trim().toLowerCase())),
-      ),
-    [orders, search, category],
-  );
+  async function loadOrders(silent = false) {
+    if (!silent) setLoading(true)
+    setError('')
+    try {
+      const [ordersResponse, assigneesResponse] = await Promise.all([
+        api.get<ApiResponse<ServiceOrder[]>>('/admin/service-orders'),
+        api.get<ApiResponse<Assignee[]>>('/admin/service-order-assignees'),
+      ])
+      setOrders(ordersResponse.data.data ?? [])
+      setAssignees(assigneesResponse.data.data ?? [])
+    } catch (requestError) {
+      setError(getErrorMessage(requestError))
+    } finally {
+      setLoading(false)
+    }
+  }
 
-  const totalThisMonth = orders.length + 32;
-  const awaiting = orders.filter((o) => o.status === "awaiting").length;
-  const inProgress = orders.filter((o) => o.status === "inProgress").length;
-  const done = orders.filter((o) => o.status === "done").length;
+  useEffect(() => {
+    // Nạp dữ liệu từ API khi route admin được mở.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadOrders()
+  }, [])
 
-  function acceptOrder(id: string) {
-    const nextStaff = STAFF_POOL[Math.floor(Math.random() * STAFF_POOL.length)];
-    setOrders((prev) =>
-      prev.map((o) =>
-        o.id === id ? { ...o, status: "inProgress", staff: nextStaff } : o,
-      ),
-    );
-    // TODO: gọi api.patch(`/admin/services/${id}/accept`, { staff: nextStaff })
+  async function openDetail(orderId: number) {
+    setDetailLoading(true)
+    setError('')
+    try {
+      const response = await api.get<ApiResponse<ServiceOrder>>(`/admin/service-orders/${orderId}`)
+      setSelected(response.data.data)
+    } catch (requestError) {
+      setError(getErrorMessage(requestError))
+    } finally {
+      setDetailLoading(false)
+    }
+  }
+
+  const filtered = useMemo(() => {
+    const query = search.trim().toLowerCase()
+    return orders.filter((order) => {
+      const statusMatches =
+        statusFilter === 'all' ||
+        order.status === statusFilter ||
+        (statusFilter === 'submitted' && order.status === 'pending_confirm')
+      const searchMatches =
+        !query ||
+        orderCode(order.id).toLowerCase().includes(query) ||
+        order.serviceName.toLowerCase().includes(query) ||
+        order.customerName.toLowerCase().includes(query) ||
+        order.plotCode?.toLowerCase().includes(query)
+      return statusMatches && searchMatches
+    })
+  }, [orders, search, statusFilter])
+
+  const stats = useMemo(() => ({
+    total: orders.length,
+    waiting: orders.filter((order) => ['submitted', 'pending_confirm'].includes(order.status)).length,
+    processing: orders.filter((order) => ['confirmed', 'in_progress'].includes(order.status)).length,
+    completed: orders.filter((order) => order.status === 'completed').length,
+  }), [orders])
+
+  async function refreshSelected(message: string) {
+    if (!selected) return
+    await Promise.all([loadOrders(true), openDetail(selected.id)])
+    setNotice(message)
+    window.setTimeout(() => setNotice(''), 3500)
   }
 
   return (
-    <div style={{ display: "grid", gap: 18 }}>
-      <header
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          flexWrap: "wrap",
-          gap: 12,
-        }}
-      >
+    <div className="service-admin">
+      <header className="service-admin__header">
         <div>
-          <h1
-            style={{
-              margin: 0,
-              fontSize: 24,
-              color: "var(--color-text-primary)",
-            }}
-          >
-            Quản lý dịch vụ
-          </h1>
-          <p
-            style={{
-              margin: "4px 0 0",
-              color: "var(--color-text-secondary)",
-              fontSize: 13,
-            }}
-          >
-            Xử lý đơn dịch vụ &amp; lịch thực hiện
-          </p>
+          <p className="service-admin__eyebrow">Vận hành dịch vụ</p>
+          <h1>Quản lý đơn dịch vụ</h1>
+          <p>Theo dõi, phân công và lưu lại toàn bộ quá trình phục vụ khách hàng.</p>
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <span
-            style={{
-              background: "rgba(245,166,35,0.16)",
-              color: "#F5A623",
-              borderRadius: 20,
-              padding: "4px 10px",
-              fontSize: 12,
-              fontWeight: 600,
-            }}
-          >
-            {awaiting} chờ xác nhận
-          </span>
-          <button
-            style={{
-              background: "var(--color-accent-teal)",
-              color: "#ffffff",
-              fontWeight: 600,
-              border: "none",
-              borderRadius: 7,
-              padding: "9px 16px",
-              fontSize: 13,
-              cursor: "pointer",
-            }}
-          >
-            + Thêm dịch vụ
-          </button>
-        </div>
+        <button className="service-admin__refresh" onClick={() => void loadOrders()} disabled={loading}>
+          {loading ? <LoaderCircle className="spin" size={17} /> : <ClipboardList size={17} />}
+          Làm mới danh sách
+        </button>
       </header>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
-          gap: 14,
-        }}
-      >
-        <div
-          style={{
-            ...panelStyle,
-            padding: "14px 16px",
-            display: "flex",
-            gap: 10,
-            alignItems: "center",
-          }}
-        >
-          <div style={{ fontSize: 20 }}>🛠️</div>
-          <div>
-            <div
-              style={{
-                fontSize: 18,
-                fontWeight: 700,
-                color: "var(--color-text-primary)",
-              }}
-            >
-              {totalThisMonth}
-            </div>
-            <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
-              Tổng đơn tháng này
-            </div>
-          </div>
-        </div>
-        <div
-          style={{
-            ...panelStyle,
-            padding: "14px 16px",
-            display: "flex",
-            gap: 10,
-            alignItems: "center",
-          }}
-        >
-          <div style={{ fontSize: 20 }}>⏳</div>
-          <div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: "#F5A623" }}>
-              {awaiting}
-            </div>
-            <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
-              Chờ xác nhận
-            </div>
-          </div>
-        </div>
-        <div
-          style={{
-            ...panelStyle,
-            padding: "14px 16px",
-            display: "flex",
-            gap: 10,
-            alignItems: "center",
-          }}
-        >
-          <div style={{ fontSize: 20 }}>🔧</div>
-          <div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: "#4A9EFF" }}>
-              {inProgress}
-            </div>
-            <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
-              Đang thực hiện
-            </div>
-          </div>
-        </div>
-        <div
-          style={{
-            ...panelStyle,
-            padding: "14px 16px",
-            display: "flex",
-            gap: 10,
-            alignItems: "center",
-          }}
-        >
-          <div style={{ fontSize: 20 }}>✅</div>
-          <div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: "#00C8A0" }}>
-              {done}
-            </div>
-            <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
-              Hoàn thành
-            </div>
-          </div>
-        </div>
-      </div>
+      {notice && <div className="service-alert service-alert--success">{notice}</div>}
+      {error && <div className="service-alert service-alert--error">{error}</div>}
 
-      <div
-        style={{
-          display: "flex",
-          gap: 10,
-          alignItems: "center",
-          flexWrap: "wrap",
-        }}
-      >
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="🔍 Tìm đơn dịch vụ..."
-          style={{ ...inputStyle, minWidth: 220 }}
-        />
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {CATEGORIES.map((c) => (
-            <button
-              key={c}
-              onClick={() => setCategory(c)}
-              style={{
-                border: "1px solid var(--color-border)",
-                background:
-                  category === c ? "rgba(0,200,160,0.14)" : "transparent",
-                color:
-                  category === c
-                    ? "var(--color-accent-teal)"
-                    : "var(--color-text-secondary)",
-                fontWeight: category === c ? 600 : 400,
-                borderRadius: 7,
-                padding: "6px 12px",
-                fontSize: 12,
-                cursor: "pointer",
-              }}
-            >
-              {c}
-            </button>
-          ))}
-        </div>
-      </div>
+      <section className="service-stats" aria-label="Tổng quan đơn dịch vụ">
+        <Stat icon={<ClipboardList />} label="Tổng đơn" value={stats.total} tone="teal" />
+        <Stat icon={<Clock3 />} label="Chờ xác nhận" value={stats.waiting} tone="amber" />
+        <Stat icon={<Wrench />} label="Đang xử lý" value={stats.processing} tone="blue" />
+        <Stat icon={<CheckCircle2 />} label="Đã hoàn thành" value={stats.completed} tone="green" />
+      </section>
 
-      <div style={{ ...panelStyle, overflow: "hidden" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              {[
-                "Mã đơn",
-                "Dịch vụ",
-                "Khách hàng",
-                "Lô đất",
-                "Ngày thực hiện",
-                "Nhân viên",
-                "Trạng thái",
-                "",
-              ].map((h) => (
-                <th
-                  key={h}
-                  style={{
-                    padding: "10px 16px",
-                    fontSize: 11,
-                    color: "var(--color-text-muted)",
-                    textAlign: "left",
-                    borderBottom: "1px solid var(--color-border)",
-                  }}
-                >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={8}
-                  style={{
-                    padding: 24,
-                    textAlign: "center",
-                    color: "var(--color-text-secondary)",
-                  }}
-                >
-                  Không có đơn dịch vụ nào khớp bộ lọc.
-                </td>
-              </tr>
-            ) : (
-              filtered.map((o) => (
-                <tr
-                  key={o.id}
-                  style={{ borderBottom: "1px solid var(--color-border)" }}
-                >
-                  <td
-                    style={{
-                      padding: "12px 16px",
-                      color: "var(--color-accent-teal)",
-                      fontWeight: 600,
-                    }}
-                  >
-                    {o.id}
-                  </td>
-                  <td
-                    style={{
-                      padding: "12px 16px",
-                      color: "var(--color-text-primary)",
-                    }}
-                  >
-                    {o.icon} {o.category}
-                  </td>
-                  <td
-                    style={{
-                      padding: "12px 16px",
-                      color: "var(--color-text-secondary)",
-                    }}
-                  >
-                    {o.customer}
-                  </td>
-                  <td
-                    style={{
-                      padding: "12px 16px",
-                      color: "var(--color-text-secondary)",
-                    }}
-                  >
-                    {o.lot}
-                  </td>
-                  <td
-                    style={{
-                      padding: "12px 16px",
-                      color: "var(--color-text-secondary)",
-                    }}
-                  >
-                    {o.date}
-                  </td>
-                  <td
-                    style={{
-                      padding: "12px 16px",
-                      color: "var(--color-text-secondary)",
-                    }}
-                  >
-                    {o.staff}
-                  </td>
-                  <td style={{ padding: "12px 16px" }}>
-                    <span
-                      style={{
-                        background: STATUS_META[o.status].bg,
-                        color: STATUS_META[o.status].color,
-                        borderRadius: 20,
-                        padding: "3px 9px",
-                        fontSize: 11,
-                        fontWeight: 600,
-                      }}
-                    >
-                      {STATUS_META[o.status].label}
-                    </span>
-                  </td>
-                  <td style={{ padding: "12px 16px" }}>
-                    {o.status === "awaiting" ? (
-                      <button
-                        onClick={() => acceptOrder(o.id)}
-                        style={{
-                          background: "var(--color-accent-teal)",
-                          color: "#ffffff",
-                          fontWeight: 600,
-                          border: "none",
-                          borderRadius: 6,
-                          padding: "5px 11px",
-                          fontSize: 11,
-                          cursor: "pointer",
-                        }}
-                      >
-                        Nhận đơn
-                      </button>
-                    ) : (
-                      <button
-                        style={{
-                          background: "transparent",
-                          border: "1px solid var(--color-border)",
-                          color: "var(--color-text-secondary)",
-                          borderRadius: 6,
-                          padding: "5px 11px",
-                          fontSize: 11,
-                          cursor: "pointer",
-                        }}
-                      >
-                        Chi tiết
-                      </button>
-                    )}
-                  </td>
+      <section className="service-panel">
+        <div className="service-toolbar">
+          <label className="service-search">
+            <Search size={17} />
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Tìm mã đơn, khách hàng, dịch vụ hoặc mã lô"
+            />
+          </label>
+          <div className="service-filters">
+            {STATUS_FILTERS.map((filter) => (
+              <button
+                key={filter.value}
+                className={statusFilter === filter.value ? 'active' : ''}
+                onClick={() => setStatusFilter(filter.value)}
+              >
+                {filter.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="service-empty"><LoaderCircle className="spin" />Đang tải đơn dịch vụ...</div>
+        ) : filtered.length === 0 ? (
+          <div className="service-empty">
+            <ClipboardList />
+            <strong>Không có đơn phù hợp</strong>
+            <span>Thử thay đổi từ khoá hoặc bộ lọc trạng thái.</span>
+          </div>
+        ) : (
+          <div className="service-table-wrap">
+            <table className="service-table">
+              <thead>
+                <tr>
+                  <th>Mã đơn</th>
+                  <th>Dịch vụ & khách hàng</th>
+                  <th>Lịch thực hiện</th>
+                  <th>Người xử lý</th>
+                  <th>Trạng thái</th>
+                  <th aria-label="Thao tác" />
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              </thead>
+              <tbody>
+                {filtered.map((order) => (
+                  <tr key={order.id}>
+                    <td>
+                      <button className="service-code" onClick={() => void openDetail(order.id)}>
+                        {orderCode(order.id)}
+                      </button>
+                      <small>Tạo {formatDate(order.createdAt)}</small>
+                    </td>
+                    <td>
+                      <strong>{order.serviceName}</strong>
+                      <small>{order.customerName}{order.plotCode ? ` · Lô ${order.plotCode}` : ''}</small>
+                    </td>
+                    <td>
+                      <span>{formatDate(order.scheduledDate || order.requestedDate)}</span>
+                      <small>{order.scheduledDate ? 'Lịch đã xác nhận' : 'Ngày khách yêu cầu'}</small>
+                    </td>
+                    <td>
+                      <span>{order.assignedToName || 'Chưa phân công'}</span>
+                    </td>
+                    <td><StatusBadge status={order.status} /></td>
+                    <td>
+                      <button
+                        className="service-row-action"
+                        aria-label={`Xem ${orderCode(order.id)}`}
+                        onClick={() => void openDetail(order.id)}
+                      >
+                        <ChevronRight size={18} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {(selected || detailLoading) && (
+        <div className="service-drawer-layer" role="presentation" onMouseDown={() => !detailLoading && setSelected(null)}>
+          <aside className="service-drawer" role="dialog" aria-modal="true" aria-label="Chi tiết đơn dịch vụ" onMouseDown={(event) => event.stopPropagation()}>
+            {detailLoading && !selected ? (
+              <div className="service-empty"><LoaderCircle className="spin" />Đang tải chi tiết...</div>
+            ) : selected ? (
+              <OrderDetail
+                order={selected}
+                assignees={assignees}
+                onClose={() => setSelected(null)}
+                onSaved={(message) => void refreshSelected(message)}
+              />
+            ) : null}
+          </aside>
+        </div>
+      )}
     </div>
-  );
+  )
+}
+
+function Stat({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: number; tone: string }) {
+  return (
+    <article className={`service-stat service-stat--${tone}`}>
+      <div className="service-stat__icon">{icon}</div>
+      <div><strong>{value}</strong><span>{label}</span></div>
+    </article>
+  )
+}
+
+function StatusBadge({ status }: { status: OrderStatus }) {
+  const meta = STATUS_META[status]
+  return <span className={`service-status service-status--${meta.tone}`}>{meta.label}</span>
+}
+
+function OrderDetail({
+  order,
+  assignees,
+  onClose,
+  onSaved,
+}: {
+  order: ServiceOrder
+  assignees: Assignee[]
+  onClose: () => void
+  onSaved: (message: string) => void
+}) {
+  const [status, setStatus] = useState(order.status)
+  const [assignedTo, setAssignedTo] = useState(order.assignedTo ? String(order.assignedTo) : '')
+  const [scheduledDate, setScheduledDate] = useState(order.scheduledDate?.slice(0, 10) ?? '')
+  const [adminNote, setAdminNote] = useState(order.adminNote ?? '')
+  const [completionNote, setCompletionNote] = useState('')
+  const [evidence, setEvidence] = useState<File[]>([])
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  async function save() {
+    setSaving(true)
+    setError('')
+    try {
+      await api.patch(`/admin/service-orders/${order.id}`, {
+        status,
+        ...(assignedTo ? { assignedTo: Number(assignedTo) } : {}),
+        adminNote,
+        ...(scheduledDate ? { scheduledDate } : {}),
+      })
+      onSaved('Đã cập nhật đơn dịch vụ và gửi thông báo cho khách hàng khi cần.')
+    } catch (requestError) {
+      setError(getErrorMessage(requestError))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function complete() {
+    if (evidence.length === 0) {
+      setError('Vui lòng chọn ít nhất một ảnh bằng chứng hoàn thành.')
+      return
+    }
+    setSaving(true)
+    setError('')
+    try {
+      const form = new FormData()
+      form.append('completionNote', completionNote)
+      evidence.forEach((file) => form.append('evidence', file))
+      await api.post(`/admin/service-orders/${order.id}/completion`, form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      onSaved('Dịch vụ đã được xác nhận hoàn thành và khách hàng đã nhận thông báo.')
+    } catch (requestError) {
+      setError(getErrorMessage(requestError))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function selectEvidence(fileList: FileList | null) {
+    const files = Array.from(fileList ?? [])
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp']
+    if (files.length > 10) {
+      setError('Chỉ được tải lên tối đa 10 ảnh bằng chứng.')
+      return
+    }
+    if (files.some((file) => !allowedTypes.includes(file.type))) {
+      setError('Chỉ chấp nhận ảnh JPG, PNG hoặc WEBP.')
+      return
+    }
+    if (files.some((file) => file.size > 10 * 1024 * 1024)) {
+      setError('Mỗi ảnh bằng chứng không được vượt quá 10 MB.')
+      return
+    }
+    setError('')
+    setEvidence(files)
+  }
+
+  const canComplete = order.status === 'in_progress'
+  const terminal = ['completed', 'cancelled'].includes(order.status)
+
+  return (
+    <>
+      <div className="service-drawer__header">
+        <div>
+          <span>{orderCode(order.id)}</span>
+          <h2>{order.serviceName}</h2>
+          <StatusBadge status={order.status} />
+        </div>
+        <button onClick={onClose} aria-label="Đóng chi tiết"><X /></button>
+      </div>
+
+      <div className="service-drawer__body">
+        {error && <div className="service-alert service-alert--error">{error}</div>}
+
+        <section className="detail-card detail-customer">
+          <h3><UserRound size={17} />Thông tin khách hàng</h3>
+          <div className="detail-grid">
+            <Detail label="Họ tên" value={order.customerName} />
+            <Detail label="Mã lô" value={order.plotCode || 'Không gắn lô'} />
+            <Detail label="Email" value={order.customerEmail || '—'} />
+            <Detail label="Số điện thoại" value={order.customerPhone || '—'} />
+          </div>
+        </section>
+
+        <section className="detail-card">
+          <h3><CalendarDays size={17} />Thông tin yêu cầu</h3>
+          <div className="detail-grid">
+            <Detail label="Ngày gửi" value={formatDate(order.createdAt, true)} />
+            <Detail label="Ngày khách yêu cầu" value={formatDate(order.requestedDate)} />
+            <Detail label="Chi phí" value={money.format(order.amount)} />
+            <Detail label="Ghi chú khách hàng" value={order.note || 'Không có ghi chú'} wide />
+          </div>
+        </section>
+
+        {!terminal && (
+          <section className="detail-card detail-editor">
+            <h3><Wrench size={17} />Xử lý đơn</h3>
+            <div className="detail-form-grid">
+              <label>
+                Trạng thái
+                <select value={status} onChange={(event) => setStatus(event.target.value as OrderStatus)}>
+                  {NEXT_STATUSES[order.status].map((value) => (
+                    <option key={value} value={value}>{STATUS_META[value].label}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Người xử lý
+                <select value={assignedTo} onChange={(event) => setAssignedTo(event.target.value)}>
+                  <option value="">Chưa phân công</option>
+                  {assignees.map((assignee) => <option key={assignee.id} value={assignee.id}>{assignee.name}</option>)}
+                </select>
+              </label>
+              <label>
+                Lịch thực hiện
+                <input type="date" value={scheduledDate} onChange={(event) => setScheduledDate(event.target.value)} />
+              </label>
+              <label className="wide">
+                Ghi chú nội bộ
+                <textarea value={adminNote} onChange={(event) => setAdminNote(event.target.value)} rows={3} maxLength={2000} />
+              </label>
+            </div>
+            <button className="service-primary" onClick={() => void save()} disabled={saving}>
+              {saving && <LoaderCircle className="spin" size={16} />}Lưu cập nhật
+            </button>
+          </section>
+        )}
+
+        {canComplete && (
+          <section className="detail-card detail-completion">
+            <h3><CheckCircle2 size={17} />Xác nhận hoàn thành</h3>
+            <label>
+              Ghi chú kết quả
+              <textarea value={completionNote} onChange={(event) => setCompletionNote(event.target.value)} rows={3} maxLength={2000} placeholder="Mô tả công việc đã thực hiện..." />
+            </label>
+            <label className="evidence-picker">
+              <ImageIcon size={22} />
+              <span><strong>Chọn ảnh bằng chứng</strong>Tối đa 10 ảnh JPG, PNG hoặc WEBP · 10 MB/ảnh</span>
+              <input
+                type="file"
+                accept=".jpg,.jpeg,.png,.webp"
+                multiple
+                onChange={(event) => selectEvidence(event.target.files)}
+              />
+            </label>
+            {evidence.length > 0 && <p className="file-summary">Đã chọn {evidence.length} ảnh: {evidence.map((file) => file.name).join(', ')}</p>}
+            <button className="service-primary" onClick={() => void complete()} disabled={saving}>
+              {saving && <LoaderCircle className="spin" size={16} />}Xác nhận dịch vụ hoàn thành
+            </button>
+          </section>
+        )}
+
+        {order.status === 'completed' && (
+          <section className="detail-card">
+            <h3><ImageIcon size={17} />Kết quả hoàn thành</h3>
+            <p className="completion-note">{order.completionNote || 'Không có ghi chú hoàn thành.'}</p>
+            <div className="evidence-grid">
+              {(order.completionImages ?? []).map((filename) => (
+                <EvidenceImage key={filename} orderId={order.id} filename={filename} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        <section className="detail-card">
+          <h3><Clock3 size={17} />Lịch sử xử lý</h3>
+          <div className="history-list">
+            {(order.history ?? []).map((item) => (
+              <article key={item.id}>
+                <div className="history-dot" />
+                <div>
+                  <strong>{historyLabel(item)}</strong>
+                  <span>{item.changedByName || 'Hệ thống'} · {formatDate(item.createdAt, true)}</span>
+                  {item.assignedToName && <p>Người xử lý: {item.assignedToName}</p>}
+                  {item.note && <p>{item.note}</p>}
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      </div>
+    </>
+  )
+}
+
+function Detail({ label, value, wide = false }: { label: string; value: string; wide?: boolean }) {
+  return <div className={wide ? 'wide' : ''}><span>{label}</span><strong>{value}</strong></div>
+}
+
+function historyLabel(item: OrderHistory) {
+  if (item.action === 'submitted') return 'Khách hàng gửi yêu cầu'
+  if (item.action === 'assigned') return 'Phân công người xử lý'
+  if (item.action === 'completed') return 'Xác nhận hoàn thành'
+  if (item.newStatus) return `Cập nhật trạng thái: ${STATUS_META[item.newStatus]?.label ?? item.newStatus}`
+  return 'Cập nhật thông tin đơn'
+}
+
+function EvidenceImage({ orderId, filename }: { orderId: number; filename: string }) {
+  const [url, setUrl] = useState('')
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    let objectUrl = ''
+    let active = true
+    void api.get(`/service-orders/${orderId}/evidence/${encodeURIComponent(filename)}`, { responseType: 'blob' })
+      .then((response) => {
+        if (!active) return
+        objectUrl = URL.createObjectURL(response.data)
+        setUrl(objectUrl)
+      })
+      .catch(() => {
+        if (active) setFailed(true)
+      })
+    return () => {
+      active = false
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [filename, orderId])
+
+  return failed
+    ? <div className="evidence-loading">Không tải được ảnh</div>
+    : url
+    ? <a href={url} target="_blank" rel="noreferrer"><img src={url} alt="Bằng chứng hoàn thành dịch vụ" /></a>
+    : <div className="evidence-loading"><LoaderCircle className="spin" /></div>
 }

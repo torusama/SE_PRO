@@ -24,7 +24,7 @@ const MENU: MenuGroup[] = [
   ]},
   { section: 'Giao dịch', items: [
     { label: 'Hợp đồng & Sở hữu', to: ROUTES.ADMIN_CONTRACTS },
-    { label: 'Quản lý dịch vụ',   to: ROUTES.ADMIN_SERVICES, badge: 4 },
+    { label: 'Quản lý dịch vụ',   to: ROUTES.ADMIN_SERVICES },
     { label: 'Thông báo',         to: ROUTES.ADMIN_NOTIFY },
     { label: 'Chuyển nhượng',     to: ROUTES.ADMIN_TRANSFER },
     { label: 'Phê duyệt lịch hẹn', to: ROUTES.ADMIN_APPOINTMENTS },

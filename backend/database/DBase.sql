@@ -455,6 +455,22 @@ CREATE INDEX idx_so_plot        ON service_orders(plot_id);
 CREATE INDEX idx_so_status      ON service_orders(status);
 CREATE INDEX idx_so_type        ON service_orders(service_type_id);
 
+-- Lịch sử xử lý đơn dịch vụ (không ghi đè lịch sử cũ)
+CREATE TABLE service_order_history (
+    history_id         SERIAL          PRIMARY KEY,
+    order_id           INT             NOT NULL REFERENCES service_orders(order_id) ON DELETE CASCADE,
+    changed_by         INT             REFERENCES users(user_id),
+    action             VARCHAR(50)     NOT NULL,
+    previous_status    VARCHAR(30),
+    new_status         VARCHAR(30),
+    assigned_to        INT             REFERENCES users(user_id),
+    note               TEXT,
+    created_at         TIMESTAMPTZ     NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_soh_order_created
+    ON service_order_history(order_id, created_at DESC);
+
 -- ================================================================
 -- 11. NOTIFICATIONS (FR-09)
 -- ================================================================
