@@ -13,15 +13,19 @@ import { API_BASE_URL, api } from "@/lib/api";
 import {
   CEMETERY_ZONES,
   CEMETERY_ZONE_LAYOUT,
+  ZONE_META,
   getCemeteryCoordinates,
 } from "@/lib/cemeteryMapLayout";
 import {
+  CROSS_ROADS,
+  LEFT_DIAGONAL_ROAD_POINTS,
+  MAIN_ROAD,
   MAP_BG_RECT,
   MAP_BOUNDARY_POINTS,
   MAP_GATE,
   MAP_VIEWBOX,
+  SPIRIT_PARK,
   ZONE_BACKDROPS,
-  ZONE_BACKDROP_COLUMNS,
   gateMarkerPoints,
 } from "@/lib/cemeteryMapVisuals";
 import { useAuthStore } from "@/store/authStore";
@@ -238,10 +242,10 @@ const ZONES = CEMETERY_ZONES;
 const ZONE_LAYOUT = CEMETERY_ZONE_LAYOUT;
 
 const TEXT_FIXES: Array<[RegExp, string]> = [
-  [/Khu A .+ Cao C.+p/gi, ZONE_LAYOUT.A.name],
-  [/Khu B .+ Ti.+u Chu.+n/gi, ZONE_LAYOUT.B.name],
-  [/Khu C .+ Gia .+nh/gi, ZONE_LAYOUT.C.name],
-  [/Khu D .+ B.+nh D.+n/gi, ZONE_LAYOUT.D.name],
+  ...Object.entries(ZONE_LAYOUT).map(([code, layout]): [RegExp, string] => [
+    new RegExp(`Khu\\s+${code}\\b[^|]*`, "i"),
+    layout.name,
+  ]),
   [/Ä.?Ã´ng|Ã„.?ÃƒÂ´ng/g, "\u0110\u00f4ng"],
   [/TÃ¢y|TÃƒÂ¢y/g, "T\u00e2y"],
   [/Báº¯c|BÃ¡ÂºÂ¯c/g, "B\u1eafc"],
@@ -286,10 +290,10 @@ function normalizeStatus(status?: string): PlotStatus {
 }
 
 function getZoneCode(plotCode: string, zoneName?: string) {
-  const fromCode = plotCode.match(/^[A-D]/i)?.[0]?.toUpperCase();
+  const fromCode = plotCode.match(/^[A-H]/i)?.[0]?.toUpperCase();
   if (fromCode && ZONE_LAYOUT[fromCode]) return fromCode;
   const fromName = cleanText(zoneName)
-    .match(/Khu\s+([A-D])/i)?.[1]
+    .match(/Khu\s+([A-H])/i)?.[1]
     ?.toUpperCase();
   return fromName && ZONE_LAYOUT[fromName] ? fromName : "A";
 }
@@ -341,30 +345,14 @@ function makePlaceholderPlot(
 
 function getDemoPlotInfo(zoneCode: string, row: number, col: number) {
   const direction = getPlannedDirection(zoneCode, row, col);
-  const zonePrice: Record<string, number> = {
-    A: 65000000,
-    B: 45000000,
-    C: 120000000,
-    D: 32000000,
-  };
-  const area =
-    zoneCode === "C" ? 12 : zoneCode === "A" ? 4.5 : zoneCode === "B" ? 3.5 : 3;
+  const meta = ZONE_META[zoneCode] || ZONE_META.A;
+  const isCluster = meta.plotType === "family";
+  const area = meta.area;
   const price =
-    zonePrice[zoneCode] +
-    row * (zoneCode === "C" ? 1600000 : 950000) +
-    col * (zoneCode === "C" ? 520000 : 420000);
-  const size =
-    zoneCode === "C"
-      ? "3.0 x 4.0 m"
-      : area >= 4
-        ? "2.0 x 2.0 m"
-        : "1.5 x 2.0 m";
-  const plotType =
-    zoneCode === "C"
-      ? "l\u00f4 gia t\u1ed9c"
-      : zoneCode === "A"
-        ? "l\u00f4 cao c\u1ea5p"
-        : "l\u00f4 ti\u00eau chu\u1ea9n";
+    meta.basePrice +
+    row * (isCluster ? 1600000 : 950000) +
+    col * (isCluster ? 520000 : 420000);
+  const size = meta.size;
 
   return {
     price,
@@ -373,7 +361,7 @@ function getDemoPlotInfo(zoneCode: string, row: number, col: number) {
     direction,
     description: buildPlotIntro(
       `${zoneCode}-${String(row).padStart(2, "0")}-${String(col).padStart(3, "0")}`,
-      ZONE_LAYOUT[zoneCode]?.name || plotType,
+      ZONE_LAYOUT[zoneCode]?.name || zoneCode,
       String(row).padStart(2, "0"),
       col,
       area,
@@ -435,13 +423,7 @@ function mapBackendPlot(item: BackendMapPlot, index: number): MapPlot {
     status,
     price: Number(item.price || 0),
     area,
-    size:
-      item.size ||
-      (zoneCode === "C"
-        ? "3.0 x 4.0 m"
-        : area >= 8
-          ? "4.0 x 2.0 m"
-          : "2.0 x 2.0 m"),
+    size: item.size || (ZONE_META[zoneCode]?.size ?? "2.0 x 2.0 m"),
     direction,
     description:
       cleanDescriptionText(item.description) ||
@@ -497,20 +479,12 @@ function getPlannedDirection(
   const centerY = coord.y + coord.height / 2;
   const roadCandidates = [
     {
-      direction: centerX < 279 ? "\u0110\u00f4ng" : "T\u00e2y",
-      distance: Math.abs(centerX - 279),
+      direction: centerX < MAIN_ROAD.x ? "\u0110\u00f4ng" : "T\u00e2y",
+      distance: Math.abs(centerX - MAIN_ROAD.x),
     },
     {
-      direction: centerX < 524 ? "\u0110\u00f4ng" : "T\u00e2y",
-      distance: Math.abs(centerX - 524),
-    },
-    {
-      direction: centerY < 179 ? "Nam" : "B\u1eafc",
-      distance: Math.abs(centerY - 179),
-    },
-    {
-      direction: centerY < 389 ? "Nam" : "B\u1eafc",
-      distance: Math.abs(centerY - 389),
+      direction: centerY < SPIRIT_PARK.cy ? "Nam" : "B\u1eafc",
+      distance: Math.abs(centerY - SPIRIT_PARK.cy),
     },
   ];
   return roadCandidates.sort((a, b) => a.distance - b.distance)[0].direction;
@@ -542,13 +516,15 @@ function getPlotPositionNote(
   row: number,
   plotNumber: number,
 ) {
-  const maxCol = zoneCode === "C" ? 12 : 5;
+  const layout = ZONE_LAYOUT[zoneCode] || ZONE_LAYOUT.A;
+  const maxCol = layout.cols;
+  const maxRow = layout.rows;
   const band =
-    row <= 4
-      ? "n\u1eb1m \u1edf d\u1ea3i ph\u00eda B\u1eafc, g\u1ea7n tr\u1ee5c \u0111\u01b0\u1eddng B\u1eafc"
-      : row <= 8
+    row <= Math.ceil(maxRow / 3)
+      ? "n\u1eb1m \u1edf d\u1ea3i ph\u00eda tr\u00ean, g\u1ea7n tr\u1ee5c \u0111\u01b0\u1eddng ngang \u0111\u1ea7u khu"
+      : row <= Math.ceil((maxRow * 2) / 3)
         ? "n\u1eb1m \u1edf khu trung t\u00e2m, thu\u1eadn ti\u1ec7n di chuy\u1ec3n t\u1eeb c\u1ea3 hai tr\u1ee5c \u0111\u01b0\u1eddng"
-        : "n\u1eb1m \u1edf d\u1ea3i ph\u00eda Nam, g\u1ea7n l\u1ed1i v\u00e0o t\u1eeb c\u1ed5ng ch\u00ednh";
+        : "n\u1eb1m \u1edf d\u1ea3i ph\u00eda d\u01b0\u1edbi, g\u1ea7n l\u1ed1i v\u00e0o t\u1eeb c\u1ed5ng ch\u00ednh";
   const side =
     plotNumber <= Math.ceil(maxCol / 3)
       ? "s\u00e1t nh\u00e1nh l\u1ed1i b\u00ean tr\u00e1i c\u1ee7a khu"
@@ -559,13 +535,7 @@ function getPlotPositionNote(
 }
 
 function getZoneIntro(zoneCode: string) {
-  if (zoneCode === "A")
-    return "Khu A c\u00f3 kh\u00f4ng gian trang tr\u1ecdng, m\u1eadt \u0111\u1ed9 tho\u00e1ng v\u00e0 ph\u00f9 h\u1ee3p v\u1edbi gia \u0111\u00ecnh mu\u1ed1n ch\u1ecdn v\u1ecb tr\u00ed cao c\u1ea5p.";
-  if (zoneCode === "B")
-    return "Khu B c\u00e2n b\u1eb1ng gi\u1eefa chi ph\u00ed v\u00e0 v\u1ecb tr\u00ed, ph\u00f9 h\u1ee3p nhu c\u1ea7u ch\u1ecdn l\u00f4 \u1ed5n \u0111\u1ecbnh, d\u1ec5 ti\u1ebfp c\u1eadn.";
-  if (zoneCode === "C")
-    return "Khu C d\u00e0nh cho l\u00f4 gia t\u1ed9c, di\u1ec7n t\u00edch r\u1ed9ng h\u01a1n, thu\u1eadn ti\u1ec7n quy t\u1ee5 nhi\u1ec1u th\u00e0nh vi\u00ean trong c\u00f9ng gia \u0111\u00ecnh.";
-  return "Khu D c\u00f3 m\u1ee9c gi\u00e1 d\u1ec5 ti\u1ebfp c\u1eadn, ph\u00f9 h\u1ee3p gia \u0111\u00ecnh mu\u1ed1n \u01b0u ti\u00ean chi ph\u00ed nh\u01b0ng v\u1eabn \u0111\u1ea3m b\u1ea3o l\u1ed1i \u0111i r\u00f5 r\u00e0ng.";
+  return (ZONE_META[zoneCode] || ZONE_META.A).blurb;
 }
 
 function descriptionLines(description: string) {
@@ -596,52 +566,27 @@ function buildDirection(plot: MapPlot) {
   return `T\u1eeb c\u1ed5ng ch\u00ednh ph\u00eda Nam, \u0111i theo l\u1ed1i ven d\u01b0\u1edbi \u0111\u1ebfn tr\u1ee5c \u0111\u01b0\u1eddng g\u1ea7n ${plot.zoneName}. Sau \u0111\u00f3 ${turnText}, \u0111i d\u1ecdc theo h\u00e0ng ${plot.rowCode} v\u00e0 d\u1eebng \u1edf c\u1ea1nh l\u00f4 ${plot.plotCode}.`;
 }
 
+// Mỗi khu giờ là 1 khối chữ nhật đơn giản (không còn chia 3 dải trên/giữa/
+// dưới), nên đường đi được tính bằng cách nối từ cổng chính -> trục đường
+// chính bên phải (hoặc mép trái nếu khu nằm sát bên trái) -> hành lang
+// ngang gần hàng của lô -> vào lô.
 function getRouteMeta(plot: MapPlot) {
-  const layout = ZONE_LAYOUT[plot.zoneCode] || ZONE_LAYOUT.A;
-  const row = Number(plot.rowCode || 1);
-  const col = Number(plot.plotNumber || 1);
-  const colsPerBlock = plot.zoneCode === "C" ? 4 : layout.cols;
-  const localCol = (col - 1) % colsPerBlock;
-  const topRows = layout.topRows;
-  const midRows = layout.midRows;
-  const bandIndex = row <= topRows ? 0 : row <= topRows + midRows ? 1 : 2;
-  const rowsInBand =
-    bandIndex === 0
-      ? layout.topRows
-      : bandIndex === 1
-        ? layout.midRows
-        : layout.bottomRows;
-  const localRow =
-    bandIndex === 0
-      ? row - 1
-      : bandIndex === 1
-        ? row - topRows - 1
-        : row - topRows - midRows - 1;
-  const gap = plot.zoneCode === "C" ? layout.gap : layout.gap;
   const centerX = plot.x + plot.width / 2;
   const centerY = plot.y + plot.height / 2;
-  const roadX = centerX < 400 ? 279 : 524;
-  const approachFromRight = roadX > centerX;
-  const rowAisleY =
-    localRow < rowsInBand - 1
-      ? plot.y + plot.height + gap / 2
-      : localRow > 0
-        ? plot.y - gap / 2
-        : centerY;
-  const externalGap = 12;
-  const colAisleX = approachFromRight
-    ? localCol < colsPerBlock - 1
-      ? plot.x + plot.width + gap / 2
-      : plot.x + plot.width + externalGap
-    : localCol > 0
-      ? plot.x - gap / 2
-      : plot.x - externalGap;
-  const attachX = approachFromRight ? plot.x + plot.width : plot.x;
+  const useMainRoad = centerX >= 380;
+  const roadX = useMainRoad ? MAIN_ROAD.x : -10;
+  const rowAisleY = CROSS_ROADS.reduce((closest, road) => {
+    const roadY = road.y + road.height / 2;
+    return Math.abs(roadY - centerY) < Math.abs(closest - centerY)
+      ? roadY
+      : closest;
+  }, MAP_GATE.y - 30);
+  const attachX = useMainRoad ? plot.x + plot.width : plot.x;
 
   return {
     roadX,
     rowAisleY: Number(rowAisleY.toFixed(2)),
-    colAisleX: Number(colAisleX.toFixed(2)),
+    colAisleX: roadX,
     attachX: Number(attachX.toFixed(2)),
     attachY: Number(centerY.toFixed(2)),
   };
@@ -650,11 +595,10 @@ function getRouteMeta(plot: MapPlot) {
 function routePoints(plot: MapPlot) {
   const route = getRouteMeta(plot);
   return [
-    [400, 570],
-    [route.roadX, 570],
+    [MAP_GATE.x, MAP_GATE.y - 30],
+    [route.roadX, MAP_GATE.y - 30],
     [route.roadX, route.rowAisleY],
-    [route.colAisleX, route.rowAisleY],
-    [route.colAisleX, route.attachY],
+    [route.attachX, route.rowAisleY],
     [route.attachX, route.attachY],
   ]
     .map(([x, y]) => `${x},${y}`)
@@ -663,9 +607,12 @@ function routePoints(plot: MapPlot) {
 
 function arePlotsAdjacent(a: MapPlot, b: MapPlot) {
   if (a.zoneCode !== b.zoneCode) return false;
+  const colsPerBlock =
+    a.zoneCode === "C" ? 4 : (ZONE_LAYOUT[a.zoneCode] || ZONE_LAYOUT.A).cols;
   const sameFamilyBlock =
     a.zoneCode !== "C" ||
-    Math.floor((a.plotNumber - 1) / 4) === Math.floor((b.plotNumber - 1) / 4);
+    Math.floor((a.plotNumber - 1) / colsPerBlock) ===
+      Math.floor((b.plotNumber - 1) / colsPerBlock);
   const sameRow =
     sameFamilyBlock &&
     a.rowCode === b.rowCode &&
@@ -1344,57 +1291,73 @@ export default function MapPage() {
                 height={MAP_BG_RECT.height}
                 fill="url(#grid)"
               />
-              {/* Ranh giới tổng thể khu đất: đa giác không đều (có góc vát/lồi)
-                  thay cho hình chữ nhật lý thuyết, mô phỏng theo bản vẽ quy hoạch thực tế */}
+              {/* Ranh giới tổng thể khu đất: đa giác bất cân đối, viền nét đứt đỏ,
+                  mô phỏng theo bản vẽ quy hoạch kiến trúc thực tế */}
               <polygon className="map-land" points={MAP_BOUNDARY_POINTS} />
               <polygon
                 className="map-boundary-line"
                 points={MAP_BOUNDARY_POINTS}
               />
-              <rect
-                x="30"
-                y="170"
-                width="740"
-                height="18"
-                className="map-road"
+
+              {/* Đường bao/đường chéo bên trái - không song song trục, xẻ ngang khu đất */}
+              <polygon
+                className="map-road map-road-diagonal"
+                points={LEFT_DIAGONAL_ROAD_POINTS}
               />
+              {/* Đường chính chạy dọc bên phải */}
               <rect
-                x="30"
-                y="380"
-                width="740"
-                height="18"
-                className="map-road"
-              />
-              <rect
-                x="270"
-                y="30"
-                width="18"
-                height="540"
-                className="map-road"
-              />
-              <rect
-                x="515"
-                y="30"
-                width="18"
-                height="540"
+                x={MAIN_ROAD.x}
+                y={MAIN_ROAD.y}
+                width={MAIN_ROAD.width}
+                height={MAIN_ROAD.height}
                 className="map-road"
               />
               <text
-                x="400"
-                y="164"
+                x={MAIN_ROAD.x + MAIN_ROAD.width / 2}
+                y={MAIN_ROAD.y - 8}
                 textAnchor="middle"
                 className="map-road-label"
               >
                 {T.northRoad}
               </text>
-              <text
-                x="400"
-                y="374"
-                textAnchor="middle"
-                className="map-road-label"
-              >
-                {T.centralRoad}
-              </text>
+              {/* Các đường ngang nối giữa các hàng khu */}
+              {CROSS_ROADS.map((road, index) => (
+                <rect
+                  key={`cross-${index}`}
+                  x={road.x}
+                  y={road.y}
+                  width={road.width}
+                  height={road.height}
+                  className="map-road"
+                />
+              ))}
+
+              {/* Đài Nước Vĩnh Yên - công viên trung tâm */}
+              <g className="spirit-park">
+                <rect
+                  x={SPIRIT_PARK.x}
+                  y={SPIRIT_PARK.y}
+                  width={SPIRIT_PARK.width}
+                  height={SPIRIT_PARK.height}
+                  rx="18"
+                  className="spirit-park-rect"
+                />
+                <circle
+                  cx={SPIRIT_PARK.cx}
+                  cy={SPIRIT_PARK.cy}
+                  r={SPIRIT_PARK.r}
+                  className="spirit-park-circle"
+                />
+                <text
+                  x={SPIRIT_PARK.cx}
+                  y={SPIRIT_PARK.cy + 4}
+                  textAnchor="middle"
+                  className="spirit-park-label"
+                >
+                  ĐÀI NƯỚC VĨNH YÊN
+                </text>
+              </g>
+
               <polygon
                 className="map-gate-marker"
                 points={gateMarkerPoints(MAP_GATE)}
@@ -1410,42 +1373,38 @@ export default function MapPage() {
 
               {/* Khối nền từng khu: đa giác vát góc kiểu bản vẽ kiến trúc phân lô,
                   vẽ PHÍA SAU lưới ô mộ thật nên không ảnh hưởng hover/click */}
-              {ZONE_BACKDROP_COLUMNS.map((col) => {
-                const colorZone =
-                  selectionMode === "cluster"
-                    ? ZONES.find((z) => z.key === "C")
-                    : ZONES.find((z) => z.key === col);
-                if (!colorZone) return null;
-                return ZONE_BACKDROPS[col].map((band, index) => (
-                  <g key={`${col}-${band.key}`}>
+              {zones.map((zone) => {
+                const backdrop = ZONE_BACKDROPS[zone.key];
+                if (!backdrop) return null;
+                return (
+                  <g key={`backdrop-${zone.key}`}>
                     <polygon
-                      points={band.points}
-                      fill={colorZone.dot}
+                      points={backdrop.points}
+                      fill={zone.dot}
                       fillOpacity={0.07}
-                      stroke={colorZone.dot}
+                      stroke={zone.dot}
                       strokeOpacity={0.4}
                       strokeWidth={1}
                       strokeDasharray="5 3"
                     />
                     <circle
-                      cx={band.cx}
-                      cy={band.cy}
-                      r="9"
+                      cx={backdrop.cx}
+                      cy={backdrop.cy}
+                      r="11"
                       className="zone-badge"
-                      stroke={colorZone.dot}
+                      stroke={zone.dot}
                     />
                     <text
-                      x={band.cx}
-                      y={band.cy + 3}
+                      x={backdrop.cx}
+                      y={backdrop.cy + 4}
                       textAnchor="middle"
                       className="zone-badge-text"
-                      fill={colorZone.dot}
+                      fill={zone.dot}
                     >
-                      {col}
-                      {index + 1}
+                      {zone.key}
                     </text>
                   </g>
-                ));
+                );
               })}
 
               {zones.map((zone) => (
@@ -1456,9 +1415,7 @@ export default function MapPage() {
                   textAnchor="middle"
                   className="zone-label"
                 >
-                  {selectionMode === "cluster"
-                    ? T.cluster.toUpperCase()
-                    : `KHU ${zone.key}`}
+                  {`KHU ${zone.key}`}
                 </text>
               ))}
 

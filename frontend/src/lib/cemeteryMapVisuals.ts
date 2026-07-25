@@ -1,41 +1,66 @@
-// Hình học trang trí dùng chung cho bản đồ 2D (trang khách hàng + trang quản trị).
-// Mục tiêu: làm cho RANH GIỚI TỔNG THỂ của khu đất trông như một thửa đất thật
-// (đa giác không đều, có góc vát/lồi) thay vì một hình chữ nhật hoàn hảo,
-// trong khi TỪNG Ô MỘ NHỎ vẫn giữ nguyên toạ độ/hình dạng/màu sắc/hover cũ
-// (toạ độ ô mộ vẫn lấy từ cemeteryMapLayout.ts, không bị thay đổi).
+import { CEMETERY_ZONE_LAYOUT } from "./cemeteryMapLayout";
+
+// Hình học trang trí + bố cục "tổng mặt bằng" dùng chung cho bản đồ 2D
+// (trang khách hàng + trang quản trị). Mục tiêu: khu đất trông như một bản
+// vẽ quy hoạch kiến trúc thật — ranh giới bất cân đối (đa giác/hình thang mở
+// rộng, viền nét đứt màu đỏ), đường chính chạy dọc bên phải, đường bao chéo
+// xẻ bên trái, Khu Tâm Linh ở giữa — thay vì bàn cờ vuông vức như trước.
 //
-// Vùng nội dung (grid ô mộ) hiện chiếm khoảng x:[60,740] y:[48,554].
-// Hàng rào vuông cũ là x:[30,770] y:[30,570]. Đa giác bên dưới được vẽ
-// RỘNG HƠN hàng rào cũ ở mọi cạnh (phình ra ngoài + vát góc), nên không
-// bao giờ cắt ngang qua một ô mộ nào — đã kiểm chứng bằng toạ độ.
+// Lưới ô mộ THẬT (toạ độ/kích thước/hover/màu trạng thái) vẫn lấy từ
+// cemeteryMapLayout.ts như cũ, không đổi — mọi hình khối bên dưới chỉ vẽ
+// PHÍA SAU/PHÍA NGOÀI lưới đó nên không ảnh hưởng hover/click.
 
-// viewBox mở rộng để đa giác có đủ khoảng trống phình ra ngoài mà không
-// đụng vào lưới ô mộ bên trong.
-export const MAP_VIEWBOX = "-60 -30 920 660";
-export const MAP_BG_RECT = { x: -60, y: -30, width: 920, height: 660 };
+export const MAP_VIEWBOX = "-90 -50 980 1200";
+export const MAP_BG_RECT = { x: -90, y: -50, width: 980, height: 1200 };
 
-// Đường viền tổng thể khu đất (đi theo chiều kim đồng hồ), có góc vát
-// và cạnh lồi để trông như một thửa đất thật ngoài khảo sát, không phải
-// hình chữ nhật lý thuyết.
+// Ranh giới tổng thể khu đất: đa giác bất cân đối (không phải hình chữ
+// nhật/hình thang lý thuyết), luôn nằm ngoài toàn bộ 7 khu đơn + đường
+// chính + cổng (đã kiểm chứng bằng toạ độ) nên không bao giờ cắt ngang lô.
 const BOUNDARY_RAW: Array<[number, number]> = [
-  [90, -10],
-  [690, -10],
-  [770, 10],
-  [800, 60],
-  [800, 540],
-  [770, 590],
-  [120, 610],
-  [-40, 610],
-  [-40, 180],
-  [30, 60],
+  [100, -20],
+  [760, -20],
+  [860, 60],
+  [860, 900],
+  [820, 1060],
+  [160, 1100],
+  [-60, 980],
+  [-60, 100],
 ];
-
 export const MAP_BOUNDARY_POINTS = BOUNDARY_RAW.map((p) => p.join(",")).join(
   " ",
 );
 
-// Cổng chính nằm ở phần lồi phía dưới, giữa trục đường trung tâm.
-export const MAP_GATE = { x: 400, y: 600 };
+// Đường chính (trục đường chính vào khu) chạy DỌC bên phải, ngoài rìa cột
+// khu bên phải — không còn là trục cắt giữa như bố cục bàn cờ cũ.
+export const MAIN_ROAD = { x: 720, y: 10, width: 20, height: 1000 };
+
+// Đường bao/đường chéo bên trái xẻ ngang khu đất — vẽ như một dải chéo
+// (không song song trục) chạy dọc theo rìa trái, giống các tuyến "đường
+// bao" trong bản vẽ quy hoạch thực tế.
+export const LEFT_DIAGONAL_ROAD_POINTS =
+  "-10,0 26,0 4,420 30,430 -2,600 24,610 -10,980";
+
+// Các đường ngang nối giữa các hàng khu (mỗi đường là 1 dải ngang mảnh).
+export const CROSS_ROADS = [
+  { x: -10, y: 214, width: 870, height: 20 }, // giữa hàng 1 (A/B) và hàng 2 (D/E)
+  { x: -10, y: 424, width: 870, height: 14 }, // giữa hàng 2 và Khu Tâm Linh
+  { x: -10, y: 574, width: 870, height: 14 }, // giữa Khu Tâm Linh và hàng 3 (F/G)
+  { x: -10, y: 774, width: 870, height: 20 }, // giữa hàng 3 và hàng 4 (H)
+];
+
+// Khu Tâm Linh (công viên trung tâm) — nằm giữa hàng 2 và hàng 3.
+export const SPIRIT_PARK = {
+  x: 260,
+  y: 450,
+  width: 240,
+  height: 120,
+  cx: 380,
+  cy: 510,
+  r: 46,
+};
+
+// Cổng chính, dưới cùng, giữa trục đường chính bên phải và đường bao bên trái.
+export const MAP_GATE = { x: 400, y: 1030 };
 
 export function gateMarkerPoints(gate: { x: number; y: number } = MAP_GATE) {
   return `${gate.x - 13},${gate.y - 4} ${gate.x + 13},${gate.y - 4} ${gate.x},${gate.y - 30}`;
@@ -44,11 +69,6 @@ export function gateMarkerPoints(gate: { x: number; y: number } = MAP_GATE) {
 // ------------------------------------------------------------------
 // KHỐI NỀN TỪNG KHU (phong cách bản vẽ kiến trúc phân lô)
 // ------------------------------------------------------------------
-// Lưới ô mộ thật (bấm/hover/màu trạng thái) vẫn vẽ y như cũ, KHÔNG đổi.
-// Lớp dưới đây chỉ là một khối "nền đất" vẽ PHÍA SAU lưới đó, có góc vát/
-// bẻ lệch giống bản vẽ kiến trúc thay vì một khối chữ nhật vuông vắn.
-// Vì vẽ phía sau nên không bao giờ che hay chặn hover/click của ô mộ thật.
-
 type ChamferCorners = "tl-br" | "tr-bl" | "all";
 
 export function chamferedRect(
@@ -93,59 +113,33 @@ export function chamferedRect(
   return raw.map((p) => p.join(",")).join(" ");
 }
 
-// Khoảng x của từng "cột khu" — rộng hơn lưới ô mộ thật một chút (như một
-// thửa đất bao quanh cụm mộ), dùng chung cho cả Khu A/B/D (chế độ "Một lô")
-// lẫn 3 cụm gia tộc của Khu C (chế độ "Lô gia tộc") vì chúng dùng chung
-// hệ toạ độ cột trong cemeteryMapLayout.ts.
-const COLUMN_BOUNDS: Record<"A" | "B" | "D", { x1: number; x2: number }> = {
-  A: { x1: 50, x2: 260 },
-  B: { x1: 295, x2: 505 },
-  D: { x1: 540, x2: 750 },
-};
-
-// 3 dải theo chiều dọc, tương ứng dải trên/giữa/dưới (2 trục đường ngang
-// cắt qua). Vát góc đổi bên xen kẽ để mỗi dải có dáng hơi khác nhau,
-// giống các khối A1/A2/A3 lệch nhau trong bản vẽ mẫu.
-const BAND_BOUNDS: Array<{
-  key: string;
-  y1: number;
-  y2: number;
-  corners: ChamferCorners;
-}> = [
-  { key: "1", y1: 34, y2: 164, corners: "tl-br" },
-  { key: "2", y1: 196, y2: 352, corners: "tr-bl" },
-  { key: "3", y1: 406, y2: 562, corners: "tl-br" },
-];
-
-export interface ZoneBackdropBand {
-  key: string;
+export interface ZoneBackdrop {
   points: string;
   cx: number;
   cy: number;
 }
 
-function buildColumnBackdrops(x1: number, x2: number): ZoneBackdropBand[] {
-  return BAND_BOUNDS.map((band) => ({
-    key: band.key,
-    points: chamferedRect(
-      x1,
-      band.y1,
-      x2 - x1,
-      band.y2 - band.y1,
-      18,
-      band.corners,
-    ),
-    cx: (x1 + x2) / 2,
-    cy: (band.y1 + band.y2) / 2,
-  }));
-}
+const BACKDROP_PAD = 16;
+const CHAMFER_CYCLE: ChamferCorners[] = ["tl-br", "tr-bl"];
 
-// Danh sách khối nền theo từng cột (A/B/D) — dùng trực tiếp cho chế độ
-// "Một lô", và dùng lại (đổi màu theo Khu C) cho chế độ "Lô gia tộc".
-export const ZONE_BACKDROPS: Record<"A" | "B" | "D", ZoneBackdropBand[]> = {
-  A: buildColumnBackdrops(COLUMN_BOUNDS.A.x1, COLUMN_BOUNDS.A.x2),
-  B: buildColumnBackdrops(COLUMN_BOUNDS.B.x1, COLUMN_BOUNDS.B.x2),
-  D: buildColumnBackdrops(COLUMN_BOUNDS.D.x1, COLUMN_BOUNDS.D.x2),
-};
-
-export const ZONE_BACKDROP_COLUMNS: Array<"A" | "B" | "D"> = ["A", "B", "D"];
+// Một khối nền vát góc cho MỖI khu (kể cả Khu C), luôn phình RỘNG hơn lưới
+// ô mộ thật của khu đó (đệm ra ngoài BACKDROP_PAD) nên không bao giờ che
+// hay cắt vào ô mộ thật — chỉ tạo cảm giác "thửa đất lệch" phía sau.
+export const ZONE_BACKDROPS: Record<string, ZoneBackdrop> = Object.fromEntries(
+  Object.entries(CEMETERY_ZONE_LAYOUT).map(([key, layout], index) => {
+    const x = layout.x - BACKDROP_PAD;
+    const y = layout.y - BACKDROP_PAD;
+    const w = layout.width + BACKDROP_PAD * 2;
+    const h = layout.height + BACKDROP_PAD * 2;
+    const corners = CHAMFER_CYCLE[index % CHAMFER_CYCLE.length];
+    const cut = Math.min(28, Math.min(w, h) * 0.16);
+    return [
+      key,
+      {
+        points: chamferedRect(x, y, w, h, cut, corners),
+        cx: x + w / 2,
+        cy: y + h / 2,
+      },
+    ];
+  }),
+);

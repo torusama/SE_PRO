@@ -543,8 +543,8 @@
 .map-page #cemetery-map {
   width: 100%;
   height: 100%;
-  min-width: 760px;
-  min-height: 560px;
+  min-width: 640px;
+  min-height: 780px;
   cursor: default;
   transition: transform 0.2s ease;
 }
@@ -605,14 +605,14 @@
 
 /* ranh giới tổng thể khu đất (đa giác thực tế, không phải hình chữ nhật) */
 .map-page .map-land {
-  fill: rgba(0, 229, 196, 0.025);
+  fill: rgba(220, 38, 38, 0.02);
   stroke: none;
 }
 .map-page .map-boundary-line {
   fill: none;
-  stroke: rgba(0, 229, 196, 0.22);
-  stroke-width: 1.2;
-  stroke-dasharray: 7 4;
+  stroke: rgba(220, 38, 38, 0.55);
+  stroke-width: 1.4;
+  stroke-dasharray: 8 5;
   vector-effect: non-scaling-stroke;
 }
 .map-page .map-gate-marker {
@@ -623,9 +623,33 @@
   stroke-width: 1;
 }
 .map-page .zone-badge-text {
-  font-size: 8px;
+  font-size: 9px;
   font-family: "Be Vietnam Pro", sans-serif;
   font-weight: 700;
+  pointer-events: none;
+}
+.map-page .map-road-diagonal {
+  fill: rgba(0, 229, 196, 0.06);
+  stroke: rgba(0, 229, 196, 0.18);
+  stroke-width: 0.5;
+}
+.map-page .spirit-park-rect {
+  fill: rgba(82, 183, 136, 0.08);
+  stroke: rgba(82, 183, 136, 0.35);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+}
+.map-page .spirit-park-circle {
+  fill: rgba(82, 183, 136, 0.14);
+  stroke: rgba(82, 183, 136, 0.55);
+  stroke-width: 1.2;
+}
+.map-page .spirit-park-label {
+  fill: rgba(178, 226, 202, 0.85);
+  font-size: 9px;
+  font-family: "Be Vietnam Pro", sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.5px;
   pointer-events: none;
 }
 
@@ -1199,8 +1223,8 @@
     overflow: auto;
   }
   .map-page #cemetery-map {
-    width: 800px;
-    height: 600px;
+    width: 640px;
+    height: 780px;
   }
   .map-page .map-toolbar {
     padding: 10px 12px;

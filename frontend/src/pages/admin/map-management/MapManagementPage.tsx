@@ -3,15 +3,19 @@ import { api } from "@/lib/api";
 import {
   CEMETERY_ZONES,
   CEMETERY_ZONE_LAYOUT,
+  ZONE_META,
   getCemeteryCoordinates,
 } from "@/lib/cemeteryMapLayout";
 import {
+  CROSS_ROADS,
+  LEFT_DIAGONAL_ROAD_POINTS,
+  MAIN_ROAD,
   MAP_BG_RECT,
   MAP_BOUNDARY_POINTS,
   MAP_GATE,
   MAP_VIEWBOX,
+  SPIRIT_PARK,
   ZONE_BACKDROPS,
-  ZONE_BACKDROP_COLUMNS,
   gateMarkerPoints,
 } from "@/lib/cemeteryMapVisuals";
 import "./MapManagementPage.css";
@@ -156,29 +160,26 @@ function plotDescriptionLines(
   if (customLines.length) return customLines;
   const row = Number(plot.rowCode || 1);
   const col = Number(plot.plotNumber || 1);
-  const maxCol = zoneCode === "C" ? 12 : 5;
+  const layout = CEMETERY_ZONE_LAYOUT[zoneCode] || CEMETERY_ZONE_LAYOUT.A;
+  const maxCol = layout.cols;
+  const maxRow = layout.rows;
   const band =
-    row <= 4
-      ? "nằm ở dải phía Bắc, gần trục đường Bắc"
-      : row <= 8
+    row <= Math.ceil(maxRow / 3)
+      ? "nằm ở dải phía trên, gần trục đường ngang đầu khu"
+      : row <= Math.ceil((maxRow * 2) / 3)
         ? "nằm ở khu trung tâm, thuận tiện di chuyển từ cả hai trục đường"
-        : "nằm ở dải phía Nam, gần lối vào từ cổng chính";
+        : "nằm ở dải phía dưới, gần lối vào từ cổng chính";
   const side =
     col <= Math.ceil(maxCol / 3)
       ? "sát nhánh lối bên trái của khu"
       : col >= maxCol - Math.floor(maxCol / 3) + 1
         ? "sát nhánh lối bên phải của khu"
         : "nằm trong phần lõi yên tĩnh của khu";
-  const zoneNote: Record<string, string> = {
-    A: "Khu A có không gian trang trọng, mật độ thoáng và phù hợp với gia đình muốn chọn vị trí cao cấp.",
-    B: "Khu B cân bằng giữa chi phí và vị trí, phù hợp nhu cầu chọn lô ổn định, dễ tiếp cận.",
-    C: "Khu C dành cho lô gia tộc, diện tích rộng hơn, thuận tiện quy tụ nhiều thành viên trong gia đình.",
-    D: "Khu D có mức giá dễ tiếp cận nhưng vẫn đảm bảo lối đi rõ ràng.",
-  };
+  const zoneNote = (ZONE_META[zoneCode] || ZONE_META.A).blurb;
   return [
     `Tổng quan: ${plot.plotCode} là ${plot.area >= 10 ? "lô gia tộc" : "lô đơn"} thuộc ${zoneName}, diện tích ${plot.area || 0} m², hướng ${(plot.direction || "chưa cập nhật").toLowerCase()}.`,
     `Điểm nổi bật: Vị trí ${band}, ${side}, phù hợp cho việc thăm viếng định kỳ.`,
-    `Gợi ý: ${zoneNote[zoneCode] || zoneNote.D}`,
+    `Gợi ý: ${zoneNote}`,
     `Giá: Giá niêm yết ${formatPrice(plot.price)}.`,
   ];
 }
@@ -273,7 +274,7 @@ export default function MapManagementPage() {
 
   const modeZoneCodes = useMemo(
     () =>
-      new Set(
+      new Set<string>(
         CEMETERY_ZONES.filter((zone) => zone.mode === mapMode).map(
           (zone) => zone.key,
         ),
@@ -282,10 +283,7 @@ export default function MapManagementPage() {
   );
 
   const modeSlots = useMemo(
-    () =>
-      slots.filter((slot) =>
-        modeZoneCodes.has(slot.zoneCode as "A" | "B" | "C" | "D"),
-      ),
+    () => slots.filter((slot) => modeZoneCodes.has(slot.zoneCode)),
     [slots, modeZoneCodes],
   );
 
@@ -650,7 +648,7 @@ export default function MapManagementPage() {
                 height={MAP_BG_RECT.height}
                 fill="url(#admin-grid)"
               />
-              {/* Ranh giới tổng thể khu đất: đa giác không đều thay cho hình chữ nhật lý thuyết */}
+              {/* Ranh giới tổng thể khu đất: đa giác bất cân đối, viền nét đứt đỏ */}
               <polygon
                 className="admin-map-land"
                 points={MAP_BOUNDARY_POINTS}
@@ -659,50 +657,65 @@ export default function MapManagementPage() {
                 className="admin-map-boundary"
                 points={MAP_BOUNDARY_POINTS}
               />
-              <rect
-                x="30"
-                y="170"
-                width="740"
-                height="18"
-                className="admin-map-road"
+
+              {/* Đường bao/đường chéo bên trái */}
+              <polygon
+                className="admin-map-road admin-map-road-diagonal"
+                points={LEFT_DIAGONAL_ROAD_POINTS}
               />
+              {/* Đường chính chạy dọc bên phải */}
               <rect
-                x="30"
-                y="380"
-                width="740"
-                height="18"
-                className="admin-map-road"
-              />
-              <rect
-                x="270"
-                y="30"
-                width="18"
-                height="540"
-                className="admin-map-road"
-              />
-              <rect
-                x="515"
-                y="30"
-                width="18"
-                height="540"
+                x={MAIN_ROAD.x}
+                y={MAIN_ROAD.y}
+                width={MAIN_ROAD.width}
+                height={MAIN_ROAD.height}
                 className="admin-map-road"
               />
               <text
-                x="400"
-                y="164"
+                x={MAIN_ROAD.x + MAIN_ROAD.width / 2}
+                y={MAIN_ROAD.y - 8}
                 textAnchor="middle"
                 className="admin-map-road-label"
               >
-                Trục đường Bắc
+                Trục đường chính
               </text>
-              <text
-                x="400"
-                y="374"
-                textAnchor="middle"
-                className="admin-map-road-label"
-              >
-                Đường trung tâm
-              </text>
+              {CROSS_ROADS.map((road, index) => (
+                <rect
+                  key={`cross-${index}`}
+                  x={road.x}
+                  y={road.y}
+                  width={road.width}
+                  height={road.height}
+                  className="admin-map-road"
+                />
+              ))}
+
+              {/* Đài Nước Vĩnh Yên - công viên trung tâm */}
+              <g>
+                <rect
+                  x={SPIRIT_PARK.x}
+                  y={SPIRIT_PARK.y}
+                  width={SPIRIT_PARK.width}
+                  height={SPIRIT_PARK.height}
+                  rx="18"
+                  className="admin-spirit-park-rect"
+                />
+                <circle
+                  cx={SPIRIT_PARK.cx}
+                  cy={SPIRIT_PARK.cy}
+                  r={SPIRIT_PARK.r}
+                  className="admin-spirit-park-circle"
+                />
+                <text
+                  x={SPIRIT_PARK.cx}
+                  y={SPIRIT_PARK.cy + 4}
+                  textAnchor="middle"
+                  className="admin-spirit-park-label"
+                >
+                  ĐÀI NƯỚC VĨNH YÊN
+                </text>
+              </g>
+
               <polygon
                 className="admin-map-gate-marker"
                 points={gateMarkerPoints(MAP_GATE)}
@@ -717,42 +730,38 @@ export default function MapManagementPage() {
               </text>
 
               {/* Khối nền từng khu: đa giác vát góc kiểu bản vẽ kiến trúc phân lô */}
-              {ZONE_BACKDROP_COLUMNS.map((col) => {
-                const colorZone =
-                  mapMode === "cluster"
-                    ? CEMETERY_ZONES.find((z) => z.key === "C")
-                    : CEMETERY_ZONES.find((z) => z.key === col);
-                if (!colorZone) return null;
-                return ZONE_BACKDROPS[col].map((band, index) => (
-                  <g key={`${col}-${band.key}`}>
+              {modeZones.map((zone) => {
+                const backdrop = ZONE_BACKDROPS[zone.key];
+                if (!backdrop) return null;
+                return (
+                  <g key={`backdrop-${zone.key}`}>
                     <polygon
-                      points={band.points}
-                      fill={colorZone.dot}
+                      points={backdrop.points}
+                      fill={zone.dot}
                       fillOpacity={0.08}
-                      stroke={colorZone.dot}
+                      stroke={zone.dot}
                       strokeOpacity={0.5}
                       strokeWidth={1}
                       strokeDasharray="5 3"
                     />
                     <circle
-                      cx={band.cx}
-                      cy={band.cy}
-                      r="9"
+                      cx={backdrop.cx}
+                      cy={backdrop.cy}
+                      r="11"
                       className="admin-map-zone-badge"
-                      stroke={colorZone.dot}
+                      stroke={zone.dot}
                     />
                     <text
-                      x={band.cx}
-                      y={band.cy + 3}
+                      x={backdrop.cx}
+                      y={backdrop.cy + 4}
                       textAnchor="middle"
                       className="admin-map-zone-badge-text"
-                      fill={colorZone.dot}
+                      fill={zone.dot}
                     >
-                      {col}
-                      {index + 1}
+                      {zone.key}
                     </text>
                   </g>
-                ));
+                );
               })}
 
               {modeZones.map((zone) => (
@@ -763,7 +772,7 @@ export default function MapManagementPage() {
                   textAnchor="middle"
                   className="admin-map-zone-label"
                 >
-                  {mapMode === "cluster" ? "LÔ GIA TỘC" : `KHU ${zone.key}`}
+                  {`KHU ${zone.key}`}
                 </text>
               ))}
 
