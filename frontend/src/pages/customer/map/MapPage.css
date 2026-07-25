@@ -384,6 +384,11 @@
   flex: 1;
   overflow: auto;
   min-height: 0;
+  cursor: grab;
+  scroll-behavior: smooth;
+}
+.map-page .map-canvas-wrap:active {
+  cursor: grabbing;
 }
 
 /* mode switch */
@@ -543,8 +548,8 @@
 .map-page #cemetery-map {
   width: 100%;
   height: 100%;
-  min-width: 640px;
-  min-height: 780px;
+  min-width: 1500px;
+  min-height: 1120px;
   cursor: default;
   transition: transform 0.2s ease;
 }
@@ -618,6 +623,13 @@
 .map-page .map-gate-marker {
   fill: rgba(240, 192, 96, 0.55);
 }
+.map-page .map-gate-secondary {
+  fill: rgba(123, 107, 204, 0.55);
+}
+.map-page .map-connector-road {
+  fill: rgba(0, 229, 196, 0.1);
+  stroke-dasharray: 3 3;
+}
 .map-page .zone-badge {
   fill: rgba(4, 6, 14, 0.82);
   stroke-width: 1;
@@ -665,6 +677,9 @@
   font-size: 8px;
   font-family: "Be Vietnam Pro", sans-serif;
   letter-spacing: 0;
+}
+.map-page .gate-label-secondary {
+  fill: rgba(190, 175, 240, 0.85);
 }
 .map-page .zone-label {
   font-family: "Playfair Display", serif;
@@ -1223,8 +1238,8 @@
     overflow: auto;
   }
   .map-page #cemetery-map {
-    width: 640px;
-    height: 780px;
+    width: 1500px;
+    height: 1120px;
   }
   .map-page .map-toolbar {
     padding: 10px 12px;

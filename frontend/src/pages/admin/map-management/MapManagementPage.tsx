@@ -1,12 +1,22 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import { api } from "@/lib/api";
 import {
   CEMETERY_ZONES,
   CEMETERY_ZONE_LAYOUT,
   ZONE_META,
   getCemeteryCoordinates,
+  getGroupIndex,
 } from "@/lib/cemeteryMapLayout";
 import {
+  CLUSTER_GROUP_BACKDROPS,
+  CONNECTOR_ROAD,
   CROSS_ROADS,
   LEFT_DIAGONAL_ROAD_POINTS,
   MAIN_ROAD,
@@ -14,6 +24,7 @@ import {
   MAP_BOUNDARY_POINTS,
   MAP_GATE,
   MAP_VIEWBOX,
+  SECONDARY_GATE,
   SPIRIT_PARK,
   ZONE_BACKDROPS,
   gateMarkerPoints,
@@ -22,6 +33,9 @@ import "./MapManagementPage.css";
 
 type PlotStatus = "available" | "pending" | "reserved" | "sold" | "locked";
 type MapMode = "single" | "cluster";
+
+const SINGLE_ZONES = CEMETERY_ZONES.filter((zone) => zone.mode === "single");
+const clusterZone = CEMETERY_ZONES.find((zone) => zone.mode === "cluster");
 
 interface BackendPlot {
   id: number;
@@ -176,9 +190,13 @@ function plotDescriptionLines(
         ? "sát nhánh lối bên phải của khu"
         : "nằm trong phần lõi yên tĩnh của khu";
   const zoneNote = (ZONE_META[zoneCode] || ZONE_META.A).blurb;
+  const clusterNote =
+    zoneCode === "C"
+      ? ` Thuộc cụm C${getGroupIndex(zoneCode, row, col) + 1} - khu vực riêng biệt, tách bạch với các cụm gia tộc khác.`
+      : "";
   return [
     `Tổng quan: ${plot.plotCode} là ${plot.area >= 10 ? "lô gia tộc" : "lô đơn"} thuộc ${zoneName}, diện tích ${plot.area || 0} m², hướng ${(plot.direction || "chưa cập nhật").toLowerCase()}.`,
-    `Điểm nổi bật: Vị trí ${band}, ${side}, phù hợp cho việc thăm viếng định kỳ.`,
+    `Điểm nổi bật: Vị trí ${band}, ${side}, phù hợp cho việc thăm viếng định kỳ.${clusterNote}`,
     `Gợi ý: ${zoneNote}`,
     `Giá: Giá niêm yết ${formatPrice(plot.price)}.`,
   ];
@@ -230,10 +248,22 @@ export default function MapManagementPage() {
     };
   }, [loadData]);
 
+  const panStateRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    scrollLeft: number;
+    scrollTop: number;
+  } | null>(null);
+
   useEffect(() => {
     const el = mapCanvasRef.current;
     if (!el) return;
     function onWheel(event: WheelEvent) {
+      // Lướt/kéo NGANG -> để trình duyệt tự cuộn ngang, dùng để di chuyển
+      // qua lại giữa khối mộ đơn (trái) và khối lô gia tộc (phải). Chỉ cuộn
+      // DỌC (deltaY trội hơn) mới dùng để zoom.
+      if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
       event.preventDefault();
       const factor = event.deltaY > 0 ? 0.9 : 1.1;
       setZoom((current) =>
@@ -243,6 +273,46 @@ export default function MapManagementPage() {
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
   }, []);
+
+  // Tự đổi chế độ (Một lô <-> Lô gia tộc) khi kéo/lướt ngang qua lại giữa 2
+  // khối trên cùng bản đồ.
+  useEffect(() => {
+    const el = mapCanvasRef.current;
+    if (!el) return;
+    function onScroll() {
+      if (!el) return;
+      const midpoint = (el.scrollWidth - el.clientWidth) / 2;
+      setMapMode(el.scrollLeft > midpoint ? "cluster" : "single");
+    }
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, []);
+
+  function handleCanvasPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    const target = event.target as HTMLElement;
+    if (target.closest(".admin-map-plot")) return;
+    const el = mapCanvasRef.current;
+    if (!el) return;
+    panStateRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      scrollLeft: el.scrollLeft,
+      scrollTop: el.scrollTop,
+    };
+    el.setPointerCapture(event.pointerId);
+  }
+  function handleCanvasPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
+    const pan = panStateRef.current;
+    const el = mapCanvasRef.current;
+    if (!pan || !el || pan.pointerId !== event.pointerId) return;
+    el.scrollLeft = pan.scrollLeft - (event.clientX - pan.startX);
+    el.scrollTop = pan.scrollTop - (event.clientY - pan.startY);
+  }
+  function handleCanvasPointerUp(event: ReactPointerEvent<HTMLDivElement>) {
+    panStateRef.current = null;
+    mapCanvasRef.current?.releasePointerCapture(event.pointerId);
+  }
 
   const slots = useMemo(() => {
     const byCode = new Map(
@@ -335,6 +405,11 @@ export default function MapManagementPage() {
     setSelectedCode(null);
     setZoom(1);
     setRotation(0);
+    const el = mapCanvasRef.current;
+    if (el) {
+      const target = mode === "cluster" ? el.scrollWidth - el.clientWidth : 0;
+      el.scrollTo({ left: target, behavior: "smooth" });
+    }
   }
 
   function openCreate(slot?: MapSlot) {
@@ -606,7 +681,14 @@ export default function MapManagementPage() {
             </div>
           </div>
 
-          <div className="admin-map-canvas" ref={mapCanvasRef}>
+          <div
+            className="admin-map-canvas"
+            ref={mapCanvasRef}
+            onPointerDown={handleCanvasPointerDown}
+            onPointerMove={handleCanvasPointerMove}
+            onPointerUp={handleCanvasPointerUp}
+            onPointerLeave={handleCanvasPointerUp}
+          >
             <svg
               className="admin-map-compass"
               viewBox="0 0 40 40"
@@ -663,7 +745,7 @@ export default function MapManagementPage() {
                 className="admin-map-road admin-map-road-diagonal"
                 points={LEFT_DIAGONAL_ROAD_POINTS}
               />
-              {/* Đường chính chạy dọc bên phải */}
+              {/* Đường chính chạy dọc - sát rìa phải khối mộ đơn */}
               <rect
                 x={MAIN_ROAD.x}
                 y={MAIN_ROAD.y}
@@ -673,7 +755,7 @@ export default function MapManagementPage() {
               />
               <text
                 x={MAIN_ROAD.x + MAIN_ROAD.width / 2}
-                y={MAIN_ROAD.y - 8}
+                y={MAIN_ROAD.y - 10}
                 textAnchor="middle"
                 className="admin-map-road-label"
               >
@@ -689,8 +771,16 @@ export default function MapManagementPage() {
                   className="admin-map-road"
                 />
               ))}
+              {/* Đường dẫn nối sang khối lô gia tộc */}
+              <rect
+                x={CONNECTOR_ROAD.x}
+                y={CONNECTOR_ROAD.y}
+                width={CONNECTOR_ROAD.width}
+                height={CONNECTOR_ROAD.height}
+                className="admin-map-road admin-map-connector-road"
+              />
 
-              {/* Đài Nước Vĩnh Yên - công viên trung tâm */}
+              {/* Khu Tâm Linh - công viên trung tâm (khối mộ đơn) */}
               <g>
                 <rect
                   x={SPIRIT_PARK.x}
@@ -712,10 +802,11 @@ export default function MapManagementPage() {
                   textAnchor="middle"
                   className="admin-spirit-park-label"
                 >
-                  ĐÀI NƯỚC VĨNH YÊN
+                  KHU TÂM LINH
                 </text>
               </g>
 
+              {/* Cổng CHÍNH - chỉ ở khối mộ đơn (trái) */}
               <polygon
                 className="admin-map-gate-marker"
                 points={gateMarkerPoints(MAP_GATE)}
@@ -728,9 +819,22 @@ export default function MapManagementPage() {
               >
                 Cổng chính
               </text>
+              {/* Cổng PHỤ - khối lô gia tộc (phải) */}
+              <polygon
+                className="admin-map-gate-marker admin-map-gate-secondary"
+                points={gateMarkerPoints(SECONDARY_GATE)}
+              />
+              <text
+                x={SECONDARY_GATE.x}
+                y={SECONDARY_GATE.y - 36}
+                textAnchor="middle"
+                className="admin-map-gate-label admin-map-gate-label-secondary"
+              >
+                Cổng phụ
+              </text>
 
-              {/* Khối nền từng khu: đa giác vát góc kiểu bản vẽ kiến trúc phân lô */}
-              {modeZones.map((zone) => {
+              {/* Khối nền 7 khu mộ đơn: đa giác vát góc kiểu bản vẽ kiến trúc phân lô */}
+              {SINGLE_ZONES.map((zone) => {
                 const backdrop = ZONE_BACKDROPS[zone.key];
                 if (!backdrop) return null;
                 return (
@@ -763,8 +867,7 @@ export default function MapManagementPage() {
                   </g>
                 );
               })}
-
-              {modeZones.map((zone) => (
+              {SINGLE_ZONES.map((zone) => (
                 <text
                   key={zone.key}
                   x={zone.labelX}
@@ -775,6 +878,45 @@ export default function MapManagementPage() {
                   {`KHU ${zone.key}`}
                 </text>
               ))}
+
+              {/* Khu C: 4 cụm RIÊNG BIỆT (C1-C4), mỗi cụm dành cho 1 gia tộc */}
+              {CLUSTER_GROUP_BACKDROPS.map((backdrop, index) => (
+                <g key={`cluster-backdrop-${index}`}>
+                  <polygon
+                    points={backdrop.points}
+                    fill={clusterZone?.dot}
+                    fillOpacity={0.09}
+                    stroke={clusterZone?.dot}
+                    strokeOpacity={0.55}
+                    strokeWidth={1}
+                    strokeDasharray="5 3"
+                  />
+                  <circle
+                    cx={backdrop.cx}
+                    cy={backdrop.cy - 60}
+                    r="13"
+                    className="admin-map-zone-badge"
+                    stroke={clusterZone?.dot}
+                  />
+                  <text
+                    x={backdrop.cx}
+                    y={backdrop.cy - 56}
+                    textAnchor="middle"
+                    className="admin-map-zone-badge-text"
+                    fill={clusterZone?.dot}
+                  >{`C${index + 1}`}</text>
+                </g>
+              ))}
+              {clusterZone && (
+                <text
+                  x={clusterZone.labelX}
+                  y={clusterZone.labelY}
+                  textAnchor="middle"
+                  className="admin-map-zone-label"
+                >
+                  {`KHU ${clusterZone.key} - LÔ GIA TỘC`}
+                </text>
+              )}
 
               {visibleSlots.map((slot) => {
                 const plot = slot.plot;

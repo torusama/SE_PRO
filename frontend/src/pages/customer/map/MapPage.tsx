@@ -15,8 +15,11 @@ import {
   CEMETERY_ZONE_LAYOUT,
   ZONE_META,
   getCemeteryCoordinates,
+  getGroupIndex,
 } from "@/lib/cemeteryMapLayout";
 import {
+  CLUSTER_GROUP_BACKDROPS,
+  CONNECTOR_ROAD,
   CROSS_ROADS,
   LEFT_DIAGONAL_ROAD_POINTS,
   MAIN_ROAD,
@@ -24,6 +27,7 @@ import {
   MAP_BOUNDARY_POINTS,
   MAP_GATE,
   MAP_VIEWBOX,
+  SECONDARY_GATE,
   SPIRIT_PARK,
   ZONE_BACKDROPS,
   gateMarkerPoints,
@@ -89,6 +93,18 @@ interface CustomerReservation {
   plotCount?: number;
   createdAt?: string;
   reviewedAt?: string | null;
+}
+
+interface ApiErrorResponse {
+  response?: {
+    data?: {
+      message?: string;
+    };
+  };
+}
+
+function isApiErrorResponse(error: unknown): error is ApiErrorResponse {
+  return typeof error === "object" && error !== null && "response" in error;
 }
 
 const T = {
@@ -239,6 +255,8 @@ function getMyReservationLabel(reservation?: CustomerReservation) {
 }
 
 const ZONES = CEMETERY_ZONES;
+const SINGLE_ZONES = ZONES.filter((zone) => zone.mode === "single");
+const clusterZone = ZONES.find((zone) => zone.mode === "cluster");
 const ZONE_LAYOUT = CEMETERY_ZONE_LAYOUT;
 
 const TEXT_FIXES: Array<[RegExp, string]> = [
@@ -263,7 +281,7 @@ function cleanText(value?: string) {
     text = text.replace(pattern, replacement);
   });
   return text
-    .replace(/â€”|â€“|Ã¢â‚¬â€|Ã¢â‚¬â€œ/g, "-")
+    .replace(/â€”|â€“|Ã¢â‚¬â€|Ã¢â‚¬â€œ/g, "-")
     .replace(/Â|Ã‚/g, "")
     .trim();
 }
@@ -275,7 +293,7 @@ function cleanDescriptionText(value?: string) {
     .replace(/T\?y B\?c/g, "T\u00e2y B\u1eafc")
     .replace(/T\?y/g, "T\u00e2y")
     .replace(/B\?c/g, "B\u1eafc")
-    .replace(/Ã¢â‚¬â€|Ã¢â‚¬â€œ|ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â|ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“/g, "-")
+    .replace(/Ã¢â‚¬â€|Ã¢â‚¬â€œ|ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â|ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“/g, "-")
     .replace(/Ã‚|Ãƒâ€š/g, "")
     .trim();
 }
@@ -531,7 +549,11 @@ function getPlotPositionNote(
       : plotNumber >= maxCol - Math.floor(maxCol / 3) + 1
         ? "s\u00e1t nh\u00e1nh l\u1ed1i b\u00ean ph\u1ea3i c\u1ee7a khu"
         : "n\u1eb1m trong ph\u1ea7n l\u00f5i y\u00ean t\u0129nh c\u1ee7a khu";
-  return `V\u1ecb tr\u00ed ${band}, ${side}, ph\u00f9 h\u1ee3p cho vi\u1ec7c th\u0103m vi\u1ebfng \u0111\u1ecbnh k\u1ef3.`;
+  const clusterNote =
+    zoneCode === "C"
+      ? ` Thu\u1ed9c c\u1ee5m C${getGroupIndex(zoneCode, row, plotNumber) + 1} - m\u1ed9t khu v\u1ef1c ri\u00eang bi\u1ec7t, t\u00e1ch b\u1ea1ch v\u1edbi c\u00e1c c\u1ee5m gia t\u1ed9c kh\u00e1c.`
+      : "";
+  return `V\u1ecb tr\u00ed ${band}, ${side}, ph\u00f9 h\u1ee3p cho vi\u1ec7c th\u0103m vi\u1ebfng \u0111\u1ecbnh k\u1ef3.${clusterNote}`;
 }
 
 function getZoneIntro(zoneCode: string) {
@@ -573,6 +595,19 @@ function buildDirection(plot: MapPlot) {
 function getRouteMeta(plot: MapPlot) {
   const centerX = plot.x + plot.width / 2;
   const centerY = plot.y + plot.height / 2;
+
+  if (plot.zoneCode === "C") {
+    // Khu lô gia tộc đi từ Cổng phụ, thẳng vào cụm gia tộc tương ứng.
+    return {
+      roadX: SECONDARY_GATE.x,
+      rowAisleY: Number((SECONDARY_GATE.y - 30).toFixed(2)),
+      colAisleX: SECONDARY_GATE.x,
+      attachX: Number(centerX.toFixed(2)),
+      attachY: Number(centerY.toFixed(2)),
+      gate: SECONDARY_GATE,
+    };
+  }
+
   const useMainRoad = centerX >= 380;
   const roadX = useMainRoad ? MAIN_ROAD.x : -10;
   const rowAisleY = CROSS_ROADS.reduce((closest, road) => {
@@ -589,14 +624,15 @@ function getRouteMeta(plot: MapPlot) {
     colAisleX: roadX,
     attachX: Number(attachX.toFixed(2)),
     attachY: Number(centerY.toFixed(2)),
+    gate: MAP_GATE,
   };
 }
 
 function routePoints(plot: MapPlot) {
   const route = getRouteMeta(plot);
   return [
-    [MAP_GATE.x, MAP_GATE.y - 30],
-    [route.roadX, MAP_GATE.y - 30],
+    [route.gate.x, route.gate.y - 30],
+    [route.roadX, route.gate.y - 30],
     [route.roadX, route.rowAisleY],
     [route.attachX, route.rowAisleY],
     [route.attachX, route.attachY],
@@ -660,6 +696,13 @@ export default function MapPage() {
     [],
   );
 
+  // Khai báo trước khi được dùng trong các useEffect bên dưới (tránh lỗi
+  // "used before declared" của react-hooks/immutability).
+  function endClusterDrag() {
+    dragModeRef.current = null;
+    dragVisitedRef.current.clear();
+  }
+
   useEffect(() => {
     const el = starsRef.current;
     if (!el) return;
@@ -684,10 +727,22 @@ export default function MapPage() {
     };
   }, []);
 
+  const panStateRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    scrollLeft: number;
+    scrollTop: number;
+  } | null>(null);
+
   useEffect(() => {
     const el = mapWrapRef.current;
     if (!el) return;
     function onWheel(event: WheelEvent) {
+      // Lướt/kéo NGANG (trackpad 2 ngón hoặc Shift+cuộn) -> để trình duyệt tự
+      // cuộn ngang, dùng để di chuyển qua lại giữa khối mộ đơn và khối lô
+      // gia tộc. Chỉ cuộn DỌC (deltaY trội hơn) mới dùng để zoom.
+      if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
       event.preventDefault();
       const factor = event.deltaY > 0 ? 0.9 : 1.1;
       setZoom((current) =>
@@ -697,6 +752,49 @@ export default function MapPage() {
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
   }, []);
+
+  // Tự đổi nhãn/chế độ (Một lô <-> Lô gia tộc) khi người dùng kéo/lướt
+  // ngang qua lại giữa 2 khối trên cùng bản đồ, không cần bấm nút.
+  useEffect(() => {
+    const el = mapWrapRef.current;
+    if (!el) return;
+    function onScroll() {
+      if (!el) return;
+      const midpoint = (el.scrollWidth - el.clientWidth) / 2;
+      setSelectionMode(el.scrollLeft > midpoint ? "cluster" : "single");
+    }
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // Kéo (drag) trên nền trống của bản đồ để pan ngang/dọc — không ảnh hưởng
+  // thao tác kéo-chọn nhiều lô liền kề (chỉ kích hoạt khi KHÔNG bấm vào một
+  // ô mộ).
+  function handleCanvasPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    const target = event.target as HTMLElement;
+    if (target.closest(".plot-cell")) return;
+    const el = mapWrapRef.current;
+    if (!el) return;
+    panStateRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      scrollLeft: el.scrollLeft,
+      scrollTop: el.scrollTop,
+    };
+    el.setPointerCapture(event.pointerId);
+  }
+  function handleCanvasPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
+    const pan = panStateRef.current;
+    const el = mapWrapRef.current;
+    if (!pan || !el || pan.pointerId !== event.pointerId) return;
+    el.scrollLeft = pan.scrollLeft - (event.clientX - pan.startX);
+    el.scrollTop = pan.scrollTop - (event.clientY - pan.startY);
+  }
+  function handleCanvasPointerUp(event: ReactPointerEvent<HTMLDivElement>) {
+    panStateRef.current = null;
+    mapWrapRef.current?.releasePointerCapture(event.pointerId);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -751,6 +849,9 @@ export default function MapPage() {
   useEffect(() => {
     let cancelled = false;
     if (!token) {
+      // Đồng bộ với nguồn dữ liệu ngoài (token đăng nhập): khi người dùng
+      // đăng xuất / mất token thì danh sách yêu cầu của khách phải được xoá.
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reset state to sync with auth token going away
       setMyReservations([]);
       return;
     }
@@ -828,10 +929,14 @@ export default function MapPage() {
       selectedPlot &&
       !filteredPlots.some((plot) => plot.id === selectedPlot.id)
     ) {
+      // Đồng bộ lựa chọn hiện tại với danh sách lô đã lọc: nếu lô đang chọn
+      // không còn nằm trong kết quả lọc thì phải bỏ chọn / ẩn đường đi.
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reconcile selection with the filtered list derived from external data
       setSelectedPlot(null);
       setRoutePlotId(null);
     }
     if (!selectedPlot && filteredPlots.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reconcile selection with the filtered list derived from external data
       setSelectedPlot(filteredPlots[0]);
     }
     setClusterPlots((current) =>
@@ -876,6 +981,11 @@ export default function MapPage() {
     setSearchText("");
     setSelectedPlot(null);
     if (mode === "single") setClusterPlots([]);
+    const el = mapWrapRef.current;
+    if (el) {
+      const target = mode === "cluster" ? el.scrollWidth - el.clientWidth : 0;
+      el.scrollTo({ left: target, behavior: "smooth" });
+    }
   }
 
   function handlePlotPointerDown(
@@ -900,11 +1010,6 @@ export default function MapPage() {
   function handlePlotPointerEnter(plot: MapPlot) {
     if (selectionMode !== "cluster" || !dragModeRef.current) return;
     applyClusterDrag(plot, dragModeRef.current);
-  }
-
-  function endClusterDrag() {
-    dragModeRef.current = null;
-    dragVisitedRef.current.clear();
   }
 
   function applyClusterDrag(plot: MapPlot, mode: "add" | "remove") {
@@ -1015,8 +1120,11 @@ export default function MapPage() {
           current ? { ...current, status: "pending" } : current,
         );
       }
-    } catch (error: any) {
-      setSubmitError(error?.response?.data?.message || T.submitFailed);
+    } catch (error: unknown) {
+      const message = isApiErrorResponse(error)
+        ? error.response?.data?.message
+        : undefined;
+      setSubmitError(message || T.submitFailed);
     } finally {
       setSubmitting(false);
     }
@@ -1216,7 +1324,14 @@ export default function MapPage() {
             </div>
           </div>
 
-          <div className="map-canvas-wrap" ref={mapWrapRef}>
+          <div
+            className="map-canvas-wrap"
+            ref={mapWrapRef}
+            onPointerDown={handleCanvasPointerDown}
+            onPointerMove={handleCanvasPointerMove}
+            onPointerUp={handleCanvasPointerUp}
+            onPointerLeave={handleCanvasPointerUp}
+          >
             <svg
               className="compass"
               viewBox="0 0 40 40"
@@ -1292,19 +1407,19 @@ export default function MapPage() {
                 fill="url(#grid)"
               />
               {/* Ranh giới tổng thể khu đất: đa giác bất cân đối, viền nét đứt đỏ,
-                  mô phỏng theo bản vẽ quy hoạch kiến trúc thực tế */}
+                  bao trọn cả khối mộ đơn (trái) và khối lô gia tộc (phải) */}
               <polygon className="map-land" points={MAP_BOUNDARY_POINTS} />
               <polygon
                 className="map-boundary-line"
                 points={MAP_BOUNDARY_POINTS}
               />
 
-              {/* Đường bao/đường chéo bên trái - không song song trục, xẻ ngang khu đất */}
+              {/* Đường bao/đường chéo bên trái - không song song trục, xẻ ngang khối mộ đơn */}
               <polygon
                 className="map-road map-road-diagonal"
                 points={LEFT_DIAGONAL_ROAD_POINTS}
               />
-              {/* Đường chính chạy dọc bên phải */}
+              {/* Đường chính chạy dọc - sát rìa phải khối mộ đơn */}
               <rect
                 x={MAIN_ROAD.x}
                 y={MAIN_ROAD.y}
@@ -1314,13 +1429,13 @@ export default function MapPage() {
               />
               <text
                 x={MAIN_ROAD.x + MAIN_ROAD.width / 2}
-                y={MAIN_ROAD.y - 8}
+                y={MAIN_ROAD.y - 10}
                 textAnchor="middle"
                 className="map-road-label"
               >
                 {T.northRoad}
               </text>
-              {/* Các đường ngang nối giữa các hàng khu */}
+              {/* Các đường ngang nối giữa các hàng khu mộ đơn */}
               {CROSS_ROADS.map((road, index) => (
                 <rect
                   key={`cross-${index}`}
@@ -1331,8 +1446,16 @@ export default function MapPage() {
                   className="map-road"
                 />
               ))}
+              {/* Đường dẫn nối sang khối lô gia tộc */}
+              <rect
+                x={CONNECTOR_ROAD.x}
+                y={CONNECTOR_ROAD.y}
+                width={CONNECTOR_ROAD.width}
+                height={CONNECTOR_ROAD.height}
+                className="map-road map-connector-road"
+              />
 
-              {/* Đài Nước Vĩnh Yên - công viên trung tâm */}
+              {/* Khu Tâm Linh - công viên trung tâm (nằm trong khối mộ đơn) */}
               <g className="spirit-park">
                 <rect
                   x={SPIRIT_PARK.x}
@@ -1354,10 +1477,11 @@ export default function MapPage() {
                   textAnchor="middle"
                   className="spirit-park-label"
                 >
-                  ĐÀI NƯỚC VĨNH YÊN
+                  KHU TÂM LINH
                 </text>
               </g>
 
+              {/* Cổng CHÍNH - chỉ ở khối mộ đơn (trái) */}
               <polygon
                 className="map-gate-marker"
                 points={gateMarkerPoints(MAP_GATE)}
@@ -1370,10 +1494,22 @@ export default function MapPage() {
               >
                 {T.gate}
               </text>
+              {/* Cổng PHỤ - ở khối lô gia tộc (phải), không phải cổng chính */}
+              <polygon
+                className="map-gate-marker map-gate-secondary"
+                points={gateMarkerPoints(SECONDARY_GATE)}
+              />
+              <text
+                x={SECONDARY_GATE.x}
+                y={SECONDARY_GATE.y - 36}
+                textAnchor="middle"
+                className="gate-label gate-label-secondary"
+              >
+                Cổng phụ
+              </text>
 
-              {/* Khối nền từng khu: đa giác vát góc kiểu bản vẽ kiến trúc phân lô,
-                  vẽ PHÍA SAU lưới ô mộ thật nên không ảnh hưởng hover/click */}
-              {zones.map((zone) => {
+              {/* Khối nền 7 khu mộ đơn: đa giác vát góc kiểu bản vẽ kiến trúc phân lô */}
+              {SINGLE_ZONES.map((zone) => {
                 const backdrop = ZONE_BACKDROPS[zone.key];
                 if (!backdrop) return null;
                 return (
@@ -1406,8 +1542,7 @@ export default function MapPage() {
                   </g>
                 );
               })}
-
-              {zones.map((zone) => (
+              {SINGLE_ZONES.map((zone) => (
                 <text
                   key={zone.key}
                   x={zone.labelX}
@@ -1418,6 +1553,46 @@ export default function MapPage() {
                   {`KHU ${zone.key}`}
                 </text>
               ))}
+
+              {/* Khối nền Khu C: 4 cụm RIÊNG BIỆT (C1-C4), mỗi cụm dành cho 1
+                  gia tộc, có khoảng cách rõ ràng, không dính chung 1 khối */}
+              {CLUSTER_GROUP_BACKDROPS.map((backdrop, index) => (
+                <g key={`cluster-backdrop-${index}`}>
+                  <polygon
+                    points={backdrop.points}
+                    fill={clusterZone?.dot}
+                    fillOpacity={0.08}
+                    stroke={clusterZone?.dot}
+                    strokeOpacity={0.45}
+                    strokeWidth={1}
+                    strokeDasharray="5 3"
+                  />
+                  <circle
+                    cx={backdrop.cx}
+                    cy={backdrop.cy - 60}
+                    r="13"
+                    className="zone-badge"
+                    stroke={clusterZone?.dot}
+                  />
+                  <text
+                    x={backdrop.cx}
+                    y={backdrop.cy - 56}
+                    textAnchor="middle"
+                    className="zone-badge-text"
+                    fill={clusterZone?.dot}
+                  >{`C${index + 1}`}</text>
+                </g>
+              ))}
+              {clusterZone && (
+                <text
+                  x={clusterZone.labelX}
+                  y={clusterZone.labelY}
+                  textAnchor="middle"
+                  className="zone-label"
+                >
+                  {`KHU ${clusterZone.key} - ${T.cluster.toUpperCase()}`}
+                </text>
+              )}
 
               {routePlot && (
                 <polyline
