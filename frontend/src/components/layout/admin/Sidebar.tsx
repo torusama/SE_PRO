@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 import { ROUTES } from '../../../constants/routes'
 
 type MenuItem = {
@@ -32,6 +32,8 @@ const MENU: MenuGroup[] = [
 ]
 
 export default function Sidebar() {
+  const navigate = useNavigate()
+
   return (
     <aside style={{ width: 220, background: '#ffffff', borderRight: '1px solid #e5e2da' }}
       className="flex flex-col py-4 flex-shrink-0">
@@ -41,7 +43,11 @@ export default function Sidebar() {
           style={{
             borderBottom: "1px solid #e5e2da"
           }}>
-        <div style={{ color: '#008573',fontWeight: 600, fontSize: 18, fontFamily: 'var(--font-display)' }} className="font-bold text-base">
+        <div
+          onClick={() => navigate(ROUTES.HOME)}
+          style={{ color: '#008573', fontWeight: 600, fontSize: 18, fontFamily: 'var(--font-display)', cursor: 'pointer' }}
+          className="font-bold text-base"
+        >
           Vĩnh Phúc Viên
         </div>
         <div style={{ fontSize:11, color: '#999' }} className="text-[10px] tracking-wider">CEMETERY MANAGEMENT</div>

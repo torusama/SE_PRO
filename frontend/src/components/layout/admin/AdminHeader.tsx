@@ -1,4 +1,6 @@
 // src/components/layout/admin/AdminHeader.tsx
+import type { CSSProperties } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
@@ -9,6 +11,7 @@ export default function AdminHeader() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   function handleLogout() {
     api.post("/auth/logout").catch(() => {});
@@ -63,29 +66,95 @@ export default function AdminHeader() {
         </button>
 
         {user && (
-          <span
-            style={{
-              color: "#333",
-              fontSize: 13,
-            }}
-          >
-            {user.name}
-          </span>
-        )}
+          <div style={{ position: "relative" }}>
+            <button
+              type="button"
+              onClick={() => setMenuOpen((v) => !v)}
+              style={{
+                color: "#333",
+                fontSize: 13,
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                padding: "4px 6px",
+              }}
+            >
+              {user.name}
+            </button>
 
-        <button
-          onClick={handleLogout}
-          style={{
-            background: "#008573",
-            color: "#fff",
-            borderRadius: 6,
-            padding: "7px 14px",
-            fontSize: 12,
-          }}
-        >
-          Đăng xuất
-        </button>
+            {menuOpen && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "calc(100% + 6px)",
+                  right: 0,
+                  background: "#fff",
+                  border: "1px solid #e5e2da",
+                  borderRadius: 8,
+                  boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
+                  minWidth: 190,
+                  overflow: "hidden",
+                  zIndex: 20,
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    navigate(ROUTES.PROFILE);
+                  }}
+                  style={menuItemStyle}
+                >
+                  Hồ sơ của tôi
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    navigate(ROUTES.APPOINTMENTS);
+                  }}
+                  style={menuItemStyle}
+                >
+                  Đặt và xem lịch hẹn
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    navigate(ROUTES.ADMIN_DASHBOARD);
+                  }}
+                  style={menuItemStyle}
+                >
+                  Trang quản trị
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    handleLogout();
+                  }}
+                  style={{ ...menuItemStyle, color: "#c0392b" }}
+                >
+                  Đăng xuất
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </header>
   );
 }
+
+const menuItemStyle: CSSProperties = {
+  display: "block",
+  width: "100%",
+  textAlign: "left",
+  padding: "10px 16px",
+  fontSize: 13,
+  color: "#333",
+  background: "none",
+  border: "none",
+  borderBottom: "1px solid #f0efe9",
+  cursor: "pointer",
+};

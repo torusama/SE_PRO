@@ -1,6 +1,6 @@
 ﻿-- ================================================================
--- CEMETERY MANAGEMENT SYSTEM â€” PostgreSQL Schema (HoÃ n chá»‰nh 100%)
--- Dá»± Ã¡n: Há»‡ thá»‘ng Quáº£n lÃ½ NghÄ©a trang â€” NhÃ³m 8
+-- CEMETERY MANAGEMENT SYSTEM — PostgreSQL Schema
+-- Dự án: Hệ thống Quản lý Nghĩa trang
 -- PhiÃªn báº£n: 2.4 (Patched â€” 29/06/2026)
 -- Phá»§ sÃ³ng: FR-01 â†’ FR-14 Ä‘áº§y Ä‘á»§
 -- CÃ¡c fix so vá»›i v2.3:
@@ -951,121 +951,119 @@ GROUP BY
 
 -- Users (password hash lÃ  placeholder â€” backend sáº½ hash báº±ng bcrypt)
 INSERT INTO users (email, password_hash, role, full_name, phone_number, address, id_card_number, date_of_birth, gender) VALUES
-('admin@cemetery.vn',        '$2b$10$t3Ao4Uzec0esRbxHdXQIJO1RpZCDhcx9LrnlyoRg4QFzsTHzn5ubu',   'Admin',    'Quáº£n trá»‹ viÃªn Há»‡ thá»‘ng',  '0901234567', 'TP. Há»“ ChÃ­ Minh',  '079200001111', '1985-03-15', 'male'),
-('admin2@cemetery.vn',       '$2b$10$t3Ao4Uzec0esRbxHdXQIJO1RpZCDhcx9LrnlyoRg4QFzsTHzn5ubu',  'Admin',    'PhÃ³ Quáº£n trá»‹ viÃªn',       '0901234568', 'TP. Há»“ ChÃ­ Minh',  '079200002222', '1990-07-20', 'female'),
-('khachhang1@gmail.com',     '$2b$10$t3Ao4Uzec0esRbxHdXQIJO1RpZCDhcx9LrnlyoRg4QFzsTHzn5ubu',   'Customer', 'Nguyá»…n VÄƒn An',           '0987654321', 'Quáº­n 1, TP.HCM',   '079300001111', '1975-05-10', 'male'),
-('khachhang2@gmail.com',     '$2b$10$t3Ao4Uzec0esRbxHdXQIJO1RpZCDhcx9LrnlyoRg4QFzsTHzn5ubu',   'Customer', 'Tráº§n Thá»‹ BÃ¬nh',           '0912345678', 'Quáº­n 3, TP.HCM',   '079300002222', '1980-09-22', 'female'),
-('khachhang3@gmail.com',     '$2b$10$t3Ao4Uzec0esRbxHdXQIJO1RpZCDhcx9LrnlyoRg4QFzsTHzn5ubu',   'Customer', 'LÃª VÄƒn CÆ°á»ng',            '0933445566', 'Quáº­n 7, TP.HCM',   '079300003333', '1968-12-01', 'male'),
-('khachhang4@gmail.com',     '$2b$10$t3Ao4Uzec0esRbxHdXQIJO1RpZCDhcx9LrnlyoRg4QFzsTHzn5ubu',   'Customer', 'Pháº¡m Thá»‹ Dung',           '0944556677', 'BÃ¬nh DÆ°Æ¡ng',        '079300004444', '1955-03-30', 'female');
+('admin@cemetery.vn',        '$2b$10$t3Ao4Uzec0esRbxHdXQIJO1RpZCDhcx9LrnlyoRg4QFzsTHzn5ubu',   'Admin',    'Quản trị viên Hệ thống',  '0901234567', 'TP Hồ Chí Minh',  '079200001111', '1985-03-15', 'male'),
+('admin2@cemetery.vn',       '$2b$10$t3Ao4Uzec0esRbxHdXQIJO1RpZCDhcx9LrnlyoRg4QFzsTHzn5ubu',  'Admin',    'Quản trị viên Hệ thống',       '0901234568', 'TP Hồ Chí Minh',  '079200002222', '1990-07-20', 'female'),
+('khachhang1@gmail.com',     '$2b$10$t3Ao4Uzec0esRbxHdXQIJO1RpZCDhcx9LrnlyoRg4QFzsTHzn5ubu',   'Customer', 'Nguyễn Văn A',           '0987654321', 'Quận 1, TP.HCM',   '079300001111', '1975-05-10', 'male'),
+('khachhang2@gmail.com',     '$2b$10$t3Ao4Uzec0esRbxHdXQIJO1RpZCDhcx9LrnlyoRg4QFzsTHzn5ubu',   'Customer', 'Trần Thị Bình',           '0912345678', 'Quận 3, TP.HCM',   '079300002222', '1980-09-22', 'female'),
+('khachhang3@gmail.com',     '$2b$10$t3Ao4Uzec0esRbxHdXQIJO1RpZCDhcx9LrnlyoRg4QFzsTHzn5ubu',   'Customer', 'Lê Văn Cường',            '0933445566', 'Quận 7, TP.HCM',   '079300003333', '1968-12-01', 'male'),
+('khachhang4@gmail.com',     '$2b$10$t3Ao4Uzec0esRbxHdXQIJO1RpZCDhcx9LrnlyoRg4QFzsTHzn5ubu',   'Customer', 'PPhạm Thị Dung',           '0944556677', 'Bình Dương',        '079300004444', '1955-03-30', 'female');
 
--- Cemetery Zones
 INSERT INTO cemetery_zones (zone_code, zone_name, description, map_x, map_y, map_width, map_height, color_hex, sort_order) VALUES
-('A', 'Khu A â€” Cao Cáº¥p',    'Khu vá»±c cao cáº¥p, phong thá»§y tá»‘t, gáº§n cá»•ng chÃ­nh', 0,   0,   300, 250, '#FFF3CD', 1),
-('B', 'Khu B â€” TiÃªu Chuáº©n', 'Khu vá»±c tiÃªu chuáº©n, diá»‡n tÃ­ch vá»«a pháº£i',          310, 0,   300, 250, '#D1ECF1', 2),
-('C', 'Khu C â€” Gia ÄÃ¬nh',   'Khu vá»±c dÃ nh cho nhÃ³m lÃ´ gia Ä‘Ã¬nh hoáº·c dÃ²ng há»',  0,   260, 300, 300, '#D4EDDA', 3),
-('D', 'Khu D â€” BÃ¬nh DÃ¢n',   'Khu vá»±c giÃ¡ phá»• thÃ´ng',                            310, 260, 300, 300, '#F8D7DA', 4);
+('A', 'Khu A — Cao Cấp',    'Khu vực cao cấp, phong thủy tốt, gần cổng chính', 0,   0,   300, 250, '#FFF3CD', 1),
+('B', 'Khu B — Tiêu Chuẩn', 'Khu vực tiêu chuẩn, diện tích vừa phải',          310, 0,   300, 250, '#D1ECF1', 2),
+('C', 'Khu C — Gia Đình',   'Khu vực dành cho nhóm lô gia đình hoặc dòng họ',  0,   260, 300, 300, '#D4EDDA', 3),
+('D', 'Khu D — Bình Dân',   'Khu vực giá phổ thông',                            310, 260, 300, 300, '#F8D7DA', 4);
 
--- Plots â€” Khu A (10 lÃ´ Ä‘Æ¡n + 2 lÃ´ Ä‘Ã´i)
--- LÆ°u Ã½: A-02-001 vÃ  A-02-003 seed tháº³ng status 'pending' (khÃ´ng qua trigger),
---        nÃªn pháº£i set reserved_until thá»§ cÃ´ng Ä‘á»ƒ cron fn_release_expired_reservations hoáº¡t Ä‘á»™ng Ä‘Ãºng khi test.
+-- Plots — Khu A (10 lô đơn + 2 lô đôi)
+-- Lưu ý: A-02-001 và A-02-003 seed thẳng status 'pending' (không qua trigger),
+--        nên phải set reserved_until thủ công để cron fn_release_expired_reservations hoạt động đúng khi test.
 INSERT INTO plots (plot_code, zone_id, row_number, column_number, map_x, map_y, map_width, map_height, area_sqm, price, direction, plot_type, status) VALUES
 ('A-01-001', 1, '01', '001',  10,  10, 40, 40, 4.0,  50000000, 'Nam',   'single', 'available'),
 ('A-01-002', 1, '01', '002',  55,  10, 40, 40, 4.0,  50000000, 'Nam',   'single', 'available'),
-('A-01-003', 1, '01', '003', 100,  10, 40, 40, 4.0,  52000000, 'ÄÃ´ng',  'single', 'available'),
-('A-01-004', 1, '01', '004', 145,  10, 40, 40, 4.0,  52000000, 'ÄÃ´ng',  'single', 'available'),
+('A-01-003', 1, '01', '003', 100,  10, 40, 40, 4.0,  52000000, 'Đông',  'single', 'available'),
+('A-01-004', 1, '01', '004', 145,  10, 40, 40, 4.0,  52000000, 'Đông',  'single', 'available'),
 ('A-01-005', 1, '01', '005', 190,  10, 40, 40, 4.0,  50000000, 'Nam',   'single', 'available'),
 ('A-02-001', 1, '02', '001',  10,  60, 40, 40, 4.0,  48000000, 'Nam',   'single', 'available'),
 ('A-02-002', 1, '02', '002',  55,  60, 40, 40, 4.0,  48000000, 'Nam',   'single', 'available'),
-('A-02-003', 1, '02', '003', 100,  60, 40, 40, 4.0,  49000000, 'TÃ¢y',   'single', 'available'),
-('A-02-004', 1, '02', '004', 145,  60, 40, 40, 4.0,  49000000, 'TÃ¢y',   'single', 'available'),
+('A-02-003', 1, '02', '003', 100,  60, 40, 40, 4.0,  49000000, 'Tây',   'single', 'available'),
+('A-02-004', 1, '02', '004', 145,  60, 40, 40, 4.0,  49000000, 'Tây',   'single', 'available'),
 ('A-02-005', 1, '02', '005', 190,  60, 40, 40, 4.0,  48000000, 'Nam',   'single', 'available'),
 ('A-03-001', 1, '03', '001',  10, 110, 85, 40, 8.0,  95000000, 'Nam',   'double', 'available'),
 ('A-03-002', 1, '03', '002', 100, 110, 85, 40, 8.0,  95000000, 'Nam',   'double', 'available');
 
--- KhÃ´ng seed tráº¡ng thÃ¡i pending/sold/reserved.
--- CÃ¡c tráº¡ng thÃ¡i nÃ y chá»‰ phÃ¡t sinh khi user gá»­i yÃªu cáº§u vÃ  admin duyá»‡t.
+-- Không seed trạng thái pending/sold/reserved.
+-- Các trạng thái này chỉ phát sinh khi user gửi yêu cầu và admin duyệt.
 
--- Plots â€” Khu B (10 lÃ´ Ä‘Æ¡n)
+-- Plots — Khu B (10 lô đơn)
 INSERT INTO plots (plot_code, zone_id, row_number, column_number, map_x, map_y, map_width, map_height, area_sqm, price, direction, plot_type, status) VALUES
 ('B-01-001', 2, '01', '001',  10,  10, 40, 40, 3.5, 30000000, 'Nam',   'single', 'available'),
 ('B-01-002', 2, '01', '002',  55,  10, 40, 40, 3.5, 30000000, 'Nam',   'single', 'available'),
-('B-01-003', 2, '01', '003', 100,  10, 40, 40, 3.5, 31000000, 'ÄÃ´ng',  'single', 'available'),
-('B-01-004', 2, '01', '004', 145,  10, 40, 40, 3.5, 31000000, 'ÄÃ´ng',  'single', 'available'),
+('B-01-003', 2, '01', '003', 100,  10, 40, 40, 3.5, 31000000, 'Đông',  'single', 'available'),
+('B-01-004', 2, '01', '004', 145,  10, 40, 40, 3.5, 31000000, 'Đông',  'single', 'available'),
 ('B-01-005', 2, '01', '005', 190,  10, 40, 40, 3.5, 30000000, 'Nam',   'single', 'available'),
 ('B-02-001', 2, '02', '001',  10,  60, 40, 40, 3.5, 29000000, 'Nam',   'single', 'available'),
 ('B-02-002', 2, '02', '002',  55,  60, 40, 40, 3.5, 29000000, 'Nam',   'single', 'available'),
-('B-02-003', 2, '02', '003', 100,  60, 40, 40, 3.5, 30000000, 'Báº¯c',   'single', 'available'),
-('B-02-004', 2, '02', '004', 145,  60, 40, 40, 3.5, 30000000, 'Báº¯c',   'single', 'available'),
+('B-02-003', 2, '02', '003', 100,  60, 40, 40, 3.5, 30000000, 'Bắc',   'single', 'available'),
+('B-02-004', 2, '02', '004', 145,  60, 40, 40, 3.5, 30000000, 'Bắc',   'single', 'available'),
 ('B-02-005', 2, '02', '005', 190,  60, 40, 40, 3.5, 29000000, 'Nam',   'single', 'available');
 
--- Plots â€” Khu C (6 lÃ´ gia Ä‘Ã¬nh)
+-- Plots — Khu C (6 lô gia đình)
 INSERT INTO plots (plot_code, zone_id, row_number, column_number, map_x, map_y, map_width, map_height, area_sqm, price, direction, plot_type, status) VALUES
 ('C-01-001', 3, '01', '001',  10,  10, 80, 80, 12.0, 120000000, 'Nam',  'family', 'available'),
 ('C-01-002', 3, '01', '002', 100,  10, 80, 80, 12.0, 120000000, 'Nam',  'family', 'available'),
-('C-01-003', 3, '01', '003', 190,  10, 80, 80, 12.0, 118000000, 'ÄÃ´ng', 'family', 'available'),
-('C-02-001', 3, '02', '001',  10, 100, 80, 80, 12.0, 115000000, 'ÄÃ´ng', 'family', 'available'),
-('C-02-002', 3, '02', '002', 100, 100, 80, 80, 12.0, 115000000, 'ÄÃ´ng', 'family', 'available'),
+('C-01-003', 3, '01', '003', 190,  10, 80, 80, 12.0, 118000000, 'Đông', 'family', 'available'),
+('C-02-001', 3, '02', '001',  10, 100, 80, 80, 12.0, 115000000, 'Đông', 'family', 'available'),
+('C-02-002', 3, '02', '002', 100, 100, 80, 80, 12.0, 115000000, 'Đông', 'family', 'available'),
 ('C-02-003', 3, '02', '003', 190, 100, 80, 80, 12.0, 113000000, 'Nam',  'family', 'available');
 
--- Plots â€” Khu D (8 lÃ´ bÃ¬nh dÃ¢n)
+-- Plots — Khu D (8 lô bình dân)
 INSERT INTO plots (plot_code, zone_id, row_number, column_number, map_x, map_y, map_width, map_height, area_sqm, price, direction, plot_type, status) VALUES
 ('D-01-001', 4, '01', '001',  10,  10, 40, 40, 3.0, 20000000, 'Nam',   'single', 'available'),
 ('D-01-002', 4, '01', '002',  55,  10, 40, 40, 3.0, 20000000, 'Nam',   'single', 'available'),
-('D-01-003', 4, '01', '003', 100,  10, 40, 40, 3.0, 21000000, 'ÄÃ´ng',  'single', 'available'),
-('D-01-004', 4, '01', '004', 145,  10, 40, 40, 3.0, 21000000, 'ÄÃ´ng',  'single', 'available'),
+('D-01-003', 4, '01', '003', 100,  10, 40, 40, 3.0, 21000000, 'Đông',  'single', 'available'),
+('D-01-004', 4, '01', '004', 145,  10, 40, 40, 3.0, 21000000, 'Đông',  'single', 'available'),
 ('D-02-001', 4, '02', '001',  10,  60, 40, 40, 3.0, 19000000, 'Nam',   'single', 'available'),
 ('D-02-002', 4, '02', '002',  55,  60, 40, 40, 3.0, 19000000, 'Nam',   'single', 'available'),
-('D-02-003', 4, '02', '003', 100,  60, 40, 40, 3.0, 20000000, 'Báº¯c',   'single', 'available'),
-('D-02-004', 4, '02', '004', 145,  60, 40, 40, 3.0, 20000000, 'Báº¯c',   'single', 'available');
+('D-02-003', 4, '02', '003', 100,  60, 40, 40, 3.0, 20000000, 'Bắc',   'single', 'available'),
+('D-02-004', 4, '02', '004', 145,  60, 40, 40, 3.0, 20000000, 'Bắc',   'single', 'available');
 
 -- Service Types
 INSERT INTO service_types (name, description, base_price, unit, category, sort_order) VALUES
-('Dá»‹ch vá»¥ mai tÃ¡ng',        'Há»— trá»£ toÃ n bá»™ quy trÃ¬nh mai tÃ¡ng táº¡i nghÄ©a trang',    5000000,  'láº§n',   'burial',      1),
-('ChÄƒm sÃ³c má»™ Ä‘á»‹nh ká»³',     'Vá»‡ sinh, chÄƒm sÃ³c má»™ pháº§n hÃ ng thÃ¡ng',                 500000,   'thÃ¡ng', 'maintenance', 2),
-('Dá»n dáº¹p má»™',              'LÃ m cá», vá»‡ sinh khu vá»±c xung quanh má»™',                200000,   'láº§n',   'maintenance', 3),
-('Thay hoa tÆ°Æ¡i',           'Thay hoa tÆ°Æ¡i theo yÃªu cáº§u',                            150000,   'láº§n',   'maintenance', 4),
-('Tháº¯p hÆ°Æ¡ng',              'Tháº¯p hÆ°Æ¡ng táº¡i má»™ vÃ o cÃ¡c ngÃ y Ä‘áº·c biá»‡t',              100000,   'láº§n',   'memorial',    5),
-('Dá»‹ch vá»¥ tÆ°á»Ÿng niá»‡m',      'Tá»• chá»©c buá»•i lá»… tÆ°á»Ÿng niá»‡m táº¡i má»™ pháº§n',              2000000,  'buá»•i',  'memorial',    6),
-('SÆ¡n sá»­a bia má»™',          'SÆ¡n láº¡i bia má»™ vÃ  khu vá»±c xung quanh',                1500000,  'láº§n',   'maintenance', 7),
-('Chá»¥p áº£nh má»™ pháº§n',        'Ghi láº¡i hÃ¬nh áº£nh má»™ pháº§n vÃ  gá»­i vá» cho gia Ä‘Ã¬nh',      300000,   'láº§n',   'other',       8);
+('Dịch vụ mai táng',        'Hỗ trợ toàn bộ quy trình mai táng tại nghĩa trang',    5000000,  'lần',   'burial',      1),
+('Chăm sóc mộ định kỳ',     'Vệ sinh, chăm sóc mộ phần hàng tháng',                 500000,   'tháng', 'maintenance', 2),
+('Dọn dẹp mộ',              'Làm cỏ, vệ sinh khu vực xung quanh mộ',                200000,   'lần',   'maintenance', 3),
+('Thay hoa tươi',           'Thay hoa tươi theo yêu cầu',                            150000,   'lần',   'maintenance', 4),
+('Thắp hương',              'Thắp hương tại mộ vào các ngày đặc biệt',              100000,   'lần',   'memorial',    5),
+('Dịch vụ tưởng niệm',      'Tổ chức buổi lễ tưởng niệm tại mộ phần',              2000000,  'buổi',  'memorial',    6),
+('Sơn sửa bia mộ',          'Sơn lại bia mộ và khu vực xung quanh',                1500000,  'lần',   'maintenance', 7),
+('Chụp ảnh mộ phần',        'Ghi lại hình ảnh mộ phần và gửi về cho gia đình',      300000,   'lần',   'other',       8);
 
--- KhÃ´ng seed reservation/contract/payment máº«u.
--- CÃ¡c báº£n ghi nÃ y chá»‰ Ä‘Æ°á»£c táº¡o tá»« thao tÃ¡c user tháº­t trÃªn frontend.
+-- Không seed reservation/contract/payment mẫu.
+-- Các bản ghi này chỉ được tạo từ thao tác user thật trên frontend.
 
--- Service order máº«u
+-- Service order mẫu
 INSERT INTO service_orders (user_id, plot_id, service_type_id, quantity, unit_price, amount, requested_date, status, note)
 VALUES
-    (3, 3, 2, 3, 500000, 1500000, '2026-07-01', 'confirmed',  'ChÄƒm sÃ³c má»™ 3 thÃ¡ng'),
-    (3, 3, 5, 2, 100000, 200000,  '2026-06-30', 'completed',  'Tháº¯p hÆ°Æ¡ng ngÃ y giá»—'),
-    (4, 1, 3, 1, 200000, 200000,  '2026-07-05', 'submitted',  'Dá»n dáº¹p má»™');
+    (3, 3, 2, 3, 500000, 1500000, '2026-07-01', 'confirmed',  'Chăm sóc mộ 3 tháng'),
+    (3, 3, 5, 2, 100000, 200000,  '2026-06-30', 'completed',  'Thắp hương ngày giỗ'),
+    (4, 1, 3, 1, 200000, 200000,  '2026-07-05', 'submitted',  'Dọn dẹp mộ');
 
--- Notification máº«u
+-- Notification mẫu
 INSERT INTO notifications (user_id, type, title, message, related_entity_type, related_entity_id, channel)
 VALUES
-    (3, 'request_approved',   'YÃªu cáº§u Ä‘Ã£ Ä‘Æ°á»£c duyá»‡t',
-     'YÃªu cáº§u mua lÃ´ A-01-003 cá»§a báº¡n Ä‘Ã£ Ä‘Æ°á»£c phÃª duyá»‡t. Há»£p Ä‘á»“ng HD-2026-0001 Ä‘Ã£ Ä‘Æ°á»£c táº¡o.',
+    (3, 'request_approved',   'Yêu cầu đã được duyệt',
+     'Yêu cầu mua lô A-01-003 của bạn đã được phê duyệt. Hợp đồng HD-2026-0001 đã được tạo.',
      'reservation_request', 1, 'both'),
-    (3, 'contract_created',   'Há»£p Ä‘á»“ng Ä‘Ã£ Ä‘Æ°á»£c táº¡o',
-     'Há»£p Ä‘á»“ng HD-2026-0001 Ä‘Ã£ Ä‘Æ°á»£c táº¡o thÃ nh cÃ´ng. Vui lÃ²ng kiá»ƒm tra thÃ´ng tin há»£p Ä‘á»“ng.',
+    (3, 'contract_created',   'Hợp đồng đã được tạo',
+     'Hợp đồng HD-2026-0001 đã được tạo thành công. Vui lòng kiểm tra thông tin hợp đồng.',
      'contract', 1, 'in_app'),
-    (4, 'request_submitted',  'YÃªu cáº§u Ä‘Ã£ Ä‘Æ°á»£c gá»­i',
-     'YÃªu cáº§u mua lÃ´ cá»§a báº¡n Ä‘Ã£ Ä‘Æ°á»£c gá»­i thÃ nh cÃ´ng. ChÃºng tÃ´i sáº½ xá»­ lÃ½ trong 1-3 ngÃ y lÃ m viá»‡c.',
+    (4, 'request_submitted',  'Yêu cầu đã được gửi',
+     'Yêu cầu mua lô của bạn đã được gửi thành công. Chúng tôi sẽ xử lý trong 1-3 ngày làm việc.',
      'reservation_request', 2, 'in_app'),
-    (1, 'request_submitted',  'CÃ³ yÃªu cáº§u má»›i cáº§n xá»­ lÃ½',
-     'KhÃ¡ch hÃ ng Tráº§n Thá»‹ BÃ¬nh vá»«a gá»­i yÃªu cáº§u mua lÃ´. Vui lÃ²ng xem xÃ©t vÃ  phÃª duyá»‡t.',
+    (1, 'request_submitted',  'Có yêu cầu mới cần xử lý',
+     'Khách hàng Trần Thị Bình vừa gửi yêu cầu mua lô. Vui lòng xem xét và phê duyệt.',
      'reservation_request', 2, 'in_app'),
-    (3, 'service_completed',  'Dá»‹ch vá»¥ Ä‘Ã£ hoÃ n thÃ nh',
-     'Dá»‹ch vá»¥ tháº¯p hÆ°Æ¡ng táº¡i lÃ´ A-01-003 Ä‘Ã£ Ä‘Æ°á»£c thá»±c hiá»‡n thÃ nh cÃ´ng.',
+    (3, 'service_completed',  'Dịch vụ đã hoàn thành',
+     'Dịch vụ thắp hương tại lô A-01-003 đã được thực hiện thành công.',
      'service_order', 2, 'both');
 
--- Reminder máº«u
+-- Reminder mẫu
 INSERT INTO reminders (user_id, plot_id, title, description, remind_month, remind_day, reminder_type, is_recurring, notify_days_before)
 VALUES
-    (3, 3, 'NgÃ y giá»— cá»§a Nguyá»…n Thá»‹ Máº¹',
-     'NgÃ y giá»— hÃ ng nÄƒm cá»§a cá»¥ Nguyá»…n Thá»‹ Máº¹', 5, 10, 'death_anniversary', TRUE, 3),
-    (3, 3, 'NgÃ y tÆ°á»Ÿng niá»‡m',
-     'NgÃ y kÃ½ há»£p Ä‘á»“ng 01/06 â€” nháº¯c tháº¯p hÆ°Æ¡ng',  6,  1, 'memorial',         TRUE, 1);
-
+    (3, 3, 'Ngày giỗ của Nguyễn Thị Mẹ',
+     'Ngày giỗ hàng năm của cụ Nguyễn Thị Mẹ', 5, 10, 'death_anniversary', TRUE, 3),
+    (3, 3, 'Ngày tưởng niệm',
+     'Ngày ký hợp đồng 01/06 — nhắc thắp hương',  6,  1, 'memorial',         TRUE, 1);
 -- ================================================================
 -- GHI CHÃš TRIá»‚N KHAI CHO BACKEND DEVELOPER
 -- ================================================================
