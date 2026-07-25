@@ -52,3 +52,6 @@ temp/
 .agents/
 .specify/
 specs/
+
+# Local agent instructions
+AGENTS.md
