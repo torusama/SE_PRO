@@ -394,7 +394,7 @@ CREATE TABLE service_types (
     name                VARCHAR(100)    NOT NULL,
     description         TEXT,
     base_price          DECIMAL(15,2)   NOT NULL DEFAULT 0,
-    unit                VARCHAR(30)     NOT NULL DEFAULT 'láº§n',  -- láº§n, thÃ¡ng, buá»•i, bá»™
+    unit                VARCHAR(30)     NOT NULL DEFAULT 'lần',   -- lần, tháng, buổi, bộ
     category            VARCHAR(20)     NOT NULL DEFAULT 'other'
                         CHECK (category IN ('burial', 'maintenance', 'memorial', 'other')),
     image_url           TEXT,

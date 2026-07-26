@@ -29,6 +29,7 @@ Current order:
 15. `011_cemetery_zones_e_to_h.sql`
 16. `012_service_order_management.sql`
 17. `013_fix_utf8_user_names.sql`
+18. `014_fix_utf8_service_types.sql`
 
 Các tiền tố `005` đến `009` bị trùng do lịch sử dự án. Danh sách trên là thứ
 tự được kiểm soát; không chạy migration bằng glob. Các migration mới có
