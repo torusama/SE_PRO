@@ -28,6 +28,7 @@ const MENU: MenuGroup[] = [
     { label: 'Thông báo',         to: ROUTES.ADMIN_NOTIFY },
     { label: 'Chuyển nhượng',     to: ROUTES.ADMIN_TRANSFER },
     { label: 'Phê duyệt lịch hẹn', to: ROUTES.ADMIN_APPOINTMENTS },
+    { label: 'Nhắc lịch ngày giỗ', to: ROUTES.ADMIN_REMINDERS },
   ]},
 ]
 

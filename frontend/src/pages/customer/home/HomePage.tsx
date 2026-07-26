@@ -7,6 +7,7 @@ import "./HomePage.css";
 export default function HomePage() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
+  const role = useAuthStore((s) => s.role);
   const logout = useAuthStore((s) => s.logout);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -1889,10 +1890,10 @@ export default function HomePage() {
               className="feature-card"
               role="button"
               tabIndex={0}
-              onClick={() => navigate(ROUTES.REMINDERS)}
+              onClick={() => navigate(role === "admin" ? ROUTES.ADMIN_REMINDERS : ROUTES.REMINDERS)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ")
-                  navigate(ROUTES.REMINDERS);
+                  navigate(role === "admin" ? ROUTES.ADMIN_REMINDERS : ROUTES.REMINDERS);
               }}
               style={{ cursor: "pointer" }}
             >

@@ -33,6 +33,7 @@ import ServiceManagementPage from "@/pages/admin/service-management/ServiceManag
 import NotificationManagementPage from "@/pages/admin/notification-management/NotificationManagementPage";
 import TransferPage from "@/pages/admin/transfer/TransferPage";
 import AppointmentManagementPage from "@/pages/admin/appointment-management/AppointmentManagementPage";
+import ReminderManagementPage from "@/pages/admin/reminder-management/ReminderManagementPage";
 
 // Auth
 import LoginPage from "@/pages/auth/LoginPage";
@@ -66,6 +67,7 @@ const router = createBrowserRouter([
           { path: ROUTES.PROFILE, element: <ProfilePage /> },
           { path: ROUTES.AVAILABILITY, element: <AvailabilityPage /> },
           { path: ROUTES.APPOINTMENTS, element: <AppointmentsPage /> },
+          { path: ROUTES.REMINDERS, element: <RemindersPage /> },
           {
             element: <RequireCompleteProfile />,
             children: [
@@ -73,7 +75,6 @@ const router = createBrowserRouter([
               { path: ROUTES.PAYMENT, element: <PaymentPage /> },
               { path: ROUTES.MY_LOTS, element: <MyLotsPage /> },
               { path: ROUTES.NOTIFICATION, element: <NotificationPage /> },
-              { path: ROUTES.REMINDERS, element: <RemindersPage /> },
             ],
           },
         ],
@@ -99,6 +100,7 @@ const router = createBrowserRouter([
           { path: "thong-bao", element: <NotificationManagementPage /> },
           { path: "chuyen-nhuong", element: <TransferPage /> },
           { path: "lich-hen", element: <AppointmentManagementPage /> },
+          { path: "nhac-lich", element: <ReminderManagementPage /> },
         ],
       },
     ],

@@ -31,4 +31,5 @@ export const ROUTES = {
   ADMIN_NOTIFY:       '/admin/thong-bao',
   ADMIN_TRANSFER:     '/admin/chuyen-nhuong',
   ADMIN_APPOINTMENTS: '/admin/lich-hen',
+  ADMIN_REMINDERS:    '/admin/nhac-lich',
 } as const
