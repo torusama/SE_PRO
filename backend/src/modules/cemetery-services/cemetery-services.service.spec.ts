@@ -107,4 +107,34 @@ describe('CemeteryServicesService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(database.transaction).not.toHaveBeenCalled();
   });
+
+  it('returns only customer-safe status history for an owned order', async () => {
+    const { database, service } = createService();
+    database.queryOne.mockResolvedValue({
+      id: 12,
+      status: 'confirmed',
+      completionNote: null,
+    });
+    database.query.mockResolvedValue([
+      {
+        id: 1,
+        action: 'status_confirmed',
+        previousStatus: 'submitted',
+        newStatus: 'confirmed',
+      },
+    ]);
+
+    await expect(service.one(12, 7)).resolves.toMatchObject({
+      id: 12,
+      history: [{ newStatus: 'confirmed' }],
+    });
+    expect(database.queryOne).toHaveBeenCalledWith(
+      expect.stringContaining('so.user_id = $2'),
+      [12, 7],
+    );
+    expect(database.query).toHaveBeenCalledWith(
+      expect.not.stringContaining('h.note'),
+      [12],
+    );
+  });
 });

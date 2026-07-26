@@ -4,7 +4,7 @@
 // Đã bỏ thanh nav riêng của mockup (CustomerLayout đã có Navbar dùng chung) và
 // nhãn "FR-xx" (chỉ dùng để đánh dấu lúc thiết kế).
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/store/authStore'
 import { ROUTES } from '@/constants/routes'
@@ -36,10 +36,25 @@ interface ServiceOrder {
   status: OrderStatus
   amount: number
   requestedDate?: string | null
+  scheduledDate?: string | null
   createdAt?: string
+  updatedAt?: string
   serviceName: string
   plotCode?: string | null
   note?: string | null
+  assignedToName?: string | null
+  completionNote?: string | null
+  completionImages?: string[] | null
+  completedAt?: string | null
+  history?: ServiceOrderHistory[]
+}
+
+interface ServiceOrderHistory {
+  id: number
+  action: string
+  previousStatus?: OrderStatus | null
+  newStatus?: OrderStatus | null
+  createdAt: string
 }
 
 interface Contract {
@@ -64,20 +79,20 @@ const CATEGORY_RIBBON: Record<Category, string> = {
   other: 'linear-gradient(90deg, #4da6ff, #00e5c4)',
 }
 
-// 4 trạng thái hiển thị trên progress-track (submitted/pending_confirm gộp làm bước 1)
-const STEP_KEYS: OrderStatus[] = ['submitted', 'confirmed', 'in_progress', 'completed']
+const STEP_KEYS: OrderStatus[] = ['submitted', 'pending_confirm', 'confirmed', 'in_progress', 'completed']
 const STEP_LABEL: Record<string, string> = {
-  submitted: 'Đặt dịch vụ',
-  confirmed: 'Đã xác nhận',
-  in_progress: 'Đang thực hiện',
-  completed: 'Hoàn tất',
-}
-const STATUS_LABEL: Record<OrderStatus, string> = {
-  submitted: 'Chờ xác nhận',
+  submitted: 'Đã gửi',
   pending_confirm: 'Chờ xác nhận',
   confirmed: 'Đã xác nhận',
+  in_progress: 'Thực hiện',
+  completed: 'Hoàn thành',
+}
+const STATUS_LABEL: Record<OrderStatus, string> = {
+  submitted: 'Đã gửi yêu cầu',
+  pending_confirm: 'Đang chờ xác nhận',
+  confirmed: 'Đã xác nhận',
   in_progress: 'Đang thực hiện',
-  completed: 'Hoàn tất',
+  completed: 'Đã hoàn thành',
   cancelled: 'Đã huỷ',
 }
 function statusGroup(status: OrderStatus): 'done' | 'progress' | 'pending' | 'cancelled' {
@@ -88,10 +103,11 @@ function statusGroup(status: OrderStatus): 'done' | 'progress' | 'pending' | 'ca
 }
 function stepIndex(status: OrderStatus) {
   if (status === 'cancelled') return -1
-  if (status === 'submitted' || status === 'pending_confirm') return 0
-  if (status === 'confirmed') return 1
-  if (status === 'in_progress') return 2
-  return 3
+  if (status === 'submitted') return 0
+  if (status === 'pending_confirm') return 1
+  if (status === 'confirmed') return 2
+  if (status === 'in_progress') return 3
+  return 4
 }
 
 const money = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 })
@@ -111,10 +127,11 @@ const PAGE_SIZE = 5
 
 export default function ServicePage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const token = useAuthStore((s) => s.token)
   const isAuthenticated = Boolean(token)
 
-  const [tab, setTab] = useState<Tab>('catalogue')
+  const [tab, setTab] = useState<Tab>(() => searchParams.get('tab') === 'track' ? 'track' : 'catalogue')
   const [serviceTypes, setServiceTypes] = useState<ServiceType[]>([])
   const [orders, setOrders] = useState<ServiceOrder[]>([])
   const [ownedPlots, setOwnedPlots] = useState<Contract[]>([])
@@ -134,7 +151,30 @@ export default function ServicePage() {
   const [statusFilter, setStatusFilter] = useState<'all' | OrderStatus>('all')
   const [search, setSearch] = useState('')
   const [expandedId, setExpandedId] = useState<number | null>(null)
+  const [orderDetails, setOrderDetails] = useState<Record<number, ServiceOrder>>({})
+  const [detailLoadingId, setDetailLoadingId] = useState<number | null>(null)
+  const [detailError, setDetailError] = useState('')
   const [page, setPage] = useState(1)
+
+  async function loadOrderDetail(orderId: number) {
+    setDetailLoadingId(orderId)
+    setDetailError('')
+    try {
+      const response = await api.get<ApiResponse<ServiceOrder>>(`/my/service-orders/${orderId}`)
+      setOrderDetails((current) => ({ ...current, [orderId]: response.data.data }))
+    } catch (requestError) {
+      setDetailError(getErrorMessage(requestError))
+    } finally {
+      setDetailLoadingId(null)
+    }
+  }
+
+  function toggleOrder(orderId: number) {
+    const opening = expandedId !== orderId
+    setExpandedId(opening ? orderId : null)
+    setDetailError('')
+    if (opening && !orderDetails[orderId]) void loadOrderDetail(orderId)
+  }
 
   async function loadAll() {
     setLoading(true)
@@ -153,10 +193,19 @@ export default function ServicePage() {
         api.get<ApiResponse<Contract[]>>('/my/contracts'),
       ])
       setServiceTypes(typesRes.data.data ?? [])
-      setOrders(ordersRes.data.data ?? [])
+      const loadedOrders = ordersRes.data.data ?? []
+      setOrders(loadedOrders)
       const plots = (contractsRes.data.data ?? []).filter((c) => ['active', 'completed'].includes(c.status))
       setOwnedPlots(plots)
       if (plots.length && selectedPlotId === null) setSelectedPlotId(plots[0].plotId)
+      const requestedOrderId = Number(searchParams.get('order'))
+      const requestedIndex = loadedOrders.findIndex((order) => order.id === requestedOrderId)
+      if (requestedIndex >= 0) {
+        setTab('track')
+        setExpandedId(requestedOrderId)
+        setPage(Math.floor(requestedIndex / PAGE_SIZE) + 1)
+        void loadOrderDetail(requestedOrderId)
+      }
     } catch (err) {
       setError(getErrorMessage(err))
     } finally {
@@ -165,6 +214,8 @@ export default function ServicePage() {
   }
 
   useEffect(() => {
+    // Tải dữ liệu tài khoản khi trạng thái đăng nhập thay đổi.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadAll()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated])
@@ -351,7 +402,12 @@ export default function ServicePage() {
             orders={pagedOrders}
             totalCount={filteredOrders.length}
             expandedId={expandedId}
-            setExpandedId={setExpandedId}
+            toggleOrder={toggleOrder}
+            orderDetails={orderDetails}
+            detailLoadingId={detailLoadingId}
+            detailError={detailError}
+            onRefresh={() => void loadAll()}
+            onOpenNotifications={() => navigate(ROUTES.NOTIFICATION)}
             page={page}
             pageCount={pageCount}
             setPage={setPage}
@@ -600,20 +656,56 @@ function TrackTab(props: {
   orders: ServiceOrder[]
   totalCount: number
   expandedId: number | null
-  setExpandedId: (id: number | null) => void
+  toggleOrder: (id: number) => void
+  orderDetails: Record<number, ServiceOrder>
+  detailLoadingId: number | null
+  detailError: string
+  onRefresh: () => void
+  onOpenNotifications: () => void
   page: number
   pageCount: number
   setPage: (p: number) => void
 }) {
-  const { loading, statusFilter, setStatusFilter, search, setSearch, orders, totalCount, expandedId, setExpandedId, page, pageCount, setPage } = props
+  const {
+    loading,
+    statusFilter,
+    setStatusFilter,
+    search,
+    setSearch,
+    orders,
+    totalCount,
+    expandedId,
+    toggleOrder,
+    orderDetails,
+    detailLoadingId,
+    detailError,
+    onRefresh,
+    onOpenNotifications,
+    page,
+    pageCount,
+    setPage,
+  } = props
 
   return (
     <section>
+      <div className="tracking-notice">
+        <div>
+          <strong>Tiến độ được cập nhật trực tiếp từ bộ phận vận hành</strong>
+          <span>Khi trạng thái thay đổi, hệ thống sẽ gửi thông báo vào tài khoản của bạn.</span>
+        </div>
+        <div className="tracking-notice-actions">
+          <button onClick={onRefresh}>↻ Cập nhật mới nhất</button>
+          <button onClick={onOpenNotifications}>Xem thông báo</button>
+        </div>
+      </div>
+
       <div className="filter-bar">
         <button className={`filter-chip ${statusFilter === 'all' ? 'active' : ''}`} onClick={() => setStatusFilter('all')}>Tất cả</button>
+        <button className={`filter-chip ${statusFilter === 'submitted' ? 'active' : ''}`} onClick={() => setStatusFilter('submitted')}>Đã gửi</button>
+        <button className={`filter-chip ${statusFilter === 'pending_confirm' ? 'active' : ''}`} onClick={() => setStatusFilter('pending_confirm')}>Chờ xác nhận</button>
+        <button className={`filter-chip ${statusFilter === 'confirmed' ? 'active' : ''}`} onClick={() => setStatusFilter('confirmed')}>Đã xác nhận</button>
         <button className={`filter-chip ${statusFilter === 'in_progress' ? 'active' : ''}`} onClick={() => setStatusFilter('in_progress')}>Đang thực hiện</button>
-        <button className={`filter-chip ${statusFilter === 'submitted' ? 'active' : ''}`} onClick={() => setStatusFilter('submitted')}>Chờ xác nhận</button>
-        <button className={`filter-chip ${statusFilter === 'completed' ? 'active' : ''}`} onClick={() => setStatusFilter('completed')}>Hoàn tất</button>
+        <button className={`filter-chip ${statusFilter === 'completed' ? 'active' : ''}`} onClick={() => setStatusFilter('completed')}>Hoàn thành</button>
         <button className={`filter-chip ${statusFilter === 'cancelled' ? 'active' : ''}`} onClick={() => setStatusFilter('cancelled')}>Đã huỷ</button>
         <div className="search-box">
           <span>🔍</span>
@@ -632,8 +724,9 @@ function TrackTab(props: {
               const group = statusGroup(order.status)
               const idx = stepIndex(order.status)
               const isExpanded = expandedId === order.id
+              const detail = orderDetails[order.id] ?? order
               return (
-                <article key={order.id} className={`service-item status-${group}`} onClick={() => setExpandedId(isExpanded ? null : order.id)}>
+                <article key={order.id} className={`service-item status-${group}`} onClick={() => toggleOrder(order.id)}>
                   <div className={`s-icon ${group}`}>🌸</div>
                   <div>
                     <div className="s-name">{order.serviceName}</div>
@@ -653,25 +746,71 @@ function TrackTab(props: {
                   <div className="s-right">
                     <span className={`status-badge ${group}`}>{STATUS_LABEL[order.status]}</span>
                     <span className="s-price">{money.format(order.amount)}</span>
-                    <button className="s-action" onClick={(e) => { e.stopPropagation(); setExpandedId(isExpanded ? null : order.id) }}>
+                    <button className="s-action" onClick={(e) => { e.stopPropagation(); toggleOrder(order.id) }}>
                       {isExpanded ? 'Thu gọn' : 'Chi tiết'}
                     </button>
                   </div>
 
                   {isExpanded && (
-                    <div className="detail-panel">
-                      <div className="detail-block">
-                        <h4>Thông tin đơn</h4>
-                        <div className="detail-row"><span className="k">Ngày gửi yêu cầu</span><span className="v">{formatDate(order.createdAt)}</span></div>
-                        <div className="detail-row"><span className="k">Ngày mong muốn</span><span className="v">{formatDate(order.requestedDate)}</span></div>
-                        <div className="detail-row"><span className="k">Trạng thái</span><span className="v">{STATUS_LABEL[order.status]}</span></div>
-                      </div>
-                      <div className="detail-block">
-                        <h4>Ghi chú</h4>
-                        <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.7 }}>
-                          {order.note || 'Không có ghi chú thêm.'}
-                        </p>
-                      </div>
+                    <div className="detail-panel" onClick={(event) => event.stopPropagation()}>
+                      {detailLoadingId === order.id && !orderDetails[order.id] ? (
+                        <div className="detail-loading">Đang tải lịch sử cập nhật...</div>
+                      ) : (
+                        <>
+                          <div className="detail-block">
+                            <h4>Thông tin đơn</h4>
+                            <div className="detail-row"><span className="k">Ngày gửi yêu cầu</span><span className="v">{formatDate(detail.createdAt)}</span></div>
+                            <div className="detail-row"><span className="k">Ngày mong muốn</span><span className="v">{formatDate(detail.requestedDate)}</span></div>
+                            <div className="detail-row"><span className="k">Lịch thực hiện</span><span className="v">{formatDate(detail.scheduledDate)}</span></div>
+                            <div className="detail-row"><span className="k">Người phụ trách</span><span className="v">{detail.assignedToName || 'Đang phân công'}</span></div>
+                            <div className="detail-row"><span className="k">Trạng thái hiện tại</span><span className="v status-value">{STATUS_LABEL[detail.status]}</span></div>
+                            <div className="customer-note">
+                              <strong>Ghi chú khi đặt dịch vụ</strong>
+                              <p>{detail.note || 'Không có ghi chú thêm.'}</p>
+                            </div>
+                          </div>
+
+                          <div className="detail-block">
+                            <h4>Lịch sử tiến độ</h4>
+                            <div className="customer-history">
+                              {(detail.history ?? []).length === 0 ? (
+                                <p className="history-empty">Chưa có cập nhật mới.</p>
+                              ) : (
+                                (detail.history ?? []).map((history, index) => (
+                                  <div className="customer-history-item" key={history.id}>
+                                    <div className="history-marker">{index === (detail.history?.length ?? 0) - 1 ? '●' : '✓'}</div>
+                                    <div>
+                                      <strong>{history.newStatus ? STATUS_LABEL[history.newStatus] : 'Đã gửi yêu cầu'}</strong>
+                                      <span>{formatDate(history.createdAt)}</span>
+                                    </div>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          </div>
+
+                          {detail.status === 'completed' && (
+                            <div className="completion-proof">
+                              <div className="completion-proof-header">
+                                <div>
+                                  <span>✓ Dịch vụ đã hoàn thành</span>
+                                  <strong>Kết quả từ bộ phận thực hiện</strong>
+                                </div>
+                                <small>{formatDate(detail.completedAt)}</small>
+                              </div>
+                              <p>{detail.completionNote || 'Dịch vụ đã được xác nhận hoàn thành.'}</p>
+                              {(detail.completionImages ?? []).length > 0 && (
+                                <div className="customer-evidence-grid">
+                                  {(detail.completionImages ?? []).map((filename) => (
+                                    <CustomerEvidenceImage key={filename} orderId={detail.id} filename={filename} />
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </>
+                      )}
+                      {detailError && <div className="detail-error">{detailError}</div>}
                     </div>
                   )}
                 </article>
@@ -691,6 +830,37 @@ function TrackTab(props: {
         </>
       )}
     </section>
+  )
+}
+
+function CustomerEvidenceImage({ orderId, filename }: { orderId: number; filename: string }) {
+  const [url, setUrl] = useState('')
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    let objectUrl = ''
+    let active = true
+    void api.get(`/service-orders/${orderId}/evidence/${encodeURIComponent(filename)}`, { responseType: 'blob' })
+      .then((response) => {
+        if (!active) return
+        objectUrl = URL.createObjectURL(response.data)
+        setUrl(objectUrl)
+      })
+      .catch(() => {
+        if (active) setFailed(true)
+      })
+    return () => {
+      active = false
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [filename, orderId])
+
+  if (failed) return <div className="customer-evidence-fallback">Không tải được ảnh</div>
+  if (!url) return <div className="customer-evidence-fallback">Đang tải ảnh...</div>
+  return (
+    <a href={url} target="_blank" rel="noreferrer" aria-label="Mở ảnh bằng chứng hoàn thành">
+      <img src={url} alt="Bằng chứng hoàn thành dịch vụ" />
+    </a>
   )
 }
 

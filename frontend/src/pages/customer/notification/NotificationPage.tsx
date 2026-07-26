@@ -98,7 +98,7 @@ function targetRoute(item: NotificationItem): string | null {
     case 'contract':
       return ROUTES.MY_LOTS
     case 'service_order':
-      return ROUTES.SERVICES
+      return `${ROUTES.SERVICES}?tab=track${item.relatedEntityId ? `&order=${item.relatedEntityId}` : ''}`
     case 'reminder':
       return ROUTES.REMINDERS
     default:

@@ -972,7 +972,7 @@ INSERT INTO users (email, password_hash, role, full_name, phone_number, address,
 ('khachhang1@gmail.com',     '$2b$10$t3Ao4Uzec0esRbxHdXQIJO1RpZCDhcx9LrnlyoRg4QFzsTHzn5ubu',   'Customer', 'Nguyễn Văn A',           '0987654321', 'Quận 1, TP.HCM',   '079300001111', '1975-05-10', 'male'),
 ('khachhang2@gmail.com',     '$2b$10$t3Ao4Uzec0esRbxHdXQIJO1RpZCDhcx9LrnlyoRg4QFzsTHzn5ubu',   'Customer', 'Trần Thị Bình',           '0912345678', 'Quận 3, TP.HCM',   '079300002222', '1980-09-22', 'female'),
 ('khachhang3@gmail.com',     '$2b$10$t3Ao4Uzec0esRbxHdXQIJO1RpZCDhcx9LrnlyoRg4QFzsTHzn5ubu',   'Customer', 'Lê Văn Cường',            '0933445566', 'Quận 7, TP.HCM',   '079300003333', '1968-12-01', 'male'),
-('khachhang4@gmail.com',     '$2b$10$t3Ao4Uzec0esRbxHdXQIJO1RpZCDhcx9LrnlyoRg4QFzsTHzn5ubu',   'Customer', 'PPhạm Thị Dung',           '0944556677', 'Bình Dương',        '079300004444', '1955-03-30', 'female');
+('khachhang4@gmail.com',     '$2b$10$t3Ao4Uzec0esRbxHdXQIJO1RpZCDhcx9LrnlyoRg4QFzsTHzn5ubu',   'Customer', 'Phạm Thị Dung',            '0944556677', 'Bình Dương',        '079300004444', '1955-03-30', 'female');
 
 INSERT INTO cemetery_zones (zone_code, zone_name, description, map_x, map_y, map_width, map_height, color_hex, sort_order) VALUES
 ('A', 'Khu A — Cao Cấp',    'Khu vực cao cấp, phong thủy tốt, gần cổng chính', 0,   0,   300, 250, '#FFF3CD', 1),

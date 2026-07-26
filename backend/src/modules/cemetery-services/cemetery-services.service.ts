@@ -133,7 +133,21 @@ export class CemeteryServicesService {
         [id, userId],
       );
       if (!order) throw new NotFoundException('Không tìm thấy đơn dịch vụ');
-      return order;
+      const history = await this.database.query(
+        `SELECT h.history_id AS id, h.action,
+                h.previous_status AS "previousStatus",
+                h.new_status AS "newStatus",
+                h.created_at AS "createdAt"
+         FROM service_order_history h
+         WHERE h.order_id = $1
+           AND (
+             h.action IN ('submitted', 'completed')
+             OR h.new_status IS DISTINCT FROM h.previous_status
+           )
+         ORDER BY h.created_at ASC, h.history_id ASC`,
+        [id],
+      );
+      return { ...order, history };
     }
 
     const order = await this.database.queryOne(
@@ -448,7 +462,8 @@ export class CemeteryServicesService {
                    so.completed_at AS "completedAt",
                    st.name AS "serviceName", st.category,
                    p.plot_code AS "plotCode",
-                   u.full_name AS "customerName"
+                   u.full_name AS "customerName",
+                   assignee.full_name AS "assignedToName"
                    ${
                      admin
                        ? `,
@@ -456,7 +471,6 @@ export class CemeteryServicesService {
                    u.phone_number AS "customerPhone",
                    so.admin_note AS "adminNote",
                    so.assigned_to AS "assignedTo",
-                   assignee.full_name AS "assignedToName",
                    admin.full_name AS "adminName"`
                        : ''
                    }
@@ -464,10 +478,10 @@ export class CemeteryServicesService {
             JOIN service_types st ON st.service_type_id = so.service_type_id
             JOIN users u ON u.user_id = so.user_id
             LEFT JOIN plots p ON p.plot_id = so.plot_id
+            LEFT JOIN users assignee ON assignee.user_id = so.assigned_to
             ${
               admin
                 ? `
-            LEFT JOIN users assignee ON assignee.user_id = so.assigned_to
             LEFT JOIN users admin ON admin.user_id = so.admin_id`
                 : ''
             }
