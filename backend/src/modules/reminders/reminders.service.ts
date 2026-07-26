@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { DatabaseService } from '../../database/database.service';
+import { EmailService } from '../email/email.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateReminderDto } from './dto/create-reminder.dto';
 import { UpdateReminderDto } from './dto/update-reminder.dto';
@@ -26,6 +27,8 @@ interface ReminderRow {
   reminderType: string;
   isRecurring: boolean;
   notifyDaysBefore: number;
+  notifyEmail: boolean;
+  notifyEmails: string[];
   isActive: boolean;
   lastSentAt: string | null;
   lastSentYear: number | null;
@@ -34,15 +37,17 @@ interface ReminderRow {
   deceasedName?: string | null;
 }
 
-const SELECT_FIELDS = `reminder_id AS id, user_id AS "userId", plot_id AS "plotId",
-       ownership_id AS "ownershipId", title, description,
-       remind_month AS "remindMonth", remind_day AS "remindDay",
-       lunar_month AS "lunarMonth", lunar_day AS "lunarDay",
-       is_leap_month AS "isLeapMonth", specific_date AS "specificDate",
-       reminder_type AS "reminderType", is_recurring AS "isRecurring",
-       notify_days_before AS "notifyDaysBefore", is_active AS "isActive",
-       last_sent_at AS "lastSentAt", last_sent_year AS "lastSentYear",
-       created_at AS "createdAt"`;
+const SELECT_FIELDS = `r.reminder_id AS id, r.user_id AS "userId", r.plot_id AS "plotId",
+       r.ownership_id AS "ownershipId", r.title, r.description,
+       r.remind_month AS "remindMonth", r.remind_day AS "remindDay",
+       r.lunar_month AS "lunarMonth", r.lunar_day AS "lunarDay",
+       r.is_leap_month AS "isLeapMonth", r.specific_date AS "specificDate",
+       r.reminder_type AS "reminderType", r.is_recurring AS "isRecurring",
+       r.notify_days_before AS "notifyDaysBefore",
+       r.notify_email AS "notifyEmail", r.notify_emails AS "notifyEmails",
+       r.is_active AS "isActive",
+       r.last_sent_at AS "lastSentAt", r.last_sent_year AS "lastSentYear",
+       r.created_at AS "createdAt"`;
 
 @Injectable()
 export class RemindersService {
@@ -51,6 +56,7 @@ export class RemindersService {
   constructor(
     private readonly database: DatabaseService,
     private readonly notificationsService: NotificationsService,
+    private readonly emailService: EmailService,
   ) {}
 
   async create(userId: number, dto: CreateReminderDto) {
@@ -62,11 +68,12 @@ export class RemindersService {
       dto.specificDate,
     );
     const row = await this.database.queryOne<ReminderRow>(
-      `INSERT INTO reminders
+      `INSERT INTO reminders AS r
          (user_id, plot_id, ownership_id, title, description,
           remind_month, remind_day, lunar_month, lunar_day, is_leap_month,
-          specific_date, reminder_type, is_recurring, notify_days_before)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+          specific_date, reminder_type, is_recurring, notify_days_before,
+          notify_email, notify_emails)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
        RETURNING ${SELECT_FIELDS}`,
       [
         userId,
@@ -83,6 +90,8 @@ export class RemindersService {
         dto.reminderType ?? 'death_anniversary',
         isRecurring,
         dto.notifyDaysBefore ?? 3,
+        dto.notifyEmail ?? (dto.notifyEmails?.length ? true : false),
+        dto.notifyEmails ?? [],
       ],
     );
     return this.decorate(row!);
@@ -158,14 +167,15 @@ export class RemindersService {
       dto.specificDate ?? existing.specificDate ?? undefined,
     );
     const row = await this.database.queryOne<ReminderRow>(
-      `UPDATE reminders SET
+      `UPDATE reminders AS r SET
          title = $3, description = $4, plot_id = $5, ownership_id = $6,
          reminder_type = $7, is_recurring = $8,
          remind_month = $9, remind_day = $10,
          lunar_month = $11, lunar_day = $12, is_leap_month = $13,
          specific_date = $14, notify_days_before = $15,
-         is_active = $16, updated_at = NOW()
-       WHERE reminder_id = $1 AND user_id = $2 AND is_deleted = FALSE
+         is_active = $16, notify_email = $17, notify_emails = $18,
+         updated_at = NOW()
+       WHERE r.reminder_id = $1 AND r.user_id = $2 AND r.is_deleted = FALSE
        RETURNING ${SELECT_FIELDS}`,
       [
         id,
@@ -186,6 +196,8 @@ export class RemindersService {
         specificDate,
         dto.notifyDaysBefore ?? existing.notifyDaysBefore,
         dto.isActive ?? existing.isActive,
+        dto.notifyEmail ?? (dto.notifyEmails ? dto.notifyEmails.length > 0 : existing.notifyEmail),
+        dto.notifyEmails ?? existing.notifyEmails,
       ],
     );
     if (!row) throw new NotFoundException('Reminder not found');
@@ -204,8 +216,8 @@ export class RemindersService {
 
   private async getOwned(userId: number, id: number) {
     const row = await this.database.queryOne<ReminderRow>(
-      `SELECT ${SELECT_FIELDS} FROM reminders
-       WHERE reminder_id = $1 AND user_id = $2 AND is_deleted = FALSE`,
+      `SELECT ${SELECT_FIELDS} FROM reminders r
+       WHERE r.reminder_id = $1 AND r.user_id = $2 AND r.is_deleted = FALSE`,
       [id, userId],
     );
     if (!row) throw new NotFoundException('Reminder not found');
@@ -293,15 +305,32 @@ export class RemindersService {
           ? 'hôm nay'
           : `còn ${decorated.daysUntil} ngày nữa`;
       const location = row.plotCode ? ` tại lô ${row.plotCode}` : '';
+      const message = `${row.title}${location} — ${when} (${decorated.nextDate}).`;
 
       await this.notificationsService.createInApp(
         row.userId,
         'memorial_reminder',
         `Sắp đến: ${row.title}`,
-        `${row.title}${location} — ${when} (${decorated.nextDate}).`,
+        message,
         'reminder',
         row.id,
       );
+
+      if (row.notifyEmail && row.notifyEmails && row.notifyEmails.length > 0) {
+        for (const email of row.notifyEmails) {
+          try {
+            await this.emailService.sendReminderEmail(
+              email,
+              `Sắp đến: ${row.title}`,
+              message,
+            );
+          } catch (err) {
+            this.logger.error(
+              `Gửi email nhắc lịch tới ${email} thất bại: ${(err as Error).message}`,
+            );
+          }
+        }
+      }
 
       await this.database.query(
         `UPDATE reminders SET last_sent_at = NOW(), last_sent_year = $2

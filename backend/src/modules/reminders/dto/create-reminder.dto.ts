@@ -1,5 +1,9 @@
 import {
+  ArrayMaxSize,
+  ArrayUnique,
+  IsArray,
   IsBoolean,
+  IsEmail,
   IsIn,
   IsInt,
   IsOptional,
@@ -78,4 +82,17 @@ export class CreateReminderDto {
   @Min(0)
   @Max(30)
   notifyDaysBefore?: number;
+
+  // Kênh nhận thông báo qua Gmail (ngoài in-app mặc định luôn bật).
+  // notifyEmail = true khi có ít nhất 1 email trong notifyEmails.
+  @IsOptional()
+  @IsBoolean()
+  notifyEmail?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(10)
+  @ArrayUnique((email: string) => email.toLowerCase(), { message: 'Vui lòng chọn email khác, email đã bị trùng.' })
+  @IsEmail({}, { each: true, message: 'Email không hợp lệ hoặc bị trùng.' })
+  notifyEmails?: string[];
 }

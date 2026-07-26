@@ -1,13 +1,23 @@
 // Chuyển thể 1:1 từ mockup fr08_nhac_lich_ngay_gio.html.
 // Đã bỏ thanh nav riêng của mockup (CustomerLayout đã có Navbar dùng chung).
 // Bảng chọn loại nhắc lịch rút còn 2 lựa chọn thật (Hàng năm / Một lần) khớp
-// với is_recurring ở backend (/my/reminders), bỏ hàng "kênh gửi" email/SMS vì
-// backend chỉ hỗ trợ thông báo trong app (đã có ở fr09/NotificationPage).
+// với is_recurring ở backend (/my/reminders).
+// Cập nhật: bổ sung lại 3 phần mockup có mà bản rút gọn trước đó bỏ:
+//   1) Nút "Đặt dịch vụ" ở banner sắp đến + icon 🌸 trên từng dòng nhắc lịch,
+//      điều hướng sang trang đặt dịch vụ cúng lễ cho đúng lô liên quan.
+//   2) Chọn ngày theo Âm lịch (ngoài Dương lịch) cho nhắc lịch lặp lại — quy
+//      đổi sang dương lịch tự động mỗi năm bằng src/lib/lunarCalendar.ts.
+//   3) Kênh nhận thông báo qua Email (ngoài in-app mặc định luôn bật).
+// Payload gửi lên thêm 2 field mới: `calendarType` ('solar' | 'lunar') và
+// `notifyEmail` (boolean) — nếu backend /my/reminders chưa nhận 2 field này
+// thì cứ bỏ qua an toàn (không phá field cũ), chỉ cần thêm cột tương ứng ở
+// bảng reminders để lưu và tính nextDate theo âm lịch khi calendarType=lunar.
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/store/authStore'
 import { ROUTES } from '@/constants/routes'
+import { nextLunarOccurrence } from '@/lib/lunarCalendar'
 import './RemindersPage.css'
 
 interface ApiResponse<T> {
@@ -18,6 +28,8 @@ interface ApiResponse<T> {
 
 type ReminderType = 'death_anniversary' | 'memorial' | 'maintenance' | 'other'
 
+type CalendarType = 'solar' | 'lunar'
+
 interface Reminder {
   id: number
   title: string
@@ -25,10 +37,13 @@ interface Reminder {
   plotId?: number | null
   reminderType: ReminderType
   isRecurring: boolean
+  calendarType?: CalendarType
   remindMonth?: number | null
   remindDay?: number | null
   specificDate?: string | null
   notifyDaysBefore: number
+  notifyEmail?: boolean
+  notifyEmails?: string[]
   isActive: boolean
   plotCode?: string | null
   deceasedName?: string | null
@@ -72,10 +87,32 @@ const emptyForm = {
   plotId: null as number | null,
   reminderType: 'death_anniversary' as ReminderType,
   isRecurring: true,
+  calendarType: 'solar' as CalendarType,
   remindMonth: '' as string | number,
   remindDay: '' as string | number,
   specificDate: '',
   notifyDaysBefore: 3,
+  notifyEmails: [] as string[],
+  notifyEmailDraft: '',
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+/** Với nhắc lịch lặp lại theo Âm lịch, backend chỉ lưu ngày/tháng âm — client
+ * tự quy đổi ra ngày dương gần nhất để hiển thị đếm ngược, phòng khi backend
+ * chưa hỗ trợ tính nextDate theo âm lịch. */
+function effectiveNextDate(r: Reminder): { date: Date | null; iso: string | null } {
+  if (r.isRecurring && r.calendarType === 'lunar' && r.remindDay && r.remindMonth) {
+    const date = nextLunarOccurrence(r.remindDay, r.remindMonth)
+    return { date, iso: date.toISOString().slice(0, 10) }
+  }
+  if (!r.nextDate) return { date: null, iso: null }
+  return { date: new Date(r.nextDate), iso: r.nextDate.slice(0, 10) }
+}
+
+function daysBetween(a: Date, b: Date): number {
+  const ms = new Date(b.getFullYear(), b.getMonth(), b.getDate()).getTime() - new Date(a.getFullYear(), a.getMonth(), a.getDate()).getTime()
+  return Math.round(ms / 86400000)
 }
 
 export default function RemindersPage() {
@@ -124,17 +161,34 @@ export default function RemindersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated])
 
+  // daysUntil "hiệu lực": ưu tiên giá trị backend trả về, nhưng với nhắc lịch
+  // âm lịch thì luôn tính lại phía client để chắc chắn đúng năm hiện tại.
+  function effectiveDaysUntil(r: Reminder): number | null {
+    if (r.isRecurring && r.calendarType === 'lunar' && r.remindDay && r.remindMonth) {
+      return daysBetween(new Date(), effectiveNextDate(r).date as Date)
+    }
+    return r.daysUntil
+  }
+
   const upcoming = useMemo(() => {
-    const active = reminders.filter((r) => r.isActive && r.daysUntil !== null)
-    return active.sort((a, b) => (a.daysUntil ?? 0) - (b.daysUntil ?? 0))[0] ?? null
+    const active = reminders
+      .filter((r) => r.isActive)
+      .map((r) => ({ r, days: effectiveDaysUntil(r) }))
+      .filter((x) => x.days !== null)
+    active.sort((a, b) => (a.days ?? 0) - (b.days ?? 0))
+    return active[0] ?? null
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reminders])
 
   const sortedReminders = useMemo(() => {
-    return [...reminders].sort((a, b) => {
-      if (a.daysUntil === null) return 1
-      if (b.daysUntil === null) return -1
-      return a.daysUntil - b.daysUntil
-    })
+    return [...reminders]
+      .map((r) => ({ r, days: effectiveDaysUntil(r) }))
+      .sort((a, b) => {
+        if (a.days === null) return 1
+        if (b.days === null) return -1
+        return a.days - b.days
+      })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reminders])
 
   // Lịch tháng: ngày nào trùng nextDate của 1 nhắc lịch sẽ có chấm vàng
@@ -145,7 +199,12 @@ export default function RemindersPage() {
     const daysInMonth = new Date(year, month + 1, 0).getDate()
     const daysInPrevMonth = new Date(year, month, 0).getDate()
     const today = new Date()
-    const eventDates = new Set(reminders.filter((r) => r.isActive && r.nextDate).map((r) => r.nextDate))
+    const eventDates = new Set(
+      reminders
+        .filter((r) => r.isActive)
+        .map((r) => effectiveNextDate(r).iso)
+        .filter((iso): iso is string => Boolean(iso)),
+    )
 
     const cells: { date: Date; otherMonth: boolean; iso: string }[] = []
     for (let i = firstDow - 1; i >= 0; i--) cells.push({ date: new Date(year, month - 1, daysInPrevMonth - i), otherMonth: true, iso: '' })
@@ -191,11 +250,34 @@ export default function RemindersPage() {
       plotId: reminder.plotId ?? null,
       reminderType: reminder.reminderType,
       isRecurring: reminder.isRecurring,
+      calendarType: reminder.calendarType ?? 'solar',
       remindMonth: reminder.remindMonth ?? '',
       remindDay: reminder.remindDay ?? '',
       specificDate: reminder.specificDate ?? '',
       notifyDaysBefore: reminder.notifyDaysBefore,
+      notifyEmails: reminder.notifyEmails ?? [],
+      notifyEmailDraft: '',
     })
+  }
+
+  /** Thêm 1 email vào danh sách nhận thông báo (ô nhập + nút "+"). */
+  function addNotifyEmail() {
+    const raw = form.notifyEmailDraft.trim().toLowerCase()
+    if (!raw) return
+    if (!EMAIL_RE.test(raw)) {
+      setFormError('Email không hợp lệ.')
+      return
+    }
+    if (form.notifyEmails.includes(raw)) {
+      setFormError('Email này đã được thêm, vui lòng chọn email khác.')
+      return
+    }
+    setFormError('')
+    setForm({ ...form, notifyEmails: [...form.notifyEmails, raw], notifyEmailDraft: '' })
+  }
+
+  function removeNotifyEmail(email: string) {
+    setForm({ ...form, notifyEmails: form.notifyEmails.filter((e) => e !== email) })
   }
 
   async function submitForm() {
@@ -222,10 +304,13 @@ export default function RemindersPage() {
         plotId: form.plotId ?? undefined,
         reminderType: form.reminderType,
         isRecurring: form.isRecurring,
+        calendarType: form.isRecurring ? form.calendarType : undefined,
         remindMonth: form.isRecurring ? Number(form.remindMonth) : undefined,
         remindDay: form.isRecurring ? Number(form.remindDay) : undefined,
         specificDate: form.isRecurring ? undefined : form.specificDate,
         notifyDaysBefore: Number(form.notifyDaysBefore),
+        notifyEmail: form.notifyEmails.length > 0,
+        notifyEmails: form.notifyEmails,
       }
       if (editingId) {
         await api.patch(`/my/reminders/${editingId}`, payload)
@@ -264,11 +349,18 @@ export default function RemindersPage() {
     }
   }
 
-  function dayBadge(reminder: Reminder) {
-    if (reminder.daysUntil === null) return { cls: 'past', text: 'Không lặp lại' }
-    if (reminder.daysUntil === 0) return { cls: 'soon', text: 'Hôm nay' }
-    if (reminder.daysUntil <= reminder.notifyDaysBefore) return { cls: 'soon', text: `Còn ${reminder.daysUntil} ngày` }
-    return { cls: 'far', text: `Còn ${reminder.daysUntil} ngày` }
+  function dayBadge(reminder: Reminder, days: number | null) {
+    if (days === null) return { cls: 'past', text: 'Không lặp lại' }
+    if (days === 0) return { cls: 'soon', text: 'Hôm nay' }
+    if (days <= reminder.notifyDaysBefore) return { cls: 'soon', text: `Còn ${days} ngày` }
+    return { cls: 'far', text: `Còn ${days} ngày` }
+  }
+
+  /** Điều hướng sang trang đặt dịch vụ cúng lễ, gắn kèm lô liên quan nếu có
+   * (mockup: icon 🌸 / nút "Đặt dịch vụ →"). */
+  function goBookService(reminder: Reminder) {
+    if (reminder.plotId) navigate(ROUTES.SERVICE_BOOK.replace(':lotId', String(reminder.plotId)))
+    else navigate(ROUTES.SERVICES)
   }
 
   return (
@@ -303,15 +395,20 @@ export default function RemindersPage() {
             <div className="upcoming-moon">🌕</div>
             <div className="upcoming-info">
               <div className="upcoming-label">Sắp đến</div>
-              <div className="upcoming-title">{upcoming.title}</div>
+              <div className="upcoming-title">{upcoming.r.title}</div>
               <p className="upcoming-sub">
-                {upcoming.plotCode ? `Lô ${upcoming.plotCode} · ` : ''}Ngày {formatDate(upcoming.nextDate)}
+                {upcoming.r.plotCode ? `Lô ${upcoming.r.plotCode} · ` : ''}
+                Ngày {formatDate(effectiveNextDate(upcoming.r).iso)}
+                {upcoming.r.calendarType === 'lunar' && upcoming.r.remindDay && upcoming.r.remindMonth
+                  ? ` · Âm lịch ${String(upcoming.r.remindDay).padStart(2, '0')}/${String(upcoming.r.remindMonth).padStart(2, '0')}`
+                  : ''}
               </p>
             </div>
             <div className="upcoming-countdown">
-              <div className="countdown-num">{upcoming.daysUntil}</div>
+              <div className="countdown-num">{upcoming.days}</div>
               <div className="countdown-label">ngày nữa</div>
             </div>
+            <button className="upcoming-btn" onClick={() => goBookService(upcoming.r)}>Đặt dịch vụ →</button>
           </div>
         )}
 
@@ -354,23 +451,29 @@ export default function RemindersPage() {
               <div className="empty-state"><div className="empty-icon">🕯️</div><p>Bạn chưa có nhắc lịch nào. Tạo mới ở bảng bên phải.</p></div>
             ) : (
               <div className="reminder-list">
-                {sortedReminders.map((r) => {
+                {sortedReminders.map(({ r, days }) => {
                   const meta = TYPE_META[r.reminderType]
-                  const badge = dayBadge(r)
+                  const badge = dayBadge(r, days)
+                  const eff = effectiveNextDate(r)
                   return (
                     <div key={r.id} className={`reminder-item ${badge.cls === 'soon' ? 'upcoming-soon' : ''} ${r.isActive ? '' : 'inactive'}`}>
                       <div className={`r-dot ${meta.dot}`} />
                       <div className="r-body">
                         <div className="r-name">{meta.icon} {r.title}</div>
                         <div className="r-sub">
-                          {meta.label}{r.plotCode ? ` · Lô ${r.plotCode}` : ''}{r.isRecurring ? ' · Hàng năm' : ' · Một lần'}
+                          {meta.label}{r.plotCode ? ` · Lô ${r.plotCode}` : ''}
+                          {r.isRecurring ? (r.calendarType === 'lunar' ? ' · Âm lịch, hàng năm' : ' · Hàng năm') : ' · Một lần'}
+                          {r.notifyEmails && r.notifyEmails.length > 0
+                            ? ` · 📧 ${r.notifyEmails.length > 1 ? `${r.notifyEmails.length} email` : r.notifyEmails[0]}`
+                            : r.notifyEmail ? ' · 📧 Email' : ''}
                         </div>
                       </div>
                       <div className="r-right">
-                        <div className="r-date">{formatDate(r.nextDate)}</div>
+                        <div className="r-date">{formatDate(eff.iso)}</div>
                         <span className={`r-days ${badge.cls}`}>{badge.text}</span>
                       </div>
                       <div className="r-actions">
+                        <button className="r-btn" title="Đặt dịch vụ" onClick={() => goBookService(r)}>🌸</button>
                         <button className="r-btn" title={r.isActive ? 'Tạm tắt' : 'Bật lại'} onClick={() => void toggleActive(r)}>{r.isActive ? '⏸' : '▶'}</button>
                         <button className="r-btn" title="Sửa" onClick={() => startEdit(r)}>✎</button>
                         <button className="r-btn danger" title="Xoá" onClick={() => void removeReminder(r.id)}>✕</button>
@@ -419,10 +522,26 @@ export default function RemindersPage() {
               </div>
             </div>
 
+            {form.isRecurring && (
+              <div className="field">
+                <label>Loại lịch nhắc</label>
+                <div className="type-grid">
+                  <div className={`type-opt ${form.calendarType === 'solar' ? 'selected' : ''}`} onClick={() => setForm({ ...form, calendarType: 'solar' })}>
+                    <div className="type-opt-icon">📅</div>
+                    <div className="type-opt-name">Dương lịch</div>
+                  </div>
+                  <div className={`type-opt ${form.calendarType === 'lunar' ? 'selected' : ''}`} onClick={() => setForm({ ...form, calendarType: 'lunar' })}>
+                    <div className="type-opt-icon">🌕</div>
+                    <div className="type-opt-name">Âm lịch</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {form.isRecurring ? (
               <div className="field field-row">
                 <div>
-                  <label>Tháng (dương lịch)</label>
+                  <label>Tháng ({form.calendarType === 'lunar' ? 'âm lịch' : 'dương lịch'})</label>
                   <select value={form.remindMonth} onChange={(e) => setForm({ ...form, remindMonth: e.target.value })}>
                     <option value="">--</option>
                     {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => <option key={m} value={m}>Tháng {m}</option>)}
@@ -432,9 +551,14 @@ export default function RemindersPage() {
                   <label>Ngày</label>
                   <select value={form.remindDay} onChange={(e) => setForm({ ...form, remindDay: e.target.value })}>
                     <option value="">--</option>
-                    {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => <option key={d} value={d}>Ngày {d}</option>)}
+                    {Array.from({ length: form.calendarType === 'lunar' ? 30 : 31 }, (_, i) => i + 1).map((d) => <option key={d} value={d}>Ngày {d}</option>)}
                   </select>
                 </div>
+                {form.calendarType === 'lunar' && form.remindDay && form.remindMonth && (
+                  <div className="lunar-preview">
+                    → Dương lịch năm nay/sau: {formatDate(nextLunarOccurrence(Number(form.remindDay), Number(form.remindMonth)).toISOString().slice(0, 10))}
+                  </div>
+                )}
               </div>
             ) : (
               <div className="field">
@@ -458,6 +582,31 @@ export default function RemindersPage() {
               <select value={form.notifyDaysBefore} onChange={(e) => setForm({ ...form, notifyDaysBefore: Number(e.target.value) })}>
                 {[0, 1, 3, 5, 7, 14].map((d) => <option key={d} value={d}>{d === 0 ? 'Đúng ngày' : `${d} ngày trước`}</option>)}
               </select>
+            </div>
+
+            <div className="field" style={{ marginBottom: 4 }}>
+              <label>Kênh nhận thông báo (Gmail)</label>
+              <div className="notify-email-row">
+                <input
+                  type="email"
+                  placeholder="ten@gmail.com"
+                  value={form.notifyEmailDraft}
+                  onChange={(e) => { setForm({ ...form, notifyEmailDraft: e.target.value }); if (formError) setFormError('') }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addNotifyEmail() } }}
+                />
+                <button type="button" className="notify-email-add" title="Thêm email" onClick={addNotifyEmail}>+</button>
+              </div>
+              {form.notifyEmails.length > 0 && (
+                <div className="notify-email-list">
+                  {form.notifyEmails.map((email) => (
+                    <div key={email} className="notify-email-chip">
+                      📧 {email}
+                      <span className="notify-email-remove" onClick={() => removeNotifyEmail(email)}>✕</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className="field-hint">Thêm một hoặc nhiều Gmail sẽ cùng nhận thông báo nhắc lịch qua email.</p>
             </div>
 
             <div className="field">
