@@ -81,6 +81,7 @@ Import schema và seed data:
 
 ```powershell
 & "C:\Program Files\PostgreSQL\18\bin\psql.exe" -U postgres -d cemetery_db -v ON_ERROR_STOP=1 -f database\DBase.sql
+& "C:\Program Files\PostgreSQL\18\bin\psql.exe" -U postgres -d cemetery_db -v ON_ERROR_STOP=1 -f database\migrations\001_consolidated_schema.sql
 ```
 
 Nếu cần tạo lại database từ đầu:
@@ -89,6 +90,7 @@ Nếu cần tạo lại database từ đầu:
 & "C:\Program Files\PostgreSQL\18\bin\dropdb.exe" -U postgres cemetery_db
 & "C:\Program Files\PostgreSQL\18\bin\createdb.exe" -U postgres -E UTF8 cemetery_db
 & "C:\Program Files\PostgreSQL\18\bin\psql.exe" -U postgres -d cemetery_db -v ON_ERROR_STOP=1 -f database\DBase.sql
+& "C:\Program Files\PostgreSQL\18\bin\psql.exe" -U postgres -d cemetery_db -v ON_ERROR_STOP=1 -f database\migrations\001_consolidated_schema.sql
 ```
 
 Nếu PostgreSQL của bạn không phải bản 18, đổi `18` thành version đang cài, ví dụ `16` hoặc `17`.
