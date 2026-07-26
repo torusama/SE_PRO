@@ -43,6 +43,7 @@ interface Reminder {
   specificDate?: string | null
   notifyDaysBefore: number
   notifyEmail?: boolean
+  notifyEmails?: string[]
   isActive: boolean
   plotCode?: string | null
   deceasedName?: string | null
@@ -91,8 +92,11 @@ const emptyForm = {
   remindDay: '' as string | number,
   specificDate: '',
   notifyDaysBefore: 3,
-  notifyEmail: false,
+  notifyEmails: [] as string[],
+  notifyEmailDraft: '',
 }
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 /** Với nhắc lịch lặp lại theo Âm lịch, backend chỉ lưu ngày/tháng âm — client
  * tự quy đổi ra ngày dương gần nhất để hiển thị đếm ngược, phòng khi backend
@@ -251,8 +255,29 @@ export default function RemindersPage() {
       remindDay: reminder.remindDay ?? '',
       specificDate: reminder.specificDate ?? '',
       notifyDaysBefore: reminder.notifyDaysBefore,
-      notifyEmail: reminder.notifyEmail ?? false,
+      notifyEmails: reminder.notifyEmails ?? [],
+      notifyEmailDraft: '',
     })
+  }
+
+  /** Thêm 1 email vào danh sách nhận thông báo (ô nhập + nút "+"). */
+  function addNotifyEmail() {
+    const raw = form.notifyEmailDraft.trim().toLowerCase()
+    if (!raw) return
+    if (!EMAIL_RE.test(raw)) {
+      setFormError('Email không hợp lệ.')
+      return
+    }
+    if (form.notifyEmails.includes(raw)) {
+      setFormError('Email này đã được thêm, vui lòng chọn email khác.')
+      return
+    }
+    setFormError('')
+    setForm({ ...form, notifyEmails: [...form.notifyEmails, raw], notifyEmailDraft: '' })
+  }
+
+  function removeNotifyEmail(email: string) {
+    setForm({ ...form, notifyEmails: form.notifyEmails.filter((e) => e !== email) })
   }
 
   async function submitForm() {
@@ -284,7 +309,8 @@ export default function RemindersPage() {
         remindDay: form.isRecurring ? Number(form.remindDay) : undefined,
         specificDate: form.isRecurring ? undefined : form.specificDate,
         notifyDaysBefore: Number(form.notifyDaysBefore),
-        notifyEmail: form.notifyEmail,
+        notifyEmail: form.notifyEmails.length > 0,
+        notifyEmails: form.notifyEmails,
       }
       if (editingId) {
         await api.patch(`/my/reminders/${editingId}`, payload)
@@ -437,7 +463,9 @@ export default function RemindersPage() {
                         <div className="r-sub">
                           {meta.label}{r.plotCode ? ` · Lô ${r.plotCode}` : ''}
                           {r.isRecurring ? (r.calendarType === 'lunar' ? ' · Âm lịch, hàng năm' : ' · Hàng năm') : ' · Một lần'}
-                          {r.notifyEmail ? ' · 📧 Email' : ''}
+                          {r.notifyEmails && r.notifyEmails.length > 0
+                            ? ` · 📧 ${r.notifyEmails.length > 1 ? `${r.notifyEmails.length} email` : r.notifyEmails[0]}`
+                            : r.notifyEmail ? ' · 📧 Email' : ''}
                         </div>
                       </div>
                       <div className="r-right">
@@ -557,16 +585,28 @@ export default function RemindersPage() {
             </div>
 
             <div className="field" style={{ marginBottom: 4 }}>
-              <label>Kênh nhận thông báo</label>
-              <div className="notify-row">
-                <div className="notify-chip on">📱 App</div>
-                <div
-                  className={`notify-chip ${form.notifyEmail ? 'on' : ''}`}
-                  onClick={() => setForm({ ...form, notifyEmail: !form.notifyEmail })}
-                >
-                  📧 Email
-                </div>
+              <label>Kênh nhận thông báo (Gmail)</label>
+              <div className="notify-email-row">
+                <input
+                  type="email"
+                  placeholder="ten@gmail.com"
+                  value={form.notifyEmailDraft}
+                  onChange={(e) => { setForm({ ...form, notifyEmailDraft: e.target.value }); if (formError) setFormError('') }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addNotifyEmail() } }}
+                />
+                <button type="button" className="notify-email-add" title="Thêm email" onClick={addNotifyEmail}>+</button>
               </div>
+              {form.notifyEmails.length > 0 && (
+                <div className="notify-email-list">
+                  {form.notifyEmails.map((email) => (
+                    <div key={email} className="notify-email-chip">
+                      📧 {email}
+                      <span className="notify-email-remove" onClick={() => removeNotifyEmail(email)}>✕</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className="field-hint">Thêm một hoặc nhiều Gmail sẽ cùng nhận thông báo nhắc lịch qua email.</p>
             </div>
 
             <div className="field">

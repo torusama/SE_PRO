@@ -156,6 +156,16 @@
 .reminder-page .notify-chip:hover { border-color: var(--border-soft); color: var(--text-main); }
 .reminder-page .notify-chip.on { border-color: var(--teal-soft); color: var(--teal-glow); background: rgba(0, 229, 196, 0.05); cursor: default; }
 
+.reminder-page .notify-email-row { display: flex; gap: 8px; margin-top: 4px; }
+.reminder-page .notify-email-row input { flex: 1; background: rgba(4, 6, 14, 0.8); border: 0.5px solid var(--border-dim); border-radius: 8px; padding: 10px 13px; font-size: 13px; color: var(--text-main); font-family: 'Be Vietnam Pro', sans-serif; outline: none; transition: border-color 0.2s; }
+.reminder-page .notify-email-row input:focus { border-color: var(--teal-soft); }
+.reminder-page .notify-email-add { width: 40px; flex-shrink: 0; border-radius: 8px; border: 0.5px solid var(--teal-soft); color: var(--teal-glow); background: rgba(0, 229, 196, 0.08); font-size: 18px; line-height: 1; cursor: pointer; transition: all 0.2s; }
+.reminder-page .notify-email-add:hover { background: rgba(0, 229, 196, 0.16); }
+.reminder-page .notify-email-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.reminder-page .notify-email-chip { display: flex; align-items: center; gap: 7px; padding: 6px 9px; border-radius: 8px; border: 0.5px solid var(--border-dim); background: rgba(0, 229, 196, 0.05); font-size: 12px; color: var(--text-main); }
+.reminder-page .notify-email-remove { cursor: pointer; color: var(--text-muted); font-size: 11px; }
+.reminder-page .notify-email-remove:hover { color: #ff6b6b; }
+
 @media (max-width: 900px) {
   .reminder-page main { padding: 0 20px 60px; }
   .reminder-page .breadcrumb { padding: 16px 20px; }

@@ -65,4 +65,32 @@ export class EmailService {
       `,
     });
   }
+
+  /** Gửi email nhắc lịch (ngày giỗ / tưởng niệm / chăm sóc mộ...) tới 1 địa
+   * chỉ Gmail mà người dùng đã thêm ở "Kênh nhận thông báo". Không throw khi
+   * SMTP chưa cấu hình — chỉ log cảnh báo, để không làm gián đoạn cron job
+   * (in-app notification vẫn được tạo bình thường). */
+  async sendReminderEmail(to: string, title: string, message: string) {
+    if (!this.transporter) {
+      this.logger.warn(
+        `Bỏ qua gửi email nhắc lịch tới ${to} vì SMTP chưa được cấu hình.`,
+      );
+      return;
+    }
+    const smtp = this.config.get<{ from?: string }>('smtp');
+
+    await this.transporter.sendMail({
+      from: smtp?.from ? `"Vĩnh Phúc Viên" <${smtp.from}>` : undefined,
+      to,
+      subject: `[Vĩnh Phúc Viên] Nhắc lịch: ${title}`,
+      text: `${message}\n\nBạn nhận được email này vì đã đăng ký nhận thông báo nhắc lịch qua Gmail này trên hệ thống Vĩnh Phúc Viên.`,
+      html: `
+        <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
+          <h2 style="color:#0f766e;">🕯️ ${title}</h2>
+          <p style="font-size: 15px;">${message}</p>
+          <p style="color:#888; font-size:12px;">Bạn nhận được email này vì đã đăng ký nhận thông báo nhắc lịch qua Gmail này trên hệ thống Vĩnh Phúc Viên.</p>
+        </div>
+      `,
+    });
+  }
 }
