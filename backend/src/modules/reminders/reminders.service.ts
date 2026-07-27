@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { DatabaseService } from '../../database/database.service';
+import { AdminReminderQueryDto } from './dto/admin-reminder-query.dto';
+import { paginate } from '../../common/interfaces/paginated-response.interface';
 import { EmailService } from '../email/email.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateReminderDto } from './dto/create-reminder.dto';
@@ -173,15 +175,15 @@ export class RemindersService {
   }
 
   // ── ADMIN: lấy toàn bộ nhắc lịch kèm thông tin khách hàng ──────────────
-  async allForAdmin(filters?: { type?: string; search?: string }) {
+  async allForAdmin(filters: AdminReminderQueryDto = new AdminReminderQueryDto()) {
     const conditions: string[] = ['r.is_deleted = FALSE'];
     const params: any[] = [];
 
-    if (filters?.type && filters.type !== 'all') {
+    if (filters.type && filters.type !== 'all') {
       params.push(filters.type);
       conditions.push(`r.reminder_type = $${params.length}`);
     }
-    if (filters?.search?.trim()) {
+    if (filters.search?.trim()) {
       params.push(`%${filters.search.trim().toLowerCase()}%`);
       const idx = params.length;
       conditions.push(
@@ -191,6 +193,14 @@ export class RemindersService {
 
     const where = conditions.join(' AND ');
 
+    const count = await this.database.queryOne<{ total: string }>(
+      `SELECT COUNT(*)::text AS total FROM reminders r
+       JOIN users u ON u.user_id=r.user_id
+       LEFT JOIN plots p ON p.plot_id=r.plot_id
+       WHERE ${where}`,
+      params,
+    );
+    params.push(filters.pageSize, filters.offset);
     const rows = await this.database.query<
       ReminderRow & {
         customerName: string;
@@ -211,11 +221,12 @@ export class RemindersService {
        LEFT JOIN plots p ON p.plot_id = r.plot_id
        LEFT JOIN cemetery_zones z ON z.zone_id = p.zone_id
        WHERE ${where}
-       ORDER BY r.is_active DESC, r.created_at DESC`,
+       ORDER BY r.is_active DESC, r.created_at DESC
+       LIMIT $${params.length - 1} OFFSET $${params.length}`,
       params,
     );
 
-    return rows
+    const items = rows
       .map((row) => {
         const decorated = this.decorate(row);
         return {
@@ -232,6 +243,12 @@ export class RemindersService {
         if (b.daysUntil === null) return -1;
         return a.daysUntil - b.daysUntil;
       });
+    return paginate(
+      items,
+      Number(count?.total ?? 0),
+      filters.page,
+      filters.pageSize,
+    );
   }
 
   // ── ADMIN: gửi nhắc thủ công ngay ────────────────────────────────────────

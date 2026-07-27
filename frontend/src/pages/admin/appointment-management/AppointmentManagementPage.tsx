@@ -7,7 +7,7 @@ const LABEL: Record<string,string> = { pending:"Chờ phê duyệt", confirmed:"
 
 export default function AppointmentManagementPage() {
   const [items,setItems]=useState<Appointment[]>([]); const [loading,setLoading]=useState(true); const [error,setError]=useState("");
-  const load=useCallback(async()=>{ try{const r=await api.get("/schedule/admin/appointments");setItems(r.data.data??[])}catch{setError("Không thể tải danh sách lịch hẹn.")}finally{setLoading(false)} },[]);
+  const load=useCallback(async()=>{ try{const r=await api.get("/admin/appointments",{params:{page:1,pageSize:100}});setItems(r.data.data?.items??[])}catch{setError("Không thể tải danh sách lịch hẹn.")}finally{setLoading(false)} },[]);
   useEffect(()=>{void load()},[load]);
   async function update(id:number,status:"confirmed"|"cancelled"|"completed"){try{await api.patch(`/schedule/appointments/${id}/status`,{status});await load()}catch{setError("Không thể cập nhật lịch hẹn.")}}
   const pending=items.filter(x=>x.status==="pending").length;

@@ -6,6 +6,11 @@ import {
 import { createHash } from 'crypto';
 import { DatabaseService } from '../../database/database.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { AdminContractQueryDto } from './dto/admin-contract-query.dto';
+import { RecordPaymentDto } from './dto/record-payment.dto';
+import { paginate } from '../../common/interfaces/paginated-response.interface';
+import type { AdminRequestContext } from '../../common/decorators/admin-request-context.decorator';
+import { AdminAuditService } from '../admin-audit/admin-audit.service';
 
 const money = new Intl.NumberFormat('vi-VN', {
   style: 'currency',
@@ -25,10 +30,35 @@ export class ContractsService {
   constructor(
     private readonly database: DatabaseService,
     private readonly notificationsService: NotificationsService,
+    private readonly audit?: AdminAuditService,
   ) {}
 
-  adminList() {
-    return this.database.query(this.baseQuery('ORDER BY c.created_at DESC'));
+  async adminList(query: AdminContractQueryDto = new AdminContractQueryDto()) {
+    const values: unknown[] = [];
+    const conditions = ['c.is_deleted = FALSE'];
+    const add = (value: unknown) => {
+      values.push(value);
+      return `$${values.length}`;
+    };
+    if (query.search) {
+      const p = add(`%${query.search}%`);
+      conditions.push(`(c.contract_code ILIKE ${p} OR u.full_name ILIKE ${p} OR p.plot_code ILIKE ${p})`);
+    }
+    if (query.status) conditions.push(`c.status = ${add(query.status)}`);
+    if (query.paymentStatus) conditions.push(`c.payment_status = ${add(query.paymentStatus)}`);
+    const where = `WHERE ${conditions.join(' AND ')}`;
+    const count = await this.database.queryOne<{ total: string }>(
+      `SELECT COUNT(*)::text AS total FROM contracts c
+       JOIN users u ON u.user_id=c.user_id JOIN plots p ON p.plot_id=c.plot_id ${where}`,
+      values,
+    );
+    const limit = add(query.pageSize);
+    const offset = add(query.offset);
+    const items = await this.database.query(
+      this.baseQuery(`${where} ORDER BY c.created_at DESC LIMIT ${limit} OFFSET ${offset}`),
+      values,
+    );
+    return paginate(items, Number(count?.total ?? 0), query.page, query.pageSize);
   }
 
   async adminOne(id: number) {
@@ -37,7 +67,22 @@ export class ContractsService {
       [id],
     );
     if (!contract) throw new NotFoundException('Contract not found');
-    return contract;
+    const [payments, ownershipHistory] = await Promise.all([
+      this.database.query(
+        `SELECT transaction_id AS id, amount::float, payment_method AS "paymentMethod",
+                payment_date AS "paymentDate", reference_code AS "referenceCode", note
+         FROM payment_transactions WHERE contract_id=$1
+         ORDER BY payment_date DESC, transaction_id DESC`,
+        [id],
+      ),
+      this.database.query(
+        `SELECT ownership_id AS id, user_id AS "userId", ownership_start AS "startedAt",
+                ownership_end AS "endedAt", is_current AS "isCurrent", transfer_note AS note
+         FROM ownership_records WHERE contract_id=$1 ORDER BY ownership_start DESC`,
+        [id],
+      ),
+    ]);
+    return { ...contract, payments, ownershipHistory };
   }
 
   my(userId: number) {
@@ -246,8 +291,40 @@ export class ContractsService {
     return row.pdfUrl;
   }
 
-  async addPayment(id: number, body: any, adminId: number) {
+  async addPayment(
+    id: number,
+    body: RecordPaymentDto,
+    adminId: number,
+    context?: AdminRequestContext,
+  ) {
     const result = await this.database.transaction(async (client) => {
+      const locked = await client.query<any>(
+        `SELECT contract_id AS id, contract_code AS "contractCode",
+                user_id AS "userId", total_amount::float AS "totalAmount",
+                paid_amount::float AS "paidAmount",
+                payment_status AS "paymentStatus"
+         FROM contracts
+         WHERE contract_id = $1 AND is_deleted = FALSE
+         FOR UPDATE`,
+        [id],
+      );
+      const before = locked.rows[0];
+      if (!before) throw new NotFoundException('Contract not found');
+      if (body.amount > before.totalAmount - before.paidAmount) {
+        throw new BadRequestException(
+          'Payment amount exceeds the outstanding balance',
+        );
+      }
+      if (body.referenceCode) {
+        const duplicate = await client.query(
+          `SELECT 1 FROM payment_transactions
+           WHERE contract_id = $1 AND reference_code = $2 LIMIT 1`,
+          [id, body.referenceCode],
+        );
+        if (duplicate.rows.length) {
+          throw new BadRequestException('Payment reference already exists');
+        }
+      }
       const payment = await client.query(
         `INSERT INTO payment_transactions (contract_id, amount, payment_method, reference_code, note, recorded_by)
          VALUES ($1, $2, $3, $4, $5, $6)
@@ -272,23 +349,40 @@ export class ContractsService {
                    payment_status AS "paymentStatus"`,
         [id, body.amount],
       );
+      const savedPayment = payment.rows[0];
+      const updatedContract = contract.rows[0];
+      const isPaidOff = updatedContract.paymentStatus === 'paid';
+      await this.notificationsService.createInAppWithClient(
+        client,
+        updatedContract.userId,
+        'contract_updated',
+        isPaidOff ? 'Đã thanh toán đủ hợp đồng' : 'Đã ghi nhận thanh toán',
+        isPaidOff
+          ? `Hợp đồng ${updatedContract.contractCode} đã được thanh toán đầy đủ ${money.format(updatedContract.totalAmount)}.`
+          : `Hợp đồng ${updatedContract.contractCode} vừa ghi nhận thanh toán ${money.format(savedPayment.amount)}. Còn lại ${money.format(updatedContract.totalAmount - updatedContract.paidAmount)}.`,
+        'contract',
+        updatedContract.id,
+      );
+      await this.audit?.record(client, {
+        action: 'contract.payment.record',
+        entityType: 'contract',
+        entityId: id,
+        before: {
+          paidAmount: before.paidAmount,
+          paymentStatus: before.paymentStatus,
+        },
+        after: {
+          paidAmount: updatedContract.paidAmount,
+          paymentStatus: updatedContract.paymentStatus,
+          paymentId: savedPayment.id,
+          amount: savedPayment.amount,
+        },
+        context: context ?? { adminId, ipAddress: null, userAgent: null },
+      });
       return { payment: payment.rows[0], contract: contract.rows[0] };
     });
 
-    const { payment, contract } = result;
-    const isPaidOff = contract.paymentStatus === 'paid';
-    await this.notificationsService.createInApp(
-      contract.userId,
-      'contract_updated',
-      isPaidOff ? 'Hợp đồng đã thanh toán đủ' : 'Đã ghi nhận thanh toán',
-      isPaidOff
-        ? `Hợp đồng ${contract.contractCode} đã được thanh toán đầy đủ ${money.format(contract.totalAmount)}.`
-        : `Hợp đồng ${contract.contractCode} vừa ghi nhận thanh toán ${money.format(payment.amount)}. Còn lại ${money.format(contract.totalAmount - contract.paidAmount)}.`,
-      'contract',
-      contract.id,
-    );
-
-    return payment;
+    return result.payment;
   }
 
   private baseQuery(suffix: string) {
@@ -307,7 +401,9 @@ export class ContractsService {
                    c.party_b_signed_at AS "partyBSignedAt",
                    c.party_b_signature_hash AS "partyBSignatureHash",
                    c.pdf_uploaded_at AS "pdfUploadedAt",
-                   u.full_name AS "customerName", u.id_card_number AS "customerIdCard",
+                   u.full_name AS "customerName",
+                   CASE WHEN u.id_card_number IS NULL THEN NULL
+                        ELSE CONCAT('******', RIGHT(u.id_card_number, 4)) END AS "customerIdCard",
                    u.address AS "customerAddress", u.phone_number AS "customerPhone",
                    u.notes AS "customerNotes",
                    p.plot_id AS "plotId", p.plot_code AS "plotCode", p.area_sqm::float AS "areaSqm",

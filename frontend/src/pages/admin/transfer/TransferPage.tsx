@@ -61,8 +61,10 @@ export default function TransferPage() {
 
   async function loadRecent() {
     try {
-      const response = await api.get('/admin/transfers')
-      setRecent(response.data.data)
+      const response = await api.get('/admin/transfers', {
+        params: { page: 1, pageSize: 30 },
+      })
+      setRecent(response.data.data?.items ?? [])
     } catch { /* history is secondary to the transfer form */ }
   }
 

@@ -4,7 +4,7 @@ import { CreateReservationDto } from './create-reservation.dto';
 export class CreateMultipleReservationDto extends CreateReservationDto {
   @IsArray()
   @ArrayMinSize(2, {
-    message: 'At least two plots are required for a multi-plot reservation',
+    message: 'Vui lòng chọn ít nhất hai lô cho yêu cầu nhiều lô',
   })
   @ArrayUnique()
   @IsInt({ each: true })

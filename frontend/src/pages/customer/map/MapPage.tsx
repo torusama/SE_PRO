@@ -1098,8 +1098,8 @@ export default function MapPage() {
           type,
           plotIds,
           note: multiPlot
-            ? `Customer selected ${plotIds.length} adjacent family plot(s) for ${type} from 2D map`
-            : `Customer selected ${plotIds.length} plot(s) for ${type} from 2D map`,
+            ? `Khách hàng đã chọn ${plotIds.length} lô liền kề cho gia đình để ${type === "purchase" ? "mua" : "giữ chỗ"} từ bản đồ 2D`
+            : `Khách hàng đã chọn ${plotIds.length} lô để ${type === "purchase" ? "mua" : "giữ chỗ"} từ bản đồ 2D`,
         },
       );
       const created = createResponse.data.data;

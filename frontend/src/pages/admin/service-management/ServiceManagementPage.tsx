@@ -138,10 +138,12 @@ export default function ServiceManagementPage() {
     setError('')
     try {
       const [ordersResponse, assigneesResponse] = await Promise.all([
-        api.get<ApiResponse<ServiceOrder[]>>('/admin/service-orders'),
+        api.get<ApiResponse<{ items: ServiceOrder[] }>>('/admin/service-orders', {
+          params: { page: 1, pageSize: 100 },
+        }),
         api.get<ApiResponse<Assignee[]>>('/admin/service-order-assignees'),
       ])
-      setOrders(ordersResponse.data.data ?? [])
+      setOrders(ordersResponse.data.data?.items ?? [])
       setAssignees(assigneesResponse.data.data ?? [])
     } catch (requestError) {
       setError(getErrorMessage(requestError))

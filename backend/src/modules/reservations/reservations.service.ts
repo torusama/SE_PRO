@@ -12,6 +12,10 @@ import {
 } from '../plots/plot-adjacency.service';
 import { CreateMultipleReservationDto } from './dto/create-multiple-reservation.dto';
 import { CreateReservationDto } from './dto/create-reservation.dto';
+import { AdminReservationQueryDto } from './dto/admin-reservation-query.dto';
+import { paginate } from '../../common/interfaces/paginated-response.interface';
+import type { AdminRequestContext } from '../../common/decorators/admin-request-context.decorator';
+import { AdminAuditService } from '../admin-audit/admin-audit.service';
 
 type ReservationStatus = 'pending' | 'submitted' | 'approved' | 'rejected';
 
@@ -77,6 +81,7 @@ export class ReservationsService {
     private readonly database: DatabaseService,
     private readonly plotAdjacency?: PlotAdjacencyService,
     private readonly config?: ConfigService,
+    private readonly audit?: AdminAuditService,
   ) {}
 
   async create(userId: number, dto: CreateReservationDto, isAiDraft = false) {
@@ -86,7 +91,7 @@ export class ReservationsService {
   async createMultiple(userId: number, dto: CreateMultipleReservationDto) {
     if (dto.plotIds.length < 2) {
       throw new BadRequestException(
-        'At least two plots are required for a multi-plot reservation',
+        'Vui lòng chọn ít nhất hai lô cho yêu cầu nhiều lô',
       );
     }
     return this.createReservation(userId, dto, false, true);
@@ -106,7 +111,7 @@ export class ReservationsService {
         plots.length !== dto.plotIds.length ||
         plots.some((plot) => plot.status !== 'available')
       ) {
-        throw new BadRequestException('All plots must be available');
+        throw new BadRequestException('Tất cả các lô đã chọn phải còn trống');
       }
       const adjacency = requireAdjacency
         ? this.validateAdjacency(plots)
@@ -136,7 +141,7 @@ export class ReservationsService {
         [dto.plotIds],
       );
       if (update.rowCount !== dto.plotIds.length) {
-        throw new BadRequestException('Selected plots are no longer available');
+        throw new BadRequestException('Một hoặc nhiều lô đã chọn không còn trống');
       }
 
       await this.notifyAdmins(
@@ -172,7 +177,7 @@ export class ReservationsService {
       const request = await this.getOwnedRequest(client, userId, id);
       if (!['draft', 'cancelled'].includes(request.status)) {
         throw new BadRequestException(
-          'Only draft reservations can be submitted',
+          'Chỉ có thể gửi yêu cầu đang ở trạng thái nháp',
         );
       }
       const plotRows = await client.query<LegacyPlotRow>(
@@ -186,7 +191,7 @@ export class ReservationsService {
         !plotRows.rows.length ||
         plotRows.rows.some((plot) => plot.status !== 'available')
       ) {
-        throw new BadRequestException('Selected plots are no longer available');
+        throw new BadRequestException('Một hoặc nhiều lô đã chọn không còn trống');
       }
       await client.query(
         `UPDATE plots SET status = 'pending', reserved_until = NOW() + INTERVAL '30 minutes', updated_at = NOW()
@@ -245,21 +250,53 @@ export class ReservationsService {
       this.detailSql('WHERE rr.request_id = $1 AND rr.user_id = $2'),
       [id, userId],
     );
-    if (!request) throw new NotFoundException('Reservation not found');
+    if (!request) throw new NotFoundException('Không tìm thấy yêu cầu');
     const plots = await this.database.query<PlotRow>(this.plotsSql(), [id]);
     return this.mapDetail(request, plots);
   }
 
-  async adminList() {
-    return this.database.query(
+  async adminList(query: AdminReservationQueryDto = new AdminReservationQueryDto()) {
+    const values: unknown[] = [];
+    const conditions: string[] = [];
+    const add = (value: unknown) => {
+      values.push(value);
+      return `$${values.length}`;
+    };
+    if (query.search) {
+      const value = add(`%${query.search}%`);
+      conditions.push(
+        `(customer_name ILIKE ${value} OR customer_email ILIKE ${value} OR EXISTS (
+          SELECT 1 FROM unnest(plot_codes) code WHERE code ILIKE ${value}
+        ))`,
+      );
+    }
+    if (query.status) conditions.push(`status = ${add(query.status)}`);
+    if (query.type) conditions.push(`request_type = ${add(query.type)}`);
+    if (query.source)
+      conditions.push(
+        `is_ai_draft = ${add(query.source === 'ai')}`,
+      );
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    const count = await this.database.queryOne<{ total: string }>(
+      `SELECT COUNT(*)::text AS total FROM vw_reservation_requests_full ${where}`,
+      values,
+    );
+    const limit = add(query.pageSize);
+    const offset = add(query.offset);
+    const items = await this.database.query(
       `SELECT request_id AS id, request_type AS type, status,
               customer_name AS "customerName", customer_email AS "customerEmail",
               total_price::float AS "totalPrice", plot_codes AS "plotCodes",
               plot_count::int AS "plotCount", created_at AS "createdAt",
-              reviewed_at AS "reviewedAt"
+              reviewed_at AS "reviewedAt",
+              CASE WHEN is_ai_draft THEN 'ai' ELSE 'customer' END AS source
        FROM vw_reservation_requests_full
-       ORDER BY created_at DESC`,
+       ${where}
+       ORDER BY created_at DESC
+       LIMIT ${limit} OFFSET ${offset}`,
+      values,
     );
+    return paginate(items, Number(count?.total ?? 0), query.page, query.pageSize);
   }
 
   async adminOne(id: number) {
@@ -267,12 +304,17 @@ export class ReservationsService {
       this.detailSql('WHERE rr.request_id = $1'),
       [id],
     );
-    if (!request) throw new NotFoundException('Reservation not found');
+    if (!request) throw new NotFoundException('Không tìm thấy yêu cầu');
     const plots = await this.database.query<PlotRow>(this.plotsSql(), [id]);
     return this.mapDetail(request, plots);
   }
 
-  async approve(adminId: number, id: number, adminNote?: string) {
+  async approve(
+    adminId: number,
+    id: number,
+    adminNote?: string,
+    context?: AdminRequestContext,
+  ) {
     return this.database.transaction(async (client) => {
       const request = await this.lockRequest(client, id);
       this.assertPendingDecision(request.status, 'approved');
@@ -290,7 +332,7 @@ export class ReservationsService {
       );
       if (plotUpdate.rowCount !== plotIds.length) {
         throw new BadRequestException(
-          'Reservation plots are no longer pending',
+          'Các lô trong yêu cầu không còn ở trạng thái chờ duyệt',
         );
       }
 
@@ -308,10 +350,22 @@ export class ReservationsService {
         client,
         request.user_id,
         'request_approved',
-        'Yeu cau da duoc duyet',
-        'Yeu cau giu cho/mua lo cua ban da duoc duyet.',
+        'Yêu cầu đã được duyệt',
+        'Yêu cầu giữ chỗ hoặc mua lô của bạn đã được duyệt.',
         id,
       );
+      await this.audit?.record(client, {
+        action: 'reservation.approve',
+        entityType: 'reservation_request',
+        entityId: id,
+        before: { status: request.status },
+        after: { status: 'approved', plotStatus: finalPlotStatus, adminNote },
+        context: context ?? {
+          adminId,
+          ipAddress: null,
+          userAgent: null,
+        },
+      });
 
       return {
         id,
@@ -456,7 +510,12 @@ Hai bên đã đọc, hiểu, tự nguyện ký và chịu trách nhiệm về t
 (Ký, ghi rõ họ tên, chức vụ, đóng dấu)       (Ký, ghi rõ họ tên)`;
   }
 
-  async reject(adminId: number, id: number, adminNote?: string) {
+  async reject(
+    adminId: number,
+    id: number,
+    adminNote?: string,
+    context?: AdminRequestContext,
+  ) {
     return this.database.transaction(async (client) => {
       const request = await this.lockRequest(client, id);
       this.assertPendingDecision(request.status, 'rejected');
@@ -489,10 +548,22 @@ Hai bên đã đọc, hiểu, tự nguyện ký và chịu trách nhiệm về t
         client,
         request.user_id,
         'request_rejected',
-        'Yeu cau da bi tu choi',
-        'Yeu cau giu cho/mua lo cua ban da bi tu choi.',
+        'Yêu cầu đã bị từ chối',
+        'Yêu cầu giữ chỗ hoặc mua lô của bạn đã bị từ chối.',
         id,
       );
+      await this.audit?.record(client, {
+        action: 'reservation.reject',
+        entityType: 'reservation_request',
+        entityId: id,
+        before: { status: request.status },
+        after: { status: 'rejected', plotStatus: 'available', adminNote },
+        context: context ?? {
+          adminId,
+          ipAddress: null,
+          userAgent: null,
+        },
+      });
 
       return {
         id,
@@ -505,7 +576,7 @@ Hai bên đã đọc, hiểu, tự nguyện ký và chịu trách nhiệm về t
 
   private assertUniquePlotIds(plotIds: number[]) {
     if (new Set(plotIds).size !== plotIds.length) {
-      throw new BadRequestException('Duplicate plot IDs are not allowed');
+      throw new BadRequestException('Danh sách lô không được chứa mã trùng nhau');
     }
   }
 
@@ -534,7 +605,7 @@ Hai bên đã đọc, hiểu, tự nguyện ký và chịu trách nhiệm về t
       [id],
     );
     const request = result.rows[0];
-    if (!request) throw new NotFoundException('Reservation not found');
+    if (!request) throw new NotFoundException('Không tìm thấy yêu cầu');
     return request;
   }
 
@@ -553,7 +624,7 @@ Hai bên đã đọc, hiểu, tự nguyện ký và chịu trách nhiệm về t
       [requestId],
     );
     if (!result.rows.length) {
-      throw new BadRequestException('Reservation has no plots');
+      throw new BadRequestException('Yêu cầu không có lô nào');
     }
     return result.rows;
   }
@@ -571,7 +642,9 @@ Hai bên đã đọc, hiểu, tự nguyện ký và chịu trách nhiệm về t
 
   private assertPlotsPending(plots: PlotRow[]) {
     if (plots.some((plot) => plot.status !== 'pending')) {
-      throw new BadRequestException('Reservation plots are no longer pending');
+      throw new BadRequestException(
+        'Các lô trong yêu cầu không còn ở trạng thái chờ duyệt',
+      );
     }
   }
 
@@ -586,7 +659,7 @@ Hai bên đã đọc, hiểu, tự nguyện ký và chịu trách nhiệm về t
        FOR UPDATE`,
       [id, userId],
     );
-    if (!result.rows[0]) throw new NotFoundException('Reservation not found');
+    if (!result.rows[0]) throw new NotFoundException('Không tìm thấy yêu cầu');
     return result.rows[0];
   }
 
@@ -599,7 +672,7 @@ Hai bên đã đọc, hiểu, tự nguyện ký và chịu trách nhiệm về t
       this.detailSql('WHERE rr.request_id = $1 AND rr.user_id = $2'),
       [requestId, userId],
     );
-    if (!request.rows[0]) throw new NotFoundException('Reservation not found');
+    if (!request.rows[0]) throw new NotFoundException('Không tìm thấy yêu cầu');
     const plots = await client.query<PlotRow>(this.plotsSql(), [requestId]);
     return this.mapDetail(request.rows[0], plots.rows);
   }
@@ -664,7 +737,7 @@ Hai bên đã đọc, hiểu, tự nguyện ký và chịu trách nhiệm về t
   private validateAdjacency(plots: PlotRow[]): PlotAdjacencyResult {
     if (!this.plotAdjacency) {
       throw new BadRequestException(
-        'Selected plots do not have enough location data to validate adjacency',
+        'Các lô đã chọn thiếu dữ liệu vị trí để kiểm tra tính liền kề',
       );
     }
     return this.plotAdjacency.validateAdjacent(plots);

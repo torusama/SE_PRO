@@ -401,3 +401,42 @@ Recommend body: `{ "budget": 50000000, "numberOfPlots": 2, "preferredZone": "Khu
 | ------ | ------------------- | ---- |
 | POST   | `/uploads/image`    | Yes  |
 | POST   | `/uploads/document` | Yes  |
+# Admin Portal Backend Integration (bổ sung 2026-07-27)
+
+Tất cả endpoint dưới đây yêu cầu Bearer JWT, `JwtAuthGuard`, `RolesGuard` và role
+`admin`. Danh sách dùng envelope:
+
+```json
+{
+  "success": true,
+  "data": {
+    "items": [],
+    "page": 1,
+    "pageSize": 20,
+    "total": 0,
+    "totalPages": 0
+  }
+}
+```
+
+- `GET /admin/dashboard/summary`, `/plot-stats`, `/revenue?period=month`,
+  `/service-stats`: số liệu tổng hợp trực tiếp từ PostgreSQL.
+- `GET /admin/users`: `page`, `pageSize`, `search`, `role`, `isActive`.
+- `PATCH /admin/users/:id/status`: khóa/mở tài khoản và ghi audit.
+- `GET /admin/plots`: `page`, `pageSize`, `search`, `zoneId`, `status`,
+  `includeDeleted`; có detail và route restore.
+- Admin zones hỗ trợ tạo, sửa, vô hiệu hóa và khôi phục.
+- `GET /admin/reservations`: `page`, `pageSize`, `search`, `status`, `type`,
+  `source=customer|ai`. Approve/reject cập nhật request, plot, contract,
+  notification và audit trong một transaction.
+- `GET /admin/contracts`: `page`, `pageSize`, `search`, `status`,
+  `paymentStatus`. Detail trả thêm `payments` và `ownershipHistory`; CCCD được
+  che, chỉ giữ bốn số cuối.
+- `GET /admin/audit-logs` và `/admin/audit-logs/:id`: lịch sử đã loại bỏ trường
+  nhạy cảm, hỗ trợ tìm kiếm, actor, loại đối tượng và khoảng ngày.
+- `GET /admin/ai-activity` và `/admin/ai-activity/:id`: chỉ đọc các reservation
+  draft có `is_ai_draft=true`. Các capability về prompt history, model usage và
+  recommendation telemetry được trả rõ là không hỗ trợ, không tạo schema AI lớn.
+
+Migration bắt buộc trước khi dùng audit API:
+`database/migrations/013_admin_audit_entity_key.sql`.

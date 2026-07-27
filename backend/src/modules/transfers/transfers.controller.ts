@@ -21,6 +21,12 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { TransfersService } from './transfers.service';
+import { AdminOwnershipQueryDto } from './dto/admin-ownership-query.dto';
+import { AdminTransferQueryDto } from './dto/admin-transfer-query.dto';
+import {
+  CurrentAdminContext,
+  type AdminRequestContext,
+} from '../../common/decorators/admin-request-context.decorator';
 
 const allowedFiles = new Map([
   ['application/pdf', '.pdf'],
@@ -48,26 +54,37 @@ const transferDocuments = FilesInterceptor('documents', 10, {
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('admin')
-@Controller('admin/transfers')
+@Controller()
 export class TransfersController {
   constructor(private readonly service: TransfersService) {}
 
-  @Get('search')
+  @Get('admin/transfers/search')
   async search(@Query('mode') mode: string, @Query('q') query = '') {
     return { success: true, data: await this.service.search(mode, query) };
   }
 
-  @Get()
-  async list() {
-    return { success: true, data: await this.service.listRecent() };
+  @Get('admin/transfers')
+  async list(@Query() query: AdminTransferQueryDto) {
+    return { success: true, data: await this.service.listRecent(query) };
   }
 
-  @Post()
+  @Get('admin/ownership')
+  async ownership(@Query() query: AdminOwnershipQueryDto) {
+    return { success: true, data: await this.service.ownership(query) };
+  }
+
+  @Get('admin/transfers/:id')
+  async detail(@Param('id') id: string) {
+    return { success: true, data: await this.service.transferDetail(id) };
+  }
+
+  @Post('admin/transfers')
   @UseInterceptors(transferDocuments)
   async transfer(
     @CurrentUser() user: { id: number },
     @Body('payload') payload: string,
     @UploadedFiles() files: Express.Multer.File[],
+    @CurrentAdminContext() context: AdminRequestContext,
   ) {
     if (!payload) throw new BadRequestException('Thiếu dữ liệu chuyển nhượng');
     let parsed: unknown;
@@ -75,11 +92,11 @@ export class TransfersController {
     return {
       success: true,
       message: 'Chuyển nhượng thành công',
-      data: await this.service.transfer(user.id, parsed, files ?? []),
+      data: await this.service.transfer(user.id, parsed, files ?? [], context),
     };
   }
 
-  @Get('documents/:id')
+  @Get('admin/transfers/documents/:id')
   async download(@Param('id') id: string, @Res() response: Response) {
     const document = await this.service.getDocument(id);
     return response.download(

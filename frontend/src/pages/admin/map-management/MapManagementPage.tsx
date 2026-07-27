@@ -52,6 +52,7 @@ interface BackendPlot {
   direction?: string;
   plotType?: "single" | "double" | "family";
   description?: string;
+  isDeleted?: boolean;
 }
 
 interface Zone {
@@ -217,6 +218,7 @@ export default function MapManagementPage() {
   );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [includeDeleted, setIncludeDeleted] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
   const [message, setMessage] = useState("");
@@ -227,10 +229,12 @@ export default function MapManagementPage() {
     if (!silent) setLoading(true);
     try {
       const [plotResponse, zoneResponse] = await Promise.all([
-        api.get<{ data: BackendPlot[] }>("/plots/map"),
+        api.get<{ data: { items: BackendPlot[] } }>("/admin/plots", {
+          params: { page: 1, pageSize: 100, includeDeleted },
+        }),
         api.get<{ data: Zone[] }>("/admin/plot-zones"),
       ]);
-      setPlots(plotResponse.data.data || []);
+      setPlots(plotResponse.data.data?.items || []);
       setZones(zoneResponse.data.data || []);
       setError("");
     } catch (loadError) {
@@ -238,7 +242,7 @@ export default function MapManagementPage() {
     } finally {
       if (!silent) setLoading(false);
     }
-  }, []);
+  }, [includeDeleted]);
 
   useEffect(() => {
     const initialLoad = window.setTimeout(() => void loadData(), 0);
@@ -533,6 +537,20 @@ export default function MapManagementPage() {
     }
   }
 
+  async function restorePlot(plot: BackendPlot) {
+    setSaving(true);
+    setError("");
+    try {
+      await api.post(`/admin/plots/${plot.id}/restore`);
+      setMessage("Đã khôi phục lô.");
+      await loadData(true);
+    } catch (restoreError) {
+      setError(errorMessage(restoreError));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className="admin-map-page">
       <header className="admin-map-page-header">
@@ -541,6 +559,14 @@ export default function MapManagementPage() {
           <p>Cùng cấu trúc và dữ liệu với bản đồ công khai /ban-do</p>
         </div>
         <div className="admin-map-header-actions">
+          <label>
+            <input
+              type="checkbox"
+              checked={includeDeleted}
+              onChange={(event) => setIncludeDeleted(event.target.checked)}
+            />
+            Hiện lô đã xóa
+          </label>
           <button onClick={() => void loadData()} disabled={loading}>
             ↻ Làm mới
           </button>
@@ -1150,8 +1176,18 @@ export default function MapManagementPage() {
                     </ul>
                   </div>
 
+                  {plot.isDeleted && (
+                    <button
+                      className="admin-primary-button admin-map-main-action"
+                      disabled={saving}
+                      onClick={() => void restorePlot(plot)}
+                    >
+                      Khôi phục lô
+                    </button>
+                  )}
                   <button
                     className="admin-primary-button admin-map-main-action"
+                    disabled={plot.isDeleted}
                     onClick={() => openEdit(plot)}
                   >
                     Sửa thông tin
@@ -1162,7 +1198,7 @@ export default function MapManagementPage() {
                         Cập nhật trạng thái
                         <select
                           value={plot.status}
-                          disabled={saving}
+                          disabled={saving || plot.isDeleted}
                           onChange={(event) =>
                             void changeStatus(
                               plot,
@@ -1187,7 +1223,7 @@ export default function MapManagementPage() {
                     )}
                     <button
                       className={plot.status === "locked" ? "unlock" : "lock"}
-                      disabled={saving}
+                      disabled={saving || plot.isDeleted}
                       onClick={() => void toggleLock(plot)}
                     >
                       {plot.status === "locked" ? "Mở khóa lô" : "Khóa lô"}

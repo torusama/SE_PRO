@@ -9,6 +9,10 @@ import { promises as fs } from 'fs';
 import { join } from 'path';
 import * as bcrypt from 'bcrypt';
 import { DatabaseService } from '../../database/database.service';
+import { AdminOwnershipQueryDto } from './dto/admin-ownership-query.dto';
+import { AdminTransferQueryDto } from './dto/admin-transfer-query.dto';
+import { paginate } from '../../common/interfaces/paginated-response.interface';
+import type { AdminRequestContext } from '../../common/decorators/admin-request-context.decorator';
 
 interface RecipientInput {
   fullName: string;
@@ -62,8 +66,24 @@ export class TransfersService {
     );
   }
 
-  listRecent() {
-    return this.database.query(
+  async listRecent(query: AdminTransferQueryDto = new AdminTransferQueryDto()) {
+    const values: unknown[] = [];
+    const conditions: string[] = [];
+    if (query.search) {
+      values.push(`%${query.search}%`);
+      conditions.push(
+        `(b.batch_code ILIKE $1 OR old.full_name ILIKE $1 OR recipient.full_name ILIKE $1)`,
+      );
+    }
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    const count = await this.database.queryOne<{ total: string }>(
+      `SELECT COUNT(*)::text AS total FROM admin_transfer_batches b
+       JOIN users old ON old.user_id=b.previous_holder_user_id
+       JOIN users recipient ON recipient.user_id=b.recipient_user_id ${where}`,
+      values,
+    );
+    values.push(query.pageSize, query.offset);
+    const items = await this.database.query(
       `SELECT b.batch_id AS id, b.batch_code AS "batchCode", b.plot_count AS "plotCount",
               old.full_name AS "previousHolderName", recipient.full_name AS "recipientName",
               b.created_at AS "createdAt", admin.full_name AS "createdByName",
@@ -74,12 +94,92 @@ export class TransfersService {
        JOIN users admin ON admin.user_id = b.created_by
        JOIN admin_transfer_items item ON item.batch_id = b.batch_id
        JOIN plots p ON p.plot_id = item.plot_id
+       ${where}
        GROUP BY b.batch_id, old.full_name, recipient.full_name, admin.full_name
-       ORDER BY b.created_at DESC LIMIT 30`,
+       ORDER BY b.created_at DESC
+       LIMIT $${values.length - 1} OFFSET $${values.length}`,
+      values,
     );
+    return paginate(items, Number(count?.total ?? 0), query.page, query.pageSize);
   }
 
-  async transfer(adminId: number, raw: unknown, files: Express.Multer.File[]) {
+  async ownership(query: AdminOwnershipQueryDto) {
+    const values: unknown[] = [];
+    const conditions: string[] = [];
+    const add = (value: unknown) => {
+      values.push(value);
+      return `$${values.length}`;
+    };
+    if (query.search) {
+      const p = add(`%${query.search}%`);
+      conditions.push(`(p.plot_code ILIKE ${p} OR u.full_name ILIKE ${p} OR u.email ILIKE ${p})`);
+    }
+    if (query.plotId) conditions.push(`o.plot_id=${add(query.plotId)}`);
+    if (query.holderId) conditions.push(`o.user_id=${add(query.holderId)}`);
+    if (query.currentOnly) conditions.push('o.is_current=TRUE');
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    const count = await this.database.queryOne<{ total: string }>(
+      `SELECT COUNT(*)::text AS total FROM ownership_records o
+       JOIN users u ON u.user_id=o.user_id JOIN plots p ON p.plot_id=o.plot_id ${where}`,
+      values,
+    );
+    values.push(query.pageSize, query.offset);
+    const items = await this.database.query(
+      `SELECT o.ownership_id AS id, o.plot_id AS "plotId", p.plot_code AS "plotCode",
+              o.user_id AS "holderId", u.full_name AS "holderName",
+              o.contract_id AS "contractId", o.ownership_start AS "startedAt",
+              o.ownership_end AS "endedAt", o.is_current AS "isCurrent",
+              o.transfer_note AS note
+       FROM ownership_records o JOIN users u ON u.user_id=o.user_id
+       JOIN plots p ON p.plot_id=o.plot_id ${where}
+       ORDER BY o.ownership_start DESC
+       LIMIT $${values.length - 1} OFFSET $${values.length}`,
+      values,
+    );
+    return paginate(items, Number(count?.total ?? 0), query.page, query.pageSize);
+  }
+
+  async transferDetail(id: string) {
+    const batch = await this.database.queryOne(
+      `SELECT b.batch_id AS id, b.batch_code AS "batchCode",
+              b.plot_count AS "plotCount", b.admin_note AS "adminNote",
+              b.created_at AS "createdAt",
+              old.full_name AS "previousHolderName",
+              recipient.full_name AS "recipientName",
+              admin.full_name AS "createdByName"
+       FROM admin_transfer_batches b
+       JOIN users old ON old.user_id=b.previous_holder_user_id
+       JOIN users recipient ON recipient.user_id=b.recipient_user_id
+       JOIN users admin ON admin.user_id=b.created_by
+       WHERE b.batch_id=$1`,
+      [id],
+    );
+    if (!batch) throw new NotFoundException('Không tìm thấy đợt chuyển quyền');
+    const [items, documents] = await Promise.all([
+      this.database.query(
+        `SELECT i.item_id AS id, i.plot_id AS "plotId", p.plot_code AS "plotCode",
+                i.previous_contract_id AS "previousContractId",
+                i.new_contract_id AS "newContractId"
+         FROM admin_transfer_items i JOIN plots p ON p.plot_id=i.plot_id
+         WHERE i.batch_id=$1 ORDER BY p.plot_code`,
+        [id],
+      ),
+      this.database.query(
+        `SELECT document_id AS id, original_filename AS "filename",
+                mime_type AS "mimeType", size_bytes AS "sizeBytes"
+         FROM admin_transfer_documents WHERE batch_id=$1 ORDER BY created_at`,
+        [id],
+      ),
+    ]);
+    return { ...batch, items, documents };
+  }
+
+  async transfer(
+    adminId: number,
+    raw: unknown,
+    files: Express.Multer.File[],
+    context?: AdminRequestContext,
+  ) {
     const input = this.validateInput(raw);
     if (!files.length) throw new BadRequestException('Cần ít nhất một văn bản ảnh hoặc PDF');
     try {
@@ -178,11 +278,16 @@ export class TransfersService {
           );
         }
         await client.query(
-          `INSERT INTO audit_logs (user_id,action,entity_type,entity_id,old_value,new_value)
-           VALUES ($1,'admin_plot_transfer_completed','admin_transfer_batch',NULL,$2::jsonb,$3::jsonb)`,
+          `INSERT INTO audit_logs
+             (user_id,action,entity_type,entity_id,entity_key,old_value,new_value,
+              ip_address,user_agent)
+           VALUES ($1,'admin_plot_transfer_completed','admin_transfer_batch',NULL,$2,$3::jsonb,$4::jsonb,$5,$6)`,
           [adminId,
+            batchId,
             JSON.stringify({ holderUserId: previousHolderId, plotIds: input.plotIds }),
-            JSON.stringify({ recipientUserId: recipient.userId, batchCode })],
+            JSON.stringify({ recipientUserId: recipient.userId, batchCode }),
+            context?.ipAddress ?? null,
+            context?.userAgent ?? null],
         );
         return { id: batchId, batchCode, plotCount: input.plotIds.length,
           recipientUserId: recipient.userId, recipientAccountCreatedInactive: recipient.created };

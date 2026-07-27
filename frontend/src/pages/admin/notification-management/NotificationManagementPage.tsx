@@ -1,191 +1,138 @@
-// src/pages/admin/notification-management/NotificationManagementPage.tsx
-import { useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { api } from "@/lib/api";
 
-interface SystemNotif {
-  id: string
-  icon: string
-  iconBg: string
-  title: string
-  desc: string
-  time: string
-  unread?: boolean
-  action?: string
-  broadcast?: boolean
+interface NotificationRow {
+  id: number;
+  title: string;
+  message: string;
+  isRead: boolean;
+  broadcast: boolean;
+  recipientName?: string;
+  createdAt: string;
 }
 
-const INITIAL_NOTIFS: SystemNotif[] = [
-  { id: 'n1', icon: '🚨', iconBg: 'rgba(255,92,92,0.14)', title: 'Hợp đồng HD-2022-0031 sắp hết hạn', desc: 'Hợp đồng dịch vụ của Phạm Văn Tuấn (lô C-18) hết hạn 31/07/2025. Cần liên hệ gia hạn.', time: '09:00', unread: true, action: 'Liên hệ KH' },
-  { id: 'n3', icon: '💰', iconBg: 'rgba(212,168,67,0.14)', title: 'Thanh toán thành công — 28.500.000 đ', desc: 'Nguyễn Bích Chi (KH-0127) đã thanh toán hợp đồng HD-2025-0071. Biên lai đã gửi email.', time: 'Hôm qua' },
-  { id: 'n4', icon: '📢', iconBg: 'rgba(74,158,255,0.14)', title: 'Broadcast đã gửi — 247 khách hàng', desc: 'Thông báo lịch bảo trì khu A đã gửi thành công. Tỷ lệ đọc: 84%.', time: '25/06', broadcast: true },
-]
-
-const AUDIENCE_OPTIONS = ['Tất cả khách hàng (247)', 'Khu A (80 KH)', 'Khu B (70 KH)', 'Khu C (60 KH)', 'HĐ sắp hết hạn']
-const TYPE_OPTIONS = ['📢 Thông báo chung', '💰 Nhắc thanh toán', '🛠️ Lịch bảo trì', '⚠️ Cảnh báo khẩn']
-const TABS = ['Tất cả', 'Chưa đọc', 'Broadcast'] as const
-
-const panelStyle: React.CSSProperties = {
-  background: 'var(--color-bg-card)',
-  border: '1px solid var(--color-border)',
+const panel: React.CSSProperties = {
+  background: "var(--color-bg-card)",
+  border: "1px solid var(--color-border)",
   borderRadius: 12,
-}
+};
 
-const inputStyle: React.CSSProperties = {
-  background: 'var(--color-bg-secondary)',
-  border: '1px solid var(--color-border)',
-  color: 'var(--color-text-primary)',
+const input: React.CSSProperties = {
+  width: "100%",
+  padding: "8px 10px",
   borderRadius: 7,
-  padding: '8px 10px',
-  fontSize: 12.5,
-  width: '100%',
-}
+  border: "1px solid var(--color-border)",
+  background: "var(--color-bg-secondary)",
+  color: "var(--color-text-primary)",
+};
 
 export default function NotificationManagementPage() {
-  const [notifs, setNotifs] = useState(INITIAL_NOTIFS)
-  const [tab, setTab] = useState<(typeof TABS)[number]>('Tất cả')
-  const [audience, setAudience] = useState(AUDIENCE_OPTIONS[0])
-  const [notifType, setNotifType] = useState(TYPE_OPTIONS[0])
-  const [title, setTitle] = useState('')
-  const [content, setContent] = useState('')
-  const [channels, setChannels] = useState({ inApp: true, email: true, sms: false })
-  const [sentMessage, setSentMessage] = useState('')
+  const [rows, setRows] = useState<NotificationRow[]>([]);
+  const [tab, setTab] = useState<"all" | "unread" | "broadcast">("all");
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [message, setMessage] = useState("");
 
-  const visibleNotifs = notifs.filter((n) => {
-    if (tab === 'Chưa đọc') return n.unread
-    if (tab === 'Broadcast') return n.broadcast
-    return true
-  })
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await api.get("/admin/notifications", {
+        params: { page: 1, pageSize: 100 },
+      });
+      setRows(response.data.data?.items ?? []);
+      setMessage("");
+    } catch {
+      setMessage("Không thể tải danh sách thông báo.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  function handleSend() {
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const visible = useMemo(
+    () =>
+      rows.filter((row) => {
+        if (tab === "unread") return !row.isRead;
+        if (tab === "broadcast") return row.broadcast;
+        return true;
+      }),
+    [rows, tab],
+  );
+
+  async function send() {
     if (!title.trim() || !content.trim()) {
-      setSentMessage('Vui lòng nhập đầy đủ tiêu đề và nội dung.')
-      return
+      setMessage("Vui lòng nhập đầy đủ tiêu đề và nội dung.");
+      return;
     }
-    const newNotif: SystemNotif = {
-      id: `n${Date.now()}`,
-      icon: '📢',
-      iconBg: 'rgba(74,158,255,0.14)',
-      title,
-      desc: `Gửi tới ${audience} · Kênh: ${[channels.inApp && 'In-app', channels.email && 'Email', channels.sms && 'SMS'].filter(Boolean).join(', ')}`,
-      time: 'Vừa xong',
-      broadcast: true,
+    setSending(true);
+    try {
+      await api.post("/admin/notifications/broadcast", {
+        audience: "all_customers",
+        type: "announcement",
+        title: title.trim(),
+        content: content.trim(),
+        channel: "in_app",
+      });
+      setTitle("");
+      setContent("");
+      setMessage("Đã gửi thông báo trong ứng dụng.");
+      await load();
+    } catch {
+      setMessage("Không thể gửi thông báo.");
+    } finally {
+      setSending(false);
     }
-    setNotifs((prev) => [newNotif, ...prev])
-    setSentMessage(`Đã gửi thông báo tới ${audience}.`)
-    setTitle('')
-    setContent('')
-    // TODO: gọi api.post('/admin/notifications/broadcast', { audience, notifType, title, content, channels })
   }
 
   return (
-    <div style={{ display: 'grid', gap: 18 }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 24, color: 'var(--color-text-primary)' }}>Thông báo hệ thống</h1>
-          <p style={{ margin: '4px 0 0', color: 'var(--color-text-secondary)', fontSize: 13 }}>
-            FR-09 · Broadcast &amp; quản lý thông báo tới khách hàng
-          </p>
-        </div>
+    <div style={{ display: "grid", gap: 18 }}>
+      <header>
+        <h1 style={{ margin: 0, fontSize: 24 }}>Thông báo hệ thống</h1>
+        <p style={{ color: "var(--color-text-secondary)", margin: "4px 0 0" }}>
+          Quản lý và gửi thông báo tới khách hàng
+        </p>
       </header>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20 }}>
-        <div style={{ ...panelStyle, overflow: 'hidden' }}>
-          <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-primary)' }}>Thông báo hệ thống gần đây</div>
-            <div style={{ display: 'flex', gap: 4 }}>
-              {TABS.map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setTab(t)}
-                  style={{
-                    border: '1px solid var(--color-border)',
-                    background: tab === t ? 'rgba(0,200,160,0.14)' : 'transparent',
-                    color: tab === t ? 'var(--color-accent-teal)' : 'var(--color-text-secondary)',
-                    borderRadius: 6,
-                    padding: '3px 10px',
-                    fontSize: 11,
-                    cursor: 'pointer',
-                  }}>
-                  {t}
-                </button>
-              ))}
-            </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 20 }}>
+        <section style={panel}>
+          <div style={{ padding: 16, display: "flex", gap: 8, borderBottom: "1px solid var(--color-border)" }}>
+            {(["all", "unread", "broadcast"] as const).map((value) => (
+              <button key={value} onClick={() => setTab(value)}>
+                {value === "all" ? "Tất cả" : value === "unread" ? "Chưa đọc" : "Broadcast"}
+              </button>
+            ))}
           </div>
-
-          <div style={{ padding: 12, display: 'grid', gap: 10 }}>
-            {visibleNotifs.length === 0 ? (
-              <div style={{ padding: 20, textAlign: 'center', color: 'var(--color-text-secondary)' }}>Không có thông báo nào.</div>
-            ) : (
-              visibleNotifs.map((n) => (
-                <div key={n.id} style={{ display: 'flex', gap: 12, padding: 12, borderRadius: 9, background: n.unread ? 'rgba(0,200,160,0.05)' : 'transparent', border: '1px solid var(--color-border)' }}>
-                  <div style={{ width: 36, height: 36, borderRadius: 9, background: n.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>{n.icon}</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>{n.title}</div>
-                    <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 3 }}>{n.desc}</div>
-                    {n.action ? (
-                      <button style={{ marginTop: 8, background: 'transparent', border: '1px solid var(--color-border)', color: 'var(--color-text-secondary)', borderRadius: 6, padding: '5px 11px', fontSize: 11, cursor: 'pointer' }}>
-                        {n.action}
-                      </button>
-                    ) : null}
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-                    <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{n.time}</span>
-                    {n.unread ? <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#FF5C5C' }} /> : null}
-                  </div>
+          <div style={{ padding: 12, display: "grid", gap: 10 }}>
+            {loading ? <div>Đang tải...</div> : visible.length === 0 ? (
+              <div>Không có thông báo.</div>
+            ) : visible.map((row) => (
+              <article key={row.id} style={{ padding: 12, border: "1px solid var(--color-border)", borderRadius: 9 }}>
+                <strong>{row.title}</strong>
+                <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 4 }}>{row.message}</div>
+                <div style={{ fontSize: 11, color: "var(--color-text-muted)", marginTop: 6 }}>
+                  {row.recipientName ?? "Khách hàng"} · {new Date(row.createdAt).toLocaleString("vi-VN")}
                 </div>
-              ))
-            )}
+              </article>
+            ))}
           </div>
-        </div>
-
-        <div style={{ ...panelStyle, padding: 20, alignSelf: 'start' }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: 16 }}>📢 Soạn thông báo</div>
-          <div style={{ display: 'grid', gap: 12 }}>
-            <label style={{ display: 'grid', gap: 5, fontSize: 11, color: 'var(--color-text-muted)' }}>
-              Gửi đến
-              <select value={audience} onChange={(e) => setAudience(e.target.value)} style={inputStyle}>
-                {AUDIENCE_OPTIONS.map((a) => <option key={a} value={a}>{a}</option>)}
-              </select>
-            </label>
-            <label style={{ display: 'grid', gap: 5, fontSize: 11, color: 'var(--color-text-muted)' }}>
-              Loại thông báo
-              <select value={notifType} onChange={(e) => setNotifType(e.target.value)} style={inputStyle}>
-                {TYPE_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </label>
-            <label style={{ display: 'grid', gap: 5, fontSize: 11, color: 'var(--color-text-muted)' }}>
-              Tiêu đề
-              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Nhập tiêu đề thông báo..." style={inputStyle} />
-            </label>
-            <label style={{ display: 'grid', gap: 5, fontSize: 11, color: 'var(--color-text-muted)' }}>
-              Nội dung
-              <textarea value={content} onChange={(e) => setContent(e.target.value)} rows={4} placeholder="Soạn nội dung thông báo..." style={{ ...inputStyle, resize: 'vertical' }} />
-            </label>
-            <div style={{ display: 'grid', gap: 5 }}>
-              <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>Kênh gửi</span>
-              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                <label style={{ display: 'flex', gap: 5, alignItems: 'center', fontSize: 12, color: 'var(--color-text-secondary)', cursor: 'pointer' }}>
-                  <input type="checkbox" checked={channels.inApp} onChange={(e) => setChannels((c) => ({ ...c, inApp: e.target.checked }))} /> In-app
-                </label>
-                <label style={{ display: 'flex', gap: 5, alignItems: 'center', fontSize: 12, color: 'var(--color-text-secondary)', cursor: 'pointer' }}>
-                  <input type="checkbox" checked={channels.email} onChange={(e) => setChannels((c) => ({ ...c, email: e.target.checked }))} /> Email
-                </label>
-                <label style={{ display: 'flex', gap: 5, alignItems: 'center', fontSize: 12, color: 'var(--color-text-secondary)', cursor: 'pointer' }}>
-                  <input type="checkbox" checked={channels.sms} onChange={(e) => setChannels((c) => ({ ...c, sms: e.target.checked }))} /> SMS
-                </label>
-              </div>
-            </div>
-
-            {sentMessage ? <div style={{ fontSize: 12, color: 'var(--color-accent-teal)' }}>{sentMessage}</div> : null}
-
-            <button onClick={handleSend} style={{ background: 'var(--color-accent-teal)', color: '#ffffff', fontWeight: 600, border: 'none', borderRadius: 7, padding: '10px 0', fontSize: 13, cursor: 'pointer' }}>
-              📤 Gửi ngay
-            </button>
-            <button style={{ background: 'transparent', border: '1px solid var(--color-border)', color: 'var(--color-text-secondary)', borderRadius: 7, padding: '10px 0', fontSize: 13, cursor: 'pointer' }}>
-              🕐 Lên lịch gửi
-            </button>
-          </div>
-        </div>
+        </section>
+        <aside style={{ ...panel, padding: 20, alignSelf: "start", display: "grid", gap: 12 }}>
+          <h2 style={{ margin: 0, fontSize: 16 }}>Soạn thông báo</h2>
+          <label>Gửi đến<input value="Tất cả khách hàng" disabled style={input} /></label>
+          <label>Tiêu đề<input value={title} onChange={(event) => setTitle(event.target.value)} style={input} /></label>
+          <label>Nội dung<textarea value={content} onChange={(event) => setContent(event.target.value)} rows={5} style={input} /></label>
+          <label><input type="checkbox" checked readOnly /> Trong ứng dụng</label>
+          <label title="Chưa được backend hỗ trợ"><input type="checkbox" disabled /> Email (chưa hỗ trợ)</label>
+          <label title="Chưa được backend hỗ trợ"><input type="checkbox" disabled /> SMS (chưa hỗ trợ)</label>
+          {message && <div style={{ fontSize: 12 }}>{message}</div>}
+          <button onClick={() => void send()} disabled={sending}>{sending ? "Đang gửi..." : "Gửi ngay"}</button>
+          <button disabled title="Backend chưa hỗ trợ lên lịch">Lên lịch gửi (chưa hỗ trợ)</button>
+        </aside>
       </div>
     </div>
-  )
+  );
 }

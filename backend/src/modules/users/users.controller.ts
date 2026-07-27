@@ -6,12 +6,12 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UploadedFile,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { IsBoolean } from 'class-validator';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -24,6 +24,12 @@ import { UpdateProfileDto } from './dto/update-profile.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { VerifyPasswordDto } from './dto/verify-password.dto';
 import { UsersService } from './users.service';
+import { AdminUserQueryDto } from './dto/admin-user-query.dto';
+import { UpdateUserStatusDto } from './dto/update-user-status.dto';
+import {
+  CurrentAdminContext,
+  type AdminRequestContext,
+} from '../../common/decorators/admin-request-context.decorator';
 
 interface AuthUser {
   id: number;
@@ -31,11 +37,6 @@ interface AuthUser {
   role: string;
   fullName: string;
   phone: string;
-}
-
-class UpdateUserStatusDto {
-  @IsBoolean()
-  isActive!: boolean;
 }
 
 // Trường tối thiểu cần dùng từ file multer đã lưu ổ đĩa. Định nghĩa cục bộ thay vì
@@ -234,8 +235,8 @@ export class UsersController {
 
   @Get('admin/users')
   @Roles('admin')
-  async findAll() {
-    return { success: true, data: await this.usersService.findAll() };
+  async findAll(@Query() query: AdminUserQueryDto) {
+    return { success: true, data: await this.usersService.findAll(query) };
   }
 
   @Get('admin/users/:id')
@@ -252,11 +253,12 @@ export class UsersController {
   async updateStatus(
     @Param('id') id: string,
     @Body() dto: UpdateUserStatusDto,
+    @CurrentAdminContext() context: AdminRequestContext,
   ) {
     return {
       success: true,
       message: 'User status updated',
-      data: await this.usersService.updateStatus(Number(id), dto.isActive),
+      data: await this.usersService.updateStatus(Number(id), dto.isActive, context),
     };
   }
 }

@@ -17,6 +17,8 @@ import { UploadsModule } from './uploads/uploads.module';
 import { ScheduleModule } from './modules/schedule/schedule.module';
 import { AppointmentsModule } from './modules/appointments/appointments.module';
 import { AuthorizedPersonsModule } from './modules/authorized-persons/authorized-persons.module';
+import { AdminAuditModule } from './modules/admin-audit/admin-audit.module';
+import { TransfersModule } from './modules/transfers/transfers.module';
 
 @Module({
   imports: [
@@ -40,6 +42,8 @@ import { AuthorizedPersonsModule } from './modules/authorized-persons/authorized
     ScheduleModule,
     AppointmentsModule,
     AuthorizedPersonsModule,
+    AdminAuditModule,
+    TransfersModule,
   ],
 })
 export class AppModule {}

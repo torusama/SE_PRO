@@ -17,6 +17,14 @@ interface ApiResponse<T> {
   data: T;
 }
 
+interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
 interface ReservationSummary {
   id: number;
   type: ReservationType;
@@ -95,6 +103,14 @@ const statusMeta: Record<string, { label: string; color: string; bg: string }> =
 const typeLabel: Record<ReservationType, string> = {
   reserve: "Giữ chỗ",
   purchase: "Mua lô",
+};
+
+const plotStatusLabel: Record<string, string> = {
+  available: "Còn trống",
+  pending: "Chờ duyệt",
+  reserved: "Đã giữ chỗ",
+  sold: "Đã bán",
+  locked: "Đã khóa",
 };
 
 const money = new Intl.NumberFormat("vi-VN", {
@@ -238,10 +254,12 @@ export default function RequestsPage() {
     setLoadingList(true);
     setError("");
     try {
-      const response = await api.get<ApiResponse<ReservationSummary[]>>(
-        "/admin/reservations",
-      );
-      const rows = response.data.data ?? [];
+      const response = await api.get<
+        ApiResponse<PaginatedResponse<ReservationSummary>>
+      >("/admin/reservations", {
+        params: { page: 1, pageSize: 100 },
+      });
+      const rows = response.data.data?.items ?? [];
       const visibleRows = rows.filter(isVisibleRequest);
       setRequests(rows);
       const preferredId = nextSelectedId ?? selectedIdRef.current;
@@ -277,10 +295,10 @@ export default function RequestsPage() {
 
   const loadAppointments = useCallback(async () => {
     try {
-      const response = await api.get<ApiResponse<Appointment[]>>(
-        "/admin/appointments",
-      );
-      setAppointments(response.data.data ?? []);
+      const response = await api.get<
+        ApiResponse<PaginatedResponse<Appointment>>
+      >("/admin/appointments", { params: { page: 1, pageSize: 100 } });
+      setAppointments(response.data.data?.items ?? []);
     } catch {
       setAppointments([]);
     }
@@ -628,7 +646,7 @@ export default function RequestsPage() {
                       >
                         <strong>{plot.code}</strong>
                         <span style={{ color: "var(--color-text-secondary)" }}>
-                          {plot.status} ·{" "}
+                          {plotStatusLabel[plot.status] ?? plot.status} ·{" "}
                           {money.format(Number(plot.price ?? 0))}
                         </span>
                       </div>
@@ -645,7 +663,7 @@ export default function RequestsPage() {
               <InfoRow label="Ghi chú khách hàng" value={detail?.note || "-"} />
 
               <label style={{ display: "grid", gap: 8 }}>
-                <span style={labelStyle}>Ghi chú admin</span>
+                <span style={labelStyle}>Ghi chú quản trị viên</span>
                 <textarea
                   value={adminNote}
                   onChange={(event) => setAdminNote(event.target.value)}

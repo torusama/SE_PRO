@@ -19,8 +19,8 @@ const MENU: MenuGroup[] = [
   ]},
   { section: 'Lô đất', items: [
     { label: 'Bản đồ 2D',    to: ROUTES.ADMIN_MAP },
-    { label: 'Quản lý lô đất', to: ROUTES.ADMIN_LOTS, badge: 5 },
-    { label: 'Xử lý yêu cầu', to: ROUTES.ADMIN_REQUESTS, badge: 7 },
+    { label: 'Quản lý lô đất', to: ROUTES.ADMIN_LOTS },
+    { label: 'Xử lý yêu cầu', to: ROUTES.ADMIN_REQUESTS },
   ]},
   { section: 'Giao dịch', items: [
     { label: 'Hợp đồng & Sở hữu', to: ROUTES.ADMIN_CONTRACTS },

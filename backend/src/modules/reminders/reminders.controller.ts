@@ -16,6 +16,7 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { CreateReminderDto } from './dto/create-reminder.dto';
 import { UpdateReminderDto } from './dto/update-reminder.dto';
 import { RemindersService } from './reminders.service';
+import { AdminReminderQueryDto } from './dto/admin-reminder-query.dto';
 
 // ── Customer routes (/my/reminders) ─────────────────────────────────────────
 @UseGuards(JwtAuthGuard)
@@ -77,13 +78,10 @@ export class AdminRemindersController {
 
   /** GET /admin/reminders?type=&search=  — lấy toàn bộ nhắc lịch mọi user */
   @Get()
-  async all(
-    @Query('type') type?: string,
-    @Query('search') search?: string,
-  ) {
+  async all(@Query() query: AdminReminderQueryDto) {
     return {
       success: true,
-      data: await this.remindersService.allForAdmin({ type, search }),
+      data: await this.remindersService.allForAdmin(query),
     };
   }
 

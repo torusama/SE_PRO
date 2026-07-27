@@ -1,10 +1,17 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PoolClient } from 'pg';
 import { DatabaseService } from '../../database/database.service';
+import { AdminNotificationQueryDto, BroadcastNotificationDto } from './dto/admin-notification.dto';
+import { paginate } from '../../common/interfaces/paginated-response.interface';
+import { AdminAuditService } from '../admin-audit/admin-audit.service';
+import type { AdminRequestContext } from '../../common/decorators/admin-request-context.decorator';
 
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly audit?: AdminAuditService,
+  ) {}
 
   list(userId: number) {
     return this.database.query(
@@ -92,5 +99,77 @@ export class NotificationsService {
       ],
     );
     return result.rows[0];
+  }
+
+  async adminList(query: AdminNotificationQueryDto) {
+    const values: unknown[] = [];
+    const conditions: string[] = [];
+    const add = (value: unknown) => {
+      values.push(value);
+      return `$${values.length}`;
+    };
+    if (query.search) {
+      const p = add(`%${query.search}%`);
+      conditions.push(`(n.title ILIKE ${p} OR n.message ILIKE ${p} OR u.full_name ILIKE ${p})`);
+    }
+    if (query.isRead !== undefined) conditions.push(`n.is_read=${add(query.isRead)}`);
+    if (query.broadcast !== undefined) {
+      conditions.push(
+        query.broadcast
+          ? `n.related_entity_type='admin_broadcast'`
+          : `(n.related_entity_type IS DISTINCT FROM 'admin_broadcast')`,
+      );
+    }
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    const count = await this.database.queryOne<{ total: string }>(
+      `SELECT COUNT(*)::text AS total FROM notifications n
+       JOIN users u ON u.user_id=n.user_id ${where}`,
+      values,
+    );
+    values.push(query.pageSize, query.offset);
+    const items = await this.database.query(
+      `SELECT n.notification_id AS id, n.type, n.title, n.message,
+              n.is_read AS "isRead", n.created_at AS "createdAt",
+              n.related_entity_type='admin_broadcast' AS broadcast,
+              u.user_id AS "recipientId", u.full_name AS "recipientName"
+       FROM notifications n JOIN users u ON u.user_id=n.user_id ${where}
+       ORDER BY n.created_at DESC
+       LIMIT $${values.length - 1} OFFSET $${values.length}`,
+      values,
+    );
+    return paginate(items, Number(count?.total ?? 0), query.page, query.pageSize);
+  }
+
+  async broadcast(
+    dto: BroadcastNotificationDto,
+    context: AdminRequestContext,
+  ) {
+    if (dto.channel !== 'in_app') {
+      throw new BadRequestException('Only in-app broadcast is supported');
+    }
+    return this.database.transaction(async (client) => {
+      const inserted = await client.query(
+        `INSERT INTO notifications
+           (user_id,type,title,message,related_entity_type)
+         SELECT user_id,$1,$2,$3,'admin_broadcast'
+         FROM users
+         WHERE LOWER(role)='customer' AND is_active=TRUE AND is_deleted=FALSE
+         RETURNING notification_id`,
+        [dto.type, dto.title, dto.content],
+      );
+      await this.audit?.record(client, {
+        action: 'notification.broadcast',
+        entityType: 'admin_broadcast',
+        entityKey: `broadcast-${Date.now()}`,
+        after: {
+          audience: dto.audience,
+          channel: dto.channel,
+          recipientCount: inserted.rowCount,
+          title: dto.title,
+        },
+        context,
+      });
+      return { recipientCount: inserted.rowCount, channel: dto.channel };
+    });
   }
 }

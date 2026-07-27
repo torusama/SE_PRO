@@ -1,162 +1,163 @@
-// src/pages/admin/activity/ActivityPage.tsx
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from "react";
+import { api } from "@/lib/api";
 
-type EventType = 'Hợp đồng' | 'Dịch vụ' | 'Thanh toán' | 'Hệ thống'
+type EventType = "Hợp đồng" | "Dịch vụ" | "Thanh toán" | "Hệ thống";
 
-interface ActivityEvent {
-  id: number
-  date: string
-  time: string
-  type: EventType
-  icon: string
-  active?: boolean
-  title: string
-  desc: string
+interface AuditRow {
+  id: number;
+  actorName?: string;
+  action: string;
+  entityType: string;
+  entityId?: number | null;
+  entityKey?: string | null;
+  before?: unknown;
+  after?: unknown;
+  createdAt: string;
 }
 
-const EVENTS: ActivityEvent[] = [
-  { id: 2, date: '28/06/2025', time: '08:52', type: 'Hệ thống', icon: '✅', active: true, title: 'Hệ thống AI xác nhận hồ sơ tự động', desc: 'Auto-check · Đầy đủ hồ sơ · Chờ admin duyệt' },
-  { id: 3, date: '28/06/2025', time: '08:30', type: 'Dịch vụ', icon: '🛠️', title: 'Yêu cầu dịch vụ lau dọn lô B-05', desc: 'Lê Thị Hương · KH-0138 · Ngày thực hiện: 02/07' },
-  { id: 4, date: '27/06/2025', time: '16:40', type: 'Thanh toán', icon: '💰', title: 'Thanh toán hợp đồng HD-2025-0071 — 28.500.000 đ', desc: 'Nguyễn Bích Chi · KH-0127 · Chuyển khoản VietinBank' },
-  { id: 6, date: '26/06/2025', time: '11:00', type: 'Hợp đồng', icon: '📄', active: true, title: 'Ký hợp đồng HD-2025-0082 hoàn tất', desc: 'Lê Thị Hương · KH-0138 · Mua lô B-05 · 25.000.000 đ' },
-]
+interface ApiResponse<T> {
+  success: boolean;
+  data: T;
+}
 
-const TYPE_OPTIONS: (EventType | 'Tất cả')[] = ['Tất cả', 'Hợp đồng', 'Dịch vụ', 'Thanh toán', 'Hệ thống']
-const RANGE_OPTIONS = ['Hôm nay', '7 ngày', '30 ngày', 'Tất cả'] as const
+interface Page<T> {
+  items: T[];
+  total: number;
+}
+
+const TYPE_OPTIONS: (EventType | "Tất cả")[] = [
+  "Tất cả",
+  "Hợp đồng",
+  "Dịch vụ",
+  "Thanh toán",
+  "Hệ thống",
+];
+const RANGE_OPTIONS = ["Hôm nay", "7 ngày", "30 ngày", "Tất cả"] as const;
 
 const panelStyle: React.CSSProperties = {
-  background: 'var(--color-bg-card)',
-  border: '1px solid var(--color-border)',
+  background: "var(--color-bg-card)",
+  border: "1px solid var(--color-border)",
   borderRadius: 12,
+};
+
+function eventType(row: AuditRow): EventType {
+  const value = `${row.action} ${row.entityType}`.toLowerCase();
+  if (value.includes("payment")) return "Thanh toán";
+  if (value.includes("contract") || value.includes("ownership") || value.includes("transfer"))
+    return "Hợp đồng";
+  if (value.includes("service") || value.includes("appointment")) return "Dịch vụ";
+  return "Hệ thống";
 }
 
-function exportToCsv(rows: ActivityEvent[]) {
-  const header = ['Ngày', 'Giờ', 'Loại', 'Nội dung', 'Chi tiết']
-  const body = rows.map((r) => [r.date, r.time, r.type, r.title, r.desc])
-  const csv = [header, ...body].map((line) => line.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n')
-  const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = `hoat-dong-${new Date().toISOString().slice(0, 10)}.csv`
-  link.click()
-  URL.revokeObjectURL(url)
+function fromDate(range: (typeof RANGE_OPTIONS)[number]) {
+  if (range === "Tất cả") return undefined;
+  const date = new Date();
+  if (range === "Hôm nay") date.setHours(0, 0, 0, 0);
+  else date.setDate(date.getDate() - (range === "7 ngày" ? 7 : 30));
+  return date.toISOString();
+}
+
+function exportToCsv(rows: AuditRow[]) {
+  const header = ["Thời gian", "Loại", "Người thực hiện", "Hành động", "Đối tượng"];
+  const body = rows.map((row) => [
+    new Date(row.createdAt).toLocaleString("vi-VN"),
+    eventType(row),
+    row.actorName ?? "Admin",
+    row.action,
+    `${row.entityType} #${row.entityKey ?? row.entityId ?? "-"}`,
+  ]);
+  const csv = [header, ...body]
+    .map((line) => line.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+  const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `hoat-dong-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 export default function ActivityPage() {
-  const [typeFilter, setTypeFilter] = useState<(typeof TYPE_OPTIONS)[number]>('Tất cả')
-  const [range, setRange] = useState<(typeof RANGE_OPTIONS)[number]>('Hôm nay')
+  const [typeFilter, setTypeFilter] = useState<(typeof TYPE_OPTIONS)[number]>("Tất cả");
+  const [range, setRange] = useState<(typeof RANGE_OPTIONS)[number]>("Hôm nay");
+  const [rows, setRows] = useState<AuditRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError("");
+    api
+      .get<ApiResponse<Page<AuditRow>>>("/admin/audit-logs", {
+        params: { page: 1, pageSize: 100, from: fromDate(range) },
+      })
+      .then((response) => {
+        if (active) setRows(response.data.data?.items ?? []);
+      })
+      .catch(() => {
+        if (active) setError("Không thể tải lịch sử hoạt động.");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [range]);
 
   const filtered = useMemo(
-    () => EVENTS.filter((event) => typeFilter === 'Tất cả' || event.type === typeFilter),
-    [typeFilter],
-  )
+    () => rows.filter((row) => typeFilter === "Tất cả" || eventType(row) === typeFilter),
+    [rows, typeFilter],
+  );
 
   return (
-    <div style={{ display: 'grid', gap: 18 }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
+    <div style={{ display: "grid", gap: 18 }}>
+      <header style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 24, color: 'var(--color-text-primary)' }}>Hoạt động gần đây</h1>
-          <p style={{ margin: '4px 0 0', color: 'var(--color-text-secondary)', fontSize: 13 }}>
-            Tất cả sự kiện trong hệ thống theo thời gian thực
+          <h1 style={{ margin: 0, fontSize: 24, color: "var(--color-text-primary)" }}>Hoạt động gần đây</h1>
+          <p style={{ margin: "4px 0 0", color: "var(--color-text-secondary)", fontSize: 13 }}>
+            Lịch sử thao tác quản trị được ghi nhận từ hệ thống
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <select
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value as typeof typeFilter)}
-            style={{
-              background: 'var(--color-bg-secondary)',
-              border: '1px solid var(--color-border)',
-              color: 'var(--color-text-primary)',
-              borderRadius: 7,
-              padding: '7px 10px',
-              fontSize: 12,
-            }}>
-            {TYPE_OPTIONS.map((opt) => (
-              <option key={opt} value={opt}>
-                {opt === 'Tất cả' ? 'Tất cả loại' : opt}
-              </option>
-            ))}
+        <div style={{ display: "flex", gap: 8 }}>
+          <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value as typeof typeFilter)}>
+            {TYPE_OPTIONS.map((option) => <option key={option}>{option}</option>)}
           </select>
-          <button
-            onClick={() => exportToCsv(filtered)}
-            style={{
-              background: 'transparent',
-              border: '1px solid var(--color-border)',
-              color: 'var(--color-text-secondary)',
-              borderRadius: 7,
-              padding: '7px 14px',
-              fontSize: 12,
-              cursor: 'pointer',
-            }}>
-            ⬇ Xuất CSV
-          </button>
+          <button onClick={() => exportToCsv(filtered)}>Xuất CSV</button>
         </div>
       </header>
-
       <div style={panelStyle}>
-        <div style={{ padding: '16px 20px 0', display: 'flex', gap: 8 }}>
-          {RANGE_OPTIONS.map((opt) => (
-            <button
-              key={opt}
-              onClick={() => setRange(opt)}
-              style={{
-                border: '1px solid var(--color-border)',
-                background: range === opt ? 'rgba(0,200,160,0.14)' : 'transparent',
-                color: range === opt ? 'var(--color-accent-teal)' : 'var(--color-text-secondary)',
-                fontWeight: range === opt ? 600 : 400,
-                borderRadius: 7,
-                padding: '6px 12px',
-                fontSize: 12,
-                cursor: 'pointer',
-              }}>
-              {opt}
-            </button>
+        <div style={{ padding: "16px 20px 0", display: "flex", gap: 8 }}>
+          {RANGE_OPTIONS.map((option) => (
+            <button key={option} onClick={() => setRange(option)} style={{
+              border: "1px solid var(--color-border)",
+              background: range === option ? "rgba(0,200,160,0.14)" : "transparent",
+              color: range === option ? "var(--color-accent-teal)" : "var(--color-text-secondary)",
+              borderRadius: 7, padding: "6px 12px", cursor: "pointer",
+            }}>{option}</button>
           ))}
         </div>
-
         <div style={{ padding: 20 }}>
-          {filtered.length === 0 ? (
-            <div style={{ color: 'var(--color-text-secondary)', padding: 20, textAlign: 'center' }}>
-              Không có sự kiện nào khớp bộ lọc.
-            </div>
-          ) : (
-            <div style={{ display: 'grid', gap: 0, position: 'relative' }}>
-              {filtered.map((event, idx) => (
-                <div key={event.id} style={{ display: 'flex', gap: 14, paddingBottom: idx === filtered.length - 1 ? 0 : 18, position: 'relative' }}>
-                  {idx !== filtered.length - 1 ? (
-                    <div style={{ position: 'absolute', left: 15, top: 32, bottom: 0, width: 1, background: 'var(--color-border)' }} />
-                  ) : null}
-                  <div
-                    style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: '50%',
-                      background: event.active ? 'rgba(0,200,160,0.16)' : 'var(--color-bg-secondary)',
-                      border: `1px solid ${event.active ? 'var(--color-accent-teal)' : 'var(--color-border)'}`,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: 13,
-                      flexShrink: 0,
-                      zIndex: 1,
-                    }}>
-                    {event.icon}
+          {loading ? <div>Đang tải hoạt động...</div> : error ? <div style={{ color: "#FF5C5C" }}>{error}</div> :
+            filtered.length === 0 ? <div>Không có hoạt động phù hợp.</div> :
+            <div style={{ display: "grid", gap: 16 }}>
+              {filtered.map((row) => (
+                <div key={row.id} style={{ borderBottom: "1px solid var(--color-border)", paddingBottom: 14 }}>
+                  <div style={{ fontSize: 11, color: "var(--color-text-muted)" }}>
+                    {new Date(row.createdAt).toLocaleString("vi-VN")} · {eventType(row)}
                   </div>
-                  <div>
-                    <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
-                      {event.date} · {event.time}
-                    </div>
-                    <div style={{ fontSize: 13.5, color: 'var(--color-text-primary)', fontWeight: 500, marginTop: 2 }}>{event.title}</div>
-                    <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 2 }}>{event.desc}</div>
+                  <div style={{ color: "var(--color-text-primary)", fontWeight: 600, marginTop: 3 }}>
+                    {row.action}
+                  </div>
+                  <div style={{ color: "var(--color-text-secondary)", fontSize: 12, marginTop: 2 }}>
+                    {row.actorName ?? "Admin"} · {row.entityType} #{row.entityKey ?? row.entityId ?? "-"}
                   </div>
                 </div>
               ))}
-            </div>
-          )}
+            </div>}
         </div>
       </div>
     </div>
-  )
+  );
 }

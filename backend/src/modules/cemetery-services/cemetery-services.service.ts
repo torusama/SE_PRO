@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import { basename } from 'path';
 import { DatabaseService } from '../../database/database.service';
+import { AdminServiceOrderQueryDto } from './dto/admin-service-order-query.dto';
+import { paginate } from '../../common/interfaces/paginated-response.interface';
 import { CreateServiceOrderDto } from './dto/create-service-order.dto';
 import {
   CompleteServiceOrderDto,
@@ -113,8 +115,36 @@ export class CemeteryServicesService {
     ]);
   }
 
-  adminOrders() {
-    return this.orders('ORDER BY so.created_at DESC', [], true);
+  async adminOrders(query: AdminServiceOrderQueryDto = new AdminServiceOrderQueryDto()) {
+    const values: unknown[] = [];
+    const conditions: string[] = [];
+    const add = (value: unknown) => {
+      values.push(value);
+      return `$${values.length}`;
+    };
+    if (query.search) {
+      const p = add(`%${query.search}%`);
+      conditions.push(
+        `(u.full_name ILIKE ${p} OR st.name ILIKE ${p} OR p.plot_code ILIKE ${p})`,
+      );
+    }
+    if (query.status) conditions.push(`so.status=${add(query.status)}`);
+    if (query.assigneeId) conditions.push(`so.assigned_to=${add(query.assigneeId)}`);
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    const count = await this.database.queryOne<{ total: string }>(
+      `SELECT COUNT(*)::text AS total FROM service_orders so
+       JOIN users u ON u.user_id=so.user_id
+       JOIN service_types st ON st.service_type_id=so.service_type_id
+       LEFT JOIN plots p ON p.plot_id=so.plot_id ${where}`,
+      values,
+    );
+    values.push(query.pageSize, query.offset);
+    const items = await this.orders(
+      `${where} ORDER BY so.created_at DESC LIMIT $${values.length - 1} OFFSET $${values.length}`,
+      values,
+      true,
+    );
+    return paginate(items, Number(count?.total ?? 0), query.page, query.pageSize);
   }
 
   assignees() {

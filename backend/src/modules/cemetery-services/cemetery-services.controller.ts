@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Res,
   UploadedFiles,
   UseGuards,
@@ -21,6 +22,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { AdminServiceOrderQueryDto } from './dto/admin-service-order-query.dto';
 import { CemeteryServicesService } from './cemetery-services.service';
 import { CreateServiceOrderDto } from './dto/create-service-order.dto';
 import {
@@ -98,8 +100,8 @@ export class CemeteryServicesController {
   @Get('admin/service-orders')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
-  async adminOrders() {
-    return { success: true, data: await this.service.adminOrders() };
+  async adminOrders(@Query() query: AdminServiceOrderQueryDto) {
+    return { success: true, data: await this.service.adminOrders(query) };
   }
 
   @Get('admin/service-order-assignees')

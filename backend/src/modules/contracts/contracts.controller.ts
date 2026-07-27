@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Res, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, Res, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
@@ -11,6 +11,12 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { ContractsService } from './contracts.service';
 import { UpdateInheritanceDto } from './dto/update-inheritance.dto';
 import { SignContractDto } from './dto/sign-contract.dto';
+import { AdminContractQueryDto } from './dto/admin-contract-query.dto';
+import { RecordPaymentDto } from './dto/record-payment.dto';
+import {
+  CurrentAdminContext,
+  type AdminRequestContext,
+} from '../../common/decorators/admin-request-context.decorator';
 
 const contractPdfUpload = FileInterceptor('pdf', {
   storage: diskStorage({
@@ -36,7 +42,7 @@ export class ContractsController {
 
   @Get('admin/contracts')
   @Roles('admin')
-  async adminList() { return { success: true, data: await this.contractsService.adminList() }; }
+  async adminList(@Query() query: AdminContractQueryDto) { return { success: true, data: await this.contractsService.adminList(query) }; }
 
   @Get('admin/contracts/:id')
   @Roles('admin')
@@ -56,8 +62,13 @@ export class ContractsController {
 
   @Post('admin/contracts/:id/payments')
   @Roles('admin')
-  async addPayment(@CurrentUser() user: any, @Param('id') id: string, @Body() body: any) {
-    return { success: true, message: 'Payment added', data: await this.contractsService.addPayment(Number(id), body, user.id) };
+  async addPayment(
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+    @Body() body: RecordPaymentDto,
+    @CurrentAdminContext() context: AdminRequestContext,
+  ) {
+    return { success: true, message: 'Payment added', data: await this.contractsService.addPayment(Number(id), body, user.id, context) };
   }
 
   @Patch('admin/contracts/:id/inheritance')

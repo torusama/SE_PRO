@@ -16,6 +16,11 @@ import { AppointmentsService } from './appointments.service';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { UpdateAppointmentStatusDto } from './dto/update-appointment-status.dto';
 import { UpdateAppointmentDto } from './dto/update-appointment.dto';
+import { AdminAppointmentQueryDto } from './dto/admin-appointment-query.dto';
+import {
+  CurrentAdminContext,
+  type AdminRequestContext,
+} from '../../common/decorators/admin-request-context.decorator';
 
 interface AuthenticatedUser {
   id: number;
@@ -31,11 +36,12 @@ export class AppointmentsController {
   async create(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreateAppointmentDto,
+    @CurrentAdminContext() context: AdminRequestContext,
   ) {
     return {
       success: true,
       message: 'Appointment created',
-      data: await this.appointmentsService.create(user.id, dto),
+      data: await this.appointmentsService.create(user.id, dto, context),
     };
   }
 
@@ -54,15 +60,11 @@ export class AppointmentsController {
 
   @Get('admin/appointments')
   @Roles('admin')
-  async adminList(
-    @Query('status') status?: string,
-    @Query('from') from?: string,
-    @Query('to') to?: string,
-  ) {
+  async adminList(@Query() query: AdminAppointmentQueryDto) {
     return {
       success: true,
       message: 'Appointments retrieved',
-      data: await this.appointmentsService.adminList({ status, from, to }),
+      data: await this.appointmentsService.adminList(query),
     };
   }
 
@@ -72,11 +74,12 @@ export class AppointmentsController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
     @Body() dto: UpdateAppointmentDto,
+    @CurrentAdminContext() context: AdminRequestContext,
   ) {
     return {
       success: true,
       message: 'Appointment updated',
-      data: await this.appointmentsService.update(user.id, Number(id), dto),
+      data: await this.appointmentsService.update(user.id, Number(id), dto, context),
     };
   }
 
@@ -86,6 +89,7 @@ export class AppointmentsController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
     @Body() dto: UpdateAppointmentStatusDto,
+    @CurrentAdminContext() context: AdminRequestContext,
   ) {
     return {
       success: true,
@@ -94,6 +98,7 @@ export class AppointmentsController {
         user.id,
         Number(id),
         dto,
+        context,
       ),
     };
   }

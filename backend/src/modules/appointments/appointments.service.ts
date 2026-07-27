@@ -11,6 +11,10 @@ import {
   UpdateAppointmentStatusDto,
 } from './dto/update-appointment-status.dto';
 import { UpdateAppointmentDto } from './dto/update-appointment.dto';
+import { AdminAppointmentQueryDto } from './dto/admin-appointment-query.dto';
+import { paginate } from '../../common/interfaces/paginated-response.interface';
+import { AdminAuditService } from '../admin-audit/admin-audit.service';
+import type { AdminRequestContext } from '../../common/decorators/admin-request-context.decorator';
 
 export interface AppointmentRow extends QueryResultRow {
   id: number;
@@ -46,9 +50,12 @@ export class AppointmentsService {
     'no_show',
   ];
 
-  constructor(private readonly database: DatabaseService) {}
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly audit?: AdminAuditService,
+  ) {}
 
-  async create(adminId: number, dto: CreateAppointmentDto) {
+  async create(adminId: number, dto: CreateAppointmentDto, context?: AdminRequestContext) {
     return this.database.transaction(async (client) => {
       const request = await this.lockApprovedReservationRequest(
         client,
@@ -90,6 +97,13 @@ export class AppointmentsService {
         'Lich hen ky hop dong offline cua ban da duoc tao.',
         appointment.rows[0].id,
       );
+      await this.audit?.record(client, {
+        action: 'appointment.create',
+        entityType: 'offline_appointment',
+        entityId: appointment.rows[0].id,
+        after: appointment.rows[0],
+        context: context ?? { adminId, ipAddress: null, userAgent: null },
+      });
 
       return { ...this.mapAppointment(appointment.rows[0]), notificationCreated: true };
     });
@@ -109,7 +123,7 @@ export class AppointmentsService {
     return rows.map((row) => this.mapAppointment(row));
   }
 
-  async adminList(filters: { status?: string; from?: string; to?: string }) {
+  async adminList(filters: AdminAppointmentQueryDto) {
     this.assertOptionalStatus(filters.status);
     const params: unknown[] = [];
     const clauses = ['oa.is_deleted = FALSE'];
@@ -126,16 +140,28 @@ export class AppointmentsService {
       clauses.push(`oa.scheduled_at <= $${params.length}`);
     }
 
+    const count = await this.database.queryOne<{ total: string }>(
+      `SELECT COUNT(*)::text AS total FROM offline_appointments oa
+       WHERE ${clauses.join(' AND ')}`,
+      params,
+    );
+    params.push(filters.pageSize, filters.offset);
     const rows = await this.database.query<AppointmentRow>(
       `${this.baseSelect()}
        WHERE ${clauses.join(' AND ')}
-       ORDER BY oa.scheduled_at DESC`,
+       ORDER BY oa.scheduled_at DESC
+       LIMIT $${params.length - 1} OFFSET $${params.length}`,
       params,
     );
-    return rows.map((row) => this.mapAppointment(row));
+    return paginate(
+      rows.map((row) => this.mapAppointment(row)),
+      Number(count?.total ?? 0),
+      filters.page,
+      filters.pageSize,
+    );
   }
 
-  async update(adminId: number, id: number, dto: UpdateAppointmentDto) {
+  async update(adminId: number, id: number, dto: UpdateAppointmentDto, context?: AdminRequestContext) {
     return this.database.transaction(async (client) => {
       const current = await this.lockAppointment(client, id);
       if (current.status !== 'scheduled') {
@@ -178,6 +204,14 @@ export class AppointmentsService {
         'Thong tin lich hen ky hop dong offline cua ban da duoc cap nhat.',
         id,
       );
+      await this.audit?.record(client, {
+        action: 'appointment.update',
+        entityType: 'offline_appointment',
+        entityId: id,
+        before: current,
+        after: updated.rows[0],
+        context: context ?? { adminId, ipAddress: null, userAgent: null },
+      });
 
       return { ...this.mapAppointment(updated.rows[0]), notificationCreated: true };
     });
@@ -187,6 +221,7 @@ export class AppointmentsService {
     adminId: number,
     id: number,
     dto: UpdateAppointmentStatusDto,
+    context?: AdminRequestContext,
   ) {
     return this.database.transaction(async (client) => {
       const current = await this.lockAppointment(client, id);
@@ -235,6 +270,14 @@ export class AppointmentsService {
         'Trang thai lich hen ky hop dong offline cua ban da duoc cap nhat.',
         id,
       );
+      await this.audit?.record(client, {
+        action: 'appointment.status.update',
+        entityType: 'offline_appointment',
+        entityId: id,
+        before: { status: current.status },
+        after: { status: updated.rows[0].status, statusNote: updated.rows[0].statusNote },
+        context: context ?? { adminId, ipAddress: null, userAgent: null },
+      });
 
       return { ...this.mapAppointment(updated.rows[0]), notificationCreated: true };
     });

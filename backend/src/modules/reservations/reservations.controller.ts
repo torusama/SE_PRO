@@ -5,6 +5,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -15,6 +16,11 @@ import { CreateMultipleReservationDto } from './dto/create-multiple-reservation.
 import { CreateReservationDto } from './dto/create-reservation.dto';
 import { UpdateReservationStatusDto } from './dto/update-reservation-status.dto';
 import { ReservationsService } from './reservations.service';
+import { AdminReservationQueryDto } from './dto/admin-reservation-query.dto';
+import {
+  CurrentAdminContext,
+  type AdminRequestContext,
+} from '../../common/decorators/admin-request-context.decorator';
 
 interface AuthenticatedUser {
   id: number;
@@ -33,7 +39,7 @@ export class ReservationsController {
   ) {
     return {
       success: true,
-      message: 'Reservation request created',
+      message: 'Đã tạo yêu cầu giữ chỗ hoặc mua lô',
       data: await this.reservationsService.create(user.id, dto),
     };
   }
@@ -46,7 +52,7 @@ export class ReservationsController {
   ) {
     return {
       success: true,
-      message: 'Multi-plot reservation request created',
+      message: 'Đã tạo yêu cầu cho nhiều lô',
       data: await this.reservationsService.createMultiple(user.id, dto),
     };
   }
@@ -56,7 +62,7 @@ export class ReservationsController {
   async my(@CurrentUser() user: AuthenticatedUser) {
     return {
       success: true,
-      message: 'Reservations retrieved',
+      message: 'Đã tải danh sách yêu cầu',
       data: await this.reservationsService.my(user.id),
     };
   }
@@ -66,7 +72,7 @@ export class ReservationsController {
   async myOne(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return {
       success: true,
-      message: 'Reservation retrieved',
+      message: 'Đã tải thông tin yêu cầu',
       data: await this.reservationsService.myOne(user.id, Number(id)),
     };
   }
@@ -79,7 +85,7 @@ export class ReservationsController {
   ) {
     return {
       success: true,
-      message: 'Reservation submitted',
+      message: 'Đã gửi yêu cầu',
       data: await this.reservationsService.submit(user.id, Number(id)),
     };
   }
@@ -92,18 +98,18 @@ export class ReservationsController {
   ) {
     return {
       success: true,
-      message: 'Reservation cancelled',
+      message: 'Đã hủy yêu cầu',
       data: await this.reservationsService.cancel(user.id, Number(id)),
     };
   }
 
   @Get('admin/reservations')
   @Roles('admin')
-  async adminList() {
+  async adminList(@Query() query: AdminReservationQueryDto) {
     return {
       success: true,
-      message: 'Reservations retrieved',
-      data: await this.reservationsService.adminList(),
+      message: 'Đã tải danh sách yêu cầu',
+      data: await this.reservationsService.adminList(query),
     };
   }
 
@@ -112,7 +118,7 @@ export class ReservationsController {
   async adminOne(@Param('id') id: string) {
     return {
       success: true,
-      message: 'Reservation retrieved',
+      message: 'Đã tải thông tin yêu cầu',
       data: await this.reservationsService.adminOne(Number(id)),
     };
   }
@@ -123,14 +129,16 @@ export class ReservationsController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
     @Body() dto: UpdateReservationStatusDto,
+    @CurrentAdminContext() context: AdminRequestContext,
   ) {
     return {
       success: true,
-      message: 'Reservation approved',
+      message: 'Đã duyệt yêu cầu',
       data: await this.reservationsService.approve(
         user.id,
         Number(id),
         dto.adminNote,
+        context,
       ),
     };
   }
@@ -141,14 +149,16 @@ export class ReservationsController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
     @Body() dto: UpdateReservationStatusDto,
+    @CurrentAdminContext() context: AdminRequestContext,
   ) {
     return {
       success: true,
-      message: 'Reservation rejected',
+      message: 'Đã từ chối yêu cầu',
       data: await this.reservationsService.reject(
         user.id,
         Number(id),
         dto.adminNote,
+        context,
       ),
     };
   }

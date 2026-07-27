@@ -8,7 +8,7 @@ const result = (rows: unknown[] = [], rowCount = rows.length) => ({
   rowCount,
 });
 
-function createService(handler?: QueryHandler) {
+function createService(handler?: QueryHandler, audit?: any) {
   const client = {
     query: jest.fn((sql: string, params?: unknown[]) =>
       handler ? handler(sql, params) : result(),
@@ -28,7 +28,7 @@ function createService(handler?: QueryHandler) {
   return {
     client,
     database,
-    service: new AppointmentsService(database as never),
+    service: new AppointmentsService(database as never, audit),
   };
 }
 
@@ -175,6 +175,7 @@ describe('AppointmentsService', () => {
 
   it('lists admin appointments with filters', async () => {
     const { database, service } = createService();
+    database.queryOne.mockResolvedValue({ total: '1' });
     database.query.mockResolvedValue([appointmentRow]);
 
     await expect(
@@ -182,11 +183,14 @@ describe('AppointmentsService', () => {
         status: 'scheduled',
         from: '2026-07-01T00:00:00Z',
         to: '2026-07-31T00:00:00Z',
-      }),
-    ).resolves.toEqual([appointmentRow]);
+        page: 1,
+        pageSize: 20,
+        offset: 0,
+      } as never),
+    ).resolves.toMatchObject({ items: [appointmentRow], total: 1 });
     expect(database.query).toHaveBeenCalledWith(
       expect.stringContaining('oa.scheduled_at <= $3'),
-      ['scheduled', '2026-07-01T00:00:00Z', '2026-07-31T00:00:00Z'],
+      ['scheduled', '2026-07-01T00:00:00Z', '2026-07-31T00:00:00Z', 20, 0],
     );
   });
 
@@ -206,6 +210,26 @@ describe('AppointmentsService', () => {
     expect(client.query).toHaveBeenCalledWith(
       expect.stringContaining('INSERT INTO notifications'),
       expect.arrayContaining([7, 'appointment_updated']),
+    );
+  });
+
+  it('audits an appointment update inside the transaction', async () => {
+    const audit = { record: jest.fn() };
+    const { client, service } = createService((sql) => {
+      if (sql.includes('FOR UPDATE OF oa')) return result([appointmentRow]);
+      if (sql.includes('UPDATE offline_appointments')) {
+        return result([{ ...appointmentRow, location: 'Văn phòng mới' }]);
+      }
+      return result();
+    }, audit);
+    await service.update(1, 21, { location: 'Văn phòng mới' }, {
+      adminId: 1,
+      ipAddress: '127.0.0.1',
+      userAgent: 'jest',
+    });
+    expect(audit.record).toHaveBeenCalledWith(
+      client,
+      expect.objectContaining({ action: 'appointment.update', entityId: 21 }),
     );
   });
 

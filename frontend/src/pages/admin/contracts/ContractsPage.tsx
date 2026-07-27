@@ -45,8 +45,8 @@ export default function ContractsPage() {
   const load = async () => {
     setLoading(true)
     try {
-      const response = await api.get('/admin/contracts')
-      const rows: Contract[] = response.data.data
+      const response = await api.get('/admin/contracts', { params: { page: 1, pageSize: 100 } })
+      const rows: Contract[] = response.data.data?.items ?? []
       setContracts(rows)
       setSelectedId((current) => current ?? rows[0]?.id)
     } finally {

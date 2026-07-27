@@ -83,8 +83,10 @@ export default function ReminderManagementPage() {
     setLoading(true)
     setError('')
     try {
-      const res = await api.get<{ success: boolean; data: AdminReminder[] }>('/admin/reminders')
-      setReminders(res.data.data ?? [])
+      const res = await api.get<{ success: boolean; data: { items: AdminReminder[] } }>('/admin/reminders', {
+        params: { page: 1, pageSize: 100 },
+      })
+      setReminders(res.data.data?.items ?? [])
     } catch (err) {
       setError(getErrorMessage(err))
     } finally {

@@ -9,6 +9,10 @@ import { DatabaseService } from '../../database/database.service';
 import { EmailService } from '../email/email.service';
 import { SmsService } from '../sms/sms.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { AdminAuditService } from '../admin-audit/admin-audit.service';
+import type { AdminRequestContext } from '../../common/decorators/admin-request-context.decorator';
+import { paginate } from '../../common/interfaces/paginated-response.interface';
+import { AdminUserQueryDto } from './dto/admin-user-query.dto';
 
 // Các trường bắt buộc để coi hồ sơ là "đã hoàn thiện". Dùng để chặn
 // người dùng mới đăng ký cho đến khi họ tự cập nhật hồ sơ.
@@ -71,6 +75,7 @@ export class UsersService {
     private readonly database: DatabaseService,
     private readonly emailService: EmailService,
     private readonly smsService: SmsService,
+    private readonly adminAudit: AdminAuditService,
   ) {}
 
   async me(userId: number) {
@@ -79,13 +84,42 @@ export class UsersService {
     return user;
   }
 
-  async findAll() {
-    return this.database.query(
+  async findAll(query: AdminUserQueryDto) {
+    const values: unknown[] = [];
+    const conditions = ['is_deleted = FALSE'];
+    const add = (value: unknown) => {
+      values.push(value);
+      return `$${values.length}`;
+    };
+    if (query.search) {
+      const p = add(`%${query.search}%`);
+      conditions.push(
+        `(email ILIKE ${p} OR full_name ILIKE ${p} OR phone_number ILIKE ${p})`,
+      );
+    }
+    if (query.role) conditions.push(`LOWER(role) = ${add(query.role)}`);
+    if (query.isActive !== undefined)
+      conditions.push(`is_active = ${add(query.isActive)}`);
+    const where = `WHERE ${conditions.join(' AND ')}`;
+    const count = await this.database.queryOne<{ total: string }>(
+      `SELECT COUNT(*)::text AS total FROM users ${where}`,
+      values,
+    );
+    values.push(query.pageSize, query.offset);
+    const items = await this.database.query(
       `SELECT user_id AS id, email, LOWER(role) AS role, full_name AS "fullName",
               phone_number AS phone, is_active AS "isActive", created_at AS "createdAt"
        FROM users
-       WHERE is_deleted = FALSE
-       ORDER BY created_at DESC`,
+       ${where}
+       ORDER BY created_at DESC
+       LIMIT $${values.length - 1} OFFSET $${values.length}`,
+      values,
+    );
+    return paginate(
+      items,
+      Number(count?.total ?? 0),
+      query.page,
+      query.pageSize,
     );
   }
 
@@ -104,16 +138,36 @@ export class UsersService {
     };
   }
 
-  async updateStatus(id: number, isActive: boolean) {
-    const user = await this.database.queryOne(
-      `UPDATE users SET is_active = $2, updated_at = NOW()
-       WHERE user_id = $1 AND is_deleted = FALSE
-       RETURNING user_id AS id, email, LOWER(role) AS role, full_name AS "fullName",
-                 is_active AS "isActive"`,
-      [id, isActive],
-    );
-    if (!user) throw new NotFoundException('User not found');
-    return user;
+  async updateStatus(
+    id: number,
+    isActive: boolean,
+    context: AdminRequestContext,
+  ) {
+    return this.database.transaction(async (client) => {
+      const before = await client.query(
+        `SELECT user_id AS id, email, LOWER(role) AS role,
+                full_name AS "fullName", is_active AS "isActive"
+         FROM users WHERE user_id = $1 AND is_deleted = FALSE FOR UPDATE`,
+        [id],
+      );
+      if (!before.rows[0]) throw new NotFoundException('User not found');
+      const result = await client.query(
+        `UPDATE users SET is_active = $2, updated_at = NOW()
+         WHERE user_id = $1 AND is_deleted = FALSE
+         RETURNING user_id AS id, email, LOWER(role) AS role,
+                   full_name AS "fullName", is_active AS "isActive"`,
+        [id, isActive],
+      );
+      await this.adminAudit.record(client, {
+        action: isActive ? 'user.unlocked' : 'user.locked',
+        entityType: 'user',
+        entityId: id,
+        before: before.rows[0],
+        after: result.rows[0],
+        context,
+      });
+      return result.rows[0];
+    });
   }
 
   async updateProfile(userId: number, dto: UpdateProfileDto) {

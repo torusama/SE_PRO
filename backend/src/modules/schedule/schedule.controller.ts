@@ -10,6 +10,8 @@ import {
 } from '@nestjs/common';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { BookAppointmentDto } from './dto/book-appointment.dto';
 import { CreateAvailabilitySlotDto } from './dto/create-availability-slot.dto';
 import { UpdateAppointmentStatusDto } from './dto/update-appointment-status.dto';
@@ -109,6 +111,8 @@ export class ScheduleController {
   }
 
   @Get('schedule/admin/appointments')
+  @UseGuards(RolesGuard)
+  @Roles('admin')
   async allAppointments(@CurrentUser() user: AuthenticatedUser) {
     return { success: true, data: await this.scheduleService.listAllAppointments(user.role) };
   }
