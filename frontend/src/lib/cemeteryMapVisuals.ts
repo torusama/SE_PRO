@@ -70,6 +70,29 @@ export function gateMarkerPoints(gate: { x: number; y: number }) {
   return `${gate.x - 13},${gate.y - 4} ${gate.x + 13},${gate.y - 4} ${gate.x},${gate.y - 30}`;
 }
 
+// La bàn 12 hướng (mỗi nấc xoay 30°) — dùng cho readout hướng hiện tại ở
+// nút giữa cụm xoay bản đồ (thay vì chỉ hiển thị chữ "N" cố định).
+export const COMPASS_HEADINGS = [
+  "B",
+  "B-ĐB",
+  "Đ-ĐB",
+  "Đ",
+  "Đ-ĐN",
+  "N-ĐN",
+  "N",
+  "N-TN",
+  "T-TN",
+  "T",
+  "T-TB",
+  "B-TB",
+];
+
+export function getHeadingLabel(rotation: number) {
+  const normalized = ((rotation % 360) + 360) % 360;
+  const index = Math.round(normalized / 30) % COMPASS_HEADINGS.length;
+  return COMPASS_HEADINGS[index];
+}
+
 // ------------------------------------------------------------------
 // KHỐI NỀN TỪNG KHU (phong cách bản vẽ kiến trúc phân lô)
 // ------------------------------------------------------------------

@@ -378,10 +378,22 @@
   flex-shrink: 0;
 }
 
-/* map canvas wrapper — holds SVG + absolute overlays */
+/* map viewport — the bounded map-viewing area. Overlay controls (compass,
+   zoom, rotate) anchor to THIS element so they stay fixed in place while
+   the scrollable/zoomable map underneath pans and zooms independently. */
+.map-page .map-viewport {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+}
+
+/* map canvas wrapper — holds the SVG only, scrolls/pans independently */
 .map-page .map-canvas-wrap {
   position: relative;
   flex: 1;
+  width: 100%;
   overflow: auto;
   min-height: 0;
   cursor: grab;
@@ -491,6 +503,15 @@
 .map-page .zoom-btn:hover {
   border-color: var(--border-soft);
   color: var(--teal-glow);
+}
+.map-page .heading-btn {
+  width: auto;
+  min-width: 44px;
+  padding: 0 8px;
+  font-size: 10.5px;
+  font-family: "Be Vietnam Pro", sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.2px;
 }
 
 /* minimap */
