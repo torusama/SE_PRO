@@ -105,7 +105,10 @@ export class AppointmentsService {
         context: context ?? { adminId, ipAddress: null, userAgent: null },
       });
 
-      return { ...this.mapAppointment(appointment.rows[0]), notificationCreated: true };
+      return {
+        ...this.mapAppointment(appointment.rows[0]),
+        notificationCreated: true,
+      };
     });
   }
 
@@ -213,7 +216,10 @@ export class AppointmentsService {
         context: context ?? { adminId, ipAddress: null, userAgent: null },
       });
 
-      return { ...this.mapAppointment(updated.rows[0]), notificationCreated: true };
+      return {
+        ...this.mapAppointment(updated.rows[0]),
+        notificationCreated: true,
+      };
     });
   }
 
@@ -259,7 +265,10 @@ export class AppointmentsService {
       );
 
       if (dto.status === 'completed') {
-        await this.advanceExistingContractWorkflow(client, current.reservationRequestId);
+        await this.advanceExistingContractWorkflow(
+          client,
+          current.reservationRequestId,
+        );
       }
 
       await this.notify(
@@ -279,7 +288,10 @@ export class AppointmentsService {
         context: context ?? { adminId, ipAddress: null, userAgent: null },
       });
 
-      return { ...this.mapAppointment(updated.rows[0]), notificationCreated: true };
+      return {
+        ...this.mapAppointment(updated.rows[0]),
+        notificationCreated: true,
+      };
     });
   }
 

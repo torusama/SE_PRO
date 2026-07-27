@@ -1,0 +1,59 @@
+# Progress
+
+- Created a scoped implementation plan.
+- Recorded the attachment-read limitation and switched to the user-authorized direct file path.
+- Read the complete attachment and expanded the plan to include the synchronized cinematic guided plot tour.
+- Reviewed current ChatGPT interaction patterns for stop generation, retry, edit/resend, and conversation branching.
+- Audited the frontend file topology, dependencies, Agent state ownership, and existing map route/component locations.
+- Extracted the concrete Agent request and recommendation handoff paths; recorded the indexed-search failure and bounded-read fallback.
+- Audited new-chat/history behavior and the complete AgentMessage renderer; confirmed a focused Markdown/action implementation path.
+- Confirmed recommendation fields satisfy the tour specification and identified MapPage's existing highlight/query behavior and inline camera architecture.
+- Audited MapPage data/camera/render structure and selected a low-risk shared guided-tour canvas approach that reuses its constants/types/API without rewriting MapPage.
+- Identified the exact shared map geometry/layout modules and the minimal real-plot fields needed by the tour canvas.
+- Confirmed the production plot endpoint and shared full-map visual constants needed for the interactive tour canvas.
+- Verified reusable zone/coordinate helpers and the exact recommendation action callbacks that the tour must preserve.
+- Installed `react-markdown`/`remark-gfm` and a focused Vitest + Testing Library stack. npm reports 4 audit findings; deferred forced upgrades to avoid unrelated breakage.
+- Confirmed Vite alias/test configuration path and final installed package versions.
+- Added the Vitest script, jsdom environment, shared test setup, and switched Vite config typing to `vitest/config`.
+- Added safe React Markdown/GFM rendering and message-level copy, edit/resend, resend, feedback, and guided-tour launch controls.
+- Added the pure guided-tour step builder, reducer, synchronization selectors, keyboard mapping, reduced-motion duration helper, and full-map URL builder.
+- Added the interactive guided-tour overlay/map/narration components and responsive visual system.
+- Extended local assistant messages with a displayed response-duration field.
+- Wired guided-tour imports and added AgentPage state/refs for elapsed response timing, AbortController cancellation, and tour recommendations.
+- Added the live 100 ms elapsed timer, unmount cancellation, explicit stop action, and safe request/tour cleanup when switching or creating conversations.
+- Upgraded `sendMessage` with Axios cancellation, persisted response duration, safe branch-on-edit behavior, and same-session resend.
+- Added validated guided-tour launch and standardized full-map URLs with both highlight IDs and recommendation ID.
+- Removed the redundant topbar “Chat mới” action and added a richer, respectful sales-guidance welcome with trust/value cues.
+- Wired all message actions into AgentPage and replaced the generic typing dots with elapsed response status plus an explicit stop control.
+- Changed the composer send button into a timed stop button while requests are active.
+- Mounted the guided-tour overlay with existing compare/draft/full-map callbacks; Agent conversation state remains mounted underneath.
+- Added responsive styles for Markdown, message actions/editor, tour launcher, richer welcome content, elapsed stop state, split-screen tour, map choreography, floating details, and reduced motion.
+- Added 19 focused tests covering the 15 requested tour cases plus Markdown rendering and message-action preservation/editing.
+- All 19 tests pass across 3 files.
+- Targeted lint currently fails with 9 React 19 hook/purity rules; beginning a focused refactor.
+- Exact lint extraction identified AgentPage `Date.now()` purity plus effect-state issues in narration/map; the first JSON summarizer failed to spawn npx, so the next attempt will invoke local ESLint directly.
+- Local ESLint JSON extraction succeeded and produced exact lines/rules for all 9 remaining issues.
+- Designed a no-disable lint fix: external timestamp helper, keyed lazy narration, event-driven retry state, RAF-only camera updates, and separate pure map model exports.
+- Extracted all map types/camera/mapping helpers into `guidedTourMapModel.ts` for Fast Refresh compliance.
+- Moved request timestamps behind an external pure-boundary helper to satisfy React 19 component purity lint.
+- First build exposed only `useRef` initialization errors in the new map component; patched them for React 19 typings.
+- Removed the remaining synchronous effect-state updates: retry state is event-driven, reduced-motion initialization is lazy, and camera snapping now runs through `requestAnimationFrame`.
+- Targeted ESLint now passes with zero errors/warnings; all 19 tests and the production build pass.
+- Verified the live `/tu-van-ai` page at 1912×862: Vietnamese fonts, full-height layout, richer welcome copy, and the single sidebar new-chat entry render correctly.
+- Audited installed dependencies: 4 existing/upstream findings remain (2 moderate, 2 high); no breaking forced upgrade was applied.
+- Fixed NVIDIA responses that expose recommendation arguments as Markdown JSON: backend now recovers and executes valid inline calls, responds naturally to counts above 10, and frontend sanitizes already-persisted leaked payloads.
+- Added clarification-context merging so a short follow-up such as `2` or `20` inherits the budget from the preceding turn.
+- Verified live API behavior after restarting backend: `60 triệu` → `20` returns the 10-plot limit message with no JSON; `300 triệu` → `2` returns three real recommendations with no unfinished waiting text.
+- Reworked the natural-language/tool boundary: recognized partial requests retain deterministic clarification, NVIDIA handles free-form language, progress-only AI replies are retried with a tool-completion instruction, and recommendation narration always comes from authoritative tool results.
+- Added affirmative-context handling (`ok`, `đồng ý`, `tìm đi`) for the offered 10-plot limit and a PostgreSQL-backed individual-plot alternative when the requested multi-plot group cannot fit the total budget.
+- Final live sequence `60 triệu` → `20` → `ok` now returns 3 real recommendation options with plot IDs `[6]`, `[7]`, `[33]` and 3 `VIEW_ON_MAP` actions; the frontend recommendation-action test also passes.
+- Completed a full Agent-ownership audit. The current system is not yet AI-first: regex intent/requirement extraction can return before NVIDIA, successful recommendation narration is overwritten by backend templates, and every orchestration exception is mislabeled `NVIDIA_API_UNAVAILABLE`.
+- Confirmed a concrete tool-name defect in persisted logs: inline recovery invokes nonexistent `recommend_plots`, while the actual registered recommendation tool is `rank_plot_options`; PostgreSQL recorded `Unknown AI tool: recommend_plots`.
+- Confirmed a hallucination path: a service question produced invented package names/prices without any persisted tool call and did not match the 8 active service rows in PostgreSQL.
+- Direct NVIDIA endpoint audit: configured `mistralai/mistral-nemotron` returned no tool call with `tool_choice: auto` for a simple Vietnamese plot search, but returned a correct structured `search_available_plots` call when that tool was explicitly forced. This supports a forced structured planner architecture rather than relying on auto tool selection.
+- Implemented the AI-first refactor: NVIDIA now produces a forced, typed `plan_cemetery_concierge_action`; backend validates and executes only registered tools; authoritative output is returned to NVIDIA for final Vietnamese narration.
+- Removed the broken auto-tool-loop path and nonexistent `recommend_plots` recovery call. Registered actions now use `rank_plot_options`, `get_service_suggestions`, `get_purchase_process`, or `suggest_bazi_direction`.
+- Added final-response grounding that rejects unknown plot codes and claimed counts larger than PostgreSQL tool output, falling back to a deterministic authoritative summary only when NVIDIA narration fails validation.
+- Made planning deterministic at temperature 0 and reconciled explicitly stated conversation values so the planner cannot silently change prior budgets/counts. Added normalization for slang money, zone codes, placeholder zeros, and adjacency language.
+- All 24 AI-agent tests pass across 8 suites; targeted lint and backend production build pass. Backend was restarted on port 5000.
+- Final live acceptance passed: slang `hai chỗ cạnh nhau, ba trăm củ, khu A` produced 3 adjacent real recommendations and 3 map actions with no fallback; service guidance matched PostgreSQL; `60 triệu → 20 → ok tìm 10` preserved 60M/10 and returned grounded map payloads.

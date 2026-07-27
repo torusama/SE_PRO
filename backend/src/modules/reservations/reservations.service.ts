@@ -1,10 +1,13 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
+  OnModuleInit,
 } from '@nestjs/common';
 import { PoolClient, QueryResultRow } from 'pg';
 import { ConfigService } from '@nestjs/config';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { DatabaseService } from '../../database/database.service';
 import {
   PlotAdjacencyResult,
@@ -70,7 +73,7 @@ export interface StatusRow extends QueryResultRow {
 }
 
 @Injectable()
-export class ReservationsService {
+export class ReservationsService implements OnModuleInit {
   private readonly activeStatuses: ReservationStatus[] = [
     'pending',
     'submitted',
@@ -84,8 +87,64 @@ export class ReservationsService {
     private readonly audit?: AdminAuditService,
   ) {}
 
-  async create(userId: number, dto: CreateReservationDto, isAiDraft = false) {
-    return this.createReservation(userId, dto, isAiDraft);
+  async onModuleInit() {
+    await this.releaseExpiredReservations();
+  }
+
+  @Cron(CronExpression.EVERY_MINUTE, {
+    name: 'release-expired-plot-reservations',
+  })
+  async releaseExpiredReservations() {
+    return this.database.transaction(async (client) => {
+      const cancelled = await client.query<{ id: number }>(
+        `UPDATE reservation_requests rr
+         SET status = 'cancelled',
+             admin_note = COALESCE(NULLIF(rr.admin_note, '') || ' | ', '') ||
+               'Tự động hủy do hết thời gian giữ chỗ',
+             updated_at = NOW()
+         WHERE rr.is_deleted = FALSE
+           AND rr.status IN ('pending', 'submitted')
+           AND EXISTS (
+             SELECT 1
+             FROM request_plots rp
+             JOIN plots p ON p.plot_id = rp.plot_id
+             WHERE rp.request_id = rr.request_id
+               AND p.status = 'pending'
+               AND p.reserved_until < NOW()
+           )
+         RETURNING rr.request_id AS id`,
+      );
+      const released = await client.query<{ id: number }>(
+        `UPDATE plots p
+         SET status = 'available', reserved_until = NULL, updated_at = NOW()
+         WHERE p.is_deleted = FALSE
+           AND p.status = 'pending'
+           AND p.reserved_until < NOW()
+           AND NOT EXISTS (
+             SELECT 1
+             FROM request_plots rp
+             JOIN reservation_requests rr ON rr.request_id = rp.request_id
+             WHERE rp.plot_id = p.plot_id
+               AND rr.is_deleted = FALSE
+               AND rr.status = ANY($1::text[])
+           )
+         RETURNING p.plot_id AS id`,
+        [this.activeStatuses],
+      );
+      return {
+        requestsCancelled: cancelled.rowCount ?? cancelled.rows.length,
+        plotsReleased: released.rowCount ?? released.rows.length,
+      };
+    });
+  }
+
+  async create(
+    userId: number,
+    dto: CreateReservationDto,
+    isAiDraft = false,
+    expectedTotal?: number,
+  ) {
+    return this.createReservation(userId, dto, isAiDraft, false, expectedTotal);
   }
 
   async createMultiple(userId: number, dto: CreateMultipleReservationDto) {
@@ -102,6 +161,7 @@ export class ReservationsService {
     dto: CreateReservationDto,
     isAiDraft = false,
     requireAdjacency = false,
+    expectedTotal?: number,
   ) {
     this.assertUniquePlotIds(dto.plotIds);
 
@@ -118,6 +178,14 @@ export class ReservationsService {
         : undefined;
 
       const total = plots.reduce((sum, plot) => sum + Number(plot.price), 0);
+      if (
+        expectedTotal !== undefined &&
+        Math.abs(total - expectedTotal) >= 0.01
+      ) {
+        throw new ConflictException(
+          'Giá lô đã thay đổi sau khi bạn xác nhận. Vui lòng kiểm tra và xác nhận lại tổng giá mới.',
+        );
+      }
       const request = await client.query<{ id: number }>(
         `INSERT INTO reservation_requests (user_id, request_type, status, total_price, note, is_ai_draft)
          VALUES ($1, $2, 'pending', $3, $4, $5)

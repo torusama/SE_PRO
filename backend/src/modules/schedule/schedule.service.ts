@@ -173,7 +173,9 @@ export class ScheduleService {
            ORDER BY user_id LIMIT 1`,
         );
         if (!admin.rows.length) {
-          throw new BadRequestException('No active admin is available to receive this request');
+          throw new BadRequestException(
+            'No active admin is available to receive this request',
+          );
         }
         hostUserId = admin.rows[0].user_id;
       }
@@ -191,7 +193,9 @@ export class ScheduleService {
           [dto.slotId, requesterId],
         );
         if (!slot.rows.length) {
-          throw new BadRequestException('Availability slot does not belong to the requester');
+          throw new BadRequestException(
+            'Availability slot does not belong to the requester',
+          );
         }
       }
 
@@ -205,7 +209,9 @@ export class ScheduleService {
         [hostUserId, dto.appointmentDate, dto.startTime, dto.endTime],
       );
       if (overlap.rows.length) {
-        throw new BadRequestException('Host already has an appointment in that time range');
+        throw new BadRequestException(
+          'Host already has an appointment in that time range',
+        );
       }
 
       const inserted = await client.query(
@@ -241,7 +247,8 @@ export class ScheduleService {
   }
 
   async listAllAppointments(userRole: string) {
-    if (userRole.toLowerCase() !== 'admin') throw new ForbiddenException('Admin access required');
+    if (userRole.toLowerCase() !== 'admin')
+      throw new ForbiddenException('Admin access required');
     return this.database.query(
       `SELECT ${APPOINTMENT_SELECT}
        FROM schedule_appointments a
@@ -278,10 +285,14 @@ export class ScheduleService {
       throw new ForbiddenException('You are not part of this appointment');
     }
     if (!isAdmin && !isHost && dto.status !== 'cancelled') {
-      throw new ForbiddenException('Only the host can confirm or complete an appointment');
+      throw new ForbiddenException(
+        'Only the host can confirm or complete an appointment',
+      );
     }
     if (['cancelled', 'completed'].includes(appointment.status)) {
-      throw new BadRequestException(`Appointment is already ${appointment.status}`);
+      throw new BadRequestException(
+        `Appointment is already ${appointment.status}`,
+      );
     }
 
     const updated = await this.database.queryOne(

@@ -71,6 +71,23 @@ export class CemeteryServicesService {
     );
     if (!type) throw new NotFoundException('Không tìm thấy loại dịch vụ');
 
+    if (dto.plotId !== undefined) {
+      const ownedPlot = await this.database.queryOne(
+        `SELECT 1
+         FROM ownership_records o
+         JOIN plots p ON p.plot_id = o.plot_id AND p.is_deleted = FALSE
+         JOIN contracts c ON c.contract_id = o.contract_id
+                          AND c.status = 'active' AND c.is_deleted = FALSE
+         WHERE o.user_id = $1 AND o.plot_id = $2 AND o.is_current = TRUE`,
+        [userId, dto.plotId],
+      );
+      if (!ownedPlot) {
+        throw new ForbiddenException(
+          'Bạn chỉ có thể đặt dịch vụ cho lô thuộc quyền sử dụng của mình',
+        );
+      }
+    }
+
     return this.database.transaction(async (client) => {
       const result = await client.query(
         `INSERT INTO service_orders

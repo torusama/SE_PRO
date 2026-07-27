@@ -1,0 +1,16 @@
+export type AgentToolName =
+  | 'search_available_plots'
+  | 'find_adjacent_plot_groups'
+  | 'rank_plot_options'
+  | 'browse_available_plots'
+  | 'get_service_suggestions'
+  | 'estimate_total_cost'
+  | 'suggest_bazi_direction'
+  | 'get_purchase_process'
+  | 'create_draft_reservation';
+
+export interface AgentToolContext {
+  conversationId?: number | null;
+  messageId?: number | null;
+  userId?: number | null;
+}

@@ -19,6 +19,7 @@ export const ROUTES = {
   REMINDERS:    '/nhac-lich',
   AVAILABILITY: '/lich-ranh',
   APPOINTMENTS: '/lich-hen',
+  AI_AGENT:     '/tu-van-ai',
 
   // === Admin ===
   ADMIN_DASHBOARD:    '/admin',
@@ -32,4 +33,5 @@ export const ROUTES = {
   ADMIN_TRANSFER:     '/admin/chuyen-nhuong',
   ADMIN_APPOINTMENTS: '/admin/lich-hen',
   ADMIN_REMINDERS:    '/admin/nhac-lich',
+  ADMIN_AI_AGENT:     '/admin/ai-agent',
 } as const

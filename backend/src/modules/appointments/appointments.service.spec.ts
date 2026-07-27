@@ -123,7 +123,9 @@ describe('AppointmentsService', () => {
   it('rejects appointment creation for non-approved requests', async () => {
     const { service } = createService((sql) => {
       if (sql.includes('FROM reservation_requests')) {
-        return result([{ request_id: 10, request_type: 'purchase', status: 'pending' }]);
+        return result([
+          { request_id: 10, request_type: 'purchase', status: 'pending' },
+        ]);
       }
       return result();
     });
@@ -149,7 +151,8 @@ describe('AppointmentsService', () => {
           },
         ]);
       }
-      if (sql.includes('SELECT appointment_id')) return result([{ appointment_id: 1 }]);
+      if (sql.includes('SELECT appointment_id'))
+        return result([{ appointment_id: 1 }]);
       return result();
     });
 
@@ -203,7 +206,9 @@ describe('AppointmentsService', () => {
       return result();
     });
 
-    await expect(service.update(1, 21, { location: 'Main office' })).resolves.toMatchObject({
+    await expect(
+      service.update(1, 21, { location: 'Main office' }),
+    ).resolves.toMatchObject({
       location: 'Main office',
       notificationCreated: true,
     });
@@ -275,8 +280,8 @@ describe('AppointmentsService', () => {
       return result();
     });
 
-    await expect(service.update(1, 999, { location: 'X' })).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(
+      service.update(1, 999, { location: 'X' }),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 });

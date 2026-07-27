@@ -60,7 +60,10 @@ export class ScheduleController {
 
   @Get('schedule/hosts')
   async availableHosts(@CurrentUser() user: AuthenticatedUser) {
-    return { success: true, data: await this.scheduleService.listAvailableHosts(user.id) };
+    return {
+      success: true,
+      data: await this.scheduleService.listAvailableHosts(user.id),
+    };
   }
 
   @Patch('schedule/slots/:id')
@@ -114,7 +117,10 @@ export class ScheduleController {
   @UseGuards(RolesGuard)
   @Roles('admin')
   async allAppointments(@CurrentUser() user: AuthenticatedUser) {
-    return { success: true, data: await this.scheduleService.listAllAppointments(user.role) };
+    return {
+      success: true,
+      data: await this.scheduleService.listAllAppointments(user.role),
+    };
   }
 
   @Patch('schedule/appointments/:id/status')

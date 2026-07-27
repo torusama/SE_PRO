@@ -1,57 +1,112 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../../database/database.service';
 import { AdminAiActivityQueryDto } from './dto/admin-ai-activity-query.dto';
 import { paginate } from '../../common/interfaces/paginated-response.interface';
-import { NotFoundException } from '@nestjs/common';
+import { CreateAiDraftDto } from './dto/create-ai-draft.dto';
+import { RecommendPlotsDto } from './dto/recommend-plots.dto';
+import { PlotRecommendationService } from './plot-recommendation.service';
 
 @Injectable()
 export class AiAgentService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly recommendations: PlotRecommendationService,
+  ) {}
 
-  async recommend(body: any) {
-    const params: unknown[] = [body.budget ?? 999999999999];
-    let zoneFilter = '';
-    if (body.preferredZone) {
-      params.push(body.preferredZone);
-      zoneFilter = `AND zone_name ILIKE $${params.length}`;
-      params[params.length - 1] = `%${body.preferredZone}%`;
-    }
-    const limit = Number(body.numberOfPlots ?? 1);
-    const rows = await this.database.query(
-      `SELECT plot_id AS id, plot_code AS "plotCode", zone_name AS "zoneName",
-              price::float, status, map_x AS "mapX", map_y AS "mapY",
-              direction, row_number AS "rowCode", column_number AS "plotNumber"
-       FROM vw_plots_map
-       WHERE status = 'available' AND price <= $1 ${zoneFilter}
-       ORDER BY map_x, map_y, price
-       LIMIT ${Math.max(limit, 1)}`,
-      params,
-    );
-    const total = rows.reduce((sum, row: any) => sum + Number(row.price), 0);
-    return { plots: total <= Number(params[0]) ? rows : [], totalPrice: total };
+  recommend(dto: RecommendPlotsDto) {
+    return this.recommendations.recommend(dto);
   }
 
-  async createDraftReservation(userId: number, body: any) {
-    if (!body.plotIds?.length) throw new BadRequestException('plotIds is required');
-    const plots = await this.database.query(
-      `SELECT plot_id, price FROM plots WHERE plot_id = ANY($1::int[]) AND status = 'available'`,
-      [body.plotIds],
-    );
-    if (plots.length !== body.plotIds.length) throw new BadRequestException('All plots must be available');
-    const total = plots.reduce((sum, row: any) => sum + Number(row.price), 0);
-    const request = await this.database.queryOne(
-      `INSERT INTO reservation_requests (user_id, request_type, status, total_price, note, is_ai_draft)
-       VALUES ($1, 'purchase', 'draft', $2, $3, TRUE)
-       RETURNING request_id AS id, status, total_price::float AS "totalPrice"`,
-      [userId, total, body.note ?? 'AI draft reservation'],
-    );
-    for (const plot of plots) {
-      await this.database.query(
-        'INSERT INTO request_plots (request_id, plot_id, plot_price) VALUES ($1, $2, $3)',
-        [(request as any).id, plot.plot_id, plot.price],
-      );
+  async createDraftReservation(userId: number, dto: CreateAiDraftDto) {
+    if (new Set(dto.plotIds).size !== dto.plotIds.length) {
+      throw new BadRequestException('Duplicate plot IDs are not allowed');
     }
-    return request;
+
+    return this.database.transaction(async (client) => {
+      const plotResult = await client.query<{
+        id: number;
+        plotCode: string;
+        price: number | string;
+        status: string;
+      }>(
+        `SELECT plot_id AS id, plot_code AS "plotCode",
+                price::float, status
+         FROM plots
+         WHERE plot_id = ANY($1::int[]) AND is_deleted = FALSE
+         ORDER BY plot_id
+         FOR UPDATE`,
+        [dto.plotIds],
+      );
+      const plots = plotResult.rows;
+      if (
+        plots.length !== dto.plotIds.length ||
+        plots.some((plot) => plot.status !== 'available')
+      ) {
+        throw new BadRequestException('All plots must still be available');
+      }
+
+      const totalPrice = plots.reduce(
+        (sum, plot) => sum + Number(plot.price),
+        0,
+      );
+      const requestResult = await client.query<{
+        id: number;
+        status: string;
+        totalPrice: number | string;
+        createdAt: Date;
+      }>(
+        `INSERT INTO reservation_requests
+           (user_id, request_type, status, total_price, note, is_ai_draft)
+         VALUES ($1, 'purchase', 'draft', $2, $3, TRUE)
+         RETURNING request_id AS id, status,
+                   total_price::float AS "totalPrice",
+                   created_at AS "createdAt"`,
+        [
+          userId,
+          totalPrice,
+          dto.note ?? 'Draft created from AI recommendation',
+        ],
+      );
+      const request = requestResult.rows[0];
+
+      for (const plot of plots) {
+        await client.query(
+          `INSERT INTO request_plots (request_id, plot_id, plot_price)
+           VALUES ($1, $2, $3)`,
+          [request.id, plot.id, plot.price],
+        );
+      }
+
+      await client.query(
+        `UPDATE ai_messages m
+         SET metadata = COALESCE(m.metadata, '{}'::jsonb) ||
+                        jsonb_build_object('draftRequestId', $2, 'optionId', $3)
+         FROM ai_conversations c
+         WHERE m.conversation_id = c.conversation_id
+           AND c.session_id = $1
+           AND m.role = 'assistant'
+           AND m.message_id = (
+             SELECT MAX(m2.message_id)
+             FROM ai_messages m2
+             WHERE m2.conversation_id = c.conversation_id
+               AND m2.role = 'assistant'
+           )`,
+        [dto.sessionId, request.id, dto.optionId],
+      );
+
+      return {
+        ...request,
+        totalPrice: Number(request.totalPrice),
+        optionId: dto.optionId,
+        isAiDraft: true,
+        plots: plots.map((plot) => ({
+          id: Number(plot.id),
+          plotCode: plot.plotCode,
+          price: Number(plot.price),
+          status: plot.status,
+        })),
+      };
+    });
   }
 
   async adminActivity(query: AdminAiActivityQueryDto) {

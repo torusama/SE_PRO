@@ -1,4 +1,17 @@
-import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, Res, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Res,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
@@ -21,19 +34,27 @@ import {
 const contractPdfUpload = FileInterceptor('pdf', {
   storage: diskStorage({
     destination: './uploads/contracts',
-    filename: (_request, file, callback) => callback(
-      null,
-      `contract-${Date.now()}-${Math.round(Math.random() * 1e9)}${extname(file.originalname).toLowerCase()}`,
-    ),
+    filename: (_request, file, callback) =>
+      callback(
+        null,
+        `contract-${Date.now()}-${Math.round(Math.random() * 1e9)}${extname(file.originalname).toLowerCase()}`,
+      ),
   }),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_request, file, callback) => {
-    const valid = file.mimetype === 'application/pdf' && extname(file.originalname).toLowerCase() === '.pdf';
-    callback(valid ? null : new BadRequestException('Only PDF files are accepted'), valid);
+    const valid =
+      file.mimetype === 'application/pdf' &&
+      extname(file.originalname).toLowerCase() === '.pdf';
+    callback(
+      valid ? null : new BadRequestException('Only PDF files are accepted'),
+      valid,
+    );
   },
 });
 
-interface UploadedPdf { filename: string }
+interface UploadedPdf {
+  filename: string;
+}
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller()
@@ -42,22 +63,46 @@ export class ContractsController {
 
   @Get('admin/contracts')
   @Roles('admin')
-  async adminList(@Query() query: AdminContractQueryDto) { return { success: true, data: await this.contractsService.adminList(query) }; }
+  async adminList(@Query() query: AdminContractQueryDto) {
+    return {
+      success: true,
+      data: await this.contractsService.adminList(query),
+    };
+  }
 
   @Get('admin/contracts/:id')
   @Roles('admin')
-  async adminOne(@Param('id') id: string) { return { success: true, data: await this.contractsService.adminOne(Number(id)) }; }
+  async adminOne(@Param('id') id: string) {
+    return {
+      success: true,
+      data: await this.contractsService.adminOne(Number(id)),
+    };
+  }
 
   @Post('admin/contracts/from-reservation/:reservationId')
   @Roles('admin')
-  async fromReservation(@CurrentUser() user: any, @Param('reservationId') reservationId: string) {
-    return { success: true, message: 'Contracts created', data: await this.contractsService.createFromReservation(Number(reservationId), user.id) };
+  async fromReservation(
+    @CurrentUser() user: any,
+    @Param('reservationId') reservationId: string,
+  ) {
+    return {
+      success: true,
+      message: 'Contracts created',
+      data: await this.contractsService.createFromReservation(
+        Number(reservationId),
+        user.id,
+      ),
+    };
   }
 
   @Patch('admin/contracts/:id/status')
   @Roles('admin')
   async updateStatus(@Param('id') id: string, @Body('status') status: string) {
-    return { success: true, message: 'Contract status updated', data: await this.contractsService.updateStatus(Number(id), status) };
+    return {
+      success: true,
+      message: 'Contract status updated',
+      data: await this.contractsService.updateStatus(Number(id), status),
+    };
   }
 
   @Post('admin/contracts/:id/payments')
@@ -68,7 +113,16 @@ export class ContractsController {
     @Body() body: RecordPaymentDto,
     @CurrentAdminContext() context: AdminRequestContext,
   ) {
-    return { success: true, message: 'Payment added', data: await this.contractsService.addPayment(Number(id), body, user.id, context) };
+    return {
+      success: true,
+      message: 'Payment added',
+      data: await this.contractsService.addPayment(
+        Number(id),
+        body,
+        user.id,
+        context,
+      ),
+    };
   }
 
   @Patch('admin/contracts/:id/inheritance')
@@ -95,8 +149,17 @@ export class ContractsController {
     @Param('id') id: string,
     @Body() body: SignContractDto,
   ) {
-    if (!body.accepted) throw new BadRequestException('Signature consent is required');
-    return { success: true, message: 'Đã ký hợp đồng', data: await this.contractsService.signAsBuyer(user.id, Number(id), body.signatureName) };
+    if (!body.accepted)
+      throw new BadRequestException('Signature consent is required');
+    return {
+      success: true,
+      message: 'Đã ký hợp đồng',
+      data: await this.contractsService.signAsBuyer(
+        user.id,
+        Number(id),
+        body.signatureName,
+      ),
+    };
   }
 
   @Post('admin/contracts/:id/sign')
@@ -106,8 +169,17 @@ export class ContractsController {
     @Param('id') id: string,
     @Body() body: SignContractDto,
   ) {
-    if (!body.accepted) throw new BadRequestException('Signature consent is required');
-    return { success: true, message: 'Đã ký hợp đồng', data: await this.contractsService.signAsAdmin(user.id, Number(id), body.signatureName) };
+    if (!body.accepted)
+      throw new BadRequestException('Signature consent is required');
+    return {
+      success: true,
+      message: 'Đã ký hợp đồng',
+      data: await this.contractsService.signAsAdmin(
+        user.id,
+        Number(id),
+        body.signatureName,
+      ),
+    };
   }
 
   @Post('my/contracts/:id/pdf')
@@ -118,7 +190,16 @@ export class ContractsController {
     @UploadedFile() file?: UploadedPdf,
   ) {
     if (!file) throw new BadRequestException('PDF file is required');
-    return { success: true, message: 'Đã lưu PDF', data: await this.contractsService.savePdf(Number(id), user.id, `/uploads/contracts/${file.filename}`, false) };
+    return {
+      success: true,
+      message: 'Đã lưu PDF',
+      data: await this.contractsService.savePdf(
+        Number(id),
+        user.id,
+        `/uploads/contracts/${file.filename}`,
+        false,
+      ),
+    };
   }
 
   @Post('admin/contracts/:id/pdf')
@@ -130,7 +211,16 @@ export class ContractsController {
     @UploadedFile() file?: UploadedPdf,
   ) {
     if (!file) throw new BadRequestException('PDF file is required');
-    return { success: true, message: 'Đã lưu PDF', data: await this.contractsService.savePdf(Number(id), user.id, `/uploads/contracts/${file.filename}`, true) };
+    return {
+      success: true,
+      message: 'Đã lưu PDF',
+      data: await this.contractsService.savePdf(
+        Number(id),
+        user.id,
+        `/uploads/contracts/${file.filename}`,
+        true,
+      ),
+    };
   }
 
   @Get('my/contracts/:id/pdf')
@@ -140,7 +230,9 @@ export class ContractsController {
     @Res() response: Response,
   ) {
     const url = await this.contractsService.getPdf(Number(id), user.id, false);
-    return response.download(join(process.cwd(), 'uploads', 'contracts', basename(url)));
+    return response.download(
+      join(process.cwd(), 'uploads', 'contracts', basename(url)),
+    );
   }
 
   @Get('admin/contracts/:id/pdf')
@@ -151,14 +243,21 @@ export class ContractsController {
     @Res() response: Response,
   ) {
     const url = await this.contractsService.getPdf(Number(id), user.id, true);
-    return response.download(join(process.cwd(), 'uploads', 'contracts', basename(url)));
+    return response.download(
+      join(process.cwd(), 'uploads', 'contracts', basename(url)),
+    );
   }
 
   @Get('my/contracts')
-  async my(@CurrentUser() user: any) { return { success: true, data: await this.contractsService.my(user.id) }; }
+  async my(@CurrentUser() user: any) {
+    return { success: true, data: await this.contractsService.my(user.id) };
+  }
 
   @Get('my/contracts/:id')
   async myOne(@CurrentUser() user: any, @Param('id') id: string) {
-    return { success: true, data: await this.contractsService.myOne(user.id, Number(id)) };
+    return {
+      success: true,
+      data: await this.contractsService.myOne(user.id, Number(id)),
+    };
   }
 }

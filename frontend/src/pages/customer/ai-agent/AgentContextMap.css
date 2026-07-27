@@ -1,0 +1,360 @@
+.agent-context-map {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  border-left: 1px solid var(--agent-border);
+  background: #050a13;
+  animation: agent-context-map-enter 220ms ease both;
+}
+
+.agent-context-map-header {
+  display: flex;
+  min-height: 72px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 68px 12px 16px;
+  border-bottom: 1px solid var(--agent-border);
+  background: rgba(8, 13, 25, 0.96);
+}
+
+.agent-context-map-header > div {
+  min-width: 0;
+}
+
+.agent-context-map-header span,
+.agent-context-map-header strong,
+.agent-context-map-header small {
+  display: block;
+}
+
+.agent-context-map-header span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--agent-gold);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.agent-context-map-header strong {
+  overflow: hidden;
+  margin-top: 5px;
+  color: var(--agent-text);
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-context-map-header small {
+  overflow: hidden;
+  margin-top: 3px;
+  color: #718692;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-context-map-close,
+.agent-context-map-switcher > button {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--agent-border);
+  color: #91a5b0;
+  background: rgba(255, 255, 255, 0.035);
+  cursor: pointer;
+}
+
+.agent-context-map-close {
+  position: absolute;
+  z-index: 40;
+  top: 12px;
+  right: 12px;
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.agent-context-map-close:hover {
+  color: var(--agent-teal);
+  border-color: rgba(0, 229, 196, 0.36);
+  background: rgba(0, 229, 196, 0.1);
+}
+
+.agent-context-map-canvas {
+  position: relative;
+  min-height: 280px;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.agent-context-map-details {
+  flex: 0 0 auto;
+  padding: 14px 16px 16px;
+  border-top: 1px solid var(--agent-border);
+  background:
+    radial-gradient(circle at 0 0, rgba(0, 229, 196, 0.045), transparent 38%),
+    var(--agent-sidebar);
+}
+
+.agent-context-map-switcher {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 32px;
+  align-items: center;
+  gap: 9px;
+}
+
+.agent-context-map-switcher > button {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+}
+
+.agent-context-map-switcher > button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.agent-context-map-switcher > div {
+  display: flex;
+  min-width: 0;
+  justify-content: center;
+  gap: 7px;
+}
+
+.agent-context-map-switcher > div > button {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--agent-border);
+  border-radius: 8px;
+  color: #7f929c;
+  background: rgba(255, 255, 255, 0.025);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.agent-context-map-switcher > div > button.is-active {
+  color: #041511;
+  border-color: var(--agent-teal);
+  background: var(--agent-teal);
+  font-weight: 700;
+}
+
+.agent-context-plot-card {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.7fr) minmax(0, 1.3fr);
+  gap: 14px;
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid rgba(0, 229, 196, 0.2);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.agent-context-plot-stage {
+  position: relative;
+  margin-top: 12px;
+}
+
+.agent-context-plot-stage .agent-context-plot-card {
+  margin-top: 0;
+  opacity: 0;
+  transform: translateY(10px);
+  transition:
+    opacity 360ms ease,
+    transform 360ms ease;
+}
+
+.agent-context-plot-stage .agent-context-plot-card.is-revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.agent-context-plot-loading {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px dashed rgba(0, 229, 196, 0.18);
+  border-radius: 13px;
+  color: #718692;
+  background: rgba(7, 14, 25, 0.94);
+  font-size: 10px;
+}
+
+.agent-context-plot-loading > span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--agent-teal);
+  box-shadow: 0 0 12px rgba(0, 229, 196, 0.7);
+  animation: agent-context-loading 850ms ease-in-out infinite alternate;
+}
+
+.agent-context-plot-card > div > span {
+  color: var(--agent-gold);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.agent-context-plot-card h3 {
+  margin: 7px 0 0;
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+.agent-context-plot-card dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+  margin: 0;
+}
+
+.agent-context-plot-card dl > div {
+  min-width: 0;
+}
+
+.agent-context-plot-card.is-revealed > div,
+.agent-context-plot-card.is-revealed dl > div {
+  animation: agent-context-field-reveal 320ms ease both;
+}
+
+.agent-context-plot-card.is-revealed dl > div:nth-child(1) {
+  animation-delay: 80ms;
+}
+
+.agent-context-plot-card.is-revealed dl > div:nth-child(2) {
+  animation-delay: 150ms;
+}
+
+.agent-context-plot-card.is-revealed dl > div:nth-child(3) {
+  animation-delay: 220ms;
+}
+
+.agent-context-plot-card.is-revealed dl > div:nth-child(4) {
+  animation-delay: 290ms;
+}
+
+.agent-context-plot-card dt {
+  color: #718692;
+  font-size: 8px;
+}
+
+.agent-context-plot-card dd {
+  overflow: hidden;
+  margin: 4px 0 0;
+  color: #dbe7ec;
+  font-size: 10px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-context-map-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 7px;
+  margin-top: 12px;
+  opacity: 0;
+  transform: translateY(6px);
+  pointer-events: none;
+  transition:
+    opacity 300ms ease 120ms,
+    transform 300ms ease 120ms;
+}
+
+.agent-context-map-actions.is-revealed {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.agent-context-map-actions button {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 9px;
+  border: 1px solid var(--agent-border);
+  border-radius: 9px;
+  color: #93a6b0;
+  background: rgba(255, 255, 255, 0.025);
+  font-size: 9px;
+  cursor: pointer;
+}
+
+.agent-context-map-actions button.is-primary {
+  color: #031713;
+  border-color: var(--agent-teal);
+  background: var(--agent-teal);
+  font-weight: 700;
+}
+
+@keyframes agent-context-map-enter {
+  from {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+}
+
+@keyframes agent-context-loading {
+  to {
+    opacity: 0.35;
+    transform: scale(0.72);
+  }
+}
+
+@keyframes agent-context-field-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-context-map,
+  .agent-context-plot-loading > span,
+  .agent-context-plot-card,
+  .agent-context-map-actions {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .agent-context-map {
+    min-height: 320px;
+    border-top: 1px solid var(--agent-border);
+    border-left: 0;
+  }
+
+  .agent-context-map-header {
+    min-height: 62px;
+    padding: 9px 60px 9px 12px;
+  }
+
+  .agent-context-map-canvas {
+    min-height: 240px;
+  }
+
+  .agent-context-map-details {
+    padding: 11px 12px 13px;
+  }
+
+  .agent-context-plot-card {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+}

@@ -8,10 +8,7 @@ import {
 } from 'class-validator';
 
 export type AppointmentStatus =
-  | 'scheduled'
-  | 'completed'
-  | 'cancelled'
-  | 'no_show';
+  'scheduled' | 'completed' | 'cancelled' | 'no_show';
 
 export class UpdateAppointmentStatusDto {
   @IsIn(['scheduled', 'completed', 'cancelled', 'no_show'])

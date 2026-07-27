@@ -8,8 +8,12 @@ export class UploadsController {
   constructor(private readonly uploadsService: UploadsService) {}
 
   @Post('image')
-  image() { return { success: true, data: this.uploadsService.placeholder('image') }; }
+  image() {
+    return { success: true, data: this.uploadsService.placeholder('image') };
+  }
 
   @Post('document')
-  document() { return { success: true, data: this.uploadsService.placeholder('document') }; }
+  document() {
+    return { success: true, data: this.uploadsService.placeholder('document') };
+  }
 }

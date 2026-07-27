@@ -1,4 +1,8 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { ReservationsService } from './reservations.service';
 
 type QueryHandler = (sql: string, params?: unknown[]) => unknown;
@@ -139,6 +143,65 @@ describe('ReservationsService', () => {
       ).toBe(false);
     });
 
+    it.each(['sold', 'reserved', 'locked'])(
+      'rejects %s plots without partial writes',
+      async (status) => {
+        const { client, service } = createService((sql) => {
+          if (sql.includes('FROM plots') && sql.includes('FOR UPDATE')) {
+            return result([{ id: 1, code: 'A-01-001', status, price: 100 }]);
+          }
+          return result();
+        });
+
+        await expect(
+          service.create(7, { type: 'purchase', plotIds: [1] }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+        expect(
+          client.query.mock.calls.some(([sql]) =>
+            String(sql).includes('INSERT INTO reservation_requests'),
+          ),
+        ).toBe(false);
+      },
+    );
+
+    it('rejects a deleted or missing plot without partial writes', async () => {
+      const { client, service } = createService((sql) => {
+        if (sql.includes('FROM plots') && sql.includes('FOR UPDATE')) {
+          return result([]);
+        }
+        return result();
+      });
+
+      await expect(
+        service.create(7, { type: 'purchase', plotIds: [1] }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(
+        client.query.mock.calls.some(([sql]) =>
+          String(sql).includes('INSERT INTO reservation_requests'),
+        ),
+      ).toBe(false);
+    });
+
+    it('rejects a changed total before creating any request rows', async () => {
+      const { client, service } = createService((sql) => {
+        if (sql.includes('FROM plots') && sql.includes('FOR UPDATE')) {
+          return result([
+            { id: 1, code: 'A-01-001', status: 'available', price: 120 },
+          ]);
+        }
+        return result();
+      });
+
+      await expect(
+        service.create(7, { type: 'purchase', plotIds: [1] }, false, 100),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(
+        client.query.mock.calls.some(([sql]) =>
+          String(sql).includes('INSERT INTO reservation_requests'),
+        ),
+      ).toBe(false);
+    });
+
     it('creates a pending adjacent multi-plot reservation with adjacency metadata', async () => {
       const adjacency = {
         validateAdjacent: jest.fn(() => ({ valid: true, method: 'map' })),
@@ -253,6 +316,32 @@ describe('ReservationsService', () => {
     });
   });
 
+  describe('releaseExpiredReservations', () => {
+    it('cancels expired requests and releases plots with no active request', async () => {
+      const { client, service } = createService((sql) => {
+        if (sql.includes('UPDATE reservation_requests')) {
+          return result([{ id: 10 }], 1);
+        }
+        if (sql.includes('UPDATE plots p')) {
+          return result([{ id: 1 }], 1);
+        }
+        return result();
+      });
+
+      await expect(service.releaseExpiredReservations()).resolves.toEqual({
+        requestsCancelled: 1,
+        plotsReleased: 1,
+      });
+      expect(client.query).toHaveBeenCalledWith(
+        expect.stringContaining("rr.status IN ('pending', 'submitted')"),
+      );
+      expect(client.query).toHaveBeenCalledWith(
+        expect.stringContaining("SET status = 'available'"),
+        [['pending', 'submitted', 'approved']],
+      );
+    });
+  });
+
   describe('approve', () => {
     it('approves a reserve request, reserves plots, and creates a notification', async () => {
       const { client, service } = createService((sql) => {
@@ -326,12 +415,14 @@ describe('ReservationsService', () => {
           return result([], 1);
         }
         if (sql.includes('SELECT full_name')) {
-          return result([{
-            full_name: 'Nguyen Van A',
-            id_card_number: '012345678901',
-            phone_number: '0900000000',
-            address: 'Ha Noi',
-          }]);
+          return result([
+            {
+              full_name: 'Nguyen Van A',
+              id_card_number: '012345678901',
+              phone_number: '0900000000',
+              address: 'Ha Noi',
+            },
+          ]);
         }
         if (sql.includes('INSERT INTO contracts')) {
           return result([{ id: 99, contractCode: 'HD-2026-10-1' }]);
@@ -349,7 +440,12 @@ describe('ReservationsService', () => {
       );
       expect(client.query).toHaveBeenCalledWith(
         expect.stringContaining('INSERT INTO contracts'),
-        expect.arrayContaining([expect.stringMatching(/^HD-\d{4}-10-1$/), 10, 7, 1]),
+        expect.arrayContaining([
+          expect.stringMatching(/^HD-\d{4}-10-1$/),
+          10,
+          7,
+          1,
+        ]),
       );
       expect(client.query).toHaveBeenCalledWith(
         expect.stringContaining("'draft'"),
