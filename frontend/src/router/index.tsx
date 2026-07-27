@@ -54,11 +54,6 @@ const router = createBrowserRouter([
   {
     element: <CustomerLayout />,
     children: [
-      // --- Công khai: ai cũng xem được, không cần đăng nhập ---
-      { path: ROUTES.MAP, element: <MapPage /> },
-      { path: ROUTES.LOT_DETAIL, element: <LotDetailPage /> },
-      { path: ROUTES.SERVICES, element: <ServicePage /> },
-
       // --- Cần đăng nhập (FR-01: chặn người chưa đăng nhập) ---
       {
         element: <RequireAuth />,
@@ -66,12 +61,18 @@ const router = createBrowserRouter([
           // Trang Hồ sơ KHÔNG bị chặn bởi RequireCompleteProfile (nếu không sẽ
           // tạo vòng lặp redirect cho chính người dùng cần vào đây để hoàn thiện hồ sơ).
           { path: ROUTES.PROFILE, element: <ProfilePage /> },
-          { path: ROUTES.AVAILABILITY, element: <AvailabilityPage /> },
-          { path: ROUTES.APPOINTMENTS, element: <AppointmentsPage /> },
-          { path: ROUTES.REMINDERS, element: <RemindersPage /> },
+
+          // Tất cả tính năng còn lại đều bắt buộc hồ sơ phải đầy đủ + đã xác
+          // thực email mới được dùng (đồng bộ 1 ràng buộc cho toàn bộ trang).
           {
             element: <RequireCompleteProfile />,
             children: [
+              { path: ROUTES.MAP, element: <MapPage /> },
+              { path: ROUTES.LOT_DETAIL, element: <LotDetailPage /> },
+              { path: ROUTES.SERVICES, element: <ServicePage /> },
+              { path: ROUTES.AVAILABILITY, element: <AvailabilityPage /> },
+              { path: ROUTES.APPOINTMENTS, element: <AppointmentsPage /> },
+              { path: ROUTES.REMINDERS, element: <RemindersPage /> },
               { path: ROUTES.BOOKING, element: <BookingPage /> },
               { path: ROUTES.PAYMENT, element: <PaymentPage /> },
               { path: ROUTES.MY_LOTS, element: <MyLotsPage /> },

@@ -11,6 +11,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ROUTES } from "@/constants/routes";
 import { API_BASE_URL, api } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
+import AlertModal from "@/components/ui/AlertModal";
 import "./ProfilePage.css";
 
 const T = {
@@ -217,6 +218,13 @@ export default function ProfilePage() {
   const [activeLot, setActiveLot] = useState<number | null>(null);
   const [openModal, setOpenModal] = useState<ModalId | null>(null);
 
+  // Nếu bị RequireCompleteProfile chuyển hướng về đây (vì hồ sơ chưa đủ điều
+  // kiện để dùng các chức năng khác), hiện popup giải thích cho người dùng.
+  const [showRequireProfileAlert, setShowRequireProfileAlert] = useState<boolean>(
+    Boolean((location.state as { requireProfile?: boolean } | null)?.requireProfile),
+  );
+  const emailReminderShown = useRef(false);
+
   const [profile, setProfile] = useState<BackendUser | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const [profileError, setProfileError] = useState<string | null>(null);
@@ -417,6 +425,23 @@ export default function ProfilePage() {
     };
   }, []);
 
+  // Nhắc xác thực email 1 lần khi hồ sơ đã tải xong (thay cho banner cố định
+  // trước đây) — hiện dạng toast góc màn hình, không lặp lại nhiều lần.
+  useEffect(() => {
+    if (emailReminderShown.current) return;
+    if (!profile) return;
+    if (
+      profile.isProfileComplete &&
+      (!profile.isEmailVerified || !profile.isEmergencyEmailVerified)
+    ) {
+      emailReminderShown.current = true;
+      showToast(
+        `Vui lòng xác thực email ở mục "Xác thực Email" (tab "${T.navInfo}") để sử dụng đầy đủ chức năng.`,
+        5000,
+      );
+    }
+  }, [profile]);
+
   // --- Người thân được ủy quyền (bảng user_authorized_persons ở backend) ---
   const [authorizedPersons, setAuthorizedPersons] = useState<
     AuthorizedPerson[] | null
@@ -543,10 +568,10 @@ export default function ProfilePage() {
     }
   }, []);
 
-  function showToast(msg: string) {
+  function showToast(msg: string, durationMs = 2800) {
     setToast(msg);
     if (toastTimer.current) clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(null), 2800);
+    toastTimer.current = setTimeout(() => setToast(null), durationMs);
   }
 
   function switchTab(tab: TabId) {
@@ -836,15 +861,6 @@ export default function ProfilePage() {
         <span className="sep">›</span>
         <span className="current">{T.pageTitle}</span>
       </div>
-
-      {profile &&
-        profile.isProfileComplete &&
-        (!profile.isEmailVerified || !profile.isEmergencyEmailVerified) && (
-          <div className="incomplete-hint">
-            Vui lòng xác thực email ở mục &quot;Xác thực Email&quot; (tab &quot;
-            {T.navInfo}&quot;) để sử dụng đầy đủ chức năng.
-          </div>
-        )}
 
       <div className="page-wrap">
         <div>
@@ -2150,6 +2166,21 @@ export default function ProfilePage() {
       )}
 
       <div className={`toast ${toast ? "show" : ""}`}>{toast}</div>
+
+      <AlertModal
+        open={showRequireProfileAlert}
+        title="Cần hoàn tất hồ sơ"
+        variant="warning"
+        message={
+          <>
+            Bạn cần điền đầy đủ thông tin bắt buộc (và xác thực email) ở trang Hồ sơ
+            trước khi có thể sử dụng chức năng đó. Vui lòng hoàn tất các trường có
+            dấu <strong>*</strong> bên dưới rồi bấm &quot;Lưu thay đổi&quot;.
+          </>
+        }
+        confirmLabel="Đã hiểu"
+        onConfirm={() => setShowRequireProfileAlert(false)}
+      />
     </div>
   );
 }
