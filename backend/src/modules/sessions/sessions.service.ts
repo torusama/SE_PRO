@@ -42,7 +42,15 @@ export class SessionsService {
       `INSERT INTO user_sessions
          (jti, user_id, device_label, browser, os, ip_address, user_agent)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [jti, userId, label, browser, os, info.ip ?? null, info.userAgent ?? null],
+      [
+        jti,
+        userId,
+        label,
+        browser,
+        os,
+        info.ip ?? null,
+        info.userAgent ?? null,
+      ],
     );
   }
 

@@ -13,6 +13,9 @@ type MenuGroup = {
 }
 
 const MENU: MenuGroup[] = [
+  { section: 'AI Agent', items: [
+    { label: 'Quản trị AI Agent', to: ROUTES.ADMIN_AI_AGENT },
+  ]},
   { section: 'Tổng quan', items: [
     { label: 'Dashboard',         to: ROUTES.ADMIN_DASHBOARD },
     { label: 'Hoạt động gần đây', to: ROUTES.ADMIN_ACTIVITY },

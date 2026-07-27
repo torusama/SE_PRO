@@ -1,0 +1,25 @@
+# Progress
+
+- Created a dedicated plan for the cross-stack Agent-assisted request workflow.
+- Preserved all existing user changes in the dirty worktree.
+- Next: inspect current backend and frontend contracts before implementing.
+- Audited the existing draft button, reservation API, Agent planner/tool surface, and conversation persistence.
+- Confirmed that the current draft action is client-driven and non-conversational.
+- Logged one context-mode shell-loop failure and switched the next inspection to explicit files.
+- Completed the second audit pass across ownership/profile data, service-order persistence, planner schema, response actions, frontend send logic, and automatic map presentation.
+- Identified a security/data-integrity gap in service booking ownership validation and included it in implementation scope.
+- Finished the architecture audit and moved into design.
+- Selected a persisted pending-action state machine with planner-driven intent parsing and backend-enforced confirmation.
+- Added validated client-action context to chat requests and typed persisted pending actions/booking requirements.
+- Extended the NVIDIA planner contract with plot-request, service-booking, confirmation, and cancellation actions.
+- Added `AgentBookingService` to reuse account/ownership data, collect only missing fields, persist pending state, and call the existing reservation/service services after explicit confirmation.
+- Added ownership enforcement to direct service-order creation.
+- Replaced “Tạo yêu cầu nháp” with “Đặt yêu cầu”, routed card actions back through normal Agent chat, added service booking cards, and made non-plot replies close the contextual map.
+- Next: compile and test, then address integration errors and add focused booking-state tests.
+- Backend and frontend production builds now pass.
+- Added focused Agent booking, planner, service ownership, request-action, and map-lifecycle tests.
+- Backend focused tests pass: 15/15.
+- Final backend suite passes 80/80; final frontend suite passes 34/34.
+- Both production builds and focused backend/frontend lint pass.
+- Restarted the backend with the new build and verified the live Agent request entrypoint plus service catalog.
+- Completed the Agent-assisted plot and service request workflow.

@@ -6,7 +6,6 @@ import {
 } from '@nestjs/common';
 import { createHash, randomUUID } from 'crypto';
 import { promises as fs } from 'fs';
-import { join } from 'path';
 import * as bcrypt from 'bcrypt';
 import { DatabaseService } from '../../database/database.service';
 import { AdminOwnershipQueryDto } from './dto/admin-ownership-query.dto';
@@ -44,9 +43,10 @@ export class TransfersService {
       COALESCE(u.id_card_number, '') ILIKE $1
     )`;
     const plotCondition = `(p.plot_code ILIKE $1 OR p.plot_id::text = $2)`;
-    const params: unknown[] = mode === 'customer'
-      ? [`%${keyword}%`]
-      : [`%${keyword}%`, /^\d+$/.test(keyword) ? Number(keyword) : -1];
+    const params: unknown[] =
+      mode === 'customer'
+        ? [`%${keyword}%`]
+        : [`%${keyword}%`, /^\d+$/.test(keyword) ? Number(keyword) : -1];
     return this.database.query(
       `SELECT p.plot_id AS "plotId", p.plot_code AS "plotCode", p.status AS "plotStatus",
               p.area_sqm::float AS "areaSqm", p.plot_type AS "plotType",
@@ -181,7 +181,8 @@ export class TransfersService {
     context?: AdminRequestContext,
   ) {
     const input = this.validateInput(raw);
-    if (!files.length) throw new BadRequestException('Cần ít nhất một văn bản ảnh hoặc PDF');
+    if (!files.length)
+      throw new BadRequestException('Cần ít nhất một văn bản ảnh hoặc PDF');
     try {
       return await this.database.transaction(async (client) => {
         const ownerships = await client.query<any>(
@@ -198,19 +199,30 @@ export class TransfersService {
           [input.plotIds],
         );
         if (ownerships.rows.length !== input.plotIds.length) {
-          throw new ConflictException('Một hoặc nhiều phần mộ không còn thuộc người đứng tên hiện tại');
+          throw new ConflictException(
+            'Một hoặc nhiều phần mộ không còn thuộc người đứng tên hiện tại',
+          );
         }
-        const holderIds = new Set(ownerships.rows.map((row) => Number(row.user_id)));
-        if (holderIds.size !== 1) throw new BadRequestException('Các phần mộ được chọn phải cùng một người đứng tên');
+        const holderIds = new Set(
+          ownerships.rows.map((row) => Number(row.user_id)),
+        );
+        if (holderIds.size !== 1)
+          throw new BadRequestException(
+            'Các phần mộ được chọn phải cùng một người đứng tên',
+          );
         const previousHolderId = Number(ownerships.rows[0].user_id);
         const recipient = await this.resolveRecipient(client, input.recipient);
         if (recipient.userId === previousHolderId) {
-          throw new BadRequestException('Người nhận phải khác người đứng tên hiện tại');
+          throw new BadRequestException(
+            'Người nhận phải khác người đứng tên hiện tại',
+          );
         }
 
         const batchId = randomUUID();
         const year = new Date().getUTCFullYear();
-        await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`admin-transfer:${year}`]);
+        await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [
+          `admin-transfer:${year}`,
+        ]);
         const seq = await client.query<{ value: string }>(
           `SELECT LPAD((COUNT(*) + 1)::text, 6, '0') AS value
            FROM admin_transfer_batches WHERE created_at >= $1 AND created_at < $2`,
@@ -221,8 +233,16 @@ export class TransfersService {
           `INSERT INTO admin_transfer_batches
              (batch_id,batch_code,previous_holder_user_id,recipient_user_id,recipient_snapshot,plot_count,admin_note,created_by)
            VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8)`,
-          [batchId, batchCode, previousHolderId, recipient.userId,
-            JSON.stringify(input.recipient), input.plotIds.length, input.adminNote ?? null, adminId],
+          [
+            batchId,
+            batchCode,
+            previousHolderId,
+            recipient.userId,
+            JSON.stringify(input.recipient),
+            input.plotIds.length,
+            input.adminNote ?? null,
+            adminId,
+          ],
         );
 
         const groupCode = input.plotIds.length > 1 ? `TR-${batchCode}` : null;
@@ -246,8 +266,14 @@ export class TransfersService {
                 payment_status,status,created_by,notes,group_contract_code,ownership_source)
              VALUES ($1,$2,$3,CURRENT_DATE,CURRENT_DATE,0,0,'paid','active',$4,$5,$6,'transfer')
              RETURNING contract_id`,
-            [contractCode, recipient.userId, old.plot_id, adminId,
-              `Created from admin transfer ${batchCode}`, groupCode],
+            [
+              contractCode,
+              recipient.userId,
+              old.plot_id,
+              adminId,
+              `Created from admin transfer ${batchCode}`,
+              groupCode,
+            ],
           );
           const newOwnership = await client.query<{ ownership_id: number }>(
             `SELECT ownership_id FROM ownership_records
@@ -259,10 +285,23 @@ export class TransfersService {
                (item_id,batch_id,plot_id,previous_ownership_id,previous_contract_id,
                 new_ownership_id,new_contract_id,previous_holder_snapshot)
              VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)`,
-            [randomUUID(), batchId, old.plot_id, old.ownership_id, old.contract_id,
-              newOwnership.rows[0].ownership_id, newContract.rows[0].contract_id,
-              JSON.stringify({ userId: previousHolderId, fullName: old.full_name, email: old.email,
-                phone: old.phone_number, idCard: old.id_card_number, address: old.address })],
+            [
+              randomUUID(),
+              batchId,
+              old.plot_id,
+              old.ownership_id,
+              old.contract_id,
+              newOwnership.rows[0].ownership_id,
+              newContract.rows[0].contract_id,
+              JSON.stringify({
+                userId: previousHolderId,
+                fullName: old.full_name,
+                email: old.email,
+                phone: old.phone_number,
+                idCard: old.id_card_number,
+                address: old.address,
+              }),
+            ],
           );
         }
 
@@ -273,8 +312,16 @@ export class TransfersService {
                (document_id,batch_id,stored_filename,original_filename,mime_type,size_bytes,
                 checksum_sha256,uploaded_by)
              VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-            [randomUUID(), batchId, file.filename, file.originalname, file.mimetype,
-              file.size, createHash('sha256').update(bytes).digest('hex'), adminId],
+            [
+              randomUUID(),
+              batchId,
+              file.filename,
+              file.originalname,
+              file.mimetype,
+              file.size,
+              createHash('sha256').update(bytes).digest('hex'),
+              adminId,
+            ],
           );
         }
         await client.query(
@@ -282,24 +329,36 @@ export class TransfersService {
              (user_id,action,entity_type,entity_id,entity_key,old_value,new_value,
               ip_address,user_agent)
            VALUES ($1,'admin_plot_transfer_completed','admin_transfer_batch',NULL,$2,$3::jsonb,$4::jsonb,$5,$6)`,
-          [adminId,
+          [
+            adminId,
             batchId,
             JSON.stringify({ holderUserId: previousHolderId, plotIds: input.plotIds }),
             JSON.stringify({ recipientUserId: recipient.userId, batchCode }),
             context?.ipAddress ?? null,
-            context?.userAgent ?? null],
+            context?.userAgent ?? null,
+          ],
         );
-        return { id: batchId, batchCode, plotCount: input.plotIds.length,
-          recipientUserId: recipient.userId, recipientAccountCreatedInactive: recipient.created };
+        return {
+          id: batchId,
+          batchCode,
+          plotCount: input.plotIds.length,
+          recipientUserId: recipient.userId,
+          recipientAccountCreatedInactive: recipient.created,
+        };
       });
     } catch (error) {
-      await Promise.all(files.map((file) => fs.unlink(file.path).catch(() => undefined)));
+      await Promise.all(
+        files.map((file) => fs.unlink(file.path).catch(() => undefined)),
+      );
       throw error;
     }
   }
 
   async getDocument(id: string) {
-    const row = await this.database.queryOne<{ storedFilename: string; originalFilename: string }>(
+    const row = await this.database.queryOne<{
+      storedFilename: string;
+      originalFilename: string;
+    }>(
       `SELECT stored_filename AS "storedFilename", original_filename AS "originalFilename"
        FROM admin_transfer_documents WHERE document_id=$1`,
       [id],
@@ -310,7 +369,13 @@ export class TransfersService {
 
   private validateInput(raw: any): TransferInput {
     const plotIds: number[] = Array.isArray(raw?.plotIds)
-      ? [...new Set<number>(raw.plotIds.map((value: unknown) => Number(value)).filter((value: number) => Number.isInteger(value) && value > 0))]
+      ? [
+          ...new Set<number>(
+            raw.plotIds
+              .map((value: unknown) => Number(value))
+              .filter((value: number) => Number.isInteger(value) && value > 0),
+          ),
+        ]
       : [];
     const recipient = raw?.recipient ?? {};
     const required = ['fullName', 'email', 'phone', 'idCard', 'address'];
@@ -319,14 +384,19 @@ export class TransfersService {
       throw new BadRequestException('Thông tin người nhận chưa đầy đủ');
     }
     const email = String(recipient.email).trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new BadRequestException('Email người nhận không hợp lệ');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+      throw new BadRequestException('Email người nhận không hợp lệ');
     return {
       plotIds,
       recipient: {
-        fullName: String(recipient.fullName).trim(), email,
-        phone: String(recipient.phone).trim(), idCard: String(recipient.idCard).trim(),
+        fullName: String(recipient.fullName).trim(),
+        email,
+        phone: String(recipient.phone).trim(),
+        idCard: String(recipient.idCard).trim(),
         address: String(recipient.address).trim(),
-        dateOfBirth: recipient.dateOfBirth ? String(recipient.dateOfBirth) : undefined,
+        dateOfBirth: recipient.dateOfBirth
+          ? String(recipient.dateOfBirth)
+          : undefined,
       },
       adminNote: raw?.adminNote ? String(raw.adminNote).trim() : undefined,
     };
@@ -337,14 +407,22 @@ export class TransfersService {
       `SELECT user_id FROM users WHERE LOWER(email)=LOWER($1) AND is_deleted=FALSE FOR UPDATE`,
       [recipient.email],
     );
-    if (existing.rows[0]) return { userId: Number(existing.rows[0].user_id), created: false };
+    if (existing.rows[0])
+      return { userId: Number(existing.rows[0].user_id), created: false };
     const passwordHash = await bcrypt.hash(randomUUID(), 10);
     const created = await client.query(
       `INSERT INTO users
          (email,password_hash,role,full_name,phone_number,address,id_card_number,date_of_birth,is_active)
        VALUES ($1,$2,'Customer',$3,$4,$5,$6,$7,FALSE) RETURNING user_id`,
-      [recipient.email, passwordHash, recipient.fullName, recipient.phone, recipient.address,
-        recipient.idCard, recipient.dateOfBirth ?? null],
+      [
+        recipient.email,
+        passwordHash,
+        recipient.fullName,
+        recipient.phone,
+        recipient.address,
+        recipient.idCard,
+        recipient.dateOfBirth ?? null,
+      ],
     );
     return { userId: Number(created.rows[0].user_id), created: true };
   }

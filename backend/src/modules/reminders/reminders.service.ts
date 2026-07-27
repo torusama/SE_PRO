@@ -159,11 +159,13 @@ export class RemindersService {
        ORDER BY r.is_active DESC, r.created_at DESC`,
       [userId],
     );
-    return rows.map((row) => this.decorate(row)).sort((a, b) => {
-      if (a.daysUntil === null) return 1;
-      if (b.daysUntil === null) return -1;
-      return a.daysUntil - b.daysUntil;
-    });
+    return rows
+      .map((row) => this.decorate(row))
+      .sort((a, b) => {
+        if (a.daysUntil === null) return 1;
+        if (b.daysUntil === null) return -1;
+        return a.daysUntil - b.daysUntil;
+      });
   }
 
   async upcoming(userId: number) {
@@ -312,8 +314,10 @@ export class RemindersService {
     const isRecurring = dto.isRecurring ?? existing.isRecurring;
     const { remindMonth, remindDay, specificDate } = this.resolveDate(
       isRecurring,
-      dto.remindMonth ?? (isRecurring ? existing.remindMonth ?? undefined : undefined),
-      dto.remindDay ?? (isRecurring ? existing.remindDay ?? undefined : undefined),
+      dto.remindMonth ??
+        (isRecurring ? (existing.remindMonth ?? undefined) : undefined),
+      dto.remindDay ??
+        (isRecurring ? (existing.remindDay ?? undefined) : undefined),
       dto.specificDate ?? existing.specificDate ?? undefined,
     );
     const row = await this.database.queryOne<ReminderRow>(

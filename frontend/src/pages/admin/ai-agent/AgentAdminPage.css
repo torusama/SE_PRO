@@ -1,0 +1,92 @@
+.agent-admin {
+  --ai-bg: #050914;
+  --ai-panel: #0b1220;
+  --ai-border: rgba(255, 255, 255, .09);
+  --ai-teal: #00e5c4;
+  --ai-gold: #c9a84c;
+  min-height: 100%;
+  padding: 32px;
+  color: #e9f1f7;
+  background:
+    radial-gradient(circle at 95% 0, rgba(0, 229, 196, .1), transparent 32%),
+    linear-gradient(145deg, #050914, #080d1a);
+}
+
+.agent-admin__hero, .agent-admin__stats, .agent-admin__model, .agent-admin__row, .agent-admin__actions {
+  display: flex;
+  align-items: center;
+}
+
+.agent-admin__hero { justify-content: space-between; gap: 24px; }
+.agent-admin__eyebrow { color: var(--ai-teal); font-size: 11px; letter-spacing: .22em; font-weight: 700; }
+.agent-admin h1 { margin: 6px 0; font-size: clamp(26px, 4vw, 40px); }
+.agent-admin__hero p { margin: 0; max-width: 720px; color: #91a1b5; }
+
+.agent-admin button {
+  border: 1px solid var(--ai-border);
+  border-radius: 9px;
+  padding: 10px 16px;
+  color: #dbe8ef;
+  background: rgba(255, 255, 255, .04);
+  cursor: pointer;
+}
+.agent-admin button:hover { border-color: rgba(0, 229, 196, .5); }
+.agent-admin button:disabled { opacity: .5; cursor: wait; }
+.agent-admin__primary { color: #041411 !important; background: var(--ai-teal) !important; font-weight: 700; }
+
+.agent-admin__stats { gap: 14px; margin: 28px 0; }
+.agent-admin__stats article {
+  flex: 1;
+  min-height: 86px;
+  padding: 18px;
+  border: 1px solid var(--ai-border);
+  border-radius: 14px;
+  background: rgba(11, 18, 32, .82);
+}
+.agent-admin__stats span { display: block; color: #8393a7; font-size: 12px; }
+.agent-admin__stats strong { display: block; margin-top: 9px; color: var(--ai-gold); font-size: 22px; }
+
+.agent-admin__tabs { display: flex; gap: 6px; overflow-x: auto; border-bottom: 1px solid var(--ai-border); }
+.agent-admin__tabs button { border: 0; border-radius: 8px 8px 0 0; white-space: nowrap; }
+.agent-admin__tabs button.is-active { color: var(--ai-teal); background: rgba(0, 229, 196, .08); box-shadow: inset 0 -2px var(--ai-teal); }
+.agent-admin__panel { margin-top: 18px; }
+.agent-admin__list { display: grid; gap: 12px; }
+.agent-admin__feedback, .agent-admin__model {
+  padding: 18px;
+  border: 1px solid var(--ai-border);
+  border-radius: 13px;
+  background: rgba(11, 18, 32, .9);
+}
+.agent-admin__row { gap: 10px; color: #8898ac; font-size: 12px; }
+.agent-admin__row time { margin-left: auto; }
+.agent-admin h3 { margin: 12px 0 5px; }
+.agent-admin__feedback p, .agent-admin__model p { color: #a9b8c9; }
+.agent-admin blockquote { margin: 12px 0; padding: 10px 13px; border-left: 2px solid var(--ai-gold); color: #d9c78e; background: rgba(201, 168, 76, .06); }
+.agent-admin__actions { gap: 8px; margin-left: auto; }
+.agent-admin__actions button:first-child { color: var(--ai-teal); }
+.agent-admin__actions .danger { color: #ff7c87; }
+.agent-admin__model { justify-content: space-between; gap: 20px; }
+
+.agent-admin__status { display: inline-block; padding: 4px 8px; border-radius: 99px; color: #dce7ee; background: rgba(255, 255, 255, .07); font-size: 10px; text-transform: uppercase; letter-spacing: .07em; }
+.status-approved, .status-completed, .status-active, .status-deployed { color: var(--ai-teal); background: rgba(0, 229, 196, .1); }
+.status-rejected, .status-failed { color: #ff7c87; background: rgba(255, 78, 92, .1); }
+.status-running, .status-pending { color: #e5c96b; background: rgba(201, 168, 76, .1); }
+
+.agent-admin__table-wrap { overflow-x: auto; border: 1px solid var(--ai-border); border-radius: 13px; }
+.agent-admin table { width: 100%; border-collapse: collapse; background: rgba(11, 18, 32, .9); }
+.agent-admin th, .agent-admin td { padding: 14px; border-bottom: 1px solid var(--ai-border); text-align: left; white-space: nowrap; }
+.agent-admin th { color: #8292a7; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+.agent-admin td { color: #bdc9d6; font-size: 13px; }
+.agent-admin__timeline article { display: flex; gap: 14px; padding: 0 0 20px; }
+.agent-admin__timeline article > span { width: 9px; height: 9px; margin-top: 5px; border-radius: 50%; background: var(--ai-teal); box-shadow: 0 0 12px rgba(0, 229, 196, .7); }
+.agent-admin__timeline p, .agent-admin__timeline time { margin: 3px 0; color: #8393a7; font-size: 12px; }
+.agent-admin__empty, .agent-admin__error { padding: 28px; border: 1px dashed var(--ai-border); border-radius: 12px; color: #8ea0b5; text-align: center; }
+.agent-admin__error { margin-top: 18px; color: #ff929a; border-color: rgba(255, 78, 92, .35); }
+
+@media (max-width: 760px) {
+  .agent-admin { padding: 20px 14px; }
+  .agent-admin__hero { align-items: flex-start; flex-direction: column; }
+  .agent-admin__stats { display: grid; grid-template-columns: 1fr; }
+  .agent-admin__model { align-items: flex-start; flex-direction: column; }
+  .agent-admin__actions { margin-left: 0; }
+}

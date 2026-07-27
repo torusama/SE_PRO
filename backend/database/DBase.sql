@@ -238,7 +238,7 @@ CREATE TABLE contracts (
 
     -- Tráº¡ng thÃ¡i há»£p Ä‘á»“ng
     status              VARCHAR(20)     NOT NULL DEFAULT 'active'
-                        CHECK (status IN ('active', 'expired', 'transferred', 'cancelled')),
+                        CHECK (status IN ('draft', 'active', 'expired', 'transferred', 'cancelled')),
 
     -- File PDF
     pdf_url             TEXT,           -- Firebase Storage URL
@@ -680,7 +680,8 @@ CREATE TRIGGER trg_appointments_updated_at
 CREATE OR REPLACE FUNCTION fn_auto_create_ownership()
 RETURNS TRIGGER AS $$
 BEGIN
-    IF (TG_OP = 'INSERT' AND NEW.status = 'active') THEN
+    IF NEW.status = 'active'
+       AND (TG_OP = 'INSERT' OR OLD.status IS DISTINCT FROM 'active') THEN
         INSERT INTO ownership_records (
             contract_id,
             plot_id,
@@ -692,7 +693,7 @@ BEGIN
             NEW.contract_id,
             NEW.plot_id,
             NEW.user_id,
-            NEW.contract_date,
+            COALESCE(NEW.effective_date, NEW.contract_date),
             TRUE,
             NEW.ownership_source   -- Ä‘á»c tá»« column, khÃ´ng hardcode
         );
@@ -708,7 +709,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER trg_contract_create_ownership
-    AFTER INSERT ON contracts
+    AFTER INSERT OR UPDATE OF status ON contracts
     FOR EACH ROW EXECUTE FUNCTION fn_auto_create_ownership();
 
 -- ----------------------------------------------------------------

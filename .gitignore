@@ -45,6 +45,12 @@ Thumbs.db
 # Runtime/cache
 .cache/
 .npm/
+.venv/
+__pycache__/
+.pytest_cache/
+ml-service/models/*.joblib
+ml-service/models/registry.json
+tmp-ai-agent-*.png
 tmp/
 temp/
 
@@ -55,3 +61,5 @@ specs/
 
 # Local agent instructions
 AGENTS.md
+.tmp-agent-viewport/
+

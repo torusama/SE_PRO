@@ -14,10 +14,7 @@ import {
 } from 'class-validator';
 
 export type ReminderType =
-  | 'death_anniversary'
-  | 'memorial'
-  | 'maintenance'
-  | 'other';
+  'death_anniversary' | 'memorial' | 'maintenance' | 'other';
 
 export class CreateReminderDto {
   @IsString()

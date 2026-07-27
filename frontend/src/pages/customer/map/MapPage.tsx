@@ -7,7 +7,7 @@ import {
   type MouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { ROUTES } from "@/constants/routes";
 import { API_BASE_URL, api } from "@/lib/api";
 import {
@@ -666,12 +666,14 @@ function isAdjacentToCluster(plot: MapPlot, cluster: MapPlot[]) {
 
 export default function MapPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const token = useAuthStore((state) => state.token);
   const starsRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const dragModeRef = useRef<"add" | "remove" | null>(null);
   const dragVisitedRef = useRef<Set<string>>(new Set());
   const mapWrapRef = useRef<HTMLDivElement>(null);
+  const appliedHighlightRef = useRef<string | null>(null);
 
   const [plots, setPlots] = useState<MapPlot[]>(INITIAL_PLANNED_PLOTS);
   const [isLoading, setIsLoading] = useState(false);
@@ -718,6 +720,63 @@ export default function MapPage() {
       el.appendChild(d);
     }
   }, []);
+
+  useEffect(() => {
+    const rawHighlight = searchParams.get("highlight") ?? "";
+    if (!rawHighlight || appliedHighlightRef.current === rawHighlight) return;
+
+    const highlightIds = [
+      ...new Set(
+        rawHighlight
+          .split(",")
+          .map((value) => Number(value.trim()))
+          .filter((value) => Number.isInteger(value) && value > 0),
+      ),
+    ];
+    if (!highlightIds.length) {
+      appliedHighlightRef.current = rawHighlight;
+      return;
+    }
+
+    const highlightedPlots = plots.filter(
+      (plot) =>
+        !plot.isPlaceholder && highlightIds.includes(Number(plot.id)),
+    );
+    if (!highlightedPlots.length) return;
+
+    let scrollTimer: number | undefined;
+    const applyTimer = window.setTimeout(() => {
+      appliedHighlightRef.current = rawHighlight;
+      setSubmitMessage("");
+      setSubmitError("");
+      setAdjacencyWarning("");
+      if (highlightedPlots.length === 1) {
+        setSelectionMode("single");
+        setSelectedPlot(highlightedPlots[0]);
+        setClusterPlots([]);
+        setRoutePlotId(highlightedPlots[0].id);
+      } else {
+        setSelectionMode("cluster");
+        setSelectedPlot(highlightedPlots[0]);
+        setClusterPlots(highlightedPlots);
+        setRoutePlotId(highlightedPlots[0].id);
+      }
+
+      scrollTimer = window.setTimeout(() => {
+        const mapWrap = mapWrapRef.current;
+        if (!mapWrap) return;
+        mapWrap.scrollTo({
+          left: Math.max(0, (mapWrap.scrollWidth - mapWrap.clientWidth) / 2),
+          top: Math.max(0, (mapWrap.scrollHeight - mapWrap.clientHeight) / 2),
+          behavior: "smooth",
+        });
+      }, 80);
+    }, 0);
+    return () => {
+      window.clearTimeout(applyTimer);
+      if (scrollTimer !== undefined) window.clearTimeout(scrollTimer);
+    };
+  }, [plots, searchParams]);
 
   useEffect(() => {
     window.addEventListener("pointerup", endClusterDrag);
@@ -937,7 +996,6 @@ export default function MapPage() {
       setRoutePlotId(null);
     }
     if (!selectedPlot && filteredPlots.length > 0) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- reconcile selection with the filtered list derived from external data
       setSelectedPlot(filteredPlots[0]);
     }
     setClusterPlots((current) =>

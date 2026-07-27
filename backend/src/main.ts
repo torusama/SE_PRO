@@ -11,7 +11,7 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
-  const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:3000';
+  const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:5173';
 
   // Ensure local upload dirs exist (avatars, documents, etc.)
   const uploadsDir = join(process.cwd(), 'uploads', 'avatars');

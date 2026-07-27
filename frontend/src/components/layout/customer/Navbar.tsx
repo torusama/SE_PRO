@@ -1,22 +1,22 @@
 // src/components/layout/customer/Navbar.tsx
-// Đồng bộ 1:1 với thanh nav của Trang chủ (xem .home-nav trong HomePage.tsx/HomePage.css).
-// Toàn bộ trang trong CustomerLayout (Hồ sơ, Bản đồ, Dịch vụ, Lô của tôi...) dùng chung
-// component này nên chỉ cần sửa ở đây là mọi nơi đồng bộ theo.
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ROUTES } from "../../../constants/routes";
-import { api } from "@/lib/api";
+import { ROUTES } from "@/constants/routes";
 import { useAuthStore } from "@/store/authStore";
 import "./Navbar.css";
 
 const TXT = {
-  brandMain: "VĨNH PHÚC",
-  brandAccent: "VIÊN",
-  profile: "Hồ sơ của tôi",
-  appointments: "Đặt và xem lịch hẹn",
-  admin: "Trang quản trị",
+  brandPart1: "VĨNH PHÚC",
+  brandPart2: "VIÊN",
+  agent: "TRỢ LÝ AI",
+  map: "BẢN ĐỒ",
+  services: "DỊCH VỤ",
+  login: "ĐẮNG NHẬP",
+  profile: "Hồ sơ cá nhân",
+  myLots: "Lô của tôi",
+  appointments: "Lịch hẹn tư vấn",
+  admin: "Trang Quản trị",
   logout: "Đăng xuất",
-  login: "Đăng nhập",
 };
 
 export default function Navbar() {
@@ -26,24 +26,47 @@ export default function Navbar() {
   const role = useAuthStore((s) => s.role);
   const logout = useAuthStore((s) => s.logout);
   const [menuOpen, setMenuOpen] = useState(false);
-  // Trang Hồ sơ đã tự hiển thị avatar + tên + đăng xuất ở sidebar riêng của nó,
-  // nên bỏ cục avatar này trên nav để khỏi bị lặp lại 2 lần trên cùng 1 trang.
+
   const isProfilePage = location.pathname === ROUTES.PROFILE;
 
-  function handleLogout() {
-    // Thu hồi phiên thật ở backend (bảng user_sessions) — không chặn UI chờ
-    // kết quả, vì dù request lỗi thì local state vẫn phải được xoá ngay.
-    api.post("/auth/logout").catch(() => {});
+  const handleLogout = () => {
     logout();
     setMenuOpen(false);
-    navigate(ROUTES.LOGIN);
-  }
+    navigate(ROUTES.HOME);
+  };
 
   return (
     <nav className="site-nav">
-      <Link to={ROUTES.HOME} className="site-nav-logo">
-        {TXT.brandMain} <span>{TXT.brandAccent}</span>
+      <Link to={ROUTES.HOME} className="site-nav-brand">
+        <span>{TXT.brandPart1}</span> {TXT.brandPart2}
       </Link>
+
+      <ul className="site-nav-links">
+        <li>
+          <Link
+            to={ROUTES.AI_AGENT}
+            className={location.pathname === ROUTES.AI_AGENT ? "active" : ""}
+          >
+            {TXT.agent}
+          </Link>
+        </li>
+        <li>
+          <Link
+            to={ROUTES.MAP}
+            className={location.pathname === ROUTES.MAP ? "active" : ""}
+          >
+            {TXT.map}
+          </Link>
+        </li>
+        <li>
+          <Link
+            to={ROUTES.SERVICES}
+            className={location.pathname === ROUTES.SERVICES ? "active" : ""}
+          >
+            {TXT.services}
+          </Link>
+        </li>
+      </ul>
 
       {isProfilePage ? null : user ? (
         <div style={{ position: "relative" }}>
@@ -66,6 +89,15 @@ export default function Navbar() {
                 }}
               >
                 {TXT.profile}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  navigate(ROUTES.MY_LOTS);
+                }}
+              >
+                {TXT.myLots}
               </button>
               <button
                 type="button"

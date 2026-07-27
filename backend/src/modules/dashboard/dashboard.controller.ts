@@ -12,10 +12,14 @@ export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
   @Get('summary')
-  async summary() { return { success: true, data: await this.dashboardService.summary() }; }
+  async summary() {
+    return { success: true, data: await this.dashboardService.summary() };
+  }
 
   @Get('plots')
-  async plots() { return { success: true, data: await this.dashboardService.plots() }; }
+  async plots() {
+    return { success: true, data: await this.dashboardService.plots() };
+  }
 
   @Get('revenue')
   async revenue(@Query() query: DashboardRevenueQueryDto) {
@@ -26,5 +30,7 @@ export class DashboardController {
   }
 
   @Get('services')
-  async services() { return { success: true, data: await this.dashboardService.services() }; }
+  async services() {
+    return { success: true, data: await this.dashboardService.services() };
+  }
 }

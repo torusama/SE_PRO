@@ -39,7 +39,9 @@ const transferDocuments = FilesInterceptor('documents', 10, {
   storage: diskStorage({
     destination: './uploads/transfers',
     filename: (_request, file, callback) => {
-      const safeExtension = allowedFiles.get(file.mimetype) ?? extname(file.originalname).toLowerCase();
+      const safeExtension =
+        allowedFiles.get(file.mimetype) ??
+        extname(file.originalname).toLowerCase();
       callback(null, `${randomUUID()}${safeExtension}`);
     },
   }),
@@ -47,8 +49,15 @@ const transferDocuments = FilesInterceptor('documents', 10, {
   fileFilter: (_request, file, callback) => {
     const expected = allowedFiles.get(file.mimetype);
     const actual = extname(file.originalname).toLowerCase();
-    const valid = Boolean(expected) && (expected === actual || (expected === '.jpg' && actual === '.jpeg'));
-    callback(valid ? null : new BadRequestException('Chỉ chấp nhận PDF, JPG, PNG hoặc WEBP'), valid);
+    const valid =
+      Boolean(expected) &&
+      (expected === actual || (expected === '.jpg' && actual === '.jpeg'));
+    callback(
+      valid
+        ? null
+        : new BadRequestException('Chỉ chấp nhận PDF, JPG, PNG hoặc WEBP'),
+      valid,
+    );
   },
 });
 
@@ -88,7 +97,11 @@ export class TransfersController {
   ) {
     if (!payload) throw new BadRequestException('Thiếu dữ liệu chuyển nhượng');
     let parsed: unknown;
-    try { parsed = JSON.parse(payload); } catch { throw new BadRequestException('Dữ liệu chuyển nhượng không hợp lệ'); }
+    try {
+      parsed = JSON.parse(payload);
+    } catch {
+      throw new BadRequestException('Dữ liệu chuyển nhượng không hợp lệ');
+    }
     return {
       success: true,
       message: 'Chuyển nhượng thành công',

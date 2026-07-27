@@ -22,6 +22,7 @@ import NotificationPage from "@/pages/customer/notification/NotificationPage";
 import RemindersPage from "@/pages/customer/reminder/RemindersPage";
 import AvailabilityPage from "@/pages/customer/availability/AvailabilityPage";
 import AppointmentsPage from "@/pages/customer/appointments/AppointmentsPage";
+import AgentPage from "@/pages/customer/ai-agent/AgentPage";
 
 // Admin pages
 import DashboardPage from "@/pages/admin/dashboard/DashboardPage";
@@ -35,6 +36,7 @@ import NotificationManagementPage from "@/pages/admin/notification-management/No
 import TransferPage from "@/pages/admin/transfer/TransferPage";
 import AppointmentManagementPage from "@/pages/admin/appointment-management/AppointmentManagementPage";
 import ReminderManagementPage from "@/pages/admin/reminder-management/ReminderManagementPage";
+import AgentAdminPage from "@/pages/admin/ai-agent/AgentAdminPage";
 
 // Auth
 import LoginPage from "@/pages/auth/LoginPage";
@@ -45,9 +47,7 @@ const router = createBrowserRouter([
   { path: ROUTES.LOGIN, element: <LoginPage /> },
   { path: ROUTES.REGISTER, element: <RegisterPage /> },
 
-  // === Trang chủ — KHÔNG bọc CustomerLayout vì HomePage đã tự có
-  // nav + footer riêng (thiết kế landing page độc lập).
-  // Bọc thêm CustomerLayout sẽ tạo ra 2 lớp nav/footer chồng lên nhau.
+  // === Trang chủ — KHÔNG bọc CustomerLayout vì HomePage đã tự có nav + footer riêng ===
   { path: ROUTES.HOME, element: <HomePage /> },
 
   // === Customer routes (dùng layout chung: Navbar + Footer) ===
@@ -58,12 +58,8 @@ const router = createBrowserRouter([
       {
         element: <RequireAuth />,
         children: [
-          // Trang Hồ sơ KHÔNG bị chặn bởi RequireCompleteProfile (nếu không sẽ
-          // tạo vòng lặp redirect cho chính người dùng cần vào đây để hoàn thiện hồ sơ).
           { path: ROUTES.PROFILE, element: <ProfilePage /> },
 
-          // Tất cả tính năng còn lại đều bắt buộc hồ sơ phải đầy đủ + đã xác
-          // thực email mới được dùng (đồng bộ 1 ràng buộc cho toàn bộ trang).
           {
             element: <RequireCompleteProfile />,
             children: [
@@ -77,6 +73,7 @@ const router = createBrowserRouter([
               { path: ROUTES.PAYMENT, element: <PaymentPage /> },
               { path: ROUTES.MY_LOTS, element: <MyLotsPage /> },
               { path: ROUTES.NOTIFICATION, element: <NotificationPage /> },
+              { path: ROUTES.AI_AGENT, element: <AgentPage /> },
             ],
           },
         ],
@@ -103,6 +100,7 @@ const router = createBrowserRouter([
           { path: "chuyen-nhuong", element: <TransferPage /> },
           { path: "lich-hen", element: <AppointmentManagementPage /> },
           { path: "nhac-lich", element: <ReminderManagementPage /> },
+          { path: "ai-agent", element: <AgentAdminPage /> },
         ],
       },
     ],

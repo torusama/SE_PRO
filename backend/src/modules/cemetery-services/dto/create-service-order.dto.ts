@@ -1,4 +1,10 @@
-import { IsNumber, IsOptional, IsString } from 'class-validator';
+import {
+  IsDateString,
+  IsNumber,
+  IsOptional,
+  IsString,
+  MaxLength,
+} from 'class-validator';
 
 export class CreateServiceOrderDto {
   @IsNumber()
@@ -9,10 +15,11 @@ export class CreateServiceOrderDto {
   plotId?: number;
 
   @IsOptional()
-  @IsString()
+  @IsDateString()
   requestedDate?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(1000)
   note?: string;
 }
