@@ -79,6 +79,7 @@ export const BaziCompassWidget: React.FC<BaziCompassWidgetProps> = ({
               {element && (
                 <div className="bazi-compass-center-element">
                   Mệnh {element}
+                  {napAmName ? ` · ${napAmName}` : ''}
                 </div>
               )}
             </div>

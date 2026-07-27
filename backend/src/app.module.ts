@@ -22,7 +22,11 @@ import { TransfersModule } from './modules/transfers/transfers.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, load: [envConfig] }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: ['.env.local', '.env'],
+      load: [envConfig],
+    }),
     // Bật cron job của Nest (dùng cho reminders.service.ts - nhắc lịch ngày giỗ).
     // Đổi tên khi import vì project đã có 1 module nội bộ tên trùng là
     // "ScheduleModule" (lịch hẹn/lịch rảnh), không liên quan đến cron.

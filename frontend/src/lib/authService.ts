@@ -31,6 +31,24 @@ export interface AuthResponse {
   profileComplete: boolean;
 }
 
+interface RawAuthUser {
+  id?: string | number;
+  user_id?: string | number;
+  role?: string;
+  fullName?: string;
+  full_name?: string;
+  name?: string;
+  email?: string;
+  isProfileComplete?: boolean;
+}
+
+interface RawAuthPayload {
+  data?: RawAuthPayload;
+  accessToken?: string;
+  token?: string;
+  user?: RawAuthUser;
+}
+
 function normalizeRole(raw: string): Role {
   return raw?.toLowerCase() === "admin" ? "admin" : "customer";
 }
@@ -42,19 +60,23 @@ function buildInitials(fullName: string) {
   return (first + last).toUpperCase() || "KH";
 }
 
-function normalizeAuthResponse(raw: any): AuthResponse {
-  const payload = raw.data ?? raw;
+function normalizeAuthResponse(raw: unknown): AuthResponse {
+  const envelope = raw as RawAuthPayload;
+  const payload = envelope.data ?? envelope;
   const user = payload.user;
+  if (!user) {
+    throw new Error("Phản hồi đăng nhập không hợp lệ.");
+  }
   const fullName = user.fullName ?? user.full_name ?? user.name ?? "";
 
   return {
-    token: payload.accessToken ?? payload.token,
-    role: normalizeRole(user.role),
+    token: payload.accessToken ?? payload.token ?? "",
+    role: normalizeRole(user.role ?? ""),
     user: {
       id: String(user.id ?? user.user_id),
       name: fullName,
       initials: buildInitials(fullName),
-      email: user.email,
+      email: user.email ?? "",
     },
     profileComplete: Boolean(user.isProfileComplete),
   };
@@ -86,9 +108,8 @@ export async function verifyRegistrationOtpRequest(
   email: string,
   otpCode: string,
 ): Promise<string> {
-  const { data } = await api.post("/auth/register/email/verify-otp", {
-    email,
-    otpCode,
-  });
+  const { data } = await api.post<{
+    data: { registrationToken: string };
+  }>("/auth/register/email/verify-otp", { email, otpCode });
   return data.data.registrationToken;
 }

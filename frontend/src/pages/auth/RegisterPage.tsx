@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { isAxiosError } from "axios";
 import { Link, useNavigate } from "react-router-dom";
 import {
   registerRequest,
@@ -44,16 +45,19 @@ export default function RegisterPage() {
     return () => window.clearTimeout(timer);
   }, [navigate, step]);
 
-  function showRequestError(err: any, fallback: string) {
-    const backendMessage = err?.response?.data?.message;
+  function showRequestError(err: unknown, fallback: string) {
+    const responseData = isAxiosError(err)
+      ? (err.response?.data as { message?: string | string[] } | undefined)
+      : undefined;
+    const backendMessage = responseData?.message;
     if (Array.isArray(backendMessage)) {
       setError(backendMessage.join(". "));
     } else if (typeof backendMessage === "string") {
       setError(backendMessage);
-    } else if (err?.request) {
+    } else if (isAxiosError(err) && err.request) {
       setError("Không thể kết nối đến máy chủ. Vui lòng thử lại sau.");
     } else {
-      setError(err?.message ?? fallback);
+      setError(err instanceof Error ? err.message : fallback);
     }
   }
 
@@ -72,7 +76,7 @@ export default function RegisterPage() {
       setOtpCode("");
       setResendCooldown(60);
       setStep("otp");
-    } catch (err: any) {
+    } catch (err: unknown) {
       showRequestError(err, "Không thể gửi mã OTP. Vui lòng thử lại.");
     } finally {
       setLoading(false);
@@ -91,7 +95,7 @@ export default function RegisterPage() {
       const token = await verifyRegistrationOtpRequest(email, otpCode);
       setRegistrationToken(token);
       setStep("account");
-    } catch (err: any) {
+    } catch (err: unknown) {
       showRequestError(err, "Xác thực OTP thất bại. Vui lòng thử lại.");
     } finally {
       setLoading(false);
@@ -106,7 +110,7 @@ export default function RegisterPage() {
       await sendRegistrationOtpRequest(email);
       setOtpCode("");
       setResendCooldown(60);
-    } catch (err: any) {
+    } catch (err: unknown) {
       showRequestError(err, "Không thể gửi lại mã OTP.");
     } finally {
       setLoading(false);
@@ -143,7 +147,7 @@ export default function RegisterPage() {
         registrationToken,
       });
       setStep("success");
-    } catch (err: any) {
+    } catch (err: unknown) {
       showRequestError(err, "Đăng ký thất bại. Vui lòng thử lại.");
     } finally {
       setLoading(false);

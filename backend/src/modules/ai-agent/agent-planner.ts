@@ -275,7 +275,6 @@ export function isEnglishText(text: string): boolean {
   const normalized = text.toLowerCase();
   const englishKeywords = [
     'hello',
-    'hi',
     'please',
     'consult',
     'recommend',
@@ -297,7 +296,11 @@ export function isEnglishText(text: string): boolean {
     'i would like',
     'looking for',
   ];
-  return englishKeywords.some((keyword) => normalized.includes(keyword));
+  const hasStandaloneHi = /(?:^|[^\p{L}])hi(?:$|[^\p{L}])/u.test(normalized);
+  return (
+    hasStandaloneHi ||
+    englishKeywords.some((keyword) => normalized.includes(keyword))
+  );
 }
 
 export function recommendationDiscoveryQuestion(
