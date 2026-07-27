@@ -97,11 +97,6 @@ export class RemindersService {
     return this.decorate(row!);
   }
 
-  /**
-   * remind_month/remind_day trong DB luôn NOT NULL (dùng cho index quét theo
-   * ngày/tháng), kể cả với nhắc 1 lần (is_recurring = false) — trường hợp đó
-   * suy ra trực tiếp từ specific_date thay vì bắt người dùng nhập lại.
-   */
   private resolveDate(
     isRecurring: boolean,
     remindMonth?: number,
@@ -155,6 +150,124 @@ export class RemindersService {
       (reminder) => reminder.isActive && reminder.daysUntil !== null,
     );
     return active[0] ?? null;
+  }
+
+  // ── ADMIN: lấy toàn bộ nhắc lịch kèm thông tin khách hàng ──────────────
+  async allForAdmin(filters?: { type?: string; search?: string }) {
+    const conditions: string[] = ['r.is_deleted = FALSE'];
+    const params: any[] = [];
+
+    if (filters?.type && filters.type !== 'all') {
+      params.push(filters.type);
+      conditions.push(`r.reminder_type = $${params.length}`);
+    }
+    if (filters?.search?.trim()) {
+      params.push(`%${filters.search.trim().toLowerCase()}%`);
+      const idx = params.length;
+      conditions.push(
+        `(LOWER(r.title) LIKE $${idx} OR LOWER(u.full_name) LIKE $${idx} OR LOWER(p.plot_code) LIKE $${idx})`,
+      );
+    }
+
+    const where = conditions.join(' AND ');
+
+    const rows = await this.database.query<
+      ReminderRow & {
+        customerName: string;
+        customerPhone: string | null;
+        plotCode: string | null;
+        zoneName: string | null;
+        lastNotifiedAt: string | null;
+      }
+    >(
+      `SELECT ${SELECT_FIELDS},
+              u.full_name      AS "customerName",
+              u.phone          AS "customerPhone",
+              p.plot_code      AS "plotCode",
+              z.name           AS "zoneName",
+              r.last_sent_at   AS "lastNotifiedAt"
+       FROM reminders r
+       JOIN users u ON u.user_id = r.user_id
+       LEFT JOIN plots p ON p.plot_id = r.plot_id
+       LEFT JOIN zones z ON z.zone_id = p.zone_id
+       WHERE ${where}
+       ORDER BY r.is_active DESC, r.created_at DESC`,
+      params,
+    );
+
+    return rows
+      .map((row) => {
+        const decorated = this.decorate(row);
+        return {
+          ...decorated,
+          customerName: row.customerName,
+          customerPhone: row.customerPhone,
+          plotCode: row.plotCode,
+          zoneName: row.zoneName,
+          lastNotifiedAt: row.lastNotifiedAt,
+        };
+      })
+      .sort((a, b) => {
+        if (a.daysUntil === null) return 1;
+        if (b.daysUntil === null) return -1;
+        return a.daysUntil - b.daysUntil;
+      });
+  }
+
+  // ── ADMIN: gửi nhắc thủ công ngay ────────────────────────────────────────
+  async notifyNow(id: number) {
+    const row = await this.database.queryOne<
+      ReminderRow & {
+        customerName: string;
+        userId: number;
+        notifyEmails: string[];
+      }
+    >(
+      `SELECT ${SELECT_FIELDS}, u.full_name AS "customerName", p.plot_code AS "plotCode"
+       FROM reminders r
+       JOIN users u ON u.user_id = r.user_id
+       LEFT JOIN plots p ON p.plot_id = r.plot_id
+       WHERE r.reminder_id = $1 AND r.is_deleted = FALSE`,
+      [id],
+    );
+
+    if (!row) throw new NotFoundException('Không tìm thấy nhắc lịch.');
+
+    const decorated = this.decorate(row);
+    const location = row.plotCode ? ` tại lô ${row.plotCode}` : '';
+    const message = `${row.title}${location}${decorated.nextDate ? ` — ngày ${decorated.nextDate}` : ''}.`;
+
+    await this.notificationsService.createInApp(
+      row.userId,
+      'memorial_reminder',
+      `Nhắc lịch: ${row.title}`,
+      message,
+      'reminder',
+      row.id,
+    );
+
+    if (row.notifyEmail && row.notifyEmails?.length) {
+      for (const email of row.notifyEmails) {
+        try {
+          await this.emailService.sendReminderEmail(
+            email,
+            `Nhắc lịch: ${row.title}`,
+            message,
+          );
+        } catch (err) {
+          this.logger.error(
+            `Gửi email thủ công tới ${email} thất bại: ${(err as Error).message}`,
+          );
+        }
+      }
+    }
+
+    await this.database.query(
+      `UPDATE reminders SET last_sent_at = NOW() WHERE reminder_id = $1`,
+      [id],
+    );
+
+    return { id, notified: true };
   }
 
   async update(userId: number, id: number, dto: UpdateReminderDto) {
@@ -224,26 +337,19 @@ export class RemindersService {
     return row;
   }
 
-  /** Tính ngày dương lịch sắp tới (năm nay hoặc năm sau) và số ngày còn lại. */
   private decorate(row: ReminderRow) {
     const today = this.startOfDay(new Date());
     let nextDate: Date | null = null;
 
     if (row.isRecurring && row.remindMonth && row.remindDay) {
-      nextDate = this.nextRecurringDate(
-        today,
-        row.remindMonth,
-        row.remindDay,
-      );
+      nextDate = this.nextRecurringDate(today, row.remindMonth, row.remindDay);
     } else if (!row.isRecurring && row.specificDate) {
       const specific = this.startOfDay(new Date(row.specificDate));
       nextDate = specific >= today ? specific : null;
     }
 
     const daysUntil = nextDate
-      ? Math.round(
-          (nextDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
-        )
+      ? Math.round((nextDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
       : null;
 
     return {
@@ -255,7 +361,6 @@ export class RemindersService {
 
   private nextRecurringDate(today: Date, month: number, day: number): Date {
     const year = today.getFullYear();
-    // Ngày 29/02 trên năm không nhuận -> lùi về 28/02 để tránh lỗi Date tràn tháng.
     const clampDay = (y: number, m: number, d: number) => {
       const daysInMonth = new Date(y, m, 0).getDate();
       return Math.min(d, daysInMonth);
@@ -275,12 +380,6 @@ export class RemindersService {
     return new Date(date.getFullYear(), date.getMonth(), date.getDate());
   }
 
-  /**
-   * Cron chạy mỗi ngày lúc 07:00 (giờ server) — quét toàn bộ nhắc lịch đang
-   * hoạt động, và tạo thông báo trong app khi đến đúng số ngày cần báo trước
-   * (notify_days_before). Mỗi mốc chỉ được gửi 1 lần / năm (recurring) hoặc
-   * 1 lần duy nhất (nhắc 1 lần - specific_date).
-   */
   @Cron(CronExpression.EVERY_DAY_AT_7AM)
   async runDailyReminderCheck() {
     const currentYear = new Date().getFullYear();
@@ -296,14 +395,11 @@ export class RemindersService {
       const decorated = this.decorate(row);
       if (decorated.daysUntil === null) continue;
       if (decorated.daysUntil !== row.notifyDaysBefore) continue;
-
       if (row.isRecurring && row.lastSentYear === currentYear) continue;
       if (!row.isRecurring && row.lastSentAt) continue;
 
       const when =
-        decorated.daysUntil === 0
-          ? 'hôm nay'
-          : `còn ${decorated.daysUntil} ngày nữa`;
+        decorated.daysUntil === 0 ? 'hôm nay' : `còn ${decorated.daysUntil} ngày nữa`;
       const location = row.plotCode ? ` tại lô ${row.plotCode}` : '';
       const message = `${row.title}${location} — ${when} (${decorated.nextDate}).`;
 

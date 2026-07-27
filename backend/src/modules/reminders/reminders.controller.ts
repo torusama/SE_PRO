@@ -6,14 +6,18 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
 import { CreateReminderDto } from './dto/create-reminder.dto';
 import { UpdateReminderDto } from './dto/update-reminder.dto';
 import { RemindersService } from './reminders.service';
 
+// ── Customer routes (/my/reminders) ─────────────────────────────────────────
 @UseGuards(JwtAuthGuard)
 @Controller('my/reminders')
 export class RemindersController {
@@ -60,6 +64,36 @@ export class RemindersController {
       success: true,
       message: 'Đã xoá nhắc lịch',
       data: await this.remindersService.remove(user.id, Number(id)),
+    };
+  }
+}
+
+// ── Admin routes (/admin/reminders) ─────────────────────────────────────────
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('admin')
+@Controller('admin/reminders')
+export class AdminRemindersController {
+  constructor(private readonly remindersService: RemindersService) {}
+
+  /** GET /admin/reminders?type=&search=  — lấy toàn bộ nhắc lịch mọi user */
+  @Get()
+  async all(
+    @Query('type') type?: string,
+    @Query('search') search?: string,
+  ) {
+    return {
+      success: true,
+      data: await this.remindersService.allForAdmin({ type, search }),
+    };
+  }
+
+  /** POST /admin/reminders/:id/notify-now — gửi nhắc thủ công ngay */
+  @Post(':id/notify-now')
+  async notifyNow(@Param('id') id: string) {
+    return {
+      success: true,
+      message: 'Đã gửi nhắc nhở tới khách hàng',
+      data: await this.remindersService.notifyNow(Number(id)),
     };
   }
 }
