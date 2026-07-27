@@ -5,6 +5,8 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { SendRegistrationOtpDto } from './dto/send-registration-otp.dto';
+import { VerifyRegistrationOtpDto } from './dto/verify-registration-otp.dto';
 
 function extractRequestInfo(req: Request) {
   return {
@@ -17,12 +19,33 @@ function extractRequestInfo(req: Request) {
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @Post('register')
-  async register(@Body() dto: RegisterDto, @Req() req: Request) {
+  @Post('register/email/send-otp')
+  async sendRegistrationOtp(@Body() dto: SendRegistrationOtpDto) {
     return {
       success: true,
-      message: 'Registered',
-      data: await this.authService.register(dto, extractRequestInfo(req)),
+      message: 'Mã OTP đã được gửi tới email',
+      data: await this.authService.sendRegistrationOtp(dto.email),
+    };
+  }
+
+  @Post('register/email/verify-otp')
+  async verifyRegistrationOtp(@Body() dto: VerifyRegistrationOtpDto) {
+    return {
+      success: true,
+      message: 'Email đã được xác thực',
+      data: await this.authService.verifyRegistrationOtp(
+        dto.email,
+        dto.otpCode,
+      ),
+    };
+  }
+
+  @Post('register')
+  async register(@Body() dto: RegisterDto) {
+    return {
+      success: true,
+      message: 'Tài khoản đã được tạo thành công',
+      data: await this.authService.register(dto),
     };
   }
 

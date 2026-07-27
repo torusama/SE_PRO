@@ -35,6 +35,8 @@ Chạy theo đúng thứ tự tên file:
 2. `012_reminder_notify_emails.sql`: thêm cấu hình email cho nhắc lịch.
 3. `013_admin_audit_entity_key.sql`: thêm `audit_logs.entity_key` để định danh
    entity UUID. Migration chỉ bổ sung cột và index, không xóa dữ liệu cũ.
+4. `014_registration_email_verifications.sql`: thêm trạng thái OTP tạm thời để
+   xác thực email trước khi tạo tài khoản khách hàng.
 
 Áp dụng migration `013` từ thư mục `backend`:
 

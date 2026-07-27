@@ -15,11 +15,11 @@ export interface LoginPayload {
 }
 
 export interface RegisterPayload {
-  role: Role;
   firstName: string;
   lastName: string;
   email: string;
   password: string;
+  registrationToken: string;
 }
 
 export interface AuthResponse {
@@ -67,16 +67,28 @@ export async function loginRequest(
   return normalizeAuthResponse(data);
 }
 
-export async function registerRequest(
-  payload: RegisterPayload,
-): Promise<AuthResponse> {
+export async function registerRequest(payload: RegisterPayload): Promise<void> {
   const fullName = `${payload.firstName} ${payload.lastName}`.trim();
 
-  const { data } = await api.post("/auth/register", {
+  await api.post("/auth/register", {
     fullName,
     email: payload.email,
     password: payload.password,
+    registrationToken: payload.registrationToken,
   });
+}
 
-  return normalizeAuthResponse(data);
+export async function sendRegistrationOtpRequest(email: string): Promise<void> {
+  await api.post("/auth/register/email/send-otp", { email });
+}
+
+export async function verifyRegistrationOtpRequest(
+  email: string,
+  otpCode: string,
+): Promise<string> {
+  const { data } = await api.post("/auth/register/email/verify-otp", {
+    email,
+    otpCode,
+  });
+  return data.data.registrationToken;
 }
