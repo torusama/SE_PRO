@@ -94,7 +94,27 @@ export class RemindersService {
         dto.notifyEmails ?? [],
       ],
     );
+
+    await this.notifyAdmins(row!);
+
     return this.decorate(row!);
+  }
+
+  /** Báo cho toàn bộ admin đang hoạt động biết khách hàng vừa tạo nhắc lịch mới. */
+  private async notifyAdmins(row: ReminderRow) {
+    const title = 'Khách hàng vừa tạo nhắc lịch mới';
+    const message = `${row.title}${
+      row.remindMonth && row.remindDay
+        ? ` — ngày ${row.remindDay}/${row.remindMonth}`
+        : ''
+    }.`;
+    await this.database.query(
+      `INSERT INTO notifications (user_id, type, title, message, related_entity_type, related_entity_id)
+       SELECT user_id, 'reminder_created', $1, $2, 'reminder', $3
+       FROM users
+       WHERE LOWER(role) = 'admin' AND is_active = TRUE AND is_deleted = FALSE`,
+      [title, message, row.id],
+    );
   }
 
   private resolveDate(
@@ -182,14 +202,14 @@ export class RemindersService {
     >(
       `SELECT ${SELECT_FIELDS},
               u.full_name      AS "customerName",
-              u.phone          AS "customerPhone",
+              u.phone_number   AS "customerPhone",
               p.plot_code      AS "plotCode",
-              z.name           AS "zoneName",
+              z.zone_name      AS "zoneName",
               r.last_sent_at   AS "lastNotifiedAt"
        FROM reminders r
        JOIN users u ON u.user_id = r.user_id
        LEFT JOIN plots p ON p.plot_id = r.plot_id
-       LEFT JOIN zones z ON z.zone_id = p.zone_id
+       LEFT JOIN cemetery_zones z ON z.zone_id = p.zone_id
        WHERE ${where}
        ORDER BY r.is_active DESC, r.created_at DESC`,
       params,
