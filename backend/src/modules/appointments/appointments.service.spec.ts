@@ -263,6 +263,10 @@ describe('AppointmentsService', () => {
       expect.stringContaining('UPDATE contracts'),
       [10],
     );
+    expect(client.query).toHaveBeenCalledWith(
+      expect.stringContaining("SET status = 'active'"),
+      [10],
+    );
   });
 
   it('throws not found for missing appointment', async () => {

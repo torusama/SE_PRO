@@ -247,7 +247,7 @@ Admin approve/reject body: `{ "adminNote": "OK" }`
 Approval/rejection are transaction-safe:
 
 - Approve `reserve`: request becomes `approved`; related plots become `reserved`; one `request_approved` notification is created for the customer.
-- Approve `purchase`: request becomes `approved`; related plots become `sold`; one `request_approved` notification is created for the customer.
+- Approve `purchase`: request becomes `approved`; related plots become `reserved` and draft contracts are created; one `request_approved` notification is created for the customer. The plots become `sold` only after the offline signing appointment is completed.
 - Reject: request becomes `rejected`; related pending plots return to `available` only when no other valid request still claims them; one `request_rejected` notification is created for the customer.
 
 Only `pending` requests are valid for new decisions. Existing `submitted` records are also tolerated for backward compatibility. Already approved/rejected requests return an error and do not create duplicate notifications.

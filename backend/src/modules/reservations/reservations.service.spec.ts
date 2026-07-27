@@ -299,7 +299,7 @@ describe('ReservationsService', () => {
       );
     });
 
-    it('approves a purchase request as sold', async () => {
+    it('approves a purchase request as reserved until offline signing', async () => {
       const { client, service } = createService((sql) => {
         if (
           sql.includes('FROM reservation_requests') &&
@@ -340,16 +340,20 @@ describe('ReservationsService', () => {
       });
 
       await expect(service.approve(1, 10)).resolves.toMatchObject({
-        plotStatus: 'sold',
+        plotStatus: 'reserved',
         contracts: [{ id: 99, contractCode: 'HD-2026-10-1' }],
       });
       expect(client.query).toHaveBeenCalledWith(
         expect.stringContaining('UPDATE plots'),
-        [[1], 'sold'],
+        [[1], 'reserved'],
       );
       expect(client.query).toHaveBeenCalledWith(
         expect.stringContaining('INSERT INTO contracts'),
         expect.arrayContaining([expect.stringMatching(/^HD-\d{4}-10-1$/), 10, 7, 1]),
+      );
+      expect(client.query).toHaveBeenCalledWith(
+        expect.stringContaining("'draft'"),
+        expect.any(Array),
       );
     });
 

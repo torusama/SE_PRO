@@ -321,8 +321,9 @@ export class ReservationsService {
       const plots = await this.lockRequestPlots(client, id);
       this.assertPlotsPending(plots);
 
-      const finalPlotStatus =
-        request.request_type === 'purchase' ? 'sold' : 'reserved';
+      // Approval only reserves the plots. A purchase is not completed until the
+      // offline signing appointment has been completed.
+      const finalPlotStatus = 'reserved';
       const plotIds = plots.map((plot) => plot.id);
       const plotUpdate = await client.query(
         `UPDATE plots
@@ -425,8 +426,8 @@ export class ReservationsService {
         `INSERT INTO contracts
            (contract_code, request_id, user_id, plot_id, total_amount,
             created_by, group_contract_code, ownership_source, contract_content,
-            inheritance_content)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, 'purchase', $8, NULL)
+            inheritance_content, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'purchase', $8, NULL, 'draft')
          ON CONFLICT DO NOTHING
          RETURNING contract_id AS id, contract_code AS "contractCode"`,
         [

@@ -340,18 +340,11 @@ export class AppointmentsService {
   ) {
     await client.query(
       `UPDATE contracts
-       SET notes = COALESCE(notes || E'\n', '') || 'Offline signing appointment completed.',
+       SET status = 'active',
+           effective_date = COALESCE(effective_date, CURRENT_DATE),
+           notes = COALESCE(notes || E'\n', '') || 'Offline signing appointment completed.',
            updated_at = NOW()
-       WHERE request_id = $1 AND is_deleted = FALSE`,
-      [requestId],
-    );
-    await client.query(
-      `UPDATE ownership_records own
-       SET transfer_note = COALESCE(transfer_note || E'\n', '') || 'Offline signing appointment completed.'
-       FROM contracts c
-       WHERE own.contract_id = c.contract_id
-         AND c.request_id = $1
-         AND c.is_deleted = FALSE`,
+       WHERE request_id = $1 AND status = 'draft' AND is_deleted = FALSE`,
       [requestId],
     );
   }
