@@ -49,19 +49,37 @@ export class KnowledgeService {
     return row?.version ?? 'kb-v1';
   }
 
-  async getPromptContext() {
+  async getUserPromptContext(userId: number | null) {
     try {
       const rows = await this.database.query<{
         title: string;
         content: string;
+        scope: string;
       }>(
-        `SELECT title, content
+        `SELECT title, content, scope
          FROM ai_knowledge_entries
          WHERE is_active = TRUE
+           AND (scope = 'global' OR (scope = 'user' AND owner_user_id = $1))
          ORDER BY updated_at DESC
-         LIMIT 8`,
+         LIMIT 15`,
+        [userId],
       );
-      return rows.map((row) => `- ${row.title}: ${row.content}`).join('\n');
+
+      const userProfiles = rows
+        .filter((r) => r.scope === 'user')
+        .map((row) => `- ${row.title}: ${row.content}`);
+      const globalRules = rows
+        .filter((r) => r.scope === 'global')
+        .map((row) => `- ${row.title}: ${row.content}`);
+
+      let context = '';
+      if (globalRules.length > 0) {
+        context += `[GLOBAL BUSINESS RULES]\n${globalRules.join('\n')}\n\n`;
+      }
+      if (userProfiles.length > 0) {
+        context += `[USER PSYCHOLOGICAL & PREFERENCE PROFILE]\n${userProfiles.join('\n')}\n\n`;
+      }
+      return context.trim();
     } catch {
       return '';
     }

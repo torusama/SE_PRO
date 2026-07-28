@@ -22,6 +22,8 @@ import { CreateAiDraftDto } from './dto/create-ai-draft.dto';
 import { RecommendPlotsDto } from './dto/recommend-plots.dto';
 import { FeedbackService } from './feedback.service';
 import { ConversationHistoryService } from './conversation-history.service';
+import { ProactiveConciergeDto } from './dto/proactive-concierge.dto';
+import { ProactiveConciergeService } from './proactive-concierge.service';
 
 interface AuthenticatedUser {
   id: number;
@@ -34,6 +36,7 @@ export class AiAgentController {
     private readonly aiAgentOrchestrator: AiAgentOrchestratorService,
     private readonly feedbackService: FeedbackService,
     private readonly conversations: ConversationHistoryService,
+    private readonly proactiveConcierge: ProactiveConciergeService,
   ) {}
 
   @Post('chat')
@@ -46,6 +49,20 @@ export class AiAgentController {
       success: true,
       message: 'AI response generated',
       data: await this.aiAgentOrchestrator.chat(dto, user?.id),
+    };
+  }
+
+  @Post('proactive')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('customer')
+  async proactive(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: ProactiveConciergeDto,
+  ): Promise<{ success: true; message: string; data: unknown }> {
+    return {
+      success: true,
+      message: 'Proactive concierge evaluated',
+      data: await this.proactiveConcierge.initiate(user.id, dto),
     };
   }
 
@@ -128,13 +145,19 @@ export class AiAgentController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   async adminActivity(@Query() query: AdminAiActivityQueryDto) {
-    return { success: true, data: await this.aiAgentService.adminActivity(query) };
+    return {
+      success: true,
+      data: await this.aiAgentService.adminActivity(query),
+    };
   }
 
   @Get('admin/ai-activity/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   async adminActivityOne(@Param('id') id: string) {
-    return { success: true, data: await this.aiAgentService.adminActivityOne(Number(id)) };
+    return {
+      success: true,
+      data: await this.aiAgentService.adminActivityOne(Number(id)),
+    };
   }
 }

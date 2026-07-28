@@ -253,6 +253,8 @@ export class AgentBookingService {
       plotCode: selectedPlot?.plotCode,
       requestedDate:
         input.plan.requirements.requestedDate ?? existing?.requestedDate,
+      quotedPrice: service?.basePrice ?? existing?.quotedPrice,
+      serviceUnit: service?.unit ?? existing?.serviceUnit,
       note: input.plan.requirements.note ?? existing?.note,
     };
 
@@ -384,6 +386,51 @@ export class AgentBookingService {
     if (!pending.serviceTypeId || !pending.plotId || !pending.requestedDate) {
       throw new BadRequestException('Service order information is incomplete');
     }
+    if (!this.isValidFutureDate(pending.requestedDate)) {
+      return {
+        handled: true,
+        intent: 'service_booking',
+        pendingAction: {
+          ...pending,
+          stage: 'collecting',
+          requestedDate: undefined,
+        },
+        assistantMessage:
+          'Ngày thực hiện đã qua hoặc không còn hợp lệ. Bạn chọn một ngày mới để mình kiểm tra và cập nhật đơn dịch vụ nhé.',
+      };
+    }
+    const currentService = await this.resolveServiceType(pending.serviceTypeId);
+    if (!currentService) {
+      throw new BadRequestException(
+        'Dịch vụ này hiện không còn hoạt động. Mình có thể giới thiệu các dịch vụ đang nhận đơn để bạn chọn phương án khác.',
+      );
+    }
+    if (
+      pending.quotedPrice === undefined ||
+      Math.abs(currentService.basePrice - pending.quotedPrice) >= 0.01
+    ) {
+      const previousPrice = pending.quotedPrice;
+      const updatedPending: AgentPendingAction = {
+        ...pending,
+        serviceName: currentService.name,
+        quotedPrice: currentService.basePrice,
+        serviceUnit: currentService.unit,
+      };
+      return {
+        handled: true,
+        intent: 'service_booking',
+        pendingAction: updatedPending,
+        assistantMessage: [
+          previousPrice === undefined
+            ? 'Mình cần bạn xác nhận lại mức giá hiện tại trước khi gửi đơn dịch vụ.'
+            : `Giá dịch vụ **${currentService.name}** đã thay đổi từ **${previousPrice.toLocaleString('vi-VN')} VND** thành **${currentService.basePrice.toLocaleString('vi-VN')} VND/${currentService.unit}**.`,
+          `- Lô áp dụng: **${pending.plotCode}**`,
+          `- Ngày mong muốn: **${pending.requestedDate}**`,
+          '',
+          'Bạn có đồng ý với mức giá mới để mình gửi đơn không?',
+        ].join('\n'),
+      };
+    }
     const result = await this.cemeteryServices.createOrder(userId, {
       serviceTypeId: pending.serviceTypeId,
       plotId: pending.plotId,
@@ -396,7 +443,7 @@ export class AgentBookingService {
     return {
       handled: true,
       intent: 'service_booking',
-      assistantMessage: `Đã gửi đơn dịch vụ${id ? ` **#${id}**` : ''} **${pending.serviceName ?? ''}** cho lô **${pending.plotCode}** vào ngày **${pending.requestedDate}**. Bộ phận phụ trách sẽ tiếp nhận và cập nhật trạng thái cho bạn.`,
+      assistantMessage: `${(result as { reused?: boolean }).reused ? 'Đơn này đã được ghi nhận trước đó' : 'Đã gửi đơn dịch vụ'}${id ? ` **#${id}**` : ''} **${pending.serviceName ?? ''}** cho lô **${pending.plotCode}** vào ngày **${pending.requestedDate}**. Bộ phận phụ trách sẽ tiếp nhận và cập nhật trạng thái cho bạn.`,
     };
   }
 

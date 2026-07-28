@@ -7,10 +7,13 @@ export type AgentToolName =
   | 'estimate_total_cost'
   | 'suggest_bazi_direction'
   | 'get_purchase_process'
-  | 'create_draft_reservation';
+  | 'create_draft_reservation'
+  | 'propose_knowledge_update';
 
 export interface AgentToolContext {
   conversationId?: number | null;
+  sessionId?: string | null;
   messageId?: number | null;
   userId?: number | null;
+  role?: string | null;
 }

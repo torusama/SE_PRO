@@ -31,6 +31,16 @@ describe('AI Agent deterministic requirement extraction', () => {
       needAdjacent: true,
     });
   });
+
+  it('recognizes entrance access as a ranking preference', () => {
+    expect(
+      extractDeterministicRequirements(
+        'Mình vẫn giữ ngân sách cũ nhưng ưu tiên lô gần cổng hơn',
+      ),
+    ).toMatchObject({
+      preferNearEntrance: true,
+    });
+  });
 });
 
 describe('AI Agent pending booking reply resolution', () => {

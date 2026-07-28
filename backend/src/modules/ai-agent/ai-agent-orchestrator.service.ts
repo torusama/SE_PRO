@@ -108,6 +108,12 @@ export function extractDeterministicRequirements(
   const preferredDirection = directions.find((direction) =>
     normalized.includes(direction.toLowerCase()),
   );
+  const rejectsNearEntrance =
+    /không\s+(?:cần|muốn|ưu tiên)\s+(?:gần|sát)\s+cổng/i.test(normalized);
+  const prefersNearEntrance =
+    /(?:gần|sát)\s+cổng|cổng\s+(?:chính|phụ)|dễ\s+(?:đi|tiếp cận|di chuyển)/i.test(
+      normalized,
+    );
   return {
     budgetMax: budgets.length ? Math.max(...budgets) : undefined,
     numberOfPlots,
@@ -116,6 +122,11 @@ export function extractDeterministicRequirements(
     needAdjacent: rejectsAdjacency
       ? false
       : requestsAdjacency
+        ? true
+        : undefined,
+    preferNearEntrance: rejectsNearEntrance
+      ? false
+      : prefersNearEntrance
         ? true
         : undefined,
     plotType: /gia đình|dòng họ|dòng tộc|gia tộc|khu mộ họ/i.test(message)
@@ -151,10 +162,8 @@ export function resolvePendingBookingReply(
     pendingAction.stage === 'collecting' &&
     !pendingAction.requestType
   ) {
-    const politePrefix =
-      '(?:(?:minh|toi|em|anh|chi)\\s+(?:muon|chon)\\s+)?';
-    const politeSuffix =
-      '(?:\\s+(?:di|nhe|luon|giup\\s+(?:minh|toi|em)))?';
+    const politePrefix = '(?:(?:minh|toi|em|anh|chi)\\s+(?:muon|chon)\\s+)?';
+    const politeSuffix = '(?:\\s+(?:di|nhe|luon|giup\\s+(?:minh|toi|em)))?';
     const purchaseReply = new RegExp(
       `^${politePrefix}(?:gui\\s+yeu\\s+cau(?:\\s+mua)?|yeu\\s+cau\\s+mua|mua(?:\\s+lo)?|dat\\s+mua)${politeSuffix}$`,
     );
@@ -215,7 +224,7 @@ export class AiAgentOrchestratorService {
     private readonly recommendations: PlotRecommendationService,
     private readonly knowledge: KnowledgeService,
     private readonly booking: AgentBookingService,
-  ) { }
+  ) {}
 
   async chat(dto: ChatDto, userId?: number | null) {
     const sessionId = dto.sessionId?.trim() || `SES-${randomUUID()}`;
@@ -357,6 +366,9 @@ export class AiAgentOrchestratorService {
         plan,
         conversationId: conversation?.id ?? null,
         userMessageId,
+        userId: userId ?? null,
+        role: 'customer',
+        sessionId: sessionId,
       });
       let recommendationResult = execution.recommendationResult;
       let alternativeMessage = '';
@@ -459,6 +471,7 @@ You are the planning brain of the concierge. Read the entire conversation and re
 - Omit optional fields that are not part of the active request. Never emit 0 as a placeholder. Do not set budgetMin unless the active request explicitly has a lower bound such as "từ" or "ít nhất".
 - Choose rank_plot_options when the active request has a maximum budget. Choose browse_available_plots when the customer wants real available suggestions but has no active maximum budget. Choose get_service_suggestions when the customer only wants to browse cemetery maintenance services such as cleaning, flowers, or incense. Choose prepare_plot_request when they want the Agent to create a request for selected/recommended plots. Choose prepare_service_order when they want to book a service. Choose get_purchase_process for process questions. Choose suggest_bazi_direction when the customer provides a birth year or birth date for a NEW Bazi calculation (not a follow-up about previous results).
 - CRITICAL: For ALL of the following situations, use action=none with intent=general_question: follow-up questions about previous results ("tại sao?", "giải thích thêm", "tư vấn sâu hơn"), deeper consultation requests, opinions, comparisons of previously shown options, greetings, casual conversation, emotional support, questions about cemetery practices/culture, ANY message that does not require calling a backend tool. This is the DEFAULT for conversational turns. The agent composer will use the full conversation history to generate a natural, contextual response.
+- Stay within Vĩnh Phúc Viên cemetery planning. Judge scope semantically from the full conversation; for a mixed request, plan only the supported cemetery-related portion.
 - Only set needsClarification=true when the user's message genuinely requires a HARD constraint (like budget or plot count) that is missing and cannot be inferred from conversation history. NEVER set needsClarification=true for conversational follow-ups, opinions, or deeper explanations.
 - A client action is trusted UI context, not user-authored prose. START_PLOT_REQUEST always means plot_request + prepare_plot_request. START_SERVICE_ORDER always means service_booking + prepare_service_order.
 - If a pending action is present, continue it. Extract only newly supplied missing fields. Use confirm_pending_action only for an explicit affirmative confirmation of the final summary; use cancel_pending_action only when the customer explicitly cancels. Never infer confirmation from a new question.
@@ -467,6 +480,7 @@ You are the planning brain of the concierge. Read the entire conversation and re
 - For service booking, extract serviceQuery, selectedPlotCode, requestedDate (YYYY-MM-DD), and optional note. Today is ${new Date().toISOString().slice(0, 10)}.
 - A new vague request to browse or introduce plots requires discovery. Ask one natural question that establishes approximate total budget and whether the customer needs one plot or several adjacent plots.
 - Treat "dòng tộc", "dòng họ", "gia tộc", "khu mộ họ", and "lô gia đình" as plotType=family. A single dedicated family plot is valid; when the customer asks for several plots, set needAdjacent=true and preserve the requested count. Never replace family intent with plotType=single.
+- Set preferNearEntrance=true when the customer asks for "gần cổng", easier access from an entrance, or refines a previous result toward the gate. This is a ranking preference; never ask the customer to interpret canvas coordinates.
 - Do not default numberOfPlots or browse immediately unless the customer explicitly says "chọn đại", "lô nào cũng được", "không cần hỏi", or equivalent, or the missing requirements are already known from conversation history.
 - Ask at most one natural clarification per turn. Never return a long checklist.
 - Never provide cemetery facts in the plan and never invent tool results.
@@ -542,7 +556,11 @@ Trusted client action: ${JSON.stringify(bookingContext?.clientAction ?? null)}`,
     ) {
       return 'Bạn cho mình biết ngày sinh để mình tham khảo hướng theo Bazi nhé. Đây chỉ là gợi ý văn hóa, không phải kết luận bắt buộc.';
     }
-    if (plan.action === 'none' && plan.needsClarification && plan.clarificationQuestion) {
+    if (
+      plan.action === 'none' &&
+      plan.needsClarification &&
+      plan.clarificationQuestion
+    ) {
       return plan.clarificationQuestion;
     }
     return '';
@@ -589,6 +607,9 @@ Trusted client action: ${JSON.stringify(bookingContext?.clientAction ?? null)}`,
     plan: AgentPlan;
     conversationId: number | null;
     userMessageId: number | null;
+    userId?: number | null;
+    role?: string | null;
+    sessionId?: string | null;
   }): Promise<AgentPlanExecution> {
     if (input.plan.action === 'none') {
       return {
@@ -608,7 +629,13 @@ Trusted client action: ${JSON.stringify(bookingContext?.clientAction ?? null)}`,
     const startedAt = Date.now();
     const externalCallId = `planned-${randomUUID()}`;
     try {
-      const output = await this.tools.execute(toolName, args);
+      const output = await this.tools.execute(toolName, args, {
+        conversationId: input.conversationId,
+        messageId: input.userMessageId,
+        userId: input.userId,
+        role: input.role,
+        sessionId: input.sessionId,
+      });
       await this.logToolCall({
         conversationId: input.conversationId,
         messageId: input.userMessageId,
@@ -669,8 +696,8 @@ Trusted client action: ${JSON.stringify(bookingContext?.clientAction ?? null)}`,
       input.plan.action === 'none'
         ? 'No authoritative tool was needed. Answer conversationally using ONLY the conversation history as your knowledge source. You may reference any facts, recommendations, Bazi results, plot details, or service info that appeared in PREVIOUS assistant messages in this conversation. Do not state NEW plot, service, price, availability, process, or legal facts beyond what was already discussed.'
         : `The backend executed ${input.plan.action}. The following JSON is the complete authoritative result. Use only these facts and never expose raw JSON or internal IDs:\n${JSON.stringify(
-          this.redactToolOutput(input.toolOutput),
-        )}`;
+            this.redactToolOutput(input.toolOutput),
+          )}`;
     const messages: NvidiaMessage[] = [
       {
         role: 'system',
@@ -682,6 +709,17 @@ ${authoritativeContext}
 Write the final helpful, highly consultative response now.
 - CRITICAL LANGUAGE RULE: Detect the language of the user's latest input message. If the user input is in English, write your ENTIRE response in fluent, natural English. If in Vietnamese, write in natural Vietnamese.
 - Act as an exceptionally intelligent, empathetic, and culturally grounded AI Concierge (with the conversational depth of ChatGPT/Gemini/Claude).
+- RESPONSE CONTRACT FOR EVERY SUBSTANTIVE TURN:
+  1. Answer the user's actual question immediately; never hide the answer behind another question.
+  2. Add useful consultation: explain the relevant criteria, practical meaning, trade-offs, risk or limitation, and your grounded recommendation.
+  3. When multiple grounded options exist, compare them proactively instead of merely listing them.
+  4. Recommend the safest or strongest next step and explain why it is the best next move for this customer.
+  5. End with exactly ONE context-specific question that advances the consultation. Offer two or three relevant choices when useful. Never end with a generic "Bạn cần hỗ trợ gì thêm?".
+- Aim for 100–220 Vietnamese words for substantive follow-ups, 220–380 words for plot comparisons, and 140–260 words for service/process advice. Brief confirmations may remain short.
+- For service advice, explain who the service fits, the grounded listed price/unit, the owned-plot or date information still needed, and the confirmation step before an order is created.
+- For purchase/reservation guidance, distinguish what the system can prepare from what still requires customer confirmation, current availability, or staff processing.
+- For greetings, capability questions, vague openings, and short replies, write a fresh context-aware response yourself. Never reuse a canned welcome or sales script. Use the conversation and account context when available, briefly establish the most useful value you can provide, then ask exactly one intelligent question that helps the customer move forward.
+- Treat short replies such as quantities, budgets, dates, directions, plot codes, "ok", or phrases like "5 lô 100 triệu" as contextual natural-language input. Resolve them from conversation history and never reject them merely because they lack cemetery keywords.
 - CONVERSATION MEMORY (CRITICAL): Read the ENTIRE conversation history above carefully before responding. You MUST:
   1. Remember ALL previous topics, recommendations, Bazi analyses, plot options, services, and decisions from this conversation.
   2. When the user asks a follow-up question (e.g., "tại sao?", "giải thích thêm", "tư vấn sâu hơn", "so sánh 2 cái đó"), answer by referencing SPECIFIC details from the conversation (plot codes, prices, directions, Bazi elements, etc.) — NOT by generating a generic template.
@@ -694,7 +732,11 @@ Write the final helpful, highly consultative response now.
   3. Never produce raw markdown tables (do not use pipe symbols |). Use clean bullet points and bold headers when structuring lists.
   4. Always maintain a warm, respectful, empathetic, and professional tone suitable for cemetery and memorial planning.
   5. End with a natural, open-ended consultative question that invites further discussion or guides them to the next helpful step.
-- For plot recommendations, explain grounded trade-offs and compare options clearly (aim for 180–320 Vietnamese words).
+- For plot recommendations, explain grounded trade-offs and compare options clearly (aim for 220–380 Vietnamese words).
+- INTERNAL MAP DATA: Never reveal mapX, mapY, mapWidth, mapHeight, numeric canvas distances, or ask the customer to infer where a gate lies. Use only each option's accessSummary for entrance proximity. If no accessSummary exists, say the map does not yet provide a verified access comparison and offer the interactive map or staff confirmation.
+- PRICE GUIDANCE: inventoryPriceContext is a comparison against matching currently available listings inside Vĩnh Phúc Viên only. Explain listed total, per-plot price for groups, and lower/middle/higher position within that inventory when useful. Never present it as the external real-estate market, an appraisal, historical trend, or investment forecast.
+- SALES DEPTH: Introduce the strongest plot in customer-friendly language, explain practical benefits and trade-offs, proactively contrast alternatives, state what still needs verification, and make a reasoned recommendation for a customer who may know nothing about cemetery plots. Do not simply dump a table of fields.
+- SCOPE BOUNDARY: You, the LLM, decide scope from semantic meaning and the full conversation—never from keyword matching. Focus on Vĩnh Phúc Viên cemetery plots, maps, prices, comparisons, cultural direction guidance, purchase/reservation workflow, owned-plot context, order/request status, and memorial-care services. For a genuinely unrelated request, respond briefly and naturally, explain what you can help with, and ask one relevant redirecting question. For a mixed request, answer the supported part and briefly decline the rest.
 - Do not state ungrounded plot facts or turn an "available" status into a claim that a plot is ready for deposit without user request.
 - Do not say that you are waiting, searching later, or about to call a tool.`,
       },
@@ -750,13 +792,7 @@ Write the final helpful, highly consultative response now.
       );
     }
     if (input.suggestedServices.length) {
-      return `Các dịch vụ đang hoạt động gồm: ${input.suggestedServices
-        .slice(0, 6)
-        .map(
-          (service) =>
-            `${service.name} (${service.basePrice.toLocaleString('vi-VN')} VND/${service.unit})`,
-        )
-        .join('; ')}.`;
+      return this.describeServices(input.suggestedServices);
     }
     if (input.baziSuggestion) {
       const bazi = input.baziSuggestion;
@@ -770,14 +806,17 @@ Write the final helpful, highly consultative response now.
 
       return `Dưới đây là phân tích Bát Tự & Phong Thủy Âm Trạch cho gia chủ:
 
-- **Tuổi Can Chi:** ${bazi.yearPillar || 'Tham khảo'} ${bazi.birthHourBranch ? `(Giờ ${bazi.birthHourBranch})` : ''
-        }
-- **Mệnh Nạp Âm:** ${bazi.napAmName ? `${bazi.napAmName} (${bazi.napAmMeaning})` : ''
-        } - Mệnh **${bazi.element || 'Âm Trạch'}**
-- **Cung Mệnh:** ${bazi.cungMenh
+- **Tuổi Can Chi:** ${bazi.yearPillar || 'Tham khảo'} ${
+        bazi.birthHourBranch ? `(Giờ ${bazi.birthHourBranch})` : ''
+      }
+- **Mệnh Nạp Âm:** ${
+        bazi.napAmName ? `${bazi.napAmName} (${bazi.napAmMeaning})` : ''
+      } - Mệnh **${bazi.element || 'Âm Trạch'}**
+- **Cung Mệnh:** ${
+        bazi.cungMenh
           ? `Cung **${bazi.cungMenh}** (${bazi.tuMenh})`
           : 'Bát Trạch'
-        }
+      }
 
 **Hướng mộ gợi ý:**
 - **Hướng Tốt (Ưu tiên chọn):** ${goodDirs}
@@ -854,15 +893,7 @@ Bạn có muốn mình tiếp tục tìm các lô nghĩa trang phù hợp với 
       assistantMessage = `${process.title}: ${process.content}`;
     } else if (input.intent === 'service_suggestions') {
       const services = await this.recommendations.getServiceSuggestions();
-      assistantMessage = services.length
-        ? `Các dịch vụ đang hoạt động gồm: ${services
-          .slice(0, 5)
-          .map(
-            (service) =>
-              `${service.name} (${service.basePrice.toLocaleString('vi-VN')} VND/${service.unit})`,
-          )
-          .join('; ')}.`
-        : 'Hiện chưa có dịch vụ đang hoạt động để đề xuất.';
+      assistantMessage = this.describeServices(services);
     }
 
     return this.finish({
@@ -894,6 +925,7 @@ Bạn có muốn mình tiếp tục tìm các lô nghĩa trang phù hợp với 
     fallbackReason?: string;
   }) {
     const knowledgeVersion = await this.safeKnowledgeVersion();
+    const assistantMessage = input.assistantMessage.trim();
     const metadata = {
       llmModel: this.nvidia.model,
       rankerVersion:
@@ -931,24 +963,24 @@ Bạn có muốn mình tiếp tục tìm các lô nghĩa trang phù hợp với 
     ];
     const messageId = input.conversation
       ? await this.saveMessage(
-        input.conversation.id,
-        'assistant',
-        input.assistantMessage,
-        input.intent,
-        input.requirements,
-        {
-          agentMetadata: metadata,
-          recommendations,
-          suggestedServices,
-          baziSuggestion,
-          actions,
-        },
-      )
+          input.conversation.id,
+          'assistant',
+          assistantMessage,
+          input.intent,
+          input.requirements,
+          {
+            agentMetadata: metadata,
+            recommendations,
+            suggestedServices,
+            baziSuggestion,
+            actions,
+          },
+        )
       : null;
     return {
       sessionId: input.sessionId,
       messageId,
-      assistantMessage: input.assistantMessage,
+      assistantMessage,
       intent: input.intent,
       requirements: input.requirements,
       recommendations,
@@ -977,12 +1009,14 @@ Bạn có muốn mình tiếp tục tìm các lô nghĩa trang phù hợp với 
       result.requirements.numberOfPlots
         ? `${result.requirements.numberOfPlots} lô`
         : '',
+      result.requirements.preferNearEntrance ? 'ưu tiên gần cổng' : '',
     ].filter(Boolean);
     const facts = [
       `thuộc ${best.zoneName}`,
       `giá lô ${best.plotCost.toLocaleString('vi-VN')} VND`,
       best.totalAreaSqm > 0 ? `tổng diện tích ${best.totalAreaSqm} m²` : '',
       best.directions.length ? `hướng ${best.directions.join(', ')}` : '',
+      best.accessSummary ?? '',
     ].filter(Boolean);
     const reasons = best.reasons.slice(0, 3);
     const tradeOffs = best.tradeOffs.slice(0, 2);
@@ -1012,8 +1046,14 @@ Bạn có muốn mình tiếp tục tìm các lô nghĩa trang phù hợp với 
         const tradeOff =
           option.tradeOffs[0] ??
           'cần kiểm tra trực tiếp vị trí, hướng và kích thước trên bản đồ';
-        return `- **${index + 1}. ${option.plotCodes.join(', ')}:** ${option.zoneName}, ${option.plotCost.toLocaleString('vi-VN')} VND, ${option.totalAreaSqm.toLocaleString('vi-VN')} m²${option.directions.length ? `, hướng ${option.directions.join(', ')}` : ''}; ${suitability}; ${relativePrice}${relativeArea ? `, ${relativeArea}` : ''}. Cân nhắc: ${tradeOff}.`;
+        const perPlotPrice = Math.round(
+          option.plotCost / Math.max(option.plotIds.length, 1),
+        );
+        return `- **${index + 1}. ${option.plotCodes.join(', ')}:** ${option.zoneName}, tổng ${option.plotCost.toLocaleString('vi-VN')} VND (khoảng ${perPlotPrice.toLocaleString('vi-VN')} VND/lô), ${option.totalAreaSqm.toLocaleString('vi-VN')} m²${option.directions.length ? `, hướng ${option.directions.join(', ')}` : ''}${option.accessSummary ? `, ${option.accessSummary.toLowerCase()}` : ''}; ${suitability}; ${relativePrice}${relativeArea ? `, ${relativeArea}` : ''}. Cân nhắc: ${tradeOff}.`;
       });
+    const priceContext = result.inventoryPriceContext
+      ? `Trong ${result.inventoryPriceContext.candidateCount} lô đang trống khớp bộ lọc hiện tại, giá niêm yết dao động từ ${result.inventoryPriceContext.minimumListedPrice.toLocaleString('vi-VN')} đến ${result.inventoryPriceContext.maximumListedPrice.toLocaleString('vi-VN')} VND/lô, trung vị khoảng ${result.inventoryPriceContext.medianListedPrice.toLocaleString('vi-VN')} VND/lô. Đây là so sánh trong quỹ lô hiện có, không phải định giá thị trường bên ngoài.`
+      : '';
 
     return [
       `Mình đã đối chiếu quỹ đất đang trống${criteria.length ? ` theo ${criteria.join(', ')}` : ''} và chọn ra ${result.recommendations.length} phương án để bạn cân nhắc.`,
@@ -1027,10 +1067,33 @@ Bạn có muốn mình tiếp tục tìm các lô nghĩa trang phù hợp với 
       comparisons.length > 1
         ? `**So sánh nhanh các phương án:**\n${comparisons.join('\n')}`
         : '',
+      priceContext,
       'Theo các tiêu chí hiện tại, mình ưu tiên phương án 1 vì có điểm phù hợp tổng thể cao nhất. Bạn muốn giữ ưu tiên hiện tại, chuyển sang phương án tiết kiệm hơn hay tạo yêu cầu cho phương án đã chọn?',
     ]
       .filter(Boolean)
       .join('\n\n');
+  }
+
+  private describeServices(services: SuggestedService[]) {
+    if (!services.length) {
+      return 'Hiện chưa có dịch vụ đang hoạt động để đề xuất. Bạn muốn mình kiểm tra lại sau hay chuyển sang tư vấn lô và quy trình chăm sóc phù hợp?';
+    }
+    const options = services.slice(0, 5);
+    const cheapest = [...options].sort(
+      (left, right) => left.basePrice - right.basePrice,
+    )[0];
+    return [
+      `Mình đã đối chiếu danh mục đang hoạt động và chọn ${options.length} dịch vụ để bạn dễ cân nhắc:`,
+      options
+        .map(
+          (service, index) =>
+            `- **${index + 1}. ${service.name}:** ${service.basePrice.toLocaleString('vi-VN')} VND/${service.unit}.${service.description ? ` ${service.description}` : ''}`,
+        )
+        .join('\n'),
+      `**Gợi ý chọn:** nếu ưu tiên chi phí, **${cheapest.name}** hiện có mức niêm yết thấp nhất trong nhóm trên. Nếu mục tiêu là chăm sóc định kỳ hoặc chuẩn bị cho một dịp tưởng niệm cụ thể, mình sẽ ưu tiên dịch vụ theo tần suất, nội dung thực hiện và ngày bạn mong muốn thay vì chỉ nhìn giá.`,
+      'Khi bạn chọn dịch vụ, mình sẽ đối chiếu lô thuộc tài khoản, hỏi ngày thực hiện còn thiếu, báo lại chi phí và chỉ gửi đơn sau bước xác nhận cuối.',
+      `Bạn muốn mình phân tích kỹ **${options[0].name}**, so sánh hai dịch vụ, hay bắt đầu đặt cho một lô đang sở hữu?`,
+    ].join('\n\n');
   }
 
   private contextualizeClarificationReply(
@@ -1248,11 +1311,16 @@ Bạn có muốn mình tiếp tục tìm các lô nghĩa trang phù hợp với 
 
   private redactToolOutput<T>(value: T): T {
     if (!value || typeof value !== 'object') return value;
-    const serialized = JSON.stringify(value, (key, item) =>
-      /owner|phone|email|address|cccd|identity/i.test(key)
+    const serialized = JSON.stringify(value, (key, item) => {
+      if (
+        /^(?:mapX|mapY|mapWidth|mapHeight|entranceDistanceMapUnits)$/i.test(key)
+      ) {
+        return undefined;
+      }
+      return /owner|phone|email|address|cccd|identity/i.test(key)
         ? '[REDACTED]'
-        : item,
-    );
+        : item;
+    });
     return JSON.parse(serialized) as T;
   }
 }

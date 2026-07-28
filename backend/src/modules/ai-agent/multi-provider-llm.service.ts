@@ -110,9 +110,7 @@ export class MultiProviderLlmService {
           toolChoice,
           options,
         );
-        this.logger.log(
-          `[Multi-LLM] Provider ${provider.name} succeeded`,
-        );
+        this.logger.log(`[Multi-LLM] Provider ${provider.name} succeeded`);
         return result;
       } catch (error) {
         lastError = error;

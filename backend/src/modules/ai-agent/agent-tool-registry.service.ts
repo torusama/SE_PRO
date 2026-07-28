@@ -9,6 +9,8 @@ import { KnowledgeService } from './knowledge.service';
 import { PlotRecommendationService } from './plot-recommendation.service';
 import { AgentToolName } from './tools/agent-tool.types';
 
+import { AutonomousLearningService } from './autonomous-learning.service';
+
 @Injectable()
 export class AgentToolRegistryService {
   private readonly allowedTools = new Set<AgentToolName>([
@@ -21,12 +23,14 @@ export class AgentToolRegistryService {
     'suggest_bazi_direction',
     'get_purchase_process',
     'create_draft_reservation',
+    'propose_knowledge_update',
   ]);
 
   constructor(
     private readonly recommendations: PlotRecommendationService,
     private readonly bazi: BaziRuleService,
     private readonly knowledge: KnowledgeService,
+    private readonly autoLearning: AutonomousLearningService,
   ) {}
 
   isAllowed(name: string): name is AgentToolName {
@@ -45,11 +49,35 @@ export class AgentToolRegistryService {
     }
   }
 
-  async execute(name: string, args: Record<string, unknown>) {
+  async execute(
+    name: string,
+    args: Record<string, unknown>,
+    context: import('./tools/agent-tool.types').AgentToolContext = {},
+  ) {
     if (!this.isAllowed(name)) {
       throw new BadRequestException(`Unknown AI tool: ${name}`);
     }
     switch (name) {
+      case 'propose_knowledge_update':
+        return this.autoLearning.processProposal(
+          {
+            category: String(args.category),
+            title: String(args.title),
+            content: String(args.content),
+            knowledgeType: String(args.knowledgeType),
+            requestedScope: String(args.requestedScope),
+            sourceMessageId: args.sourceMessageId
+              ? String(args.sourceMessageId)
+              : undefined,
+            reason: String(args.reason),
+          },
+          {
+            userId: context.userId,
+            role: context.role,
+            sessionId: context.sessionId,
+            messageId: context.messageId,
+          },
+        );
       case 'search_available_plots':
         return {
           candidates: await this.recommendations.searchAvailablePlots(
@@ -85,6 +113,10 @@ export class AgentToolRegistryService {
           needAdjacent:
             typeof args.needAdjacent === 'boolean'
               ? args.needAdjacent
+              : undefined,
+          preferNearEntrance:
+            typeof args.preferNearEntrance === 'boolean'
+              ? args.preferNearEntrance
               : undefined,
         });
       case 'get_service_suggestions':
@@ -140,6 +172,10 @@ export class AgentToolRegistryService {
         typeof args.needAdjacent === 'boolean'
           ? args.needAdjacent
           : numberOfPlots > 1,
+      preferNearEntrance:
+        typeof args.preferNearEntrance === 'boolean'
+          ? args.preferNearEntrance
+          : undefined,
     };
   }
 

@@ -30,9 +30,7 @@ describe('MultiProviderLlmService', () => {
     jest.spyOn(openAiSecondary, 'isConfigured').mockReturnValue(false);
     jest.spyOn(nvidiaService, 'isConfigured').mockReturnValue(false);
 
-    await expect(service.chat([])).rejects.toThrow(
-      ServiceUnavailableException,
-    );
+    await expect(service.chat([])).rejects.toThrow(ServiceUnavailableException);
   });
 
   it('falls back through Primary OpenAI (20B) -> Secondary OpenAI (120B) -> NVIDIA NIM', async () => {
@@ -89,7 +87,9 @@ describe('MultiProviderLlmService', () => {
     jest.spyOn(nvidiaService, 'isConfigured').mockReturnValue(true);
 
     jest.spyOn(openAiPrimary, 'chat');
-    jest.spyOn(openAiSecondary, 'chat').mockResolvedValue(mockSecondaryResponse);
+    jest
+      .spyOn(openAiSecondary, 'chat')
+      .mockResolvedValue(mockSecondaryResponse);
 
     const result = await service.chat([]);
 

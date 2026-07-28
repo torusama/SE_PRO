@@ -29,7 +29,8 @@ describe('OpenAiService', () => {
 
   it('parses multiple keys from OPENAI_API_KEY multiline / comma separated string', () => {
     jest.spyOn(configService, 'get').mockImplementation((key: string) => {
-      if (key === 'ai.openai.apiKey') return '{\n  sk-key1\n  sk-key2\n  sk-key3\n}';
+      if (key === 'ai.openai.apiKey')
+        return '{\n  sk-key1\n  sk-key2\n  sk-key3\n}';
       if (key === 'ai.enableLlm') return true;
       return null;
     });
@@ -66,7 +67,9 @@ describe('OpenAiService', () => {
       ok: true,
       status: 200,
       json: async () => ({
-        choices: [{ message: { role: 'assistant', content: 'Success with key2' } }],
+        choices: [
+          { message: { role: 'assistant', content: 'Success with key2' } },
+        ],
       }),
     });
 
@@ -74,9 +77,13 @@ describe('OpenAiService', () => {
 
     expect(mockFetch).toHaveBeenCalledTimes(2);
     // First call uses sk-key1
-    expect(mockFetch.mock.calls[0][1].headers.Authorization).toBe('Bearer sk-key1');
+    expect(mockFetch.mock.calls[0][1].headers.Authorization).toBe(
+      'Bearer sk-key1',
+    );
     // Second call automatically switches to sk-key2
-    expect(mockFetch.mock.calls[1][1].headers.Authorization).toBe('Bearer sk-key2');
+    expect(mockFetch.mock.calls[1][1].headers.Authorization).toBe(
+      'Bearer sk-key2',
+    );
     expect(result.choices[0].message.content).toBe('Success with key2');
   });
 });

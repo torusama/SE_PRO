@@ -61,6 +61,10 @@ export class RecommendPlotsDto {
   needAdjacent?: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  preferNearEntrance?: boolean;
+
+  @IsOptional()
   @IsDateString()
   birthDate?: string;
 

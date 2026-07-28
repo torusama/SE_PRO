@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { DatabaseService } from '../../database/database.service';
 import { AdminAiActivityQueryDto } from './dto/admin-ai-activity-query.dto';
 import { paginate } from '../../common/interfaces/paginated-response.interface';

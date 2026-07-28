@@ -73,8 +73,7 @@ export class OpenAiService {
         options.temperature ??
         this.config.get<number>('ai.nvidia.temperature') ??
         0.2,
-      max_tokens:
-        this.config.get<number>('ai.nvidia.maxTokens') ?? 2048,
+      max_tokens: this.config.get<number>('ai.nvidia.maxTokens') ?? 2048,
       tools: tools.length > 0 ? tools : undefined,
       tool_choice: tools.length > 0 ? toolChoice : undefined,
     };
@@ -139,7 +138,11 @@ export class OpenAiService {
           );
           this.logger.warn(
             `OpenAI attempt ${attempt + 1}/${candidates.length} failed on key slot ${candidate.slot + 1}; ${
-              isTimeout ? 'timeout' : error instanceof Error ? error.message : String(error)
+              isTimeout
+                ? 'timeout'
+                : error instanceof Error
+                  ? error.message
+                  : String(error)
             }`,
           );
 
@@ -243,7 +246,7 @@ export class OpenAiService {
     const isAuthFailure = error?.status === 401 || error?.status === 403;
     const cooldownMs = isAuthFailure
       ? invalidKeyCooldownMs
-      : error?.retryAfterMs ?? normalCooldownMs;
+      : (error?.retryAfterMs ?? normalCooldownMs);
     this.cooldownUntil.set(apiKey, Date.now() + cooldownMs);
   }
 

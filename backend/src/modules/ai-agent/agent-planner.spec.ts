@@ -17,6 +17,7 @@ describe('agent planner', () => {
           budgetMax: 300_000_000,
           numberOfPlots: 2,
           needAdjacent: true,
+          preferNearEntrance: true,
         }),
       ),
     ).toEqual({
@@ -29,6 +30,7 @@ describe('agent planner', () => {
         budgetMax: 300_000_000,
         numberOfPlots: 2,
         needAdjacent: true,
+        preferNearEntrance: true,
       },
     });
   });

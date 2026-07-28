@@ -5,6 +5,7 @@ import { PlotAdjacencyService } from '../plots/plot-adjacency.service';
 import { RecommendPlotsDto } from './dto/recommend-plots.dto';
 import { BaziRuleService } from './bazi-rule.service';
 import { PlotRankerClient } from './plot-ranker.client';
+import { calculatePlotEntranceAccess } from './cemetery-map-access';
 import {
   AgentRequirements,
   PlotCandidate,
@@ -24,11 +25,15 @@ interface PlotRow extends QueryResultRow {
   areaSqm: number | string | null;
   rowNumber: string | null;
   columnNumber: string | null;
+  description: string | null;
   mapX: number | string | null;
   mapY: number | string | null;
   mapWidth: number | string | null;
   mapHeight: number | string | null;
 }
+
+const NEAR_ENTRANCE_MAX_DISTANCE = 420;
+const MODERATE_ENTRANCE_MAX_DISTANCE = 800;
 
 interface ServiceRow extends QueryResultRow {
   id: number;
@@ -69,14 +74,14 @@ export class PlotRecommendationService {
 
     const candidates = await this.searchAvailablePlots(dto);
     const optionGroups = this.buildOptionGroups(
-      candidates,
+      this.orderCandidatesForGrouping(candidates, dto),
       dto.numberOfPlots,
       dto.needAdjacent ?? dto.numberOfPlots > 1,
       dto.budgetMax,
     );
     let recommendations = optionGroups
       .map((plots, index) => this.toRecommendation(plots, dto, index))
-      .sort((a, b) => b.score - a.score || a.plotCost - b.plotCost)
+      .sort((left, right) => this.compareRecommendations(left, right, dto))
       .slice(0, 20);
 
     let rankerVersion = 'rule-based-v1';
@@ -99,7 +104,7 @@ export class PlotRecommendationService {
           ...option,
           score: scores.get(option.optionId) ?? option.score,
         }))
-        .sort((a, b) => b.score - a.score || a.plotCost - b.plotCost);
+        .sort((left, right) => this.compareRecommendations(left, right, dto));
       rankerVersion = prediction.modelVersion;
       fallbackUsed = false;
     }
@@ -121,6 +126,7 @@ export class PlotRecommendationService {
       recommendations,
       suggestedServices: [],
       baziSuggestion,
+      inventoryPriceContext: this.buildInventoryPriceContext(candidates),
       rankerVersion,
       fallbackUsed,
     };
@@ -151,14 +157,14 @@ export class PlotRecommendationService {
     };
     const candidates = await this.searchAvailablePlots(query);
     const optionGroups = this.buildOptionGroups(
-      candidates,
+      this.orderCandidatesForGrouping(candidates, query),
       numberOfPlots,
       query.needAdjacent ?? numberOfPlots > 1,
       Number.MAX_SAFE_INTEGER,
     );
     const recommendations = optionGroups
       .map((plots, index) => this.toRecommendation(plots, query, index, false))
-      .sort((a, b) => b.score - a.score || a.plotCost - b.plotCost)
+      .sort((left, right) => this.compareRecommendations(left, right, query))
       .slice(0, 3)
       .map((option, index) => ({
         ...option,
@@ -173,6 +179,7 @@ export class PlotRecommendationService {
       },
       recommendations,
       suggestedServices: [],
+      inventoryPriceContext: this.buildInventoryPriceContext(candidates),
       rankerVersion: 'availability-browse-v1',
       fallbackUsed: false,
     };
@@ -218,6 +225,7 @@ export class PlotRecommendationService {
               zone_name AS "zoneName", price::float, status, direction,
               plot_type AS "plotType", area_sqm::float AS "areaSqm",
               row_number AS "rowNumber", column_number AS "columnNumber",
+              description,
               map_x::float AS "mapX", map_y::float AS "mapY",
               map_width::float AS "mapWidth", map_height::float AS "mapHeight"
        FROM vw_plots_map
@@ -263,6 +271,7 @@ export class PlotRecommendationService {
               zone_name AS "zoneName", price::float, status, direction,
               plot_type AS "plotType", area_sqm::float AS "areaSqm",
               row_number AS "rowNumber", column_number AS "columnNumber",
+              description,
               map_x::float AS "mapX", map_y::float AS "mapY",
               map_width::float AS "mapWidth", map_height::float AS "mapHeight"
        FROM vw_plots_map
@@ -422,6 +431,20 @@ export class PlotRecommendationService {
     return results;
   }
 
+  private orderCandidatesForGrouping(
+    candidates: PlotCandidate[],
+    requirements: Pick<RecommendPlotsDto, 'preferNearEntrance'>,
+  ) {
+    if (!requirements.preferNearEntrance) return candidates;
+    return [...candidates].sort((left, right) => {
+      const leftDistance =
+        left.entranceDistanceMapUnits ?? Number.POSITIVE_INFINITY;
+      const rightDistance =
+        right.entranceDistanceMapUnits ?? Number.POSITIVE_INFINITY;
+      return leftDistance - rightDistance || left.price - right.price;
+    });
+  }
+
   private areAdjacent(first: PlotCandidate, second: PlotCandidate) {
     try {
       return this.adjacency.validateAdjacent([
@@ -464,18 +487,36 @@ export class PlotRecommendationService {
     const budgetScore = budgetSpecified
       ? Math.min(1, plotCost / dto.budgetMax)
       : 0.8;
+    const baseScore =
+      budgetScore * 0.3 +
+      (zoneMatches ? 1 : 0) * 0.2 +
+      (directionMatches ? 1 : 0) * 0.15 +
+      (plots.length > 1 ? 1 : 0.7) * 0.15 +
+      (plots.every((plot) => !dto.plotType || plot.plotType === dto.plotType)
+        ? 1
+        : 0) *
+        0.1 +
+      (plots.length === dto.numberOfPlots ? 1 : 0) * 0.1;
+    const entranceDistances = plots
+      .map((plot) => plot.entranceDistanceMapUnits)
+      .filter((value): value is number => value !== null);
+    const entranceDistanceMapUnits = entranceDistances.length
+      ? entranceDistances.reduce((sum, value) => sum + value, 0) /
+        entranceDistances.length
+      : null;
+    const entranceScore =
+      entranceDistanceMapUnits === null
+        ? 0
+        : Math.max(0, 1 - entranceDistanceMapUnits / 1800);
     const score = Number(
-      (
-        budgetScore * 0.3 +
-        (zoneMatches ? 1 : 0) * 0.2 +
-        (directionMatches ? 1 : 0) * 0.15 +
-        (plots.length > 1 ? 1 : 0.7) * 0.15 +
-        (plots.every((plot) => !dto.plotType || plot.plotType === dto.plotType)
-          ? 1
-          : 0) *
-          0.1 +
-        (plots.length === dto.numberOfPlots ? 1 : 0) * 0.1
+      (dto.preferNearEntrance
+        ? baseScore * 0.75 + entranceScore * 0.25
+        : baseScore
       ).toFixed(4),
+    );
+    const accessSummary = this.buildAccessSummary(
+      plots,
+      entranceDistanceMapUnits,
     );
     const reasons = [
       budgetSpecified
@@ -493,6 +534,7 @@ export class PlotRecommendationService {
       ...(directionMatches && dto.preferredDirection
         ? [`Có hướng ${dto.preferredDirection} theo yêu cầu`]
         : []),
+      ...(dto.preferNearEntrance && accessSummary ? [accessSummary] : []),
     ];
     const tradeOffs = [
       ...(!zoneMatches && dto.preferredZone
@@ -503,6 +545,10 @@ export class PlotRecommendationService {
         : []),
       ...(budgetSpecified && plotCost > dto.budgetMax * 0.95
         ? ['Tổng giá gần sát ngân sách tối đa']
+        : []),
+      ...(dto.preferNearEntrance &&
+      plots.every((plot) => plot.entranceProximity === 'far')
+        ? ['Vị trí nằm sâu hơn so với cổng gần nhất trên sơ đồ nội khu']
         : []),
     ];
 
@@ -523,22 +569,91 @@ export class PlotRecommendationService {
       reasons,
       tradeOffs,
       highlightPlotIds: plots.map((plot) => plot.id),
+      accessSummary,
+      entranceDistanceMapUnits,
+    };
+  }
+
+  private compareRecommendations(
+    left: RecommendationOption,
+    right: RecommendationOption,
+    dto: Pick<RecommendPlotsDto, 'preferNearEntrance'>,
+  ) {
+    if (dto.preferNearEntrance) {
+      const leftDistance =
+        left.entranceDistanceMapUnits ?? Number.POSITIVE_INFINITY;
+      const rightDistance =
+        right.entranceDistanceMapUnits ?? Number.POSITIVE_INFINITY;
+      if (leftDistance !== rightDistance) return leftDistance - rightDistance;
+    }
+    return right.score - left.score || left.plotCost - right.plotCost;
+  }
+
+  private buildAccessSummary(
+    plots: PlotCandidate[],
+    averageDistance: number | null,
+  ) {
+    if (averageDistance === null) return null;
+    const entrances = [
+      ...new Set(plots.map((plot) => plot.nearestEntrance).filter(Boolean)),
+    ];
+    const entranceLabel =
+      entrances.length === 1
+        ? entrances[0] === 'main'
+          ? 'Cổng chính'
+          : 'Cổng phụ'
+        : 'cổng gần nhất';
+    if (averageDistance <= NEAR_ENTRANCE_MAX_DISTANCE) {
+      return `Thuộc nhóm gần ${entranceLabel} trên sơ đồ nội khu`;
+    }
+    if (averageDistance <= MODERATE_ENTRANCE_MAX_DISTANCE) {
+      return `Khoảng tiếp cận trung bình tới ${entranceLabel} trên sơ đồ nội khu`;
+    }
+    return `Nằm sâu hơn so với ${entranceLabel} trên sơ đồ nội khu`;
+  }
+
+  private buildInventoryPriceContext(candidates: PlotCandidate[]) {
+    if (!candidates.length) return undefined;
+    const prices = candidates.map((plot) => plot.price).sort((a, b) => a - b);
+    const middle = Math.floor(prices.length / 2);
+    const medianListedPrice =
+      prices.length % 2 === 0
+        ? (prices[middle - 1] + prices[middle]) / 2
+        : prices[middle];
+    return {
+      candidateCount: prices.length,
+      minimumListedPrice: prices[0],
+      medianListedPrice,
+      maximumListedPrice: prices[prices.length - 1],
+      scope: 'matching_available_inventory' as const,
     };
   }
 
   private normalizePlot(row: PlotRow): PlotCandidate {
     const numberOrNull = (value: number | string | null) =>
       value === null || value === undefined ? null : Number(value);
+    const mapX = numberOrNull(row.mapX);
+    const mapY = numberOrNull(row.mapY);
+    const mapWidth = numberOrNull(row.mapWidth);
+    const mapHeight = numberOrNull(row.mapHeight);
+    const access = calculatePlotEntranceAccess({
+      plotCode: row.plotCode,
+      zoneName: row.zoneName,
+      rowNumber: row.rowNumber,
+      columnNumber: row.columnNumber,
+    });
     return {
       ...row,
       id: Number(row.id),
       zoneId: Number(row.zoneId),
       price: Number(row.price),
       areaSqm: numberOrNull(row.areaSqm),
-      mapX: numberOrNull(row.mapX),
-      mapY: numberOrNull(row.mapY),
-      mapWidth: numberOrNull(row.mapWidth),
-      mapHeight: numberOrNull(row.mapHeight),
+      description: row.description ?? null,
+      mapX,
+      mapY,
+      mapWidth,
+      mapHeight,
+      ...access,
     };
   }
 

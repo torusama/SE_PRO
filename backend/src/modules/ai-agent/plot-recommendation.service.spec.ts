@@ -130,4 +130,50 @@ describe('PlotRecommendationService', () => {
     expect(result.recommendations[0].plotIds).toEqual([1]);
     expect(result.rankerVersion).toBe('availability-browse-v1');
   });
+
+  it('prioritizes verified entrance access without exposing raw geometry as advice', async () => {
+    const database = {
+      query: jest.fn().mockResolvedValue([
+        {
+          ...plots[0],
+          id: 10,
+          plotCode: 'A-01-001',
+          price: 80_000_000,
+          mapX: 20,
+          mapY: 40,
+        },
+        {
+          ...plots[0],
+          id: 11,
+          plotCode: 'H-06-001',
+          zoneName: 'Khu H',
+          rowNumber: '6',
+          columnNumber: '1',
+          price: 90_000_000,
+          mapX: 450,
+          mapY: 1490,
+        },
+      ]),
+    };
+    const service = new PlotRecommendationService(
+      database as unknown as DatabaseService,
+      new PlotAdjacencyService(),
+      new BaziRuleService(),
+    );
+
+    const result = await service.recommend({
+      budgetMax: 100_000_000,
+      numberOfPlots: 1,
+      preferNearEntrance: true,
+    });
+
+    expect(result.recommendations[0].plotIds).toEqual([11]);
+    expect(result.recommendations[0].accessSummary).toContain('Cổng chính');
+    expect(result.inventoryPriceContext).toMatchObject({
+      candidateCount: 2,
+      minimumListedPrice: 80_000_000,
+      maximumListedPrice: 90_000_000,
+      scope: 'matching_available_inventory',
+    });
+  });
 });

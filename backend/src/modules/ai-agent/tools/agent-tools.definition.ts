@@ -21,6 +21,7 @@ export const AGENT_TOOL_DEFINITIONS = [
           minAreaSqm: { type: 'number', minimum: 0 },
           maxAreaSqm: { type: 'number', minimum: 0 },
           needAdjacent: { type: 'boolean' },
+          preferNearEntrance: { type: 'boolean' },
         },
         required: ['budgetMax', 'numberOfPlots'],
       },
@@ -67,6 +68,7 @@ export const AGENT_TOOL_DEFINITIONS = [
             enum: ['single', 'double', 'family'],
           },
           needAdjacent: { type: 'boolean' },
+          preferNearEntrance: { type: 'boolean' },
         },
         required: ['budgetMax', 'numberOfPlots'],
       },
@@ -92,6 +94,7 @@ export const AGENT_TOOL_DEFINITIONS = [
           minAreaSqm: { type: 'number', minimum: 0 },
           maxAreaSqm: { type: 'number', minimum: 0 },
           needAdjacent: { type: 'boolean' },
+          preferNearEntrance: { type: 'boolean' },
         },
       },
     },
@@ -168,6 +171,48 @@ export const AGENT_TOOL_DEFINITIONS = [
       description:
         'Get the current versioned reservation and purchase process.',
       parameters: { type: 'object', additionalProperties: false },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'propose_knowledge_update',
+      description:
+        'Propose an update to the knowledge base or store an implicit psychological profile/user preference.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          category: { type: 'string' },
+          title: { type: 'string' },
+          content: { type: 'string' },
+          knowledgeType: {
+            type: 'string',
+            enum: [
+              'implicit_profile',
+              'explicit_preference',
+              'business_rule',
+              'faq',
+              'information_correction',
+              'recommendation_feedback',
+            ],
+          },
+          requestedScope: {
+            type: 'string',
+            enum: ['user', 'global'],
+          },
+          sourceMessageId: { type: 'string' },
+          reason: { type: 'string' },
+        },
+        required: [
+          'category',
+          'title',
+          'content',
+          'knowledgeType',
+          'requestedScope',
+          'reason',
+        ],
+      },
     },
   },
 ] as const;

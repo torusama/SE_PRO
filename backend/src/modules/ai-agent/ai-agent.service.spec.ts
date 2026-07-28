@@ -33,9 +33,16 @@ describe('AiAgentService admin activity', () => {
   });
 
   it('loads a retained AI draft detail and rejects missing records', async () => {
-    const database = { queryOne: jest.fn().mockResolvedValueOnce({ id: 2 }).mockResolvedValueOnce(null) };
+    const database = {
+      queryOne: jest
+        .fn()
+        .mockResolvedValueOnce({ id: 2 })
+        .mockResolvedValueOnce(null),
+    };
     const service = new AiAgentService(database as never);
     await expect(service.adminActivityOne(2)).resolves.toEqual({ id: 2 });
-    await expect(service.adminActivityOne(3)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.adminActivityOne(3)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
   });
 });

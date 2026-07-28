@@ -336,6 +336,8 @@ describe('AgentBookingService', () => {
       plotId: 10,
       plotCode: 'A-01-001',
       requestedDate: '2099-08-10',
+      quotedPrice: 200_000,
+      serviceUnit: 'lần',
     };
 
     const result = await service.handleTurn({
@@ -354,5 +356,35 @@ describe('AgentBookingService', () => {
       }),
     );
     expect(result?.assistantMessage).toContain('#45');
+  });
+
+  it('requires confirmation again when the service price changes', async () => {
+    const { service, cemeteryServices } = createService();
+    const pending: AgentPendingAction = {
+      kind: 'service_order',
+      stage: 'awaiting_confirmation',
+      serviceTypeId: 3,
+      serviceName: 'Dọn dẹp mộ',
+      plotId: 10,
+      plotCode: 'A-01-001',
+      requestedDate: '2099-08-10',
+      quotedPrice: 150_000,
+      serviceUnit: 'lần',
+    };
+
+    const result = await service.handleTurn({
+      conversationId: 1,
+      userId: 7,
+      plan: plan('confirm_pending_action', 'service_booking'),
+      pendingAction: pending,
+    });
+
+    expect(cemeteryServices.createOrder).not.toHaveBeenCalled();
+    expect(result?.assistantMessage).toContain('đã thay đổi');
+    expect(result?.pendingAction).toMatchObject({
+      kind: 'service_order',
+      quotedPrice: 200_000,
+      serviceUnit: 'lần',
+    });
   });
 });

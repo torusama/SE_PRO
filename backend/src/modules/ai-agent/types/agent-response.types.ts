@@ -16,6 +16,8 @@ export type AgentPendingAction =
       plotId?: number;
       plotCode?: string;
       requestedDate?: string;
+      quotedPrice?: number;
+      serviceUnit?: string;
       note?: string;
     };
 
@@ -29,6 +31,7 @@ export interface AgentRequirements {
   minAreaSqm?: number;
   maxAreaSqm?: number;
   needAdjacent?: boolean;
+  preferNearEntrance?: boolean;
   birthDate?: string;
   birthTime?: string;
   gender?: 'male' | 'female' | 'other';
@@ -53,10 +56,14 @@ export interface PlotCandidate {
   areaSqm: number | null;
   rowNumber: string | null;
   columnNumber: string | null;
+  description: string | null;
   mapX: number | null;
   mapY: number | null;
   mapWidth: number | null;
   mapHeight: number | null;
+  nearestEntrance: 'main' | 'secondary' | null;
+  entranceProximity: 'near' | 'moderate' | 'far' | null;
+  entranceDistanceMapUnits: number | null;
 }
 
 export interface RecommendationOption {
@@ -76,6 +83,8 @@ export interface RecommendationOption {
   reasons: string[];
   tradeOffs: string[];
   highlightPlotIds: number[];
+  accessSummary: string | null;
+  entranceDistanceMapUnits: number | null;
 }
 
 export interface BaziGoodDirection {
@@ -126,6 +135,13 @@ export interface RecommendationResult {
     category: string;
   }>;
   baziSuggestion?: BaziSuggestion;
+  inventoryPriceContext?: {
+    candidateCount: number;
+    minimumListedPrice: number;
+    medianListedPrice: number;
+    maximumListedPrice: number;
+    scope: 'matching_available_inventory';
+  };
   rankerVersion: string;
   fallbackUsed: boolean;
 }

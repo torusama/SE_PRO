@@ -16,9 +16,12 @@ import { PlotRankerClient } from './plot-ranker.client';
 import { FeedbackService } from './feedback.service';
 import { TrainingService } from './training.service';
 import { ConversationHistoryService } from './conversation-history.service';
+import { ProactiveConciergeService } from './proactive-concierge.service';
 
 import { OpenAiService, OpenAiSecondaryService } from './openai.service';
 import { MultiProviderLlmService } from './multi-provider-llm.service';
+
+import { AutonomousLearningService } from './autonomous-learning.service';
 
 @Module({
   imports: [PlotsModule, ReservationsModule, CemeteryServicesModule],
@@ -39,6 +42,8 @@ import { MultiProviderLlmService } from './multi-provider-llm.service';
     TrainingService,
     ConversationHistoryService,
     AgentBookingService,
+    ProactiveConciergeService,
+    AutonomousLearningService,
   ],
   exports: [AiAgentService, PlotRecommendationService, BaziRuleService],
 })

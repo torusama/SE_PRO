@@ -81,6 +81,11 @@ export const AGENT_PLANNER_TOOL = {
           description:
             'True when the user asks for adjacent, neighboring, side-by-side, "liền kề", "liền nhau", "cạnh nhau", "kế nhau", or family plots. Omit when not discussed.',
         },
+        preferNearEntrance: {
+          type: 'boolean',
+          description:
+            'True when the customer prioritizes a plot near an entrance or asks for easier access from a gate. Preserve it across follow-up turns until the customer changes that preference.',
+        },
         birthDate: { type: 'string' },
         birthTime: { type: 'string' },
         gender: {
@@ -224,6 +229,10 @@ export function parseAgentPlan(raw: string): AgentPlan {
     needAdjacent:
       typeof parsed.needAdjacent === 'boolean'
         ? parsed.needAdjacent
+        : undefined,
+    preferNearEntrance:
+      typeof parsed.preferNearEntrance === 'boolean'
+        ? parsed.preferNearEntrance
         : undefined,
     birthDate: optionalString(parsed.birthDate),
     birthTime: optionalString(parsed.birthTime),
