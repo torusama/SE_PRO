@@ -6,7 +6,11 @@ describe('RemindersService admin operations', () => {
       queryOne: jest.fn().mockResolvedValue({ total: '0' }),
       query: jest.fn().mockResolvedValue([]),
     };
-    const service = new RemindersService(database as never, {} as never, {} as never);
+    const service = new RemindersService(
+      database as never,
+      {} as never,
+      {} as never,
+    );
     await expect(
       service.allForAdmin({
         page: 1,
@@ -44,7 +48,10 @@ describe('RemindersService admin operations', () => {
       notifications as never,
       {} as never,
     );
-    await expect(service.notifyNow(5)).resolves.toEqual({ id: 5, notified: true });
+    await expect(service.notifyNow(5)).resolves.toEqual({
+      id: 5,
+      notified: true,
+    });
     expect(notifications.createInApp).toHaveBeenCalledWith(
       2,
       'memorial_reminder',

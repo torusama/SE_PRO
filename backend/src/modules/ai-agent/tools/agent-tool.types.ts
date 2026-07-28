@@ -11,9 +11,9 @@ export type AgentToolName =
   | 'propose_knowledge_update';
 
 export interface AgentToolContext {
-  conversationId?: number | null;
-  sessionId?: string | null;
-  messageId?: number | null;
-  userId?: number | null;
-  role?: string | null;
+  conversationId: number | string | null;
+  sessionId: string | null;
+  sourceMessageId: number | string | null;
+  userId: number | null;
+  role: string | null;
 }

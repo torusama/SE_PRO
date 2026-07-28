@@ -52,32 +52,48 @@ export class AgentToolRegistryService {
   async execute(
     name: string,
     args: Record<string, unknown>,
-    context: import('./tools/agent-tool.types').AgentToolContext = {},
+    context: Partial<import('./tools/agent-tool.types').AgentToolContext> = {},
   ) {
     if (!this.isAllowed(name)) {
       throw new BadRequestException(`Unknown AI tool: ${name}`);
     }
     switch (name) {
-      case 'propose_knowledge_update':
+      case 'propose_knowledge_update': {
+        const category = this.requiredString(args.category, 'category');
+        const title = this.requiredString(args.title, 'title');
+        const content = this.requiredString(args.content, 'content');
+        const knowledgeType = this.requiredEnum(args.knowledgeType, 'knowledgeType', [
+          'user_preference',
+          'business_rule',
+          'faq',
+          'information_correction',
+          'recommendation_feedback'
+        ]);
+        const requestedScope = this.requiredEnum(args.requestedScope, 'requestedScope', ['user', 'global']);
+        const reason = this.requiredString(args.reason, 'reason');
+
+        if (content.length > 5000) {
+          throw new BadRequestException('Content is too large');
+        }
+
         return this.autoLearning.processProposal(
           {
-            category: String(args.category),
-            title: String(args.title),
-            content: String(args.content),
-            knowledgeType: String(args.knowledgeType),
-            requestedScope: String(args.requestedScope),
-            sourceMessageId: args.sourceMessageId
-              ? String(args.sourceMessageId)
-              : undefined,
-            reason: String(args.reason),
+            category,
+            title,
+            content,
+            knowledgeType: knowledgeType as any,
+            requestedScope: requestedScope as any,
+            reason,
           },
           {
             userId: context.userId,
             role: context.role,
             sessionId: context.sessionId,
-            messageId: context.messageId,
+            messageId: context.sourceMessageId,
+            conversationId: context.conversationId,
           },
         );
+      }
       case 'search_available_plots':
         return {
           candidates: await this.recommendations.searchAvailablePlots(
@@ -231,5 +247,24 @@ export class AgentToolRegistryService {
         quantity: this.integer(record.quantity, 'quantity'),
       };
     });
+  }
+
+  private requiredString(value: unknown, name: string) {
+    if (typeof value !== 'string') {
+      throw new BadRequestException(`${name} must be a string`);
+    }
+    const normalized = value.trim();
+    if (!normalized || normalized.toLowerCase() === 'undefined' || normalized.toLowerCase() === 'null') {
+      throw new BadRequestException(`${name} must not be empty or a literal null/undefined`);
+    }
+    return normalized;
+  }
+
+  private requiredEnum(value: unknown, name: string, allowedValues: string[]) {
+    const normalized = this.requiredString(value, name);
+    if (!allowedValues.includes(normalized)) {
+      throw new BadRequestException(`${name} must be one of: ${allowedValues.join(', ')}`);
+    }
+    return normalized;
   }
 }

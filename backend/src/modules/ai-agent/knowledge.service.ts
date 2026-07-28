@@ -59,6 +59,7 @@ export class KnowledgeService {
         `SELECT title, content, scope
          FROM ai_knowledge_entries
          WHERE is_active = TRUE
+           AND validation_status = 'active'
            AND (scope = 'global' OR (scope = 'user' AND owner_user_id = $1))
          ORDER BY updated_at DESC
          LIMIT 15`,
@@ -74,10 +75,10 @@ export class KnowledgeService {
 
       let context = '';
       if (globalRules.length > 0) {
-        context += `[GLOBAL BUSINESS RULES]\n${globalRules.join('\n')}\n\n`;
+        context += `<VERIFIED_GLOBAL_KNOWLEDGE>\n${globalRules.join('\n')}\n</VERIFIED_GLOBAL_KNOWLEDGE>\n\n`;
       }
       if (userProfiles.length > 0) {
-        context += `[USER PSYCHOLOGICAL & PREFERENCE PROFILE]\n${userProfiles.join('\n')}\n\n`;
+        context += `<PERSISTENT_USER_PREFERENCES>\n${userProfiles.join('\n')}\n</PERSISTENT_USER_PREFERENCES>\n\n`;
       }
       return context.trim();
     } catch {

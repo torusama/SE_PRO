@@ -89,6 +89,37 @@ export class CemeteryServicesService {
     }
 
     return this.database.transaction(async (client) => {
+      const idempotencyKey = [
+        userId,
+        dto.plotId ?? 'none',
+        dto.serviceTypeId,
+        dto.requestedDate ?? 'none',
+      ].join(':');
+      await client.query(
+        `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
+        [idempotencyKey],
+      );
+      const duplicate = await client.query(
+        `SELECT order_id AS id, status, amount::float
+         FROM service_orders
+         WHERE user_id = $1
+           AND plot_id IS NOT DISTINCT FROM $2
+           AND service_type_id = $3
+           AND requested_date IS NOT DISTINCT FROM $4::date
+           AND status IN ('submitted', 'pending_confirm', 'confirmed', 'in_progress')
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [
+          userId,
+          dto.plotId ?? null,
+          dto.serviceTypeId,
+          dto.requestedDate ?? null,
+        ],
+      );
+      if (duplicate.rows[0]) {
+        return { ...duplicate.rows[0], reused: true };
+      }
+
       const result = await client.query(
         `INSERT INTO service_orders
            (user_id, plot_id, service_type_id, unit_price, amount, requested_date, note)
@@ -132,7 +163,9 @@ export class CemeteryServicesService {
     ]);
   }
 
-  async adminOrders(query: AdminServiceOrderQueryDto = new AdminServiceOrderQueryDto()) {
+  async adminOrders(
+    query: AdminServiceOrderQueryDto = new AdminServiceOrderQueryDto(),
+  ) {
     const values: unknown[] = [];
     const conditions: string[] = [];
     const add = (value: unknown) => {
@@ -146,7 +179,8 @@ export class CemeteryServicesService {
       );
     }
     if (query.status) conditions.push(`so.status=${add(query.status)}`);
-    if (query.assigneeId) conditions.push(`so.assigned_to=${add(query.assigneeId)}`);
+    if (query.assigneeId)
+      conditions.push(`so.assigned_to=${add(query.assigneeId)}`);
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const count = await this.database.queryOne<{ total: string }>(
       `SELECT COUNT(*)::text AS total FROM service_orders so
@@ -161,7 +195,12 @@ export class CemeteryServicesService {
       values,
       true,
     );
-    return paginate(items, Number(count?.total ?? 0), query.page, query.pageSize);
+    return paginate(
+      items,
+      Number(count?.total ?? 0),
+      query.page,
+      query.pageSize,
+    );
   }
 
   assignees() {

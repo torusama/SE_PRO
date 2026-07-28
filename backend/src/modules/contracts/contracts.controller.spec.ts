@@ -15,6 +15,8 @@ describe('ContractsController admin guards', () => {
     'uploadAdminPdf',
     'downloadAdminPdf',
   ] as const)('%s requires admin role', (method) => {
-    expect(Reflect.getMetadata(ROLES_KEY, controller[method])).toEqual(['admin']);
+    expect(Reflect.getMetadata(ROLES_KEY, controller[method])).toEqual([
+      'admin',
+    ]);
   });
 });

@@ -97,8 +97,10 @@ describe('AI Agent pending booking reply resolution', () => {
 
   it('only treats submit language as confirmation after the summary is ready', () => {
     const ready: AgentPendingAction = {
-      ...collectingPlotRequest(),
+      kind: 'plot_request',
       stage: 'awaiting_confirmation',
+      plotIds: [201],
+      plotCodes: ['C-02-001'],
       requestType: 'purchase',
     };
 

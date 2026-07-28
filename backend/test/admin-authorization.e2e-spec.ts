@@ -22,7 +22,10 @@ class HeaderAuthGuard implements CanActivate {
 }
 
 const missingId = 999999999;
-const adminRoutes: Array<{ method: 'get' | 'post' | 'patch' | 'delete'; path: string }> = [
+const adminRoutes: Array<{
+  method: 'get' | 'post' | 'patch' | 'delete';
+  path: string;
+}> = [
   { method: 'get', path: '/admin/dashboard/summary' },
   { method: 'get', path: '/admin/dashboard/plots' },
   { method: 'get', path: '/admin/dashboard/revenue' },
@@ -91,21 +94,33 @@ describe('Admin authorization matrix (e2e)', () => {
     await app.close();
   });
 
-  it.each(adminRoutes)('$method $path rejects unauthenticated callers', async (route) => {
-    await call(app.getHttpServer(), route).expect(401);
-  });
+  it.each(adminRoutes)(
+    '$method $path rejects unauthenticated callers',
+    async (route) => {
+      await call(app.getHttpServer(), route).expect(401);
+    },
+  );
 
-  it.each(adminRoutes)('$method $path rejects customer callers', async (route) => {
-    await call(app.getHttpServer(), route)
-      .set('x-test-role', 'customer')
-      .expect(403);
-  });
+  it.each(adminRoutes)(
+    '$method $path rejects customer callers',
+    async (route) => {
+      await call(app.getHttpServer(), route)
+        .set('x-test-role', 'customer')
+        .expect(403);
+    },
+  );
 
-  it.each(adminRoutes)('$method $path allows the admin guard layer', async (route) => {
-    const response = await call(app.getHttpServer(), route).set('x-test-role', 'admin');
-    expect(response.status).not.toBe(401);
-    expect(response.status).not.toBe(403);
-  });
+  it.each(adminRoutes)(
+    '$method $path allows the admin guard layer',
+    async (route) => {
+      const response = await call(app.getHttpServer(), route).set(
+        'x-test-role',
+        'admin',
+      );
+      expect(response.status).not.toBe(401);
+      expect(response.status).not.toBe(403);
+    },
+  );
 
   it.each([
     '/my/reservations',

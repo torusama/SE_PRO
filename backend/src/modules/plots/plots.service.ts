@@ -7,10 +7,7 @@ import { DatabaseService } from '../../database/database.service';
 import { CreatePlotDto } from './dto/create-plot.dto';
 import { UpdatePlotDto } from './dto/update-plot.dto';
 import { AdminPlotQueryDto } from './dto/admin-plot-query.dto';
-import {
-  CreateAdminZoneDto,
-  UpdateAdminZoneDto,
-} from './dto/admin-zone.dto';
+import { CreateAdminZoneDto, UpdateAdminZoneDto } from './dto/admin-zone.dto';
 import { paginate } from '../../common/interfaces/paginated-response.interface';
 import { AdminAuditService } from '../admin-audit/admin-audit.service';
 import type { AdminRequestContext } from '../../common/decorators/admin-request-context.decorator';
@@ -32,7 +29,10 @@ export class PlotsService {
     id: number | null,
     action: string,
     context: AdminRequestContext,
-    mutation: (client: PoolClient, before: Record<string, unknown> | null) => Promise<T>,
+    mutation: (
+      client: PoolClient,
+      before: Record<string, unknown> | null,
+    ) => Promise<T>,
   ) {
     return this.database.transaction(async (client) => {
       let before: Record<string, unknown> | null = null;
@@ -433,24 +433,37 @@ export class PlotsService {
   }
 
   async adminCreate(dto: CreatePlotDto, context: AdminRequestContext) {
-    return this.auditedMutation(null, 'plot.create', context, async (client) => {
-      const result = await client.query(
-        `INSERT INTO plots
+    return this.auditedMutation(
+      null,
+      'plot.create',
+      context,
+      async (client) => {
+        const result = await client.query(
+          `INSERT INTO plots
            (plot_code,zone_id,row_number,column_number,price,area_sqm,direction,
             plot_type,description,map_x,map_y,map_width,map_height)
          VALUES ($1,$2,$3,$4,$5,$6,$7,COALESCE($8,'single'),$9,
                  COALESCE($10,0),COALESCE($11,0),COALESCE($12,40),COALESCE($13,40))
          RETURNING plot_id AS id, plot_code AS "plotCode", status, price::float`,
-        [
-          dto.plotCode, dto.zoneId, dto.rowNumber ?? null,
-          dto.columnNumber ?? null, dto.price, dto.area ?? null,
-          dto.direction ?? null, dto.plotType ?? null, dto.description ?? null,
-          dto.mapX ?? null, dto.mapY ?? null, dto.mapWidth ?? null,
-          dto.mapHeight ?? null,
-        ],
-      );
-      return result.rows[0];
-    });
+          [
+            dto.plotCode,
+            dto.zoneId,
+            dto.rowNumber ?? null,
+            dto.columnNumber ?? null,
+            dto.price,
+            dto.area ?? null,
+            dto.direction ?? null,
+            dto.plotType ?? null,
+            dto.description ?? null,
+            dto.mapX ?? null,
+            dto.mapY ?? null,
+            dto.mapWidth ?? null,
+            dto.mapHeight ?? null,
+          ],
+        );
+        return result.rows[0];
+      },
+    );
   }
 
   async adminUpdate(
@@ -458,10 +471,14 @@ export class PlotsService {
     dto: UpdatePlotDto,
     context: AdminRequestContext,
   ) {
-    return this.auditedMutation(id, 'plot.update', context, async (client, before) => {
-      if (before?.isDeleted) throw new NotFoundException('Plot not found');
-      const result = await client.query(
-        `UPDATE plots SET plot_code=COALESCE($2,plot_code),
+    return this.auditedMutation(
+      id,
+      'plot.update',
+      context,
+      async (client, before) => {
+        if (before?.isDeleted) throw new NotFoundException('Plot not found');
+        const result = await client.query(
+          `UPDATE plots SET plot_code=COALESCE($2,plot_code),
            zone_id=COALESCE($3,zone_id),row_number=COALESCE($4,row_number),
            column_number=COALESCE($5,column_number),price=COALESCE($6,price),
            area_sqm=COALESCE($7,area_sqm),direction=COALESCE($8,direction),
@@ -471,57 +488,75 @@ export class PlotsService {
            updated_at=NOW()
          WHERE plot_id=$1 AND is_deleted=FALSE
          RETURNING plot_id AS id,plot_code AS "plotCode",status,price::float`,
-        [
-          id, dto.plotCode ?? null, dto.zoneId ?? null, dto.rowNumber ?? null,
-          dto.columnNumber ?? null, dto.price ?? null, dto.area ?? null,
-          dto.direction ?? null, dto.plotType ?? null, dto.description ?? null,
-          dto.mapX ?? null, dto.mapY ?? null, dto.mapWidth ?? null,
-          dto.mapHeight ?? null,
-        ],
-      );
-      return result.rows[0];
-    });
+          [
+            id,
+            dto.plotCode ?? null,
+            dto.zoneId ?? null,
+            dto.rowNumber ?? null,
+            dto.columnNumber ?? null,
+            dto.price ?? null,
+            dto.area ?? null,
+            dto.direction ?? null,
+            dto.plotType ?? null,
+            dto.description ?? null,
+            dto.mapX ?? null,
+            dto.mapY ?? null,
+            dto.mapWidth ?? null,
+            dto.mapHeight ?? null,
+          ],
+        );
+        return result.rows[0];
+      },
+    );
   }
 
-  async adminStatus(
-    id: number,
-    status: string,
-    context: AdminRequestContext,
-  ) {
-    return this.auditedMutation(id, 'plot.status.update', context, async (client, before) => {
-      if (before?.isDeleted) throw new NotFoundException('Plot not found');
-      const current = String(before?.status);
-      const allowed: Record<string, string[]> = {
-        available: ['pending', 'reserved', 'sold', 'locked'],
-        pending: ['available', 'reserved', 'sold', 'locked'],
-        reserved: ['available', 'sold', 'locked'],
-        sold: ['locked'],
-        locked: [],
-      };
-      if (!allowed[current]?.includes(status)) {
-        throw new BadRequestException('Plot status transition is not allowed');
-      }
-      const result = await client.query(
-        `UPDATE plots SET status=$2,updated_at=NOW()
+  async adminStatus(id: number, status: string, context: AdminRequestContext) {
+    return this.auditedMutation(
+      id,
+      'plot.status.update',
+      context,
+      async (client, before) => {
+        if (before?.isDeleted) throw new NotFoundException('Plot not found');
+        const current = String(before?.status);
+        const allowed: Record<string, string[]> = {
+          available: ['pending', 'reserved', 'sold', 'locked'],
+          pending: ['available', 'reserved', 'sold', 'locked'],
+          reserved: ['available', 'sold', 'locked'],
+          sold: ['locked'],
+          locked: [],
+        };
+        if (!allowed[current]?.includes(status)) {
+          throw new BadRequestException(
+            'Plot status transition is not allowed',
+          );
+        }
+        const result = await client.query(
+          `UPDATE plots SET status=$2,updated_at=NOW()
          WHERE plot_id=$1 AND is_deleted=FALSE
          RETURNING plot_id AS id,plot_code AS "plotCode",status`,
-        [id, status],
-      );
-      return result.rows[0];
-    });
+          [id, status],
+        );
+        return result.rows[0];
+      },
+    );
   }
 
   async adminPrice(id: number, price: number, context: AdminRequestContext) {
-    return this.auditedMutation(id, 'plot.price.update', context, async (client, before) => {
-      if (before?.isDeleted) throw new NotFoundException('Plot not found');
-      const result = await client.query(
-        `UPDATE plots SET price=$2,updated_at=NOW()
+    return this.auditedMutation(
+      id,
+      'plot.price.update',
+      context,
+      async (client, before) => {
+        if (before?.isDeleted) throw new NotFoundException('Plot not found');
+        const result = await client.query(
+          `UPDATE plots SET price=$2,updated_at=NOW()
          WHERE plot_id=$1 AND is_deleted=FALSE
          RETURNING plot_id AS id,plot_code AS "plotCode",price::float,status`,
-        [id, price],
-      );
-      return result.rows[0];
-    });
+          [id, price],
+        );
+        return result.rows[0];
+      },
+    );
   }
 
   async adminLock(
@@ -530,61 +565,86 @@ export class PlotsService {
     reason: string | undefined,
     context: AdminRequestContext,
   ) {
-    return this.auditedMutation(id, 'plot.lock', context, async (client, before) => {
-      if (before?.isDeleted) throw new NotFoundException('Plot not found');
-      if (before?.status === 'locked') throw new BadRequestException('Plot is already locked');
-      const result = await client.query(
-        `UPDATE plots SET previous_status=status,status='locked',locked_at=NOW(),
+    return this.auditedMutation(
+      id,
+      'plot.lock',
+      context,
+      async (client, before) => {
+        if (before?.isDeleted) throw new NotFoundException('Plot not found');
+        if (before?.status === 'locked')
+          throw new BadRequestException('Plot is already locked');
+        const result = await client.query(
+          `UPDATE plots SET previous_status=status,status='locked',locked_at=NOW(),
            locked_by=$2,lock_reason=$3,updated_at=NOW()
          WHERE plot_id=$1 AND is_deleted=FALSE
          RETURNING plot_id AS id,plot_code AS "plotCode",status,
                    previous_status AS "previousStatus",lock_reason AS "lockReason"`,
-        [id, adminId, reason ?? null],
-      );
-      return result.rows[0];
-    });
+          [id, adminId, reason ?? null],
+        );
+        return result.rows[0];
+      },
+    );
   }
 
   async adminUnlock(id: number, context: AdminRequestContext) {
-    return this.auditedMutation(id, 'plot.unlock', context, async (client, before) => {
-      if (before?.status !== 'locked') throw new BadRequestException('Plot is not locked');
-      const result = await client.query(
-        `UPDATE plots SET status=COALESCE(previous_status,'available'),
+    return this.auditedMutation(
+      id,
+      'plot.unlock',
+      context,
+      async (client, before) => {
+        if (before?.status !== 'locked')
+          throw new BadRequestException('Plot is not locked');
+        const result = await client.query(
+          `UPDATE plots SET status=COALESCE(previous_status,'available'),
            previous_status=NULL,locked_at=NULL,locked_by=NULL,lock_reason=NULL,
            updated_at=NOW()
          WHERE plot_id=$1 AND is_deleted=FALSE
          RETURNING plot_id AS id,plot_code AS "plotCode",status`,
-        [id],
-      );
-      return result.rows[0];
-    });
+          [id],
+        );
+        return result.rows[0];
+      },
+    );
   }
 
   async adminRemove(id: number, context: AdminRequestContext) {
-    return this.auditedMutation(id, 'plot.delete', context, async (client, before) => {
-      if (before?.isDeleted) throw new NotFoundException('Plot not found');
-      if (['pending', 'reserved', 'sold'].includes(String(before?.status))) {
-        throw new BadRequestException('Plot with active business records cannot be deleted');
-      }
-      const result = await client.query(
-        `UPDATE plots SET is_deleted=TRUE,updated_at=NOW()
+    return this.auditedMutation(
+      id,
+      'plot.delete',
+      context,
+      async (client, before) => {
+        if (before?.isDeleted) throw new NotFoundException('Plot not found');
+        if (['pending', 'reserved', 'sold'].includes(String(before?.status))) {
+          throw new BadRequestException(
+            'Plot with active business records cannot be deleted',
+          );
+        }
+        const result = await client.query(
+          `UPDATE plots SET is_deleted=TRUE,updated_at=NOW()
          WHERE plot_id=$1 AND is_deleted=FALSE RETURNING plot_id AS id`,
-        [id],
-      );
-      return result.rows[0];
-    });
+          [id],
+        );
+        return result.rows[0];
+      },
+    );
   }
 
   async adminRestore(id: number, context: AdminRequestContext) {
-    return this.auditedMutation(id, 'plot.restore', context, async (client, before) => {
-      if (!before?.isDeleted) throw new NotFoundException('Không tìm thấy lô đã xóa');
-      const result = await client.query(
-        `UPDATE plots SET is_deleted=FALSE,updated_at=NOW()
+    return this.auditedMutation(
+      id,
+      'plot.restore',
+      context,
+      async (client, before) => {
+        if (!before?.isDeleted)
+          throw new NotFoundException('Không tìm thấy lô đã xóa');
+        const result = await client.query(
+          `UPDATE plots SET is_deleted=FALSE,updated_at=NOW()
          WHERE plot_id=$1 AND is_deleted=TRUE
          RETURNING plot_id AS id,plot_code AS "plotCode",status`,
-        [id],
-      );
-      return result.rows[0];
-    });
+          [id],
+        );
+        return result.rows[0];
+      },
+    );
   }
 }

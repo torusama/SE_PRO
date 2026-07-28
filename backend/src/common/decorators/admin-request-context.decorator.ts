@@ -9,16 +9,17 @@ export interface AdminRequestContext {
 
 export const CurrentAdminContext = createParamDecorator(
   (_data: unknown, context: ExecutionContext): AdminRequestContext => {
-    const request = context.switchToHttp().getRequest<
-      Request & { user?: { id?: number } }
-    >();
+    const request = context
+      .switchToHttp()
+      .getRequest<Request & { user?: { id?: number } }>();
     const forwarded = request.headers['x-forwarded-for'];
     const forwardedIp = Array.isArray(forwarded)
       ? forwarded[0]
       : forwarded?.split(',')[0]?.trim();
     return {
       adminId: Number(request.user?.id ?? 0),
-      ipAddress: forwardedIp || request.ip || request.socket.remoteAddress || null,
+      ipAddress:
+        forwardedIp || request.ip || request.socket.remoteAddress || null,
       userAgent:
         typeof request.headers['user-agent'] === 'string'
           ? request.headers['user-agent']

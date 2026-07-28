@@ -21,4 +21,4 @@ Fix short replies such as “gửi yêu cầu” so the active plot request cont
 
 | Error | Attempt | Resolution |
 |---|---:|---|
-| None | 0 | — |
+| Context-mode test cell disappeared after an environment refresh | 1 | Re-ran the focused test command directly; 22/22 tests passed. |

@@ -79,7 +79,12 @@ export class AppointmentsController {
     return {
       success: true,
       message: 'Appointment updated',
-      data: await this.appointmentsService.update(user.id, Number(id), dto, context),
+      data: await this.appointmentsService.update(
+        user.id,
+        Number(id),
+        dto,
+        context,
+      ),
     };
   }
 

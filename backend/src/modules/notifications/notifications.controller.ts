@@ -1,11 +1,26 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { NotificationsService } from './notifications.service';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
-import { AdminNotificationQueryDto, BroadcastNotificationDto } from './dto/admin-notification.dto';
-import { CurrentAdminContext, type AdminRequestContext } from '../../common/decorators/admin-request-context.decorator';
+import {
+  AdminNotificationQueryDto,
+  BroadcastNotificationDto,
+} from './dto/admin-notification.dto';
+import {
+  CurrentAdminContext,
+  type AdminRequestContext,
+} from '../../common/decorators/admin-request-context.decorator';
 
 @UseGuards(JwtAuthGuard)
 @Controller('notifications')
@@ -53,7 +68,10 @@ export class AdminNotificationsController {
 
   @Get()
   async list(@Query() query: AdminNotificationQueryDto) {
-    return { success: true, data: await this.notificationsService.adminList(query) };
+    return {
+      success: true,
+      data: await this.notificationsService.adminList(query),
+    };
   }
 
   @Post('broadcast')

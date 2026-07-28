@@ -31,7 +31,12 @@ function createService(handler?: QueryHandler, adjacency?: any, audit?: any) {
   return {
     client,
     database,
-    service: new ReservationsService(database as never, adjacency, undefined, audit),
+    service: new ReservationsService(
+      database as never,
+      adjacency,
+      undefined,
+      audit,
+    ),
   };
 }
 
@@ -523,16 +528,35 @@ describe('ReservationsService', () => {
     });
 
     it('keeps audit in the decision transaction and propagates audit failure', async () => {
-      const audit = { record: jest.fn().mockRejectedValue(new Error('audit failed')) };
-      const { client, database, service } = createService((sql) => {
-        if (sql.includes('FROM reservation_requests') && sql.includes('FOR UPDATE')) {
-          return result([{ request_id: 10, user_id: 7, request_type: 'reserve', status: 'pending' }]);
-        }
-        if (sql.includes('FROM request_plots') && sql.includes('FOR UPDATE')) {
-          return result([{ id: 1, status: 'pending', price: 100 }]);
-        }
-        return result([], 1);
-      }, undefined, audit);
+      const audit = {
+        record: jest.fn().mockRejectedValue(new Error('audit failed')),
+      };
+      const { client, database, service } = createService(
+        (sql) => {
+          if (
+            sql.includes('FROM reservation_requests') &&
+            sql.includes('FOR UPDATE')
+          ) {
+            return result([
+              {
+                request_id: 10,
+                user_id: 7,
+                request_type: 'reserve',
+                status: 'pending',
+              },
+            ]);
+          }
+          if (
+            sql.includes('FROM request_plots') &&
+            sql.includes('FOR UPDATE')
+          ) {
+            return result([{ id: 1, status: 'pending', price: 100 }]);
+          }
+          return result([], 1);
+        },
+        undefined,
+        audit,
+      );
       await expect(
         service.reject(1, 10, 'Từ chối', {
           adminId: 1,

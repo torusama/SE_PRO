@@ -177,7 +177,9 @@ export class RemindersService {
   }
 
   // ── ADMIN: lấy toàn bộ nhắc lịch kèm thông tin khách hàng ──────────────
-  async allForAdmin(filters: AdminReminderQueryDto = new AdminReminderQueryDto()) {
+  async allForAdmin(
+    filters: AdminReminderQueryDto = new AdminReminderQueryDto(),
+  ) {
     const conditions: string[] = ['r.is_deleted = FALSE'];
     const params: any[] = [];
 
@@ -350,7 +352,10 @@ export class RemindersService {
         specificDate,
         dto.notifyDaysBefore ?? existing.notifyDaysBefore,
         dto.isActive ?? existing.isActive,
-        dto.notifyEmail ?? (dto.notifyEmails ? dto.notifyEmails.length > 0 : existing.notifyEmail),
+        dto.notifyEmail ??
+          (dto.notifyEmails
+            ? dto.notifyEmails.length > 0
+            : existing.notifyEmail),
         dto.notifyEmails ?? existing.notifyEmails,
       ],
     );
@@ -390,7 +395,9 @@ export class RemindersService {
     }
 
     const daysUntil = nextDate
-      ? Math.round((nextDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+      ? Math.round(
+          (nextDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+        )
       : null;
 
     return {
@@ -440,7 +447,9 @@ export class RemindersService {
       if (!row.isRecurring && row.lastSentAt) continue;
 
       const when =
-        decorated.daysUntil === 0 ? 'hôm nay' : `còn ${decorated.daysUntil} ngày nữa`;
+        decorated.daysUntil === 0
+          ? 'hôm nay'
+          : `còn ${decorated.daysUntil} ngày nữa`;
       const location = row.plotCode ? ` tại lô ${row.plotCode}` : '';
       const message = `${row.title}${location} — ${when} (${decorated.nextDate}).`;
 

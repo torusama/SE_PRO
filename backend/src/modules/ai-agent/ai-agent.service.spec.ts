@@ -7,7 +7,7 @@ describe('AiAgentService admin activity', () => {
       queryOne: jest.fn().mockResolvedValue({ total: '1' }),
       query: jest.fn().mockResolvedValue([{ id: 2, status: 'draft' }]),
     };
-    const service = new AiAgentService(database as never);
+    const service = new AiAgentService(database as never, {} as never);
     await expect(
       service.adminActivity({ page: 1, pageSize: 20, offset: 0 } as never),
     ).resolves.toMatchObject({
@@ -26,7 +26,7 @@ describe('AiAgentService admin activity', () => {
       queryOne: jest.fn().mockResolvedValue({ total: '0' }),
       query: jest.fn().mockResolvedValue([]),
     };
-    const service = new AiAgentService(database as never);
+    const service = new AiAgentService(database as never, {} as never);
     await expect(
       service.adminActivity({ page: 1, pageSize: 20, offset: 0 } as never),
     ).resolves.toMatchObject({ items: [], total: 0, totalPages: 0 });
@@ -39,7 +39,7 @@ describe('AiAgentService admin activity', () => {
         .mockResolvedValueOnce({ id: 2 })
         .mockResolvedValueOnce(null),
     };
-    const service = new AiAgentService(database as never);
+    const service = new AiAgentService(database as never, {} as never);
     await expect(service.adminActivityOne(2)).resolves.toEqual({ id: 2 });
     await expect(service.adminActivityOne(3)).rejects.toBeInstanceOf(
       NotFoundException,

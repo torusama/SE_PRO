@@ -296,11 +296,6 @@ export class AuthService {
       user.emergency_contact_name &&
       user.emergency_contact_phone,
     );
-    const canAccessMainFeatures =
-      isProfileComplete &&
-      Boolean(user.email_verified_at) &&
-      Boolean(user.emergency_contact_email_verified_at);
-
     return {
       accessToken,
       user: {
@@ -310,7 +305,7 @@ export class AuthService {
         fullName: user.full_name,
         phone: user.phone_number,
         isActive: user.is_active,
-        isProfileComplete: canAccessMainFeatures,
+        isProfileComplete,
       },
     };
   }

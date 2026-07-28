@@ -4,8 +4,6 @@ import {
   Copy,
   Pencil,
   RotateCcw,
-  ThumbsDown,
-  ThumbsUp,
   UserRound,
   X,
 } from 'lucide-react'
@@ -15,7 +13,6 @@ import type {
   AgentRecommendation,
   AgentService,
   ChatMessage,
-  FeedbackType,
 } from './agent.types'
 import MarkdownMessage from './MarkdownMessage'
 import PacedMarkdownMessage from './PacedMarkdownMessage'
@@ -32,7 +29,6 @@ interface AgentMessageProps {
   onStartServiceOrder: (service: AgentService) => void
   onEditResend: (message: ChatMessage, content: string) => void
   onResend: (message: ChatMessage) => void
-  onFeedback: (message: ChatMessage, type: FeedbackType) => void
   onPresentationComplete?: (message: ChatMessage) => void
 }
 
@@ -61,7 +57,6 @@ export default function AgentMessage({
   onStartServiceOrder,
   onEditResend,
   onResend,
-  onFeedback,
   onPresentationComplete,
 }: AgentMessageProps) {
   const isAssistant = message.role === 'assistant'
@@ -315,30 +310,6 @@ export default function AgentMessage({
               </>
             )}
           </div>
-          {isAssistant && message.response && (
-            <div className="agent-feedback-buttons">
-              <button
-                type="button"
-                title="Hữu ích"
-                onClick={() => onFeedback(message, 'helpful')}
-              >
-                <ThumbsUp size={13} />
-              </button>
-              <button
-                type="button"
-                title="Phản hồi"
-                onClick={() => onFeedback(message, 'bad_recommendation')}
-              >
-                <ThumbsDown size={13} />
-              </button>
-              <button
-                type="button"
-                onClick={() => onFeedback(message, 'wrong_information')}
-              >
-                Thông tin sai
-              </button>
-            </div>
-          )}
         </div>
       </div>
     </article>

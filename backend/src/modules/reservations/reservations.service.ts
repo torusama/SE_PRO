@@ -209,7 +209,9 @@ export class ReservationsService implements OnModuleInit {
         [dto.plotIds],
       );
       if (update.rowCount !== dto.plotIds.length) {
-        throw new BadRequestException('Một hoặc nhiều lô đã chọn không còn trống');
+        throw new BadRequestException(
+          'Một hoặc nhiều lô đã chọn không còn trống',
+        );
       }
 
       await this.notifyAdmins(
@@ -259,7 +261,9 @@ export class ReservationsService implements OnModuleInit {
         !plotRows.rows.length ||
         plotRows.rows.some((plot) => plot.status !== 'available')
       ) {
-        throw new BadRequestException('Một hoặc nhiều lô đã chọn không còn trống');
+        throw new BadRequestException(
+          'Một hoặc nhiều lô đã chọn không còn trống',
+        );
       }
       await client.query(
         `UPDATE plots SET status = 'pending', reserved_until = NOW() + INTERVAL '30 minutes', updated_at = NOW()
@@ -323,7 +327,9 @@ export class ReservationsService implements OnModuleInit {
     return this.mapDetail(request, plots);
   }
 
-  async adminList(query: AdminReservationQueryDto = new AdminReservationQueryDto()) {
+  async adminList(
+    query: AdminReservationQueryDto = new AdminReservationQueryDto(),
+  ) {
     const values: unknown[] = [];
     const conditions: string[] = [];
     const add = (value: unknown) => {
@@ -341,9 +347,7 @@ export class ReservationsService implements OnModuleInit {
     if (query.status) conditions.push(`status = ${add(query.status)}`);
     if (query.type) conditions.push(`request_type = ${add(query.type)}`);
     if (query.source)
-      conditions.push(
-        `is_ai_draft = ${add(query.source === 'ai')}`,
-      );
+      conditions.push(`is_ai_draft = ${add(query.source === 'ai')}`);
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const count = await this.database.queryOne<{ total: string }>(
       `SELECT COUNT(*)::text AS total FROM vw_reservation_requests_full ${where}`,
@@ -364,7 +368,12 @@ export class ReservationsService implements OnModuleInit {
        LIMIT ${limit} OFFSET ${offset}`,
       values,
     );
-    return paginate(items, Number(count?.total ?? 0), query.page, query.pageSize);
+    return paginate(
+      items,
+      Number(count?.total ?? 0),
+      query.page,
+      query.pageSize,
+    );
   }
 
   async adminOne(id: number) {
@@ -645,7 +654,9 @@ Hai bên đã đọc, hiểu, tự nguyện ký và chịu trách nhiệm về t
 
   private assertUniquePlotIds(plotIds: number[]) {
     if (new Set(plotIds).size !== plotIds.length) {
-      throw new BadRequestException('Danh sách lô không được chứa mã trùng nhau');
+      throw new BadRequestException(
+        'Danh sách lô không được chứa mã trùng nhau',
+      );
     }
   }
 

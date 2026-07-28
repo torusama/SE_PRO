@@ -6,6 +6,7 @@ describe('AgentToolRegistryService', () => {
     {} as never,
     {} as never,
     {} as never,
+    {} as never,
   );
 
   it('rejects malformed JSON tool arguments', () => {

@@ -258,7 +258,11 @@ export class UsersController {
     return {
       success: true,
       message: 'User status updated',
-      data: await this.usersService.updateStatus(Number(id), dto.isActive, context),
+      data: await this.usersService.updateStatus(
+        Number(id),
+        dto.isActive,
+        context,
+      ),
     };
   }
 }

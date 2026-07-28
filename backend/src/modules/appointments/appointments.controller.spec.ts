@@ -24,6 +24,7 @@ describe('AppointmentsController', () => {
           scheduledAt: '2026-07-15T09:00:00+07:00',
           location: 'Office',
         },
+        {} as never,
       ),
     ).resolves.toEqual({
       success: true,

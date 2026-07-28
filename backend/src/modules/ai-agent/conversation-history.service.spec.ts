@@ -52,10 +52,11 @@ describe('ConversationHistoryService', () => {
 
     const result = await service.get(42, 'SES-owned');
 
-    expect(result.messages[0].response?.recommendations).toEqual([
+    const message = result.messages[0] as any;
+    expect(message.response?.recommendations).toEqual([
       { optionId: 'OPT-001' },
     ]);
-    expect(result.messages[0].response?.metadata).toMatchObject({
+    expect(message.response?.metadata).toMatchObject({
       fallbackUsed: false,
     });
     expect(database.queryOne).toHaveBeenCalledWith(

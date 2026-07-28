@@ -78,31 +78,37 @@ describe('TransfersService', () => {
     const filePath = join(tmpdir(), `transfer-${Date.now()}.pdf`);
     await fs.writeFile(filePath, 'test document');
     const client = {
-      query: jest.fn((sql: string) => {
+      query: jest.fn((sql: string, _params?: any[]) => {
         if (sql.includes('FROM ownership_records o')) {
           return Promise.resolve({
-            rows: [{
-              ownership_id: 1,
-              plot_id: 2,
-              contract_id: 3,
-              user_id: 4,
-              full_name: 'Chủ cũ',
-              plot_code: 'A-01',
-            }],
+            rows: [
+              {
+                ownership_id: 1,
+                plot_id: 2,
+                contract_id: 3,
+                user_id: 4,
+                full_name: 'Chủ cũ',
+                plot_code: 'A-01',
+              },
+            ],
           });
         }
         if (sql.includes('SELECT user_id FROM users')) {
           return Promise.resolve({ rows: [{ user_id: 5 }] });
         }
-        if (sql.includes('LPAD')) return Promise.resolve({ rows: [{ value: '000001' }] });
-        if (sql.includes('RETURNING contract_id')) return Promise.resolve({ rows: [{ contract_id: 6 }] });
+        if (sql.includes('LPAD'))
+          return Promise.resolve({ rows: [{ value: '000001' }] });
+        if (sql.includes('RETURNING contract_id'))
+          return Promise.resolve({ rows: [{ contract_id: 6 }] });
         if (sql.includes('SELECT ownership_id FROM ownership_records')) {
           return Promise.resolve({ rows: [{ ownership_id: 7 }] });
         }
         return Promise.resolve({ rows: [], rowCount: 1 });
       }),
     };
-    database.transaction.mockImplementation(async (callback: any) => callback(client));
+    database.transaction.mockImplementation(async (callback: any) =>
+      callback(client),
+    );
     const transferred = await service.transfer(
       9,
       {
@@ -115,13 +121,15 @@ describe('TransfersService', () => {
           address: 'Hà Nội',
         },
       },
-      [{
-        path: filePath,
-        filename: 'transfer.pdf',
-        originalname: 'transfer.pdf',
-        mimetype: 'application/pdf',
-        size: 13,
-      }] as Express.Multer.File[],
+      [
+        {
+          path: filePath,
+          filename: 'transfer.pdf',
+          originalname: 'transfer.pdf',
+          mimetype: 'application/pdf',
+          size: 13,
+        },
+      ] as Express.Multer.File[],
       { adminId: 9, ipAddress: '127.0.0.1', userAgent: 'jest' },
     );
     expect(transferred.id).toEqual(expect.any(String));

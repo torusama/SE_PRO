@@ -30,12 +30,21 @@ const T = {
 };
 
 type TabId = "info" | "contact" | "lots" | "security";
+type ProfileLocationState = {
+  tab?: TabId;
+  requireProfile?: boolean;
+  from?: {
+    pathname?: string;
+    search?: string;
+    hash?: string;
+  };
+};
+
 type ModalId =
   | "transfer"
   | "status-lot"
   | "avatar"
   | "password"
-  | "email"
   | "phone"
   | "idcard-password";
 
@@ -213,7 +222,11 @@ export default function ProfilePage() {
   const location = useLocation();
   const starsRef = useRef<HTMLDivElement>(null);
 
-  const initialTab = (location.state as { tab?: TabId } | null)?.tab;
+  const routeState = location.state as ProfileLocationState | null;
+  const completionReturnPath = routeState?.from?.pathname
+    ? `${routeState.from.pathname}${routeState.from.search ?? ""}${routeState.from.hash ?? ""}`
+    : location.pathname;
+  const initialTab = routeState?.tab;
   const [activeTab, setActiveTab] = useState<TabId>(initialTab ?? "info");
   const [activeLot, setActiveLot] = useState<number | null>(null);
   const [openModal, setOpenModal] = useState<ModalId | null>(null);
@@ -221,9 +234,8 @@ export default function ProfilePage() {
   // Nếu bị RequireCompleteProfile chuyển hướng về đây (vì hồ sơ chưa đủ điều
   // kiện để dùng các chức năng khác), hiện popup giải thích cho người dùng.
   const [showRequireProfileAlert, setShowRequireProfileAlert] = useState<boolean>(
-    Boolean((location.state as { requireProfile?: boolean } | null)?.requireProfile),
+    Boolean(routeState?.requireProfile),
   );
-  const emailReminderShown = useRef(false);
 
   const [profile, setProfile] = useState<BackendUser | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
@@ -298,17 +310,6 @@ export default function ProfilePage() {
   const [idCardSaving, setIdCardSaving] = useState(false);
   const idCardPasswordRef = useRef<string | null>(null);
 
-  // --- Xác thực email bằng OTP (email đăng nhập + email người liên hệ khẩn cấp) ---
-  const [ownOtpRequested, setOwnOtpRequested] = useState(false);
-  const [ownOtpCode, setOwnOtpCode] = useState("");
-  const [ownOtpCooldown, setOwnOtpCooldown] = useState(0);
-  const [ownOtpBusy, setOwnOtpBusy] = useState(false);
-
-  const [emgOtpRequested, setEmgOtpRequested] = useState(false);
-  const [emgOtpCode, setEmgOtpCode] = useState("");
-  const [emgOtpCooldown, setEmgOtpCooldown] = useState(0);
-  const [emgOtpBusy, setEmgOtpBusy] = useState(false);
-
   // --- Xác thực số điện thoại bằng OTP SMS ---
   const [phoneOtpRequested, setPhoneOtpRequested] = useState(false);
   const [phoneOtpCode, setPhoneOtpCode] = useState("");
@@ -319,15 +320,12 @@ export default function ProfilePage() {
   const [phoneOtpDevCode, setPhoneOtpDevCode] = useState<string | null>(null);
 
   useEffect(() => {
-    if (ownOtpCooldown <= 0 && emgOtpCooldown <= 0 && phoneOtpCooldown <= 0)
-      return;
+    if (phoneOtpCooldown <= 0) return;
     const t = setInterval(() => {
-      setOwnOtpCooldown((v) => Math.max(0, v - 1));
-      setEmgOtpCooldown((v) => Math.max(0, v - 1));
       setPhoneOtpCooldown((v) => Math.max(0, v - 1));
     }, 1000);
     return () => clearInterval(t);
-  }, [ownOtpCooldown, emgOtpCooldown, phoneOtpCooldown]);
+  }, [phoneOtpCooldown]);
 
   const [emergencyContact, setEmergencyContact] = useState({
     name: "",
@@ -383,16 +381,7 @@ export default function ProfilePage() {
     setNotifyService(data.notifyService ?? true);
     setNotifyAnniversary(data.notifyAnniversary ?? true);
     setNotifyAnnouncement(data.notifyAnnouncement ?? false);
-    // Cổng truy cập tổng khớp công thức ở backend (auth.service.withToken):
-    // phải vừa đủ hồ sơ, vừa xác thực OTP cả email đăng nhập lẫn email người
-    // liên hệ khẩn cấp.
-    setProfileComplete(
-      Boolean(
-        data.isProfileComplete &&
-        data.isEmailVerified &&
-        data.isEmergencyEmailVerified,
-      ),
-    );
+    setProfileComplete(Boolean(data.isProfileComplete));
   }
 
   useEffect(() => {
@@ -425,22 +414,16 @@ export default function ProfilePage() {
     };
   }, []);
 
-  // Nhắc xác thực email 1 lần khi hồ sơ đã tải xong (thay cho banner cố định
-  // trước đây) — hiện dạng toast góc màn hình, không lặp lại nhiều lần.
   useEffect(() => {
-    if (emailReminderShown.current) return;
-    if (!profile) return;
-    if (
-      profile.isProfileComplete &&
-      (!profile.isEmailVerified || !profile.isEmergencyEmailVerified)
-    ) {
-      emailReminderShown.current = true;
-      showToast(
-        `Vui lòng xác thực email ở mục "Xác thực Email" (tab "${T.navInfo}") để sử dụng đầy đủ chức năng.`,
-        5000,
-      );
-    }
-  }, [profile]);
+    if (!profile?.isProfileComplete || !routeState?.requireProfile) return;
+    setShowRequireProfileAlert(false);
+    navigate(completionReturnPath, { replace: true, state: null });
+  }, [
+    completionReturnPath,
+    navigate,
+    profile?.isProfileComplete,
+    routeState?.requireProfile,
+  ]);
 
   // --- Người thân được ủy quyền (bảng user_authorized_persons ở backend) ---
   const [authorizedPersons, setAuthorizedPersons] = useState<
@@ -621,20 +604,20 @@ export default function ProfilePage() {
         notes: notes || undefined,
       });
       applyProfile(res.data.data);
+      const profileIsComplete = Boolean(res.data.data.isProfileComplete);
       if (user && token && role) {
         setAuth(
           { ...user, name: res.data.data.fullName },
           token,
           role as "customer" | "admin",
-          role === "admin" ||
-            Boolean(
-              res.data.data.isProfileComplete &&
-                res.data.data.isEmailVerified &&
-                res.data.data.isEmergencyEmailVerified,
-            ),
+          role === "admin" || profileIsComplete,
         );
       }
       showToast("✓ Đã lưu thông tin");
+      if (profileIsComplete && routeState?.requireProfile) {
+        setShowRequireProfileAlert(false);
+        navigate(completionReturnPath, { replace: true, state: null });
+      }
     } catch (error: unknown) {
       showToast(getErrorMessage(error, "Lưu thông tin thất bại."));
     } finally {
@@ -685,80 +668,6 @@ export default function ProfilePage() {
       showToast(getErrorMessage(error, "Lưu số CCCD/Hộ chiếu thất bại."));
     } finally {
       setIdCardSaving(false);
-    }
-  }
-
-  async function handleSendOwnOtp() {
-    setOwnOtpBusy(true);
-    try {
-      await api.post("/users/me/email/send-otp");
-      setOwnOtpRequested(true);
-      setOwnOtpCooldown(60);
-      showToast(`✓ Đã gửi mã OTP đến ${profile?.email ?? "email của bạn"}`);
-    } catch (error: unknown) {
-      showToast(getErrorMessage(error, "Gửi mã OTP thất bại."));
-    } finally {
-      setOwnOtpBusy(false);
-    }
-  }
-
-  async function handleVerifyOwnOtp() {
-    if (ownOtpCode.trim().length !== 6) {
-      showToast("Vui lòng nhập đủ 6 chữ số.");
-      return;
-    }
-    setOwnOtpBusy(true);
-    try {
-      await api.post("/users/me/email/verify-otp", {
-        code: ownOtpCode.trim(),
-      });
-      setOwnOtpCode("");
-      setOwnOtpRequested(false);
-      const res = await api.get("/users/me");
-      applyProfile(res.data.data);
-      showToast("✓ Đã xác thực email đăng nhập");
-    } catch (error: unknown) {
-      showToast(getErrorMessage(error, "Mã OTP không đúng."));
-    } finally {
-      setOwnOtpBusy(false);
-    }
-  }
-
-  async function handleSendEmergencyOtp() {
-    setEmgOtpBusy(true);
-    try {
-      await api.post("/users/me/emergency-contact/send-otp");
-      setEmgOtpRequested(true);
-      setEmgOtpCooldown(60);
-      showToast(
-        `✓ Đã gửi mã OTP đến ${profile?.emergencyContactEmail ?? "email người liên hệ"}`,
-      );
-    } catch (error: unknown) {
-      showToast(getErrorMessage(error, "Gửi mã OTP thất bại."));
-    } finally {
-      setEmgOtpBusy(false);
-    }
-  }
-
-  async function handleVerifyEmergencyOtp() {
-    if (emgOtpCode.trim().length !== 6) {
-      showToast("Vui lòng nhập đủ 6 chữ số.");
-      return;
-    }
-    setEmgOtpBusy(true);
-    try {
-      await api.post("/users/me/emergency-contact/verify-otp", {
-        code: emgOtpCode.trim(),
-      });
-      setEmgOtpCode("");
-      setEmgOtpRequested(false);
-      const res = await api.get("/users/me");
-      applyProfile(res.data.data);
-      showToast("✓ Đã xác thực email người liên hệ khẩn cấp");
-    } catch (error: unknown) {
-      showToast(getErrorMessage(error, "Mã OTP không đúng."));
-    } finally {
-      setEmgOtpBusy(false);
     }
   }
 
@@ -1265,104 +1174,6 @@ export default function ProfilePage() {
             </div>
 
             <div className="panel">
-              <div className="panel-title">Xác thực Email</div>
-              <div className="otp-row">
-                <div className="otp-info">
-                  <div className="otp-label">Email đăng nhập</div>
-                  <div className="otp-email">{profile?.email ?? "—"}</div>
-                </div>
-                {profile?.isEmailVerified ? (
-                  <span className="otp-badge verified">✓ Đã xác thực</span>
-                ) : ownOtpRequested ? (
-                  <div className="otp-verify-box">
-                    <input
-                      inputMode="numeric"
-                      maxLength={6}
-                      placeholder="Mã 6 số"
-                      value={ownOtpCode}
-                      onChange={(e) =>
-                        setOwnOtpCode(e.target.value.replace(/\D/g, ""))
-                      }
-                    />
-                    <button
-                      className="otp-btn"
-                      onClick={handleVerifyOwnOtp}
-                      disabled={ownOtpBusy}
-                    >
-                      Xác nhận
-                    </button>
-                    <button
-                      className="otp-btn ghost"
-                      onClick={handleSendOwnOtp}
-                      disabled={ownOtpBusy || ownOtpCooldown > 0}
-                    >
-                      {ownOtpCooldown > 0
-                        ? `Gửi lại (${ownOtpCooldown}s)`
-                        : "Gửi lại mã"}
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    className="otp-btn"
-                    onClick={handleSendOwnOtp}
-                    disabled={ownOtpBusy}
-                  >
-                    {ownOtpBusy ? "Đang gửi…" : "Gửi mã xác thực"}
-                  </button>
-                )}
-              </div>
-
-              <div className="otp-row">
-                <div className="otp-info">
-                  <div className="otp-label">Email người liên hệ khẩn cấp</div>
-                  <div className="otp-email">
-                    {profile?.emergencyContactEmail ||
-                      "Chưa có — điền ở trên rồi bấm Lưu thay đổi"}
-                  </div>
-                </div>
-                {profile?.isEmergencyEmailVerified ? (
-                  <span className="otp-badge verified">✓ Đã xác thực</span>
-                ) : emgOtpRequested ? (
-                  <div className="otp-verify-box">
-                    <input
-                      inputMode="numeric"
-                      maxLength={6}
-                      placeholder="Mã 6 số"
-                      value={emgOtpCode}
-                      onChange={(e) =>
-                        setEmgOtpCode(e.target.value.replace(/\D/g, ""))
-                      }
-                    />
-                    <button
-                      className="otp-btn"
-                      onClick={handleVerifyEmergencyOtp}
-                      disabled={emgOtpBusy}
-                    >
-                      Xác nhận
-                    </button>
-                    <button
-                      className="otp-btn ghost"
-                      onClick={handleSendEmergencyOtp}
-                      disabled={emgOtpBusy || emgOtpCooldown > 0}
-                    >
-                      {emgOtpCooldown > 0
-                        ? `Gửi lại (${emgOtpCooldown}s)`
-                        : "Gửi lại mã"}
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    className="otp-btn"
-                    onClick={handleSendEmergencyOtp}
-                    disabled={emgOtpBusy || !profile?.emergencyContactEmail}
-                  >
-                    {emgOtpBusy ? "Đang gửi…" : "Gửi mã xác thực"}
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="panel">
               <div className="panel-title">Ghi chú & yêu cầu đặc biệt</div>
               <div className="field">
                 <textarea
@@ -1398,19 +1209,6 @@ export default function ProfilePage() {
                     <div className="c-label">Email</div>
                     <div className="c-value">{profile?.email ?? "—"}</div>
                   </div>
-                  <span
-                    className={`contact-status ${profile?.isEmailVerified ? "verified" : "unverified"}`}
-                  >
-                    {profile?.isEmailVerified
-                      ? "✓ Đã xác thực"
-                      : "Chưa xác thực"}
-                  </span>
-                  <button
-                    className="btn-mini"
-                    onClick={() => setOpenModal("email")}
-                  >
-                    Đổi
-                  </button>
                 </div>
                 <div className="contact-method" style={{ flexWrap: "wrap" }}>
                   <div className="contact-icon">📱</div>
@@ -2072,22 +1870,6 @@ export default function ProfilePage() {
         />
       )}
 
-      {openModal === "email" && (
-        <EmailModal
-          currentEmail={profile?.email ?? ""}
-          onClose={() => setOpenModal(null)}
-          onSubmit={() => {
-            // Đổi email cần một dịch vụ gửi mail xác thực (chưa được cấu hình ở
-            // backend hiện tại) và email cũng là định danh đăng nhập, nên KHÔNG
-            // giả lập thành công ở đây — báo thật cho người dùng biết.
-            setOpenModal(null);
-            showToast(
-              "Chức năng đổi email cần dịch vụ gửi mã xác thực, backend chưa cấu hình nên tạm thời chưa khả dụng.",
-            );
-          }}
-        />
-      )}
-
       {openModal === "phone" && (
         <PhoneModal
           currentPhone={profile?.phone ?? ""}
@@ -2178,8 +1960,8 @@ export default function ProfilePage() {
         variant="warning"
         message={
           <>
-            Bạn cần điền đầy đủ thông tin bắt buộc (và xác thực email) ở trang Hồ sơ
-            trước khi có thể sử dụng chức năng đó. Vui lòng hoàn tất các trường có
+            Bạn cần điền đầy đủ thông tin bắt buộc ở trang Hồ sơ trước khi có thể
+            sử dụng chức năng đó. Vui lòng hoàn tất các trường có
             dấu <strong>*</strong> bên dưới rồi bấm &quot;Lưu thay đổi&quot;.
           </>
         }
@@ -3240,96 +3022,6 @@ function AuthorizedPersonModal({
           disabled={submitting}
         >
           {submitting ? "Đang lưu…" : "Lưu →"}
-        </button>
-      </div>
-    </ModalShell>
-  );
-}
-
-function EmailModal({
-  currentEmail,
-  onClose,
-  onSubmit,
-}: {
-  currentEmail: string;
-  onClose: () => void;
-  onSubmit: (newEmail: string) => void;
-}) {
-  const [newEmail, setNewEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-
-  function handleSubmit() {
-    if (!newEmail || !password) {
-      setError("Vui lòng điền đầy đủ các trường.");
-      return;
-    }
-    if (!/^\S+@\S+\.\S+$/.test(newEmail)) {
-      setError("Email không hợp lệ.");
-      return;
-    }
-    setError(null);
-    onSubmit(newEmail);
-  }
-
-  return (
-    <ModalShell
-      title="Đổi Địa Chỉ Email"
-      sub={`Email hiện tại: ${currentEmail}`}
-      onClose={onClose}
-    >
-      {error && (
-        <div
-          className="modal-warn"
-          style={{
-            color: "rgba(224,92,92,0.85)",
-            borderColor: "rgba(224,92,92,0.25)",
-            background: "rgba(224,92,92,0.07)",
-          }}
-        >
-          ⚠ {error}
-        </div>
-      )}
-
-      <div className="modal-section">
-        <div className="modal-field">
-          <label>Email mới</label>
-          <input
-            type="email"
-            value={newEmail}
-            onChange={(e) => setNewEmail(e.target.value)}
-            placeholder="ten@vidu.com"
-          />
-        </div>
-        <div className="modal-field">
-          <label>Mật khẩu hiện tại (để xác nhận)</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
-          />
-        </div>
-      </div>
-
-      <div
-        style={{
-          fontSize: 12,
-          color: "var(--text-muted)",
-          marginBottom: 20,
-          lineHeight: 1.6,
-        }}
-      >
-        📧 Một email xác thực sẽ được gửi đến địa chỉ mới. Email cũ vẫn có hiệu
-        lực cho đến khi bạn xác nhận địa chỉ mới.
-      </div>
-
-      <div className="modal-btn-row">
-        <button className="modal-btn-ghost" onClick={onClose}>
-          Hủy
-        </button>
-        <button className="modal-btn-primary" onClick={handleSubmit}>
-          Gửi email xác thực →
         </button>
       </div>
     </ModalShell>

@@ -10,6 +10,7 @@ import {
   type WheelEvent as ReactWheelEvent,
 } from 'react'
 import { API_BASE_URL } from '@/lib/api'
+import { getCemeteryRoutePoints } from '@/lib/cemeteryMapRoute'
 import {
   CLUSTER_GROUP_BACKDROPS,
   CONNECTOR_ROAD,
@@ -27,6 +28,7 @@ import {
 import type { GuidedTourStep } from './guidedTour'
 import {
   getCameraForPlots,
+  getCameraForRoute,
   mapTourPlot,
   OVERVIEW_CAMERA,
   type BackendMapPlot,
@@ -42,6 +44,7 @@ interface GuidedTourMapProps {
   onCameraAnimatingChange: (value: boolean) => void
   onPlotSelect?: (plot: GuidedTourPlot) => void
   onFocusedPlotsChange?: (plots: GuidedTourPlot[]) => void
+  routePlot?: GuidedTourPlot | null
 }
 
 const STATUS_COLOR: Record<PlotStatus, string> = {
@@ -62,6 +65,7 @@ function GuidedTourMap({
   onCameraAnimatingChange,
   onPlotSelect,
   onFocusedPlotsChange,
+  routePlot,
 }: GuidedTourMapProps) {
   const [plots, setPlots] = useState<GuidedTourPlot[]>([])
   const [loading, setLoading] = useState(true)
@@ -177,8 +181,13 @@ function GuidedTourMap({
   useEffect(() => {
     if (loading) return
     if (activeStep.cameraMode === 'keep-current') return
-    animateTo(getCameraForPlots(activePlots, activeStep), activeStep.durationMs)
-  }, [activePlots, activeStep, animateTo, loading])
+    animateTo(
+      routePlot
+        ? getCameraForRoute(routePlot)
+        : getCameraForPlots(activePlots, activeStep),
+      activeStep.durationMs,
+    )
+  }, [activePlots, activeStep, animateTo, loading, routePlot])
 
   useEffect(() => cancelAnimation, [cancelAnimation])
 
@@ -360,6 +369,24 @@ function GuidedTourMap({
           />
           <polygon points={gateMarkerPoints(MAP_GATE)} fill="#c9a84c" />
           <polygon points={gateMarkerPoints(SECONDARY_GATE)} fill="#7b6bcc" />
+          {routePlot && (
+            <>
+              <polyline
+                className="guided-map-route-shadow"
+                points={getCemeteryRoutePoints(routePlot)}
+              />
+              <polyline
+                className="guided-map-route"
+                points={getCemeteryRoutePoints(routePlot)}
+              />
+              <circle
+                className="guided-map-route-target"
+                cx={routePlot.x + routePlot.width / 2}
+                cy={routePlot.y + routePlot.height / 2}
+                r="17"
+              />
+            </>
+          )}
           {plots.map((plot) => {
             const active = activeIds.has(plot.id)
             return (

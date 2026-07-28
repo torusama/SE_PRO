@@ -42,10 +42,13 @@ export class ContractsService {
     };
     if (query.search) {
       const p = add(`%${query.search}%`);
-      conditions.push(`(c.contract_code ILIKE ${p} OR u.full_name ILIKE ${p} OR p.plot_code ILIKE ${p})`);
+      conditions.push(
+        `(c.contract_code ILIKE ${p} OR u.full_name ILIKE ${p} OR p.plot_code ILIKE ${p})`,
+      );
     }
     if (query.status) conditions.push(`c.status = ${add(query.status)}`);
-    if (query.paymentStatus) conditions.push(`c.payment_status = ${add(query.paymentStatus)}`);
+    if (query.paymentStatus)
+      conditions.push(`c.payment_status = ${add(query.paymentStatus)}`);
     const where = `WHERE ${conditions.join(' AND ')}`;
     const count = await this.database.queryOne<{ total: string }>(
       `SELECT COUNT(*)::text AS total FROM contracts c
@@ -55,10 +58,17 @@ export class ContractsService {
     const limit = add(query.pageSize);
     const offset = add(query.offset);
     const items = await this.database.query(
-      this.baseQuery(`${where} ORDER BY c.created_at DESC LIMIT ${limit} OFFSET ${offset}`),
+      this.baseQuery(
+        `${where} ORDER BY c.created_at DESC LIMIT ${limit} OFFSET ${offset}`,
+      ),
       values,
     );
-    return paginate(items, Number(count?.total ?? 0), query.page, query.pageSize);
+    return paginate(
+      items,
+      Number(count?.total ?? 0),
+      query.page,
+      query.pageSize,
+    );
   }
 
   async adminOne(id: number) {

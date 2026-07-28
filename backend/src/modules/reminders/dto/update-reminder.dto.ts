@@ -87,7 +87,9 @@ export class UpdateReminderDto {
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(10)
-  @ArrayUnique((email: string) => email.toLowerCase(), { message: 'Vui lòng chọn email khác, email đã bị trùng.' })
+  @ArrayUnique((email: string) => email.toLowerCase(), {
+    message: 'Vui lòng chọn email khác, email đã bị trùng.',
+  })
   @IsEmail({}, { each: true, message: 'Email không hợp lệ hoặc bị trùng.' })
   notifyEmails?: string[];
 }

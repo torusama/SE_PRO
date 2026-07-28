@@ -46,7 +46,9 @@ describe('AdminAuditService', () => {
   it('applies search, type, actor and date filters with stable pagination', async () => {
     const database = {
       queryOne: jest.fn().mockResolvedValue({ total: '1' }),
-      query: jest.fn().mockResolvedValue([{ id: 7, before: { token: '[REDACTED]' } }]),
+      query: jest
+        .fn()
+        .mockResolvedValue([{ id: 7, before: { token: '[REDACTED]' } }]),
     };
     const service = new AdminAuditService(database as never);
     await expect(

@@ -27,6 +27,7 @@ import { ProactiveConciergeService } from './proactive-concierge.service';
 
 interface AuthenticatedUser {
   id: number;
+  role: string;
 }
 
 @Controller('ai-agent')
@@ -48,7 +49,7 @@ export class AiAgentController {
     return {
       success: true,
       message: 'AI response generated',
-      data: await this.aiAgentOrchestrator.chat(dto, user?.id),
+      data: await this.aiAgentOrchestrator.chat(dto, user),
     };
   }
 

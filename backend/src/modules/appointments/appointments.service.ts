@@ -55,7 +55,11 @@ export class AppointmentsService {
     private readonly audit?: AdminAuditService,
   ) {}
 
-  async create(adminId: number, dto: CreateAppointmentDto, context?: AdminRequestContext) {
+  async create(
+    adminId: number,
+    dto: CreateAppointmentDto,
+    context?: AdminRequestContext,
+  ) {
     return this.database.transaction(async (client) => {
       const request = await this.lockApprovedReservationRequest(
         client,
@@ -164,7 +168,12 @@ export class AppointmentsService {
     );
   }
 
-  async update(adminId: number, id: number, dto: UpdateAppointmentDto, context?: AdminRequestContext) {
+  async update(
+    adminId: number,
+    id: number,
+    dto: UpdateAppointmentDto,
+    context?: AdminRequestContext,
+  ) {
     return this.database.transaction(async (client) => {
       const current = await this.lockAppointment(client, id);
       if (current.status !== 'scheduled') {
@@ -284,7 +293,10 @@ export class AppointmentsService {
         entityType: 'offline_appointment',
         entityId: id,
         before: { status: current.status },
-        after: { status: updated.rows[0].status, statusNote: updated.rows[0].statusNote },
+        after: {
+          status: updated.rows[0].status,
+          statusNote: updated.rows[0].statusNote,
+        },
         context: context ?? { adminId, ipAddress: null, userAgent: null },
       });
 

@@ -9,7 +9,12 @@ describe('NotificationsService admin operations', () => {
     };
     const service = new NotificationsService(database as never);
     await expect(
-      service.adminList({ page: 1, pageSize: 20, offset: 0, isRead: false } as never),
+      service.adminList({
+        page: 1,
+        pageSize: 20,
+        offset: 0,
+        isRead: false,
+      } as never),
     ).resolves.toMatchObject({ total: 1, items: [{ id: 1 }] });
   });
 
@@ -30,7 +35,9 @@ describe('NotificationsService admin operations', () => {
 
   it('inserts broadcast recipients and audit in one transaction', async () => {
     const client = {
-      query: jest.fn().mockResolvedValue({ rows: [{ notification_id: 1 }], rowCount: 1 }),
+      query: jest
+        .fn()
+        .mockResolvedValue({ rows: [{ notification_id: 1 }], rowCount: 1 }),
     };
     const database = {
       transaction: jest.fn(async (callback: any) => callback(client)),

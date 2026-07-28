@@ -8,3 +8,5 @@
 - 2026-07-27: Regression tests passed 12/12 (extractDeterministicRequirements + resolvePendingBookingReply).
 - 2026-07-27: Backend build (nest build) and frontend build (vite build) both succeeded with 0 errors.
 - 2026-07-27: Restarted backend (start:dev) and frontend (dev) servers successfully.
+- 2026-07-28: Re-ran both pending-reply and booking suites after the session refresh; 22/22 tests passed.
+- 2026-07-28: Formatted the two backend files and the sidebar stylesheet with Prettier.

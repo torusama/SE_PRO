@@ -16,7 +16,7 @@
   overflow: hidden;
   color: var(--agent-text);
   background: var(--agent-bg);
-  font-family: 'Be Vietnam Pro', 'Inter', sans-serif;
+  font-family: "Be Vietnam Pro", "Inter", sans-serif;
 }
 
 .agent-page * {
@@ -548,7 +548,7 @@
 
 .agent-welcome h2 {
   margin: 9px 0 8px;
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: "Playfair Display", Georgia, serif;
   font-size: clamp(28px, 3.2vw, 42px);
   font-weight: 500;
   letter-spacing: -0.025em;
@@ -748,6 +748,14 @@
 .agent-message-foot time {
   color: #526875;
   font-size: 8px;
+}
+
+.agent-message.user .agent-message-actions {
+  order: 1;
+}
+
+.agent-message.user .agent-message-foot time {
+  order: 2;
 }
 
 .agent-feedback-buttons {
@@ -1033,12 +1041,11 @@
   height: 240px;
   border-radius: 50%;
   border: 2px solid rgba(201, 168, 76, 0.45);
-  background:
-    radial-gradient(
-      circle,
-      rgba(15, 23, 42, 0.95) 0%,
-      rgba(10, 18, 31, 0.98) 100%
-    );
+  background: radial-gradient(
+    circle,
+    rgba(15, 23, 42, 0.95) 0%,
+    rgba(10, 18, 31, 0.98) 100%
+  );
   box-shadow:
     0 0 25px rgba(201, 168, 76, 0.15),
     inset 0 0 20px rgba(0, 0, 0, 0.7);
@@ -1671,21 +1678,6 @@
   color: #78909b;
 }
 
-.agent-compare-hint {
-  position: fixed;
-  right: 20px;
-  bottom: 88px;
-  z-index: 30;
-  padding: 9px 12px;
-  border: 1px solid var(--agent-border-strong);
-  border-radius: 10px;
-  color: var(--agent-teal);
-  background: #0b1621;
-  font-size: 9px;
-  cursor: pointer;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
-}
-
 .agent-dialog-backdrop {
   position: fixed;
   z-index: 10020;
@@ -1940,11 +1932,6 @@
   .agent-composer-inner > p {
     display: none;
   }
-
-  .agent-compare-hint {
-    right: 12px;
-    bottom: 76px;
-  }
 }
 
 /* Readability pass: keep the Vĩnh Phúc Viên identity while giving the chat
@@ -2079,7 +2066,7 @@
 
 .agent-identity h1 {
   overflow: hidden;
-  font-family: 'Be Vietnam Pro', 'Inter', system-ui, sans-serif;
+  font-family: "Be Vietnam Pro", "Inter", system-ui, sans-serif;
   font-size: 16px;
   font-weight: 650;
   line-height: 1.35;
@@ -2559,7 +2546,7 @@
 }
 
 .agent-markdown h3::before {
-  content: '';
+  content: "";
   display: inline-block;
   width: 3px;
   height: 14px;
@@ -2812,23 +2799,21 @@
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-left: 3px solid rgba(0, 229, 196, 0.5);
   border-radius: 14px;
-  background:
-    linear-gradient(
-      135deg,
-      rgba(0, 229, 196, 0.03) 0%,
-      rgba(10, 21, 34, 0.7) 100%
-    );
+  background: linear-gradient(
+    135deg,
+    rgba(0, 229, 196, 0.03) 0%,
+    rgba(10, 21, 34, 0.7) 100%
+  );
   transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
 .agent-service-card:hover {
   border-color: rgba(0, 229, 196, 0.2);
-  background:
-    linear-gradient(
-      135deg,
-      rgba(0, 229, 196, 0.06) 0%,
-      rgba(10, 21, 34, 0.85) 100%
-    );
+  background: linear-gradient(
+    135deg,
+    rgba(0, 229, 196, 0.06) 0%,
+    rgba(10, 21, 34, 0.85) 100%
+  );
   transform: translateY(-1px);
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
 }
@@ -2924,12 +2909,12 @@
   }
 }
 
-.agent-input-wrap > button[aria-label='Dừng phản hồi'] {
+.agent-input-wrap > button[aria-label="Dừng phản hồi"] {
   color: #eaf4f5;
   background: #26343d;
 }
 
-.agent-input-wrap > button[aria-label='Dừng phản hồi']:hover {
+.agent-input-wrap > button[aria-label="Dừng phản hồi"]:hover {
   background: #344650;
 }
 

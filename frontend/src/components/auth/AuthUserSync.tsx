@@ -45,12 +45,7 @@ export default function AuthUserSync() {
           email: profile.email,
         });
         setProfileComplete(
-          role === "admin" ||
-            Boolean(
-              profile.isProfileComplete &&
-                profile.isEmailVerified &&
-                profile.isEmergencyEmailVerified,
-            ),
+          role === "admin" || Boolean(profile.isProfileComplete),
         );
       })
       .catch(() => {

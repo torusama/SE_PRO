@@ -1,7 +1,14 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PoolClient } from 'pg';
 import { DatabaseService } from '../../database/database.service';
-import { AdminNotificationQueryDto, BroadcastNotificationDto } from './dto/admin-notification.dto';
+import {
+  AdminNotificationQueryDto,
+  BroadcastNotificationDto,
+} from './dto/admin-notification.dto';
 import { paginate } from '../../common/interfaces/paginated-response.interface';
 import { AdminAuditService } from '../admin-audit/admin-audit.service';
 import type { AdminRequestContext } from '../../common/decorators/admin-request-context.decorator';
@@ -110,9 +117,12 @@ export class NotificationsService {
     };
     if (query.search) {
       const p = add(`%${query.search}%`);
-      conditions.push(`(n.title ILIKE ${p} OR n.message ILIKE ${p} OR u.full_name ILIKE ${p})`);
+      conditions.push(
+        `(n.title ILIKE ${p} OR n.message ILIKE ${p} OR u.full_name ILIKE ${p})`,
+      );
     }
-    if (query.isRead !== undefined) conditions.push(`n.is_read=${add(query.isRead)}`);
+    if (query.isRead !== undefined)
+      conditions.push(`n.is_read=${add(query.isRead)}`);
     if (query.broadcast !== undefined) {
       conditions.push(
         query.broadcast
@@ -137,13 +147,15 @@ export class NotificationsService {
        LIMIT $${values.length - 1} OFFSET $${values.length}`,
       values,
     );
-    return paginate(items, Number(count?.total ?? 0), query.page, query.pageSize);
+    return paginate(
+      items,
+      Number(count?.total ?? 0),
+      query.page,
+      query.pageSize,
+    );
   }
 
-  async broadcast(
-    dto: BroadcastNotificationDto,
-    context: AdminRequestContext,
-  ) {
+  async broadcast(dto: BroadcastNotificationDto, context: AdminRequestContext) {
     if (dto.channel !== 'in_app') {
       throw new BadRequestException('Only in-app broadcast is supported');
     }

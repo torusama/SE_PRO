@@ -11,6 +11,10 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { ROUTES } from "@/constants/routes";
 import { API_BASE_URL, api } from "@/lib/api";
 import {
+  buildCemeteryDirection,
+  getCemeteryRoutePoints,
+} from "@/lib/cemeteryMapRoute";
+import {
   CEMETERY_ZONES,
   CEMETERY_ZONE_LAYOUT,
   ZONE_META,
@@ -41,12 +45,7 @@ type StatusFilter = "all" | PlotStatus;
 type SelectionMode = "single" | "cluster";
 type ReservationType = "reserve" | "purchase";
 type CustomerReservationStatus =
-  | "draft"
-  | "submitted"
-  | "pending"
-  | "approved"
-  | "rejected"
-  | "cancelled";
+  "draft" | "submitted" | "pending" | "approved" | "rejected" | "cancelled";
 
 interface BackendMapPlot {
   id?: string | number;
@@ -580,68 +579,6 @@ function descriptionLines(description: string) {
     .filter(Boolean);
 }
 
-function buildDirection(plot: MapPlot) {
-  const route = getRouteMeta(plot);
-  const turnText =
-    route.roadX < plot.x + plot.width / 2
-      ? "r\u1ebd ph\u1ea3i v\u00e0o khu l\u00f4"
-      : "r\u1ebd tr\u00e1i v\u00e0o khu l\u00f4";
-  return `T\u1eeb c\u1ed5ng ch\u00ednh ph\u00eda Nam, \u0111i theo l\u1ed1i ven d\u01b0\u1edbi \u0111\u1ebfn tr\u1ee5c \u0111\u01b0\u1eddng g\u1ea7n ${plot.zoneName}. Sau \u0111\u00f3 ${turnText}, \u0111i d\u1ecdc theo h\u00e0ng ${plot.rowCode} v\u00e0 d\u1eebng \u1edf c\u1ea1nh l\u00f4 ${plot.plotCode}.`;
-}
-
-// Mỗi khu giờ là 1 khối chữ nhật đơn giản (không còn chia 3 dải trên/giữa/
-// dưới), nên đường đi được tính bằng cách nối từ cổng chính -> trục đường
-// chính bên phải (hoặc mép trái nếu khu nằm sát bên trái) -> hành lang
-// ngang gần hàng của lô -> vào lô.
-function getRouteMeta(plot: MapPlot) {
-  const centerX = plot.x + plot.width / 2;
-  const centerY = plot.y + plot.height / 2;
-
-  if (plot.zoneCode === "C") {
-    // Khu lô gia tộc đi từ Cổng phụ, thẳng vào cụm gia tộc tương ứng.
-    return {
-      roadX: SECONDARY_GATE.x,
-      rowAisleY: Number((SECONDARY_GATE.y - 30).toFixed(2)),
-      colAisleX: SECONDARY_GATE.x,
-      attachX: Number(centerX.toFixed(2)),
-      attachY: Number(centerY.toFixed(2)),
-      gate: SECONDARY_GATE,
-    };
-  }
-
-  const useMainRoad = centerX >= 380;
-  const roadX = useMainRoad ? MAIN_ROAD.x : -10;
-  const rowAisleY = CROSS_ROADS.reduce((closest, road) => {
-    const roadY = road.y + road.height / 2;
-    return Math.abs(roadY - centerY) < Math.abs(closest - centerY)
-      ? roadY
-      : closest;
-  }, MAP_GATE.y - 30);
-  const attachX = useMainRoad ? plot.x + plot.width : plot.x;
-
-  return {
-    roadX,
-    rowAisleY: Number(rowAisleY.toFixed(2)),
-    colAisleX: roadX,
-    attachX: Number(attachX.toFixed(2)),
-    attachY: Number(centerY.toFixed(2)),
-    gate: MAP_GATE,
-  };
-}
-
-function routePoints(plot: MapPlot) {
-  const route = getRouteMeta(plot);
-  return [
-    [route.gate.x, route.gate.y - 30],
-    [route.roadX, route.gate.y - 30],
-    [route.roadX, route.rowAisleY],
-    [route.attachX, route.rowAisleY],
-    [route.attachX, route.attachY],
-  ]
-    .map(([x, y]) => `${x},${y}`)
-    .join(" ");
-}
-
 function arePlotsAdjacent(a: MapPlot, b: MapPlot) {
   if (a.zoneCode !== b.zoneCode) return false;
   const colsPerBlock =
@@ -723,6 +660,7 @@ export default function MapPage() {
 
   useEffect(() => {
     const rawHighlight = searchParams.get("highlight") ?? "";
+    const shouldShowRoute = searchParams.get("route") === "1";
     if (!rawHighlight || appliedHighlightRef.current === rawHighlight) return;
 
     const highlightIds = [
@@ -739,8 +677,7 @@ export default function MapPage() {
     }
 
     const highlightedPlots = plots.filter(
-      (plot) =>
-        !plot.isPlaceholder && highlightIds.includes(Number(plot.id)),
+      (plot) => !plot.isPlaceholder && highlightIds.includes(Number(plot.id)),
     );
     if (!highlightedPlots.length) return;
 
@@ -754,12 +691,12 @@ export default function MapPage() {
         setSelectionMode("single");
         setSelectedPlot(highlightedPlots[0]);
         setClusterPlots([]);
-        setRoutePlotId(highlightedPlots[0].id);
+        setRoutePlotId(shouldShowRoute ? highlightedPlots[0].id : null);
       } else {
         setSelectionMode("cluster");
         setSelectedPlot(highlightedPlots[0]);
         setClusterPlots(highlightedPlots);
-        setRoutePlotId(highlightedPlots[0].id);
+        setRoutePlotId(shouldShowRoute ? highlightedPlots[0].id : null);
       }
 
       scrollTimer = window.setTimeout(() => {
@@ -1617,7 +1554,7 @@ export default function MapPage() {
                 {routePlot && (
                   <polyline
                     className="route-line"
-                    points={routePoints(routePlot)}
+                    points={getCemeteryRoutePoints(routePlot)}
                   />
                 )}
 
@@ -1941,7 +1878,7 @@ export default function MapPage() {
               {routePlot && (
                 <div className="direction-box">
                   <div className="box-label">{T.directionGuide}</div>
-                  <p>{buildDirection(selectedPlot)}</p>
+                  <p>{buildCemeteryDirection(selectedPlot)}</p>
                 </div>
               )}
 

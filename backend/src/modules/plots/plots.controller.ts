@@ -22,10 +22,7 @@ import {
 } from './dto/update-plot.dto';
 import { PlotsService } from './plots.service';
 import { AdminPlotQueryDto } from './dto/admin-plot-query.dto';
-import {
-  CreateAdminZoneDto,
-  UpdateAdminZoneDto,
-} from './dto/admin-zone.dto';
+import { CreateAdminZoneDto, UpdateAdminZoneDto } from './dto/admin-zone.dto';
 import {
   CurrentAdminContext,
   type AdminRequestContext,
@@ -66,10 +63,7 @@ export class PlotsController {
   @Patch('admin/plot-zones/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
-  async updateZone(
-    @Param('id') id: string,
-    @Body() dto: UpdateAdminZoneDto,
-  ) {
+  async updateZone(@Param('id') id: string, @Body() dto: UpdateAdminZoneDto) {
     return {
       success: true,
       data: await this.plotsService.updateZone(Number(id), dto),
@@ -158,7 +152,11 @@ export class PlotsController {
     return {
       success: true,
       message: 'Plot status updated',
-      data: await this.plotsService.adminStatus(Number(id), dto.status, context),
+      data: await this.plotsService.adminStatus(
+        Number(id),
+        dto.status,
+        context,
+      ),
     };
   }
 

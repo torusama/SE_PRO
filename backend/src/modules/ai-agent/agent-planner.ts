@@ -111,6 +111,32 @@ export const AGENT_PLANNER_TOOL = {
             'Requested service date in YYYY-MM-DD format. Resolve relative Vietnamese dates from the current date supplied by the system.',
         },
         note: { type: 'string', maxLength: 1000 },
+        knowledgeProposals: {
+          type: 'array',
+          description: 'Optional knowledge updates or memory proposals detected from the user message. Use this to remember preferences or capture learning signals while still completing the primary action.',
+          items: {
+            type: 'object',
+            properties: {
+              category: { type: 'string' },
+              title: { type: 'string' },
+              content: { type: 'string' },
+              knowledgeType: {
+                type: 'string',
+                enum: [
+                  'user_preference',
+                  'business_rule',
+                  'faq',
+                  'information_correction',
+                  'recommendation_feedback',
+                ],
+              },
+              requestedScope: { type: 'string', enum: ['user', 'global'] },
+              reason: { type: 'string' },
+            },
+            required: ['category', 'title', 'content', 'knowledgeType', 'requestedScope', 'reason'],
+            additionalProperties: false,
+          },
+        },
       },
       required: [
         'intent',
@@ -144,6 +170,20 @@ export type AgentPlanAction =
   | 'suggest_bazi_direction'
   | 'none';
 
+export interface KnowledgeProposal {
+  category: string;
+  title: string;
+  content: string;
+  knowledgeType:
+    | 'user_preference'
+    | 'business_rule'
+    | 'faq'
+    | 'information_correction'
+    | 'recommendation_feedback';
+  requestedScope: 'user' | 'global';
+  reason: string;
+}
+
 export interface AgentPlan {
   intent: AgentPlanIntent;
   action: AgentPlanAction;
@@ -151,6 +191,7 @@ export interface AgentPlan {
   needsClarification: boolean;
   clarificationQuestion: string;
   requirements: AgentRequirements;
+  knowledgeProposals?: KnowledgeProposal[];
 }
 
 const INTENTS = new Set<AgentPlanIntent>([
@@ -263,6 +304,16 @@ export function parseAgentPlan(raw: string): AgentPlan {
     delete requirements.budgetMin;
   }
 
+  let knowledgeProposals: KnowledgeProposal[] | undefined = undefined;
+  if (Array.isArray(parsed.knowledgeProposals)) {
+    knowledgeProposals = parsed.knowledgeProposals.filter((p: any) => 
+      p && typeof p === 'object' && p.category && p.title && p.content && p.knowledgeType && p.requestedScope && p.reason
+    ) as KnowledgeProposal[];
+    if (knowledgeProposals.length === 0) {
+      knowledgeProposals = undefined;
+    }
+  }
+
   return {
     intent: parsed.intent as AgentPlanIntent,
     action: parsed.action as AgentPlanAction,
@@ -277,6 +328,7 @@ export function parseAgentPlan(raw: string): AgentPlan {
     requirements: Object.fromEntries(
       Object.entries(requirements).filter(([, value]) => value !== undefined),
     ),
+    knowledgeProposals,
   };
 }
 

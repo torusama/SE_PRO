@@ -100,7 +100,12 @@ export class TransfersService {
        LIMIT $${values.length - 1} OFFSET $${values.length}`,
       values,
     );
-    return paginate(items, Number(count?.total ?? 0), query.page, query.pageSize);
+    return paginate(
+      items,
+      Number(count?.total ?? 0),
+      query.page,
+      query.pageSize,
+    );
   }
 
   async ownership(query: AdminOwnershipQueryDto) {
@@ -112,7 +117,9 @@ export class TransfersService {
     };
     if (query.search) {
       const p = add(`%${query.search}%`);
-      conditions.push(`(p.plot_code ILIKE ${p} OR u.full_name ILIKE ${p} OR u.email ILIKE ${p})`);
+      conditions.push(
+        `(p.plot_code ILIKE ${p} OR u.full_name ILIKE ${p} OR u.email ILIKE ${p})`,
+      );
     }
     if (query.plotId) conditions.push(`o.plot_id=${add(query.plotId)}`);
     if (query.holderId) conditions.push(`o.user_id=${add(query.holderId)}`);
@@ -136,7 +143,12 @@ export class TransfersService {
        LIMIT $${values.length - 1} OFFSET $${values.length}`,
       values,
     );
-    return paginate(items, Number(count?.total ?? 0), query.page, query.pageSize);
+    return paginate(
+      items,
+      Number(count?.total ?? 0),
+      query.page,
+      query.pageSize,
+    );
   }
 
   async transferDetail(id: string) {
@@ -332,7 +344,10 @@ export class TransfersService {
           [
             adminId,
             batchId,
-            JSON.stringify({ holderUserId: previousHolderId, plotIds: input.plotIds }),
+            JSON.stringify({
+              holderUserId: previousHolderId,
+              plotIds: input.plotIds,
+            }),
             JSON.stringify({ recipientUserId: recipient.userId, batchCode }),
             context?.ipAddress ?? null,
             context?.userAgent ?? null,

@@ -22,7 +22,11 @@ function setup(handler?: (sql: string, params?: unknown[]) => any) {
     database,
     notifications,
     audit,
-    service: new ContractsService(database as never, notifications as never, audit as never),
+    service: new ContractsService(
+      database as never,
+      notifications as never,
+      audit as never,
+    ),
   };
 }
 
@@ -61,7 +65,16 @@ describe('ContractsService admin operations', () => {
   it('rejects duplicate and overpayment before writes', async () => {
     const over = setup((sql) => {
       if (sql.includes('FOR UPDATE')) {
-        return { rows: [{ id: 1, totalAmount: 100, paidAmount: 90, paymentStatus: 'partial' }] };
+        return {
+          rows: [
+            {
+              id: 1,
+              totalAmount: 100,
+              paidAmount: 90,
+              paymentStatus: 'partial',
+            },
+          ],
+        };
       }
       return { rows: [], rowCount: 0 };
     });
@@ -71,9 +84,14 @@ describe('ContractsService admin operations', () => {
 
     const duplicate = setup((sql) => {
       if (sql.includes('FOR UPDATE')) {
-        return { rows: [{ id: 1, totalAmount: 100, paidAmount: 0, paymentStatus: 'unpaid' }] };
+        return {
+          rows: [
+            { id: 1, totalAmount: 100, paidAmount: 0, paymentStatus: 'unpaid' },
+          ],
+        };
       }
-      if (sql.includes('SELECT 1 FROM payment_transactions')) return { rows: [{ exists: 1 }] };
+      if (sql.includes('SELECT 1 FROM payment_transactions'))
+        return { rows: [{ exists: 1 }] };
       return { rows: [], rowCount: 0 };
     });
     await expect(
@@ -88,13 +106,35 @@ describe('ContractsService admin operations', () => {
   it('records payment, notification and audit inside one transaction', async () => {
     const { client, notifications, audit, service } = setup((sql) => {
       if (sql.includes('FOR UPDATE')) {
-        return { rows: [{ id: 1, contractCode: 'HD-1', userId: 2, totalAmount: 100, paidAmount: 0, paymentStatus: 'unpaid' }] };
+        return {
+          rows: [
+            {
+              id: 1,
+              contractCode: 'HD-1',
+              userId: 2,
+              totalAmount: 100,
+              paidAmount: 0,
+              paymentStatus: 'unpaid',
+            },
+          ],
+        };
       }
       if (sql.includes('INSERT INTO payment_transactions')) {
         return { rows: [{ id: 8, amount: 100, paymentMethod: 'cash' }] };
       }
       if (sql.includes('UPDATE contracts')) {
-        return { rows: [{ id: 1, contractCode: 'HD-1', userId: 2, totalAmount: 100, paidAmount: 100, paymentStatus: 'paid' }] };
+        return {
+          rows: [
+            {
+              id: 1,
+              contractCode: 'HD-1',
+              userId: 2,
+              totalAmount: 100,
+              paidAmount: 100,
+              paymentStatus: 'paid',
+            },
+          ],
+        };
       }
       return { rows: [], rowCount: 0 };
     });

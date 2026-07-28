@@ -227,11 +227,16 @@ describe('AppointmentsService', () => {
       }
       return result();
     }, audit);
-    await service.update(1, 21, { location: 'Văn phòng mới' }, {
-      adminId: 1,
-      ipAddress: '127.0.0.1',
-      userAgent: 'jest',
-    });
+    await service.update(
+      1,
+      21,
+      { location: 'Văn phòng mới' },
+      {
+        adminId: 1,
+        ipAddress: '127.0.0.1',
+        userAgent: 'jest',
+      },
+    );
     expect(audit.record).toHaveBeenCalledWith(
       client,
       expect.objectContaining({ action: 'appointment.update', entityId: 21 }),

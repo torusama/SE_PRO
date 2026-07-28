@@ -13,7 +13,9 @@ describe('ReservationsController admin contract', () => {
   it.each(['adminList', 'adminOne', 'approve', 'reject'] as const)(
     '%s requires the admin role',
     (method) => {
-      expect(Reflect.getMetadata(ROLES_KEY, controller[method])).toEqual(['admin']);
+      expect(Reflect.getMetadata(ROLES_KEY, controller[method])).toEqual([
+        'admin',
+      ]);
     },
   );
 

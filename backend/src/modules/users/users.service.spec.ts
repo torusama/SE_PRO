@@ -36,7 +36,12 @@ describe('UsersService admin operations', () => {
         fullName: 'Khách hàng',
       }),
     };
-    const service = new UsersService(database as never, {} as never, {} as never, {} as never);
+    const service = new UsersService(
+      database as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
     await expect(service.findById(2)).resolves.toMatchObject({
       idCardNumber: expect.stringContaining('8901'),
     });
@@ -55,7 +60,12 @@ describe('UsersService admin operations', () => {
       transaction: jest.fn(async (callback: any) => callback(client)),
     };
     const audit = { record: jest.fn().mockResolvedValue({ id: 1 }) };
-    const service = new UsersService(database as never, {} as never, {} as never, audit as never);
+    const service = new UsersService(
+      database as never,
+      {} as never,
+      {} as never,
+      audit as never,
+    );
     await service.updateStatus(2, false, {
       adminId: 1,
       ipAddress: '127.0.0.1',

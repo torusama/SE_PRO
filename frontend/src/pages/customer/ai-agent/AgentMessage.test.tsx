@@ -68,7 +68,6 @@ describe('AgentMessage actions', () => {
         onStartServiceOrder={noOp}
         onEditResend={noOp}
         onResend={noOp}
-        onFeedback={noOp}
       />,
     )
 
@@ -100,7 +99,6 @@ describe('AgentMessage actions', () => {
         onStartServiceOrder={noOp}
         onEditResend={onEditResend}
         onResend={noOp}
-        onFeedback={noOp}
       />,
     )
 
@@ -148,7 +146,6 @@ describe('AgentMessage actions', () => {
         onStartServiceOrder={onStartServiceOrder}
         onEditResend={noOp}
         onResend={noOp}
-        onFeedback={noOp}
       />,
     )
 

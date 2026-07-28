@@ -17,9 +17,7 @@ describe('AppController (e2e)', () => {
   });
 
   it('/ (GET) does not expose a placeholder route', () => {
-    return request(app.getHttpServer())
-      .get('/')
-      .expect(404);
+    return request(app.getHttpServer()).get('/').expect(404);
   });
 
   afterEach(async () => {

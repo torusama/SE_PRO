@@ -18,7 +18,7 @@ const result = {
   suggestedServices: [],
   rankerVersion: 'rule-based-v1',
   fallbackUsed: true,
-} as RecommendationResult;
+} as unknown as RecommendationResult;
 
 describe('agent recommendation grounding', () => {
   it('accepts plot codes present in tool output', () => {

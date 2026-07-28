@@ -1,8 +1,7 @@
 // src/components/auth/RequireCompleteProfile.tsx
-// Chặn các trang chức năng chính nếu: (1) hồ sơ cá nhân chưa đủ trường bắt buộc,
-// hoặc (2) email đăng nhập chưa xác thực OTP, hoặc (3) email người liên hệ khẩn
-// cấp chưa xác thực OTP. Trạng thái này luôn đọc từ backend (đăng nhập/đăng ký
-// trả về, hoặc GET /users/me nếu chưa biết) — không suy đoán/hard-code ở frontend.
+// Chặn các trang chức năng chính khi hồ sơ cá nhân chưa đủ trường bắt buộc.
+// Email tài khoản đã được xác thực trong luồng đăng ký, nên không yêu cầu OTP
+// lần hai khi người dùng cập nhật hồ sơ.
 import { useEffect, useState } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { api } from "@/lib/api";
@@ -23,13 +22,7 @@ export default function RequireCompleteProfile() {
       .get("/users/me")
       .then((res) => {
         const data = res.data?.data ?? {};
-        // Cổng truy cập tổng: vừa điền đủ hồ sơ, vừa xác thực OTP cho cả email
-        // đăng nhập lẫn email người liên hệ khẩn cấp (khớp công thức ở auth.service).
-        const canAccess = Boolean(
-          data.isProfileComplete &&
-          data.isEmailVerified &&
-          data.isEmergencyEmailVerified,
-        );
+        const canAccess = Boolean(data.isProfileComplete);
         if (!cancelled) setProfileComplete(canAccess);
       })
       .catch(() => {

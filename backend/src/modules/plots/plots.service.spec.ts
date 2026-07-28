@@ -33,7 +33,8 @@ describe('PlotsService admin operations', () => {
 
   it('creates, updates, deactivates and restores zones', async () => {
     const database = {
-      queryOne: jest.fn()
+      queryOne: jest
+        .fn()
         .mockResolvedValueOnce({ id: 1, code: 'D', isActive: true })
         .mockResolvedValueOnce({ id: 1, code: 'D', isActive: true })
         .mockResolvedValueOnce({ id: 1, code: 'D', isActive: false })
@@ -52,9 +53,9 @@ describe('PlotsService admin operations', () => {
       queryOne: jest.fn().mockRejectedValue({ code: '23505' }),
     };
     const service = new PlotsService(database as never);
-    await expect(service.createZone({ code: 'A', name: 'Trùng' })).rejects.toBeInstanceOf(
-      BadRequestException,
-    );
+    await expect(
+      service.createZone({ code: 'A', name: 'Trùng' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('blocks direct transitions away from locked state', async () => {
@@ -70,21 +71,34 @@ describe('PlotsService admin operations', () => {
   it('atomically locks, unlocks, deletes and restores with audit', async () => {
     const beforeRows = [
       { id: 1, plotCode: 'A-01', status: 'available', isDeleted: false },
-      { id: 1, plotCode: 'A-01', status: 'locked', previousStatus: 'available', isDeleted: false },
+      {
+        id: 1,
+        plotCode: 'A-01',
+        status: 'locked',
+        previousStatus: 'available',
+        isDeleted: false,
+      },
       { id: 1, plotCode: 'A-01', status: 'available', isDeleted: false },
       { id: 1, plotCode: 'A-01', status: 'available', isDeleted: true },
     ];
     const client = {
       query: jest.fn((sql: string) => {
-        if (sql.includes('FOR UPDATE')) return Promise.resolve({ rows: [beforeRows.shift()] });
-        if (sql.includes("status='locked'")) return Promise.resolve({ rows: [{ id: 1, status: 'locked' }] });
-        if (sql.includes('previous_status=NULL')) return Promise.resolve({ rows: [{ id: 1, status: 'available' }] });
-        if (sql.includes('is_deleted=TRUE')) return Promise.resolve({ rows: [{ id: 1 }] });
-        if (sql.includes('is_deleted=FALSE')) return Promise.resolve({ rows: [{ id: 1, status: 'available' }] });
+        if (sql.includes('FOR UPDATE'))
+          return Promise.resolve({ rows: [beforeRows.shift()] });
+        if (sql.includes("status='locked'"))
+          return Promise.resolve({ rows: [{ id: 1, status: 'locked' }] });
+        if (sql.includes('previous_status=NULL'))
+          return Promise.resolve({ rows: [{ id: 1, status: 'available' }] });
+        if (sql.includes('is_deleted=TRUE'))
+          return Promise.resolve({ rows: [{ id: 1 }] });
+        if (sql.includes('is_deleted=FALSE'))
+          return Promise.resolve({ rows: [{ id: 1, status: 'available' }] });
         return Promise.resolve({ rows: [] });
       }),
     };
-    const database = { transaction: jest.fn(async (callback: any) => callback(client)) };
+    const database = {
+      transaction: jest.fn(async (callback: any) => callback(client)),
+    };
     const audit = { record: jest.fn() };
     const service = new PlotsService(database as never, audit as never);
     const context = { adminId: 9, ipAddress: '127.0.0.1', userAgent: 'jest' };
@@ -102,7 +116,9 @@ describe('PlotsService admin operations', () => {
         rows: [{ id: 1, status: 'sold', isDeleted: false }],
       }),
     };
-    const database = { transaction: jest.fn(async (callback: any) => callback(client)) };
+    const database = {
+      transaction: jest.fn(async (callback: any) => callback(client)),
+    };
     const audit = { record: jest.fn() };
     const service = new PlotsService(database as never, audit as never);
     await expect(

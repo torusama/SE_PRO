@@ -226,7 +226,9 @@ export class AiAgentOrchestratorService {
     private readonly booking: AgentBookingService,
   ) {}
 
-  async chat(dto: ChatDto, userId?: number | null) {
+  async chat(dto: ChatDto, user?: { id: number; role: string } | null) {
+    const userId = user?.id ?? null;
+    const userRole = user?.role ?? null;
     const sessionId = dto.sessionId?.trim() || `SES-${randomUUID()}`;
     const traceId = `TRACE-${randomUUID()}`;
     const directRequirements = this.extractRequirements(dto.message);
@@ -362,12 +364,32 @@ export class AiAgentOrchestratorService {
         });
       }
 
+      if (plan.knowledgeProposals && plan.knowledgeProposals.length > 0) {
+        for (const proposal of plan.knowledgeProposals) {
+          try {
+            await this.tools.execute(
+              'propose_knowledge_update',
+              proposal as unknown as Record<string, unknown>,
+              {
+                conversationId: conversation?.id ?? null,
+                sourceMessageId: userMessageId,
+                userId: userId,
+                role: userRole,
+                sessionId: sessionId,
+              },
+            );
+          } catch (e) {
+            console.error('[AutonomousLearning error]:', e);
+          }
+        }
+      }
+
       const execution = await this.executeAgentPlan({
         plan,
         conversationId: conversation?.id ?? null,
         userMessageId,
-        userId: userId ?? null,
-        role: 'customer',
+        userId: userId,
+        role: userRole,
         sessionId: sessionId,
       });
       let recommendationResult = execution.recommendationResult;
@@ -630,11 +652,11 @@ Trusted client action: ${JSON.stringify(bookingContext?.clientAction ?? null)}`,
     const externalCallId = `planned-${randomUUID()}`;
     try {
       const output = await this.tools.execute(toolName, args, {
-        conversationId: input.conversationId,
-        messageId: input.userMessageId,
-        userId: input.userId,
-        role: input.role,
-        sessionId: input.sessionId,
+        conversationId: input.conversationId ?? null,
+        sourceMessageId: input.userMessageId ?? null,
+        userId: input.userId ?? null,
+        role: input.role ?? null,
+        sessionId: input.sessionId ?? null,
       });
       await this.logToolCall({
         conversationId: input.conversationId,

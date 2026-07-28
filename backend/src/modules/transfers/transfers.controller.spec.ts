@@ -3,6 +3,8 @@ import { TransfersController } from './transfers.controller';
 
 describe('TransfersController admin guards', () => {
   it('protects every route at controller level', () => {
-    expect(Reflect.getMetadata(ROLES_KEY, TransfersController)).toEqual(['admin']);
+    expect(Reflect.getMetadata(ROLES_KEY, TransfersController)).toEqual([
+      'admin',
+    ]);
   });
 });
