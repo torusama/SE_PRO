@@ -626,7 +626,12 @@ export default function ProfilePage() {
           { ...user, name: res.data.data.fullName },
           token,
           role as "customer" | "admin",
-          res.data.data.isProfileComplete,
+          role === "admin" ||
+            Boolean(
+              res.data.data.isProfileComplete &&
+                res.data.data.isEmailVerified &&
+                res.data.data.isEmergencyEmailVerified,
+            ),
         );
       }
       showToast("✓ Đã lưu thông tin");

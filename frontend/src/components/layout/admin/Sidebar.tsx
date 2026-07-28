@@ -69,7 +69,11 @@ export default function Sidebar() {
               {group.section}
             </div>
             {group.items.map(item => (
-              <NavLink  key={item.to} to={item.to} className={({ isActive }) =>`sidebar-item ${isActive ? 'active' : ''}`}
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === ROUTES.ADMIN_DASHBOARD}
+                className={({ isActive }) =>`sidebar-item ${isActive ? 'active' : ''}`}
                 style={({ isActive }) => ({
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                   padding: '8px 16px',

@@ -40,9 +40,52 @@ type HistoryItem = {
   createdAt: string
 }
 
-type Tab = 'feedback' | 'training' | 'models' | 'history'
+type Conversation = {
+  conversationId: number
+  sessionId: string
+  status: string
+  customerName?: string
+  customerEmail?: string
+  messageCount: number
+  feedbackCount: number
+  preview?: string
+  llmModel: string
+  updatedAt: string
+}
+
+type ConversationMessage = {
+  messageId: number
+  role: string
+  content?: string
+  intent?: string
+  extractedData?: Record<string, unknown>
+  metadata?: {
+    recommendations?: Array<{ optionId?: string; plotCodes?: string[]; totalCost?: number }>
+    actions?: Array<{ type?: string; optionId?: string; plotIds?: number[] }>
+    draftRequestId?: number
+  }
+  createdAt: string
+}
+
+type ConversationDetail = Conversation & {
+  createdAt: string
+  rankerVersion?: string
+  knowledgeVersion?: string
+  messages: ConversationMessage[]
+  toolCalls: Array<{
+    toolCallId: number
+    toolName: string
+    status: string
+    executionTimeMs?: number
+    createdAt: string
+  }>
+  feedback: Feedback[]
+}
+
+type Tab = 'conversations' | 'feedback' | 'training' | 'models' | 'history'
 
 const tabs: Array<{ id: Tab; label: string }> = [
+  { id: 'conversations', label: 'Nhật ký Agent' },
   { id: 'feedback', label: 'Phản hồi' },
   { id: 'training', label: 'Huấn luyện' },
   { id: 'models', label: 'Phiên bản model' },
@@ -58,7 +101,10 @@ const metricsText = (metrics?: Record<string, number>) =>
     : 'Chưa có'
 
 export default function AgentAdminPage() {
-  const [tab, setTab] = useState<Tab>('feedback')
+  const [tab, setTab] = useState<Tab>('conversations')
+  const [conversations, setConversations] = useState<Conversation[]>([])
+  const [conversationDetail, setConversationDetail] = useState<ConversationDetail>()
+  const [detailLoading, setDetailLoading] = useState(false)
   const [feedback, setFeedback] = useState<Feedback[]>([])
   const [runs, setRuns] = useState<TrainingRun[]>([])
   const [models, setModels] = useState<ModelVersion[]>([])
@@ -71,12 +117,14 @@ export default function AgentAdminPage() {
     setLoading(true)
     setError(undefined)
     try {
-      const [feedbackRes, runsRes, modelsRes, historyRes] = await Promise.all([
+      const [conversationRes, feedbackRes, runsRes, modelsRes, historyRes] = await Promise.all([
+        api.get('/admin/ai-agent/conversations', { params: { page: 1, pageSize: 100 } }),
         api.get('/admin/ai-agent/feedback'),
         api.get('/admin/ai-agent/training-runs'),
         api.get('/admin/ai-agent/model-versions'),
         api.get('/admin/ai-agent/learning-history'),
       ])
+      setConversations(conversationRes.data.data?.items ?? [])
       setFeedback(feedbackRes.data.data ?? feedbackRes.data)
       setRuns(runsRes.data.data ?? runsRes.data)
       setModels(modelsRes.data.data ?? modelsRes.data)
@@ -87,6 +135,19 @@ export default function AgentAdminPage() {
       setLoading(false)
     }
   }, [])
+
+  const openConversation = async (conversationId: number) => {
+    setDetailLoading(true)
+    setError(undefined)
+    try {
+      const response = await api.get(`/admin/ai-agent/conversations/${conversationId}`)
+      setConversationDetail(response.data.data)
+    } catch {
+      setError('Không tải được chi tiết phiên trò chuyện.')
+    } finally {
+      setDetailLoading(false)
+    }
+  }
 
   useEffect(() => {
     const timer = window.setTimeout(() => void loadData(), 0)
@@ -152,6 +213,7 @@ export default function AgentAdminPage() {
       </header>
 
       <section className="agent-admin__stats">
+        <article><span>Phiên trò chuyện</span><strong>{conversations.length}</strong></article>
         <article><span>Chờ duyệt</span><strong>{pendingCount}</strong></article>
         <article><span>Training runs</span><strong>{runs.length}</strong></article>
         <article><span>Model đang chạy</span><strong>{activeModel?.versionName ?? 'Rule fallback'}</strong></article>
@@ -170,6 +232,122 @@ export default function AgentAdminPage() {
         <div className="agent-admin__empty">Đang tải dữ liệu…</div>
       ) : (
         <section className="agent-admin__panel">
+          {tab === 'conversations' && (
+            <div className="agent-admin__conversation-layout">
+              <div className="agent-admin__conversation-list">
+                {conversations.map((item) => (
+                  <button
+                    className={conversationDetail?.conversationId === item.conversationId ? 'is-selected' : ''}
+                    key={item.conversationId}
+                    onClick={() => void openConversation(item.conversationId)}
+                  >
+                    <span>
+                      <strong>{item.customerName || 'Khách chưa đăng nhập'}</strong>
+                      <small>{item.customerEmail || item.sessionId}</small>
+                    </span>
+                    <span className="agent-admin__conversation-meta">
+                      <small>{item.messageCount} tin nhắn · {item.feedbackCount} phản hồi</small>
+                      <time>{formatDate(item.updatedAt)}</time>
+                    </span>
+                    <p>{item.preview || 'Chưa có nội dung'}</p>
+                  </button>
+                ))}
+                {!conversations.length && <div className="agent-admin__empty">Chưa có phiên trò chuyện.</div>}
+              </div>
+
+              <div className="agent-admin__conversation-detail">
+                {detailLoading ? (
+                  <div className="agent-admin__empty">Đang tải chi tiết…</div>
+                ) : !conversationDetail ? (
+                  <div className="agent-admin__empty">Chọn một phiên để xem nhu cầu, tư vấn và thao tác của Agent.</div>
+                ) : (
+                  <>
+                    <header>
+                      <div>
+                        <span className={`agent-admin__status status-${conversationDetail.status}`}>{conversationDetail.status}</span>
+                        <h2>{conversationDetail.customerName || 'Khách chưa đăng nhập'}</h2>
+                        <p>{conversationDetail.customerEmail || conversationDetail.sessionId}</p>
+                      </div>
+                      <dl>
+                        <div><dt>LLM</dt><dd>{conversationDetail.llmModel}</dd></div>
+                        <div><dt>Ranker</dt><dd>{conversationDetail.rankerVersion || 'rule-based'}</dd></div>
+                        <div><dt>Knowledge</dt><dd>{conversationDetail.knowledgeVersion || '—'}</dd></div>
+                      </dl>
+                    </header>
+
+                    <div className="agent-admin__messages">
+                      {conversationDetail.messages
+                        .filter((message) => message.role === 'user' || message.role === 'assistant')
+                        .map((message) => {
+                          const recommendations = message.metadata?.recommendations ?? []
+                          const draftId = message.metadata?.draftRequestId
+                          return (
+                            <article className={`role-${message.role}`} key={message.messageId}>
+                              <div className="agent-admin__message-head">
+                                <strong>{message.role === 'user' ? 'Khách hàng' : 'AI Agent'}</strong>
+                                <time>{formatDate(message.createdAt)}</time>
+                              </div>
+                              <p>{message.content || '—'}</p>
+                              {message.intent && <small>Intent: {message.intent}</small>}
+                              {message.extractedData && Object.keys(message.extractedData).length > 0 && (
+                                <details>
+                                  <summary>Nhu cầu đã trích xuất</summary>
+                                  <pre>{JSON.stringify(message.extractedData, null, 2)}</pre>
+                                </details>
+                              )}
+                              {recommendations.length > 0 && (
+                                <div className="agent-admin__recommendations">
+                                  {recommendations.map((option, index) => (
+                                    <span key={option.optionId || index}>
+                                      {option.optionId || `Phương án ${index + 1}`}: {(option.plotCodes ?? []).join(', ') || '—'}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                              {(message.metadata?.actions?.length ?? 0) > 0 && (
+                                <div className="agent-admin__recommendations">
+                                  {message.metadata?.actions?.map((action, index) => (
+                                    <span key={`${action.type}-${index}`}>
+                                      {action.type || 'ACTION'}
+                                      {action.plotIds?.length ? ` · lô ID ${action.plotIds.join(', ')}` : ''}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                              {draftId && <strong className="agent-admin__draft">Draft reservation #{draftId}</strong>}
+                            </article>
+                          )
+                        })}
+                    </div>
+
+                    <section className="agent-admin__trace">
+                      <h3>Tool calls ({conversationDetail.toolCalls.length})</h3>
+                      {conversationDetail.toolCalls.map((call) => (
+                        <div key={call.toolCallId}>
+                          <code>{call.toolName}</code>
+                          <span className={`agent-admin__status status-${call.status}`}>{call.status}</span>
+                          <small>{call.executionTimeMs ?? 0} ms · {formatDate(call.createdAt)}</small>
+                        </div>
+                      ))}
+                      {!conversationDetail.toolCalls.length && <p>Phiên này chưa ghi nhận tool call.</p>}
+                    </section>
+                    <section className="agent-admin__trace">
+                      <h3>Phản hồi ({conversationDetail.feedback.length})</h3>
+                      {conversationDetail.feedback.map((item) => (
+                        <div key={item.feedbackId}>
+                          <strong>{item.feedbackType}</strong>
+                          <span className={`agent-admin__status status-${item.status}`}>{item.status}</span>
+                          <small>{item.rating ? `${item.rating}/5 sao` : 'Chưa chấm sao'} · {formatDate(item.createdAt)}</small>
+                        </div>
+                      ))}
+                      {!conversationDetail.feedback.length && <p>Phiên này chưa có phản hồi.</p>}
+                    </section>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
           {tab === 'feedback' && (
             <div className="agent-admin__list">
               {feedback.map((item) => (

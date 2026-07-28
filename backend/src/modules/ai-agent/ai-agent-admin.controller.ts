@@ -16,6 +16,8 @@ import { RetrainModelDto } from './dto/retrain-model.dto';
 import { ReviewFeedbackDto } from './dto/review-feedback.dto';
 import { FeedbackService } from './feedback.service';
 import { TrainingService } from './training.service';
+import { ConversationHistoryService } from './conversation-history.service';
+import { AdminAiActivityQueryDto } from './dto/admin-ai-activity-query.dto';
 
 interface AdminUser {
   id: number;
@@ -28,7 +30,26 @@ export class AiAgentAdminController {
   constructor(
     private readonly feedback: FeedbackService,
     private readonly training: TrainingService,
+    private readonly conversations: ConversationHistoryService,
   ) {}
+
+  @Get('conversations')
+  async conversationList(@Query() query: AdminAiActivityQueryDto) {
+    return {
+      success: true,
+      message: 'AI conversations retrieved',
+      data: await this.conversations.adminList(query),
+    };
+  }
+
+  @Get('conversations/:id')
+  async conversationDetail(@Param('id') id: string) {
+    return {
+      success: true,
+      message: 'AI conversation retrieved',
+      data: await this.conversations.adminGet(Number(id)),
+    };
+  }
 
   @Get('feedback')
   async listFeedback(@Query('status') status?: string) {

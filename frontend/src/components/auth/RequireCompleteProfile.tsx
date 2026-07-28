@@ -11,12 +11,13 @@ import { ROUTES } from "@/constants/routes";
 
 export default function RequireCompleteProfile() {
   const profileComplete = useAuthStore((s) => s.profileComplete);
+  const role = useAuthStore((s) => s.role);
   const setProfileComplete = useAuthStore((s) => s.setProfileComplete);
   const location = useLocation();
   const [checking, setChecking] = useState(profileComplete === null);
 
   useEffect(() => {
-    if (profileComplete !== null) return;
+    if (role === "admin" || profileComplete !== null) return;
     let cancelled = false;
     api
       .get("/users/me")
@@ -42,7 +43,9 @@ export default function RequireCompleteProfile() {
     return () => {
       cancelled = true;
     };
-  }, [profileComplete, setProfileComplete]);
+  }, [profileComplete, role, setProfileComplete]);
+
+  if (role === "admin") return <Outlet />;
 
   if (checking) return null;
 

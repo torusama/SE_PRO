@@ -16,7 +16,11 @@ function buildInitials(fullName: string) {
  */
 export default function AuthUserSync() {
   const token = useAuthStore((state) => state.token);
+  const role = useAuthStore((state) => state.role);
   const setUser = useAuthStore((state) => state.setUser);
+  const setProfileComplete = useAuthStore(
+    (state) => state.setProfileComplete,
+  );
 
   useEffect(() => {
     if (!token) return;
@@ -40,6 +44,14 @@ export default function AuthUserSync() {
           initials: buildInitials(fullName),
           email: profile.email,
         });
+        setProfileComplete(
+          role === "admin" ||
+            Boolean(
+              profile.isProfileComplete &&
+                profile.isEmailVerified &&
+                profile.isEmergencyEmailVerified,
+            ),
+        );
       })
       .catch(() => {
         // The global API interceptor handles an expired/revoked session.
@@ -49,7 +61,7 @@ export default function AuthUserSync() {
     return () => {
       cancelled = true;
     };
-  }, [setUser, token]);
+  }, [role, setProfileComplete, setUser, token]);
 
   return null;
 }

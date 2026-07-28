@@ -83,10 +83,73 @@
 .agent-admin__empty, .agent-admin__error { padding: 28px; border: 1px dashed var(--ai-border); border-radius: 12px; color: #8ea0b5; text-align: center; }
 .agent-admin__error { margin-top: 18px; color: #ff929a; border-color: rgba(255, 78, 92, .35); }
 
+.agent-admin__conversation-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, .75fr) minmax(440px, 1.6fr);
+  gap: 14px;
+}
+.agent-admin__conversation-list, .agent-admin__conversation-detail {
+  min-height: 520px;
+  max-height: 72vh;
+  overflow: auto;
+  border: 1px solid var(--ai-border);
+  border-radius: 13px;
+  background: rgba(11, 18, 32, .9);
+}
+.agent-admin__conversation-list > button {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--ai-border);
+  border-radius: 0;
+  padding: 15px;
+  text-align: left;
+}
+.agent-admin__conversation-list > button.is-selected { background: rgba(0, 229, 196, .1); }
+.agent-admin__conversation-list button > span:first-child,
+.agent-admin__conversation-meta { display: flex; justify-content: space-between; gap: 8px; }
+.agent-admin__conversation-list small,
+.agent-admin__conversation-list time { color: #7f91a7; font-size: 11px; }
+.agent-admin__conversation-list p {
+  margin: 8px 0 0;
+  overflow: hidden;
+  color: #a9b8c9;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agent-admin__conversation-detail { padding: 20px; }
+.agent-admin__conversation-detail > header { display: flex; justify-content: space-between; gap: 18px; border-bottom: 1px solid var(--ai-border); }
+.agent-admin__conversation-detail h2 { margin: 8px 0 2px; }
+.agent-admin__conversation-detail header p { margin-top: 0; color: #91a1b5; }
+.agent-admin__conversation-detail dl { margin: 0 0 16px; font-size: 11px; }
+.agent-admin__conversation-detail dl div { display: grid; grid-template-columns: 74px 1fr; gap: 8px; }
+.agent-admin__conversation-detail dt { color: #7f91a7; }
+.agent-admin__conversation-detail dd { margin: 0; color: #c4d0dc; overflow-wrap: anywhere; }
+.agent-admin__messages { display: grid; gap: 12px; padding: 18px 0; }
+.agent-admin__messages article { max-width: 88%; padding: 13px; border: 1px solid var(--ai-border); border-radius: 12px; background: rgba(255, 255, 255, .035); }
+.agent-admin__messages .role-user { margin-left: auto; border-color: rgba(201, 168, 76, .25); }
+.agent-admin__messages .role-assistant { border-color: rgba(0, 229, 196, .22); }
+.agent-admin__message-head { display: flex; justify-content: space-between; gap: 12px; color: var(--ai-teal); font-size: 12px; }
+.agent-admin__message-head time { color: #77899e; font-size: 10px; }
+.agent-admin__messages article > p { white-space: pre-wrap; color: #c7d2dd; font-size: 13px; line-height: 1.55; }
+.agent-admin__messages details { margin-top: 10px; color: #d9c78e; font-size: 12px; }
+.agent-admin__messages pre { max-height: 210px; overflow: auto; padding: 10px; border-radius: 8px; color: #b9c7d5; background: #070c16; white-space: pre-wrap; }
+.agent-admin__recommendations { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.agent-admin__recommendations span, .agent-admin__draft { padding: 5px 8px; border-radius: 7px; color: #7df4df; background: rgba(0, 229, 196, .09); font-size: 11px; }
+.agent-admin__draft { display: inline-block; margin-top: 8px; color: #e5c96b; background: rgba(201, 168, 76, .1); }
+.agent-admin__trace { padding-top: 4px; border-top: 1px solid var(--ai-border); }
+.agent-admin__trace > div { display: flex; align-items: center; gap: 9px; padding: 8px 0; border-bottom: 1px solid var(--ai-border); }
+.agent-admin__trace code { color: #8ce8da; }
+.agent-admin__trace small { margin-left: auto; color: #7f91a7; }
+
 @media (max-width: 760px) {
   .agent-admin { padding: 20px 14px; }
   .agent-admin__hero { align-items: flex-start; flex-direction: column; }
   .agent-admin__stats { display: grid; grid-template-columns: 1fr; }
   .agent-admin__model { align-items: flex-start; flex-direction: column; }
   .agent-admin__actions { margin-left: 0; }
+  .agent-admin__conversation-layout { grid-template-columns: 1fr; }
+  .agent-admin__conversation-list, .agent-admin__conversation-detail { max-height: none; min-height: 0; }
+  .agent-admin__conversation-detail > header { flex-direction: column; }
 }
