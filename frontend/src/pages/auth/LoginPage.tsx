@@ -25,11 +25,11 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      const { user, token, role, profileComplete } = await loginRequest({
+      const { user, token, role } = await loginRequest({
         email,
         password,
       });
-      setAuth(user, token, role, profileComplete);
+      setAuth(user, token, role);
       navigate(role === "admin" ? ROUTES.ADMIN_DASHBOARD : ROUTES.HOME);
     } catch (err: any) {
       let message: string;

@@ -233,9 +233,8 @@ export default function ProfilePage() {
 
   // Nếu bị RequireCompleteProfile chuyển hướng về đây (vì hồ sơ chưa đủ điều
   // kiện để dùng các chức năng khác), hiện popup giải thích cho người dùng.
-  const [showRequireProfileAlert, setShowRequireProfileAlert] = useState<boolean>(
-    Boolean(routeState?.requireProfile),
-  );
+  const [showRequireProfileAlert, setShowRequireProfileAlert] =
+    useState<boolean>(Boolean(routeState?.requireProfile));
 
   const [profile, setProfile] = useState<BackendUser | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
@@ -613,6 +612,7 @@ export default function ProfilePage() {
           role === "admin" || profileIsComplete,
         );
       }
+      applyProfile(res.data.data);
       showToast("✓ Đã lưu thông tin");
       if (profileIsComplete && routeState?.requireProfile) {
         setShowRequireProfileAlert(false);
@@ -1960,9 +1960,9 @@ export default function ProfilePage() {
         variant="warning"
         message={
           <>
-            Bạn cần điền đầy đủ thông tin bắt buộc ở trang Hồ sơ trước khi có thể
-            sử dụng chức năng đó. Vui lòng hoàn tất các trường có
-            dấu <strong>*</strong> bên dưới rồi bấm &quot;Lưu thay đổi&quot;.
+            Bạn cần điền đầy đủ thông tin bắt buộc ở trang Hồ sơ trước khi có
+            thể sử dụng chức năng đó. Vui lòng hoàn tất các trường có dấu{" "}
+            <strong>*</strong> bên dưới rồi bấm &quot;Lưu thay đổi&quot;.
           </>
         }
         confirmLabel="Đã hiểu"

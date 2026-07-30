@@ -59,7 +59,9 @@ const avatarFileFilter = (
 ) => {
   if (!/^image\/(jpe?g|png|webp)$/.test(file.mimetype)) {
     callback(
-      new BadRequestException('Only JPG, PNG, or WEBP images are allowed'),
+      new BadRequestException(
+        'Chỉ chấp nhận ảnh định dạng JPG, PNG hoặc WEBP.',
+      ),
       false,
     );
     return;
@@ -109,7 +111,8 @@ export class UsersController {
     @CurrentUser() user: AuthUser,
     @UploadedFile() file?: UploadedDiskFile,
   ) {
-    if (!file) throw new BadRequestException('No file uploaded');
+    if (!file)
+      throw new BadRequestException('Vui lòng chọn một tệp để tải lên.');
     const avatarUrl = `/uploads/avatars/${file.filename}`;
     return {
       success: true,

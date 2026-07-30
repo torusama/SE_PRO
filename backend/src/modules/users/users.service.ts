@@ -80,7 +80,10 @@ export class UsersService {
 
   async me(userId: number) {
     const user = await this.findById(userId);
-    if (!user) throw new NotFoundException('User not found');
+    if (!user)
+      throw new NotFoundException(
+        'Không tìm thấy thông tin tài khoản. Vui lòng đăng nhập lại.',
+      );
     return user;
   }
 
@@ -130,7 +133,10 @@ export class UsersService {
        WHERE user_id = $1 AND is_deleted = FALSE`,
       [id],
     );
-    if (!user) throw new NotFoundException('User not found');
+    if (!user)
+      throw new NotFoundException(
+        'Không tìm thấy thông tin tài khoản. Vui lòng đăng nhập lại.',
+      );
     return {
       ...user,
       idCardNumber: maskIdCard(user.idCardNumber),
@@ -216,7 +222,10 @@ export class UsersService {
         dto.ward ?? null,
       ],
     );
-    if (!user) throw new NotFoundException('User not found');
+    if (!user)
+      throw new NotFoundException(
+        'Không tìm thấy thông tin tài khoản. Vui lòng đăng nhập lại.',
+      );
     return {
       ...user,
       idCardNumber: maskIdCard(user.idCardNumber),
@@ -233,7 +242,10 @@ export class UsersService {
        WHERE user_id = $1 AND is_deleted = FALSE`,
       [userId],
     );
-    if (!row) throw new NotFoundException('User not found');
+    if (!row)
+      throw new NotFoundException(
+        'Không tìm thấy thông tin tài khoản. Vui lòng đăng nhập lại.',
+      );
     const matches = await bcrypt.compare(password, row.password_hash);
     if (!matches) throw new UnauthorizedException('Mật khẩu không đúng');
     return { idCardNumber: row.id_card_number };
@@ -244,7 +256,10 @@ export class UsersService {
       `SELECT password_hash FROM users WHERE user_id = $1 AND is_deleted = FALSE`,
       [userId],
     );
-    if (!row) throw new NotFoundException('User not found');
+    if (!row)
+      throw new NotFoundException(
+        'Không tìm thấy thông tin tài khoản. Vui lòng đăng nhập lại.',
+      );
     const matches = await bcrypt.compare(password, row.password_hash);
     if (!matches) throw new UnauthorizedException('Mật khẩu không đúng');
     const updated = await this.database.queryOne<{
@@ -264,7 +279,10 @@ export class UsersService {
        RETURNING user_id AS id, avatar_url AS "avatarUrl"`,
       [userId, avatarUrl],
     );
-    if (!user) throw new NotFoundException('User not found');
+    if (!user)
+      throw new NotFoundException(
+        'Không tìm thấy thông tin tài khoản. Vui lòng đăng nhập lại.',
+      );
     return user;
   }
 
@@ -277,7 +295,10 @@ export class UsersService {
        WHERE user_id = $1 AND is_deleted = FALSE`,
       [userId],
     );
-    if (!row) throw new NotFoundException('User not found');
+    if (!row)
+      throw new NotFoundException(
+        'Không tìm thấy thông tin tài khoản. Vui lòng đăng nhập lại.',
+      );
     this.assertCooldownElapsed(row.password_otp_last_sent_at);
 
     const code = generateOtpCode();
@@ -309,11 +330,16 @@ export class UsersService {
        FROM users WHERE user_id = $1 AND is_deleted = FALSE`,
       [userId],
     );
-    if (!user) throw new NotFoundException('User not found');
+    if (!user)
+      throw new NotFoundException(
+        'Không tìm thấy thông tin tài khoản. Vui lòng đăng nhập lại.',
+      );
 
     const matches = await bcrypt.compare(currentPassword, user.password_hash);
     if (!matches)
-      throw new BadRequestException('Current password is incorrect');
+      throw new BadRequestException(
+        'Mật khẩu hiện tại không đúng. Vui lòng nhập lại mật khẩu đăng nhập hiện tại của bạn.',
+      );
 
     await this.assertOtpMatches(
       user.password_otp_hash,
@@ -380,7 +406,10 @@ export class UsersService {
        WHERE user_id = $1 AND is_deleted = FALSE`,
       [userId],
     );
-    if (!row) throw new NotFoundException('User not found');
+    if (!row)
+      throw new NotFoundException(
+        'Không tìm thấy thông tin tài khoản. Vui lòng đăng nhập lại.',
+      );
     this.assertCooldownElapsed(row.email_otp_last_sent_at);
 
     const code = generateOtpCode();
@@ -406,7 +435,10 @@ export class UsersService {
        FROM users WHERE user_id = $1 AND is_deleted = FALSE`,
       [userId],
     );
-    if (!row) throw new NotFoundException('User not found');
+    if (!row)
+      throw new NotFoundException(
+        'Không tìm thấy thông tin tài khoản. Vui lòng đăng nhập lại.',
+      );
 
     await this.assertOtpMatches(
       row.email_otp_hash,
@@ -440,7 +472,10 @@ export class UsersService {
        FROM users WHERE user_id = $1 AND is_deleted = FALSE`,
       [userId],
     );
-    if (!row) throw new NotFoundException('User not found');
+    if (!row)
+      throw new NotFoundException(
+        'Không tìm thấy thông tin tài khoản. Vui lòng đăng nhập lại.',
+      );
     if (!row.emergency_contact_email) {
       throw new BadRequestException(
         'Chưa có email người liên hệ khẩn cấp — vui lòng nhập ở tab "Thông tin cá nhân" trước.',
@@ -477,7 +512,10 @@ export class UsersService {
        FROM users WHERE user_id = $1 AND is_deleted = FALSE`,
       [userId],
     );
-    if (!row) throw new NotFoundException('User not found');
+    if (!row)
+      throw new NotFoundException(
+        'Không tìm thấy thông tin tài khoản. Vui lòng đăng nhập lại.',
+      );
 
     await this.assertOtpMatches(
       row.emergency_contact_otp_hash,
@@ -511,7 +549,10 @@ export class UsersService {
        WHERE user_id = $1 AND is_deleted = FALSE`,
       [userId],
     );
-    if (!row) throw new NotFoundException('User not found');
+    if (!row)
+      throw new NotFoundException(
+        'Không tìm thấy thông tin tài khoản. Vui lòng đăng nhập lại.',
+      );
     if (!row.phone_number) {
       throw new BadRequestException(
         'Chưa có số điện thoại — vui lòng nhập ở tab "Thông tin cá nhân" trước.',
@@ -548,7 +589,10 @@ export class UsersService {
        FROM users WHERE user_id = $1 AND is_deleted = FALSE`,
       [userId],
     );
-    if (!row) throw new NotFoundException('User not found');
+    if (!row)
+      throw new NotFoundException(
+        'Không tìm thấy thông tin tài khoản. Vui lòng đăng nhập lại.',
+      );
 
     await this.assertOtpMatches(
       row.phone_otp_hash,

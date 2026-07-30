@@ -22,6 +22,6 @@ export class RegisterDto {
   registrationToken!: string;
 
   @IsOptional()
-  @IsString()
+  @IsString({ message: 'Số điện thoại không hợp lệ.' })
   phone?: string;
 }

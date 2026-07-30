@@ -237,12 +237,23 @@ export class AuthService {
        WHERE email = $1 AND is_deleted = FALSE`,
       [this.normalizeEmail(dto.email)],
     );
-    if (!user || !user.is_active) {
-      throw new UnauthorizedException('Invalid credentials');
+    if (!user) {
+      throw new UnauthorizedException(
+        'Email hoặc mật khẩu không đúng. Vui lòng kiểm tra lại thông tin đăng nhập.',
+      );
+    }
+    if (!user.is_active) {
+      throw new UnauthorizedException(
+        'Tài khoản này đã bị khoá. Vui lòng liên hệ quản trị viên để được hỗ trợ.',
+      );
     }
 
     const ok = await bcrypt.compare(dto.password, user.password_hash);
-    if (!ok) throw new UnauthorizedException('Invalid credentials');
+    if (!ok) {
+      throw new UnauthorizedException(
+        'Email hoặc mật khẩu không đúng. Vui lòng kiểm tra lại thông tin đăng nhập.',
+      );
+    }
 
     await this.database.query(
       'UPDATE users SET last_login_at = NOW(), updated_at = NOW() WHERE user_id = $1',

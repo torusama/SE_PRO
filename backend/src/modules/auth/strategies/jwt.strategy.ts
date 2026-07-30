@@ -42,7 +42,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       [payload.sub],
     );
     if (!user || !user.is_active) {
-      throw new UnauthorizedException('User is not active');
+      throw new UnauthorizedException(
+        'Phiên đăng nhập không còn hợp lệ. Vui lòng đăng nhập lại.',
+      );
     }
 
     return {

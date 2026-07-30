@@ -47,7 +47,7 @@ export class NotificationsService {
        RETURNING notification_id AS id, is_read AS "isRead"`,
       [id, userId],
     );
-    if (!row) throw new NotFoundException('Notification not found');
+    if (!row) throw new NotFoundException('Không tìm thấy thông báo này.');
     return row;
   }
 
