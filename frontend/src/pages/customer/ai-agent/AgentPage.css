@@ -758,37 +758,6 @@
   order: 2;
 }
 
-.agent-feedback-buttons {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  opacity: 0;
-  transition: opacity 150ms ease;
-}
-
-.agent-message:hover .agent-feedback-buttons {
-  opacity: 1;
-}
-
-.agent-feedback-buttons button {
-  display: inline-flex;
-  min-height: 26px;
-  align-items: center;
-  justify-content: center;
-  padding: 0 7px;
-  border: 0;
-  border-radius: 7px;
-  color: #718590;
-  background: transparent;
-  font-size: 8px;
-  cursor: pointer;
-}
-
-.agent-feedback-buttons button:hover {
-  color: var(--agent-teal);
-  background: rgba(255, 255, 255, 0.045);
-}
-
 .agent-options {
   display: grid;
   gap: 11px;
@@ -895,6 +864,39 @@
   white-space: nowrap;
 }
 
+.agent-option-analysis {
+  margin: 0 0 14px;
+  padding: 11px 12px;
+  border: 1px solid rgba(65, 204, 178, 0.13);
+  border-radius: 10px;
+  background: rgba(65, 204, 178, 0.035);
+}
+
+.agent-option-analysis strong,
+.agent-option-analysis p {
+  display: block;
+  margin: 0;
+}
+
+.agent-option-analysis strong,
+.agent-option-section-label {
+  color: #b6c8ce;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.agent-option-analysis p {
+  margin-top: 6px;
+  color: #91a5af;
+  font-size: 9px;
+  line-height: 1.65;
+}
+
+.agent-option-section-label {
+  margin: 0 0 7px;
+}
+
 .agent-reasons {
   display: grid;
   gap: 6px;
@@ -926,6 +928,10 @@
   background: rgba(201, 168, 76, 0.04);
   font-size: 8px;
   line-height: 1.5;
+}
+
+.agent-tradeoff strong {
+  color: #c4aa6d;
 }
 
 .agent-option-actions {
@@ -1625,8 +1631,7 @@
   font-size: 15px;
 }
 
-.agent-comparison-head button,
-.agent-dialog-head button {
+.agent-comparison-head button {
   display: grid;
   width: 30px;
   height: 30px;
@@ -1676,113 +1681,6 @@
   width: 140px;
   min-width: 140px;
   color: #78909b;
-}
-
-.agent-dialog-backdrop {
-  position: fixed;
-  z-index: 10020;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  padding: 20px;
-  background: rgba(2, 5, 12, 0.76);
-  backdrop-filter: blur(8px);
-}
-
-.agent-feedback-dialog {
-  width: min(100%, 490px);
-  max-height: min(720px, 90dvh);
-  overflow-y: auto;
-  padding: 20px;
-  border: 1px solid var(--agent-border-strong);
-  border-radius: 16px;
-  color: var(--agent-text);
-  background: #0a111e;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
-}
-
-.agent-dialog-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 16px;
-}
-
-.agent-dialog-head span {
-  color: var(--agent-gold);
-  font-size: 8px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.agent-dialog-head h3 {
-  margin: 5px 0 0;
-  font-size: 17px;
-}
-
-.agent-feedback-dialog label {
-  display: grid;
-  gap: 7px;
-  margin-top: 12px;
-  color: #8fa0aa;
-  font-size: 9px;
-}
-
-.agent-feedback-dialog select,
-.agent-feedback-dialog input,
-.agent-feedback-dialog textarea {
-  width: 100%;
-  padding: 10px 11px;
-  resize: vertical;
-  border: 1px solid var(--agent-border);
-  border-radius: 9px;
-  outline: 0;
-  color: var(--agent-text);
-  background: rgba(255, 255, 255, 0.035);
-  font-size: 10px;
-}
-
-.agent-feedback-dialog select:focus,
-.agent-feedback-dialog input:focus,
-.agent-feedback-dialog textarea:focus {
-  border-color: var(--agent-border-strong);
-}
-
-.agent-feedback-note,
-.agent-dialog-error {
-  margin: 13px 0 0;
-  color: #6d818c;
-  font-size: 8px;
-  line-height: 1.6;
-}
-
-.agent-dialog-error {
-  color: #eb8b92;
-}
-
-.agent-dialog-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 18px;
-}
-
-.agent-dialog-actions button {
-  min-height: 34px;
-  padding: 0 14px;
-  border: 1px solid var(--agent-border);
-  border-radius: 9px;
-  color: #98a9b2;
-  background: rgba(255, 255, 255, 0.035);
-  font-size: 9px;
-  cursor: pointer;
-}
-
-.agent-dialog-actions button.primary {
-  color: #041511;
-  border-color: var(--agent-teal);
-  background: var(--agent-teal);
-  font-weight: 700;
 }
 
 .agent-conversation-loading {
@@ -1919,10 +1817,6 @@
   .agent-option-actions .agent-primary-action {
     width: 100%;
     margin-left: 0;
-  }
-
-  .agent-feedback-buttons {
-    opacity: 1;
   }
 
   .agent-composer {
@@ -2193,12 +2087,6 @@
   font-size: 10px;
 }
 
-.agent-feedback-buttons button {
-  min-height: 32px;
-  padding: 0 9px;
-  font-size: 10px;
-}
-
 .agent-options {
   gap: 14px;
   margin-top: 18px;
@@ -2242,6 +2130,26 @@
   margin-top: 5px;
   font-size: 12px;
   line-height: 1.4;
+}
+
+.agent-option-analysis {
+  margin-bottom: 17px;
+  padding: 14px 15px;
+}
+
+.agent-option-analysis strong,
+.agent-option-section-label {
+  font-size: 11px;
+}
+
+.agent-option-analysis p {
+  margin-top: 7px;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.agent-option-section-label {
+  margin-bottom: 9px;
 }
 
 .agent-reasons {
@@ -2932,8 +2840,7 @@
     font-size: 9px;
   }
 
-  .agent-message-actions,
-  .agent-feedback-buttons {
+  .agent-message-actions {
     opacity: 1;
   }
 

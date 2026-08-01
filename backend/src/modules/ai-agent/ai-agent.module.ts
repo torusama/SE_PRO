@@ -22,9 +22,17 @@ import { OpenAiService, OpenAiSecondaryService } from './openai.service';
 import { MultiProviderLlmService } from './multi-provider-llm.service';
 
 import { AutonomousLearningService } from './autonomous-learning.service';
+import { LearningAnalyticsService } from './learning-analytics.service';
+import { RemindersModule } from '../reminders/reminders.module';
+import { AgentInsightsService } from './agent-insights.service';
 
 @Module({
-  imports: [PlotsModule, ReservationsModule, CemeteryServicesModule],
+  imports: [
+    PlotsModule,
+    ReservationsModule,
+    CemeteryServicesModule,
+    RemindersModule,
+  ],
   controllers: [AiAgentController, AiAgentAdminController],
   providers: [
     AiAgentService,
@@ -44,6 +52,8 @@ import { AutonomousLearningService } from './autonomous-learning.service';
     AgentBookingService,
     ProactiveConciergeService,
     AutonomousLearningService,
+    LearningAnalyticsService,
+    AgentInsightsService,
   ],
   exports: [AiAgentService, PlotRecommendationService, BaziRuleService],
 })

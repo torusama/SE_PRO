@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import {
+  AGENT_PLANNER_TOOL,
   AGENT_PLANNER_TOOL_NAME,
   parseAgentPlan,
   recommendationDiscoveryQuestion,
@@ -50,6 +51,81 @@ describe('agent planner', () => {
 
   it('uses the dedicated forced planner tool name', () => {
     expect(AGENT_PLANNER_TOOL_NAME).toBe('plan_cemetery_concierge_action');
+  });
+
+  it('keeps a memory proposal additive to the primary recommendation action', () => {
+    const plan = parseAgentPlan(
+      JSON.stringify({
+        intent: 'recommend_plots',
+        action: 'rank_plot_options',
+        contextMode: 'replace',
+        needsClarification: false,
+        clarificationQuestion: '',
+        budgetMax: 400_000_000,
+        numberOfPlots: 2,
+        needAdjacent: true,
+        memoryProposals: [
+          {
+            category: 'plot_location',
+            title: 'Near entrance',
+            content: 'I prefer plots near the entrance.',
+            memoryType: 'user_preference',
+            requestedScope: 'user',
+            memoryKey: 'preferred_plot_location',
+            reason: 'Explicit reusable preference',
+          },
+        ],
+      }),
+    );
+
+    expect(plan.action).toBe('rank_plot_options');
+    expect(plan.requirements).toMatchObject({
+      budgetMax: 400_000_000,
+      numberOfPlots: 2,
+      needAdjacent: true,
+    });
+    expect(plan.memoryProposals).toEqual([
+      expect.objectContaining({
+        memoryType: 'user_preference',
+        requestedScope: 'user',
+        memoryKey: 'preferred_plot_location',
+      }),
+    ]);
+  });
+
+  it('drops malformed memory proposals without blocking the primary action', () => {
+    const plan = parseAgentPlan(
+      JSON.stringify({
+        intent: 'service_suggestions',
+        action: 'get_service_suggestions',
+        contextMode: 'replace',
+        needsClarification: false,
+        clarificationQuestion: '',
+        memoryProposals: [
+          {
+            category: 'undefined',
+            title: '',
+            content: 'null',
+            memoryType: 'implicit_profile',
+            requestedScope: 'global',
+            reason: 'invalid',
+          },
+        ],
+      }),
+    );
+
+    expect(plan.action).toBe('get_service_suggestions');
+    expect(plan.memoryProposals).toBeUndefined();
+  });
+
+  it('exposes only the canonical memory proposal field names and enums', () => {
+    const schema = JSON.stringify(AGENT_PLANNER_TOOL);
+    expect(schema).toContain('memoryProposals');
+    expect(schema).toContain('memoryType');
+    expect(schema).toContain('user_preference');
+    expect(schema).not.toContain('knowledgeProposals');
+    expect(schema).not.toContain('implicit_profile');
+    expect(schema).not.toContain('explicit_preference');
   });
 
   it('drops model placeholders and normalizes a zone code', () => {

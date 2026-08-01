@@ -82,6 +82,7 @@ export interface RecommendationOption {
   isAdjacent: boolean;
   reasons: string[];
   tradeOffs: string[];
+  analysisSummary: string;
   highlightPlotIds: number[];
   accessSummary: string | null;
   entranceDistanceMapUnits: number | null;
@@ -144,4 +145,12 @@ export interface RecommendationResult {
   };
   rankerVersion: string;
   fallbackUsed: boolean;
+  rankerFallbackReason?: string;
+  recommendationRunId?: string;
+}
+
+export interface RecommendationExecutionContext {
+  userId: number | null;
+  conversationId: number | string | null;
+  sourceMessageId: number | string | null;
 }

@@ -5,13 +5,11 @@ FEATURE_NAMES = [
     "budget_match_score",
     "zone_match",
     "preferred_direction_match",
-    "bazi_direction_match",
     "adjacency_score",
     "plot_type_match",
     "number_of_plots_match",
     "area_match_score",
     "price_to_budget_ratio",
-    "historical_acceptance_rate",
 ]
 
 
@@ -20,18 +18,21 @@ def clamp(value: float) -> float:
 
 
 def feature_vector(features: Mapping[str, Any] | None) -> list[float]:
-    """Return a stable, deterministic feature vector.
+    """Return a complete, stable feature vector without fabricating values."""
 
-    Missing or invalid values use 0.0. The API never changes feature order
-    based on input object ordering.
-    """
+    if not isinstance(features, Mapping):
+        raise ValueError("A complete feature mapping is required")
+    missing = [name for name in FEATURE_NAMES if name not in features]
+    if missing:
+        raise ValueError(
+            "Missing required PlotRanker features: " + ", ".join(missing)
+        )
 
-    source = features or {}
     vector: list[float] = []
     for name in FEATURE_NAMES:
         try:
-            value = float(source.get(name, 0.0))
-        except (TypeError, ValueError):
-            value = 0.0
+            value = float(features[name])
+        except (TypeError, ValueError) as error:
+            raise ValueError(f"Invalid PlotRanker feature: {name}") from error
         vector.append(clamp(value))
     return vector

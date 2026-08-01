@@ -33,6 +33,14 @@ import "./AgentPage.css";
 
 const STARTER_PROMPTS = [
   {
+    title: "Kiểm tra mức cạnh tranh",
+    text: "Kiểm tra mức cạnh tranh nội bộ của lô A-01-001.",
+  },
+  {
+    title: "Tổng quan chăm sóc",
+    text: "Tóm tắt các yêu cầu, đơn dịch vụ, lịch hẹn và nhắc lịch của tôi.",
+  },
+  {
     icon: "◇",
     title: "Tìm theo ngân sách",
     text: "Mình cần 1 lô dưới 150 triệu.",
@@ -409,11 +417,7 @@ export default function AgentPage() {
     const recommendations = getTourableRecommendations(
       message.response?.recommendations ?? [],
     );
-    if (
-      !recommendations.length ||
-      message.response?.intent !== "recommend_plots"
-    )
-      return;
+    if (!recommendations.length) return;
     const reducedMotion =
       typeof window.matchMedia === "function" &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -702,7 +706,6 @@ export default function AgentPage() {
                           key={prompt.title}
                           onClick={() => void sendMessage(prompt.text)}
                         >
-                          <span>{prompt.icon}</span>
                           <div>
                             <strong>{prompt.title}</strong>
                             <small>{prompt.text}</small>

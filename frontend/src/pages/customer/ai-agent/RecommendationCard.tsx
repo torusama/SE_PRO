@@ -65,8 +65,16 @@ export default function RecommendationCard({
         </div>
       </div>
 
+      {option.analysisSummary && (
+        <div className="agent-option-analysis">
+          <strong>Nhận định tư vấn</strong>
+          <p>{cleanAgentDisplayText(option.analysisSummary)}</p>
+        </div>
+      )}
+
+      <p className="agent-option-section-label">Điểm phù hợp</p>
       <ul className="agent-reasons">
-        {option.reasons.slice(0, 4).map((reason) => (
+        {option.reasons.map((reason) => (
           <li key={reason}>
             <Check size={13} />
             {cleanAgentDisplayText(reason)}
@@ -76,7 +84,7 @@ export default function RecommendationCard({
 
       {option.tradeOffs.length > 0 && (
         <p className="agent-tradeoff">
-          Lưu ý:{' '}
+          <strong>Điểm cần cân nhắc:</strong>{' '}
           {option.tradeOffs.map(cleanAgentDisplayText).join(' · ')}
         </p>
       )}

@@ -18,6 +18,7 @@ import { FeedbackService } from './feedback.service';
 import { TrainingService } from './training.service';
 import { ConversationHistoryService } from './conversation-history.service';
 import { AdminAiActivityQueryDto } from './dto/admin-ai-activity-query.dto';
+import { LearningAnalyticsService } from './learning-analytics.service';
 
 interface AdminUser {
   id: number;
@@ -31,6 +32,7 @@ export class AiAgentAdminController {
     private readonly feedback: FeedbackService,
     private readonly training: TrainingService,
     private readonly conversations: ConversationHistoryService,
+    private readonly analytics: LearningAnalyticsService,
   ) {}
 
   @Get('conversations')
@@ -146,6 +148,15 @@ export class AiAgentAdminController {
       success: true,
       message: 'AI learning history retrieved',
       data: await this.training.learningHistory(),
+    };
+  }
+
+  @Get('learning-analytics')
+  async learningAnalytics(@Query('days') days?: string) {
+    return {
+      success: true,
+      message: 'Application-level learning analytics retrieved',
+      data: await this.analytics.dashboard(days),
     };
   }
 }

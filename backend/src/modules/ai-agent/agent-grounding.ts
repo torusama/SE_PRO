@@ -49,3 +49,32 @@ export function isGroundedRecommendationNarrative(
   }
   return true;
 }
+
+export function isConsultativeRecommendationNarrative(
+  content: string,
+  result: RecommendationResult,
+) {
+  if (!isGroundedRecommendationNarrative(content, result)) return false;
+  if (!result.recommendations.length) return true;
+
+  const wordCount = content.trim().split(/\s+/u).filter(Boolean).length;
+  const minimumWords = result.recommendations.length > 1 ? 100 : 70;
+  if (wordCount < minimumWords) return false;
+
+  const coversEveryOption = result.recommendations.every((option) =>
+    option.plotCodes.some((code) => content.includes(code)),
+  );
+  if (!coversEveryOption) return false;
+
+  const hasTradeOff =
+    /(?:cân\s+nhắc|lưu\s+ý|đổi\s+lại|hạn\s+chế|đánh\s+đổi|cần\s+kiểm\s+tra|trade-?off|consider|however|limitation|verify)/iu.test(
+      content,
+    );
+  const hasProfessionalRecommendation =
+    /(?:ưu\s+tiên|nghiêng\s+về|khuyến\s+nghị|đề\s+xuất|phù\s+hợp\s+hơn|recommend|prefer|lean\s+toward|strongest\s+option)/iu.test(
+      content,
+    );
+  const endsWithQuestion = /\?\s*$/u.test(content);
+
+  return hasTradeOff && hasProfessionalRecommendation && endsWithQuestion;
+}

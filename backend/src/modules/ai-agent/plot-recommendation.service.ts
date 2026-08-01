@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { randomUUID } from 'crypto';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { QueryResultRow } from 'pg';
 import { DatabaseService } from '../../database/database.service';
 import { PlotAdjacencyService } from '../plots/plot-adjacency.service';
@@ -9,6 +10,7 @@ import { calculatePlotEntranceAccess } from './cemetery-map-access';
 import {
   AgentRequirements,
   PlotCandidate,
+  RecommendationExecutionContext,
   RecommendationOption,
   RecommendationResult,
 } from './types/agent-response.types';
@@ -46,6 +48,7 @@ interface ServiceRow extends QueryResultRow {
 
 @Injectable()
 export class PlotRecommendationService {
+  private readonly logger = new Logger(PlotRecommendationService.name);
   private readonly candidateLimit = 100;
   private readonly groupLimit = 20;
 
@@ -56,7 +59,10 @@ export class PlotRecommendationService {
     private readonly ranker?: PlotRankerClient,
   ) {}
 
-  async recommend(dto: RecommendPlotsDto): Promise<RecommendationResult> {
+  async recommend(
+    dto: RecommendPlotsDto,
+    context?: RecommendationExecutionContext,
+  ): Promise<RecommendationResult> {
     if (dto.budgetMin && dto.budgetMin > dto.budgetMax) {
       throw new BadRequestException(
         'budgetMin must be less than or equal to budgetMax',
@@ -84,34 +90,66 @@ export class PlotRecommendationService {
       .sort((left, right) => this.compareRecommendations(left, right, dto))
       .slice(0, 20);
 
+    const deterministicRanking = this.rankingSnapshot(recommendations);
+    const featureInputs = recommendations.map((option) => ({
+      optionId: option.optionId,
+      features: this.buildFeatures(option, dto),
+    }));
     let rankerVersion = 'rule-based-v1';
     let fallbackUsed = true;
-    const prediction = await this.ranker?.predict(
-      recommendations.map((option) => ({
-        optionId: option.optionId,
-        features: this.buildFeatures(option, dto),
-      })),
-    );
-    if (prediction) {
+    let mlRanking: ReturnType<typeof this.rankingSnapshot> | null = null;
+    const rankerAttempt = this.ranker
+      ? await this.ranker.predict(featureInputs)
+      : {
+          enabled: false,
+          prediction: null,
+          fallbackReason: 'disabled' as const,
+        };
+    if (rankerAttempt.prediction) {
       const scores = new Map(
-        prediction.predictions.map((item) => [
+        rankerAttempt.prediction.predictions.map((item) => [
           item.optionId,
           Math.max(0, Math.min(1, Number(item.score))),
         ]),
       );
-      recommendations = recommendations
-        .map((option) => ({
-          ...option,
-          score: scores.get(option.optionId) ?? option.score,
-        }))
-        .sort((left, right) => this.compareRecommendations(left, right, dto));
-      rankerVersion = prediction.modelVersion;
+      const scoredRecommendations = recommendations.map((option) => ({
+        ...option,
+        score: scores.get(option.optionId) ?? option.score,
+      }));
+      mlRanking = this.rankingSnapshot(
+        [...scoredRecommendations].sort(
+          (left, right) => right.score - left.score,
+        ),
+      );
+      recommendations = scoredRecommendations.sort((left, right) =>
+        this.compareRecommendations(left, right, dto),
+      );
+      rankerVersion = rankerAttempt.prediction.modelVersion;
       fallbackUsed = false;
     }
     recommendations = recommendations.slice(0, 3).map((option, index) => ({
       ...option,
       optionId: `OPT-${String(index + 1).padStart(3, '0')}`,
     }));
+    recommendations = this.enrichOptionExplanations(recommendations, dto);
+    const finalFeatureSnapshot = Object.fromEntries(
+      recommendations.map((option) => [
+        option.optionId,
+        this.buildFeatures(option, dto),
+      ]),
+    );
+    const recommendationRunId = await this.recordRecommendationRun({
+      context,
+      requirements: dto,
+      candidateOptionIds: recommendations.map((option) => option.optionId),
+      featureSnapshot: finalFeatureSnapshot,
+      deterministicRanking,
+      mlRanking,
+      finalRanking: this.rankingSnapshot(recommendations),
+      modelVersion: rankerVersion,
+      rankerEnabled: rankerAttempt.enabled,
+      fallbackReason: rankerAttempt.fallbackReason,
+    });
 
     const baziSuggestion = dto.birthDate
       ? this.bazi.suggest({
@@ -129,11 +167,14 @@ export class PlotRecommendationService {
       inventoryPriceContext: this.buildInventoryPriceContext(candidates),
       rankerVersion,
       fallbackUsed,
+      rankerFallbackReason: rankerAttempt.fallbackReason,
+      ...(recommendationRunId ? { recommendationRunId } : {}),
     };
   }
 
   async browseAvailablePlots(
     requirements: AgentRequirements,
+    context?: RecommendationExecutionContext,
   ): Promise<RecommendationResult> {
     const numberOfPlots = requirements.numberOfPlots ?? 1;
     if (numberOfPlots < 1 || numberOfPlots > 10) {
@@ -162,14 +203,31 @@ export class PlotRecommendationService {
       query.needAdjacent ?? numberOfPlots > 1,
       Number.MAX_SAFE_INTEGER,
     );
-    const recommendations = optionGroups
-      .map((plots, index) => this.toRecommendation(plots, query, index, false))
-      .sort((left, right) => this.compareRecommendations(left, right, query))
-      .slice(0, 3)
-      .map((option, index) => ({
-        ...option,
-        optionId: `OPT-${String(index + 1).padStart(3, '0')}`,
-      }));
+    const recommendations = this.enrichOptionExplanations(
+      optionGroups
+        .map((plots, index) =>
+          this.toRecommendation(plots, query, index, false),
+        )
+        .sort((left, right) => this.compareRecommendations(left, right, query))
+        .slice(0, 3)
+        .map((option, index) => ({
+          ...option,
+          optionId: `OPT-${String(index + 1).padStart(3, '0')}`,
+        })),
+      requirements,
+    );
+    const recommendationRunId = await this.recordRecommendationRun({
+      context,
+      requirements,
+      candidateOptionIds: recommendations.map((option) => option.optionId),
+      featureSnapshot: {},
+      deterministicRanking: this.rankingSnapshot(recommendations),
+      mlRanking: null,
+      finalRanking: this.rankingSnapshot(recommendations),
+      modelVersion: 'availability-browse-v1',
+      rankerEnabled: false,
+      fallbackReason: 'not_applicable_browse',
+    });
 
     return {
       requirements: {
@@ -182,6 +240,8 @@ export class PlotRecommendationService {
       inventoryPriceContext: this.buildInventoryPriceContext(candidates),
       rankerVersion: 'availability-browse-v1',
       fallbackUsed: false,
+      rankerFallbackReason: 'not_applicable_browse',
+      ...(recommendationRunId ? { recommendationRunId } : {}),
     };
   }
 
@@ -568,10 +628,137 @@ export class PlotRecommendationService {
       isAdjacent: plots.length > 1,
       reasons,
       tradeOffs,
+      analysisSummary: '',
       highlightPlotIds: plots.map((plot) => plot.id),
       accessSummary,
       entranceDistanceMapUnits,
     };
+  }
+
+  private enrichOptionExplanations(
+    options: RecommendationOption[],
+    requirements: AgentRequirements,
+  ) {
+    if (!options.length) return options;
+
+    const cheapest = Math.min(...options.map((option) => option.plotCost));
+    const largestArea = Math.max(
+      ...options.map((option) => option.totalAreaSqm),
+    );
+    const hasRealBudget =
+      requirements.budgetMax !== undefined &&
+      Number.isFinite(requirements.budgetMax) &&
+      requirements.budgetMax < Number.MAX_SAFE_INTEGER;
+
+    return options.map((option, index) => {
+      const reasons = [...option.reasons];
+      const tradeOffs = [...option.tradeOffs];
+      const perPlotPrice = Math.round(
+        option.plotCost / Math.max(option.plotIds.length, 1),
+      );
+
+      reasons.push(`Thuộc ${option.zoneName}`);
+      if (option.totalAreaSqm > 0) {
+        reasons.push(
+          `Tổng diện tích được ghi nhận là ${option.totalAreaSqm.toLocaleString('vi-VN')} m²`,
+        );
+      }
+      if (option.directions.length) {
+        reasons.push(`Hướng được ghi nhận: ${option.directions.join(', ')}`);
+      }
+
+      if (hasRealBudget) {
+        const headroom = Math.max(
+          0,
+          Number(requirements.budgetMax) - option.plotCost,
+        );
+        const percentage = Math.round(
+          (headroom / Math.max(Number(requirements.budgetMax), 1)) * 100,
+        );
+        if (headroom > 0) {
+          reasons.push(
+            `Còn dư khoảng ${headroom.toLocaleString('vi-VN')} VND so với ngân sách tối đa (${percentage}%)`,
+          );
+        }
+      }
+
+      if (option.plotIds.length > 1) {
+        reasons.push(
+          `Bình quân khoảng ${perPlotPrice.toLocaleString('vi-VN')} VND cho mỗi lô trong nhóm`,
+        );
+      }
+
+      if (options.length > 1) {
+        if (option.plotCost === cheapest) {
+          reasons.push(
+            'Có tổng giá thấp nhất trong các phương án đang so sánh',
+          );
+        } else {
+          tradeOffs.push(
+            `Tổng giá cao hơn phương án tiết kiệm nhất ${(option.plotCost - cheapest).toLocaleString('vi-VN')} VND`,
+          );
+        }
+
+        if (option.totalAreaSqm > 0 && option.totalAreaSqm === largestArea) {
+          reasons.push(
+            'Có tổng diện tích lớn nhất trong các phương án đang so sánh',
+          );
+        } else if (largestArea > option.totalAreaSqm) {
+          tradeOffs.push(
+            `Tổng diện tích nhỏ hơn phương án rộng nhất ${(largestArea - option.totalAreaSqm).toLocaleString('vi-VN')} m²`,
+          );
+        }
+      }
+
+      if (
+        option.accessSummary &&
+        !reasons.some((reason) => reason === option.accessSummary)
+      ) {
+        reasons.push(option.accessSummary);
+      }
+      if (!option.accessSummary) {
+        tradeOffs.push(
+          'Chưa có dữ liệu xác thực để so sánh khả năng tiếp cận từ cổng trên sơ đồ nội khu',
+        );
+      }
+      if (!option.directions.length) {
+        tradeOffs.push(
+          'Hướng lô chưa được ghi nhận, cần kiểm tra trước khi gửi yêu cầu',
+        );
+      } else if (!requirements.preferredDirection) {
+        tradeOffs.push(
+          `Gia đình chưa xác nhận hướng ${option.directions.join(', ')} có phải hướng ưu tiên hay không`,
+        );
+      }
+      if (!requirements.preferredZone) {
+        tradeOffs.push(
+          `Gia đình chưa xác nhận ${option.zoneName} có phải khu vực mong muốn hay không`,
+        );
+      }
+      if (!tradeOffs.length) {
+        tradeOffs.push(
+          'Cần kiểm tra vị trí thực tế trên bản đồ và xác nhận lại trạng thái còn trống trước khi gửi yêu cầu',
+        );
+      }
+
+      const uniqueReasons = [...new Set(reasons)];
+      const uniqueTradeOffs = [...new Set(tradeOffs)];
+      const position =
+        index === 0
+          ? 'Đây là phương án được ưu tiên đầu tiên'
+          : `Đây là phương án thay thế số ${index + 1}`;
+      const fitSummary = uniqueReasons.slice(0, 3).join('; ');
+      const tradeOffSummary =
+        uniqueTradeOffs[0] ??
+        'cần kiểm tra trực tiếp vị trí, hướng và kích thước trên bản đồ trước khi gửi yêu cầu';
+
+      return {
+        ...option,
+        reasons: uniqueReasons,
+        tradeOffs: uniqueTradeOffs,
+        analysisSummary: `${position} vì ${fitSummary}. Điểm cần cân nhắc: ${tradeOffSummary}.`,
+      };
+    });
   }
 
   private compareRecommendations(
@@ -678,7 +865,6 @@ export class PlotRecommendationService {
       budget_match_score: Math.min(1, option.estimatedTotal / dto.budgetMax),
       zone_match: zoneMatch ? 1 : 0,
       preferred_direction_match: directionMatch ? 1 : 0,
-      bazi_direction_match: 0,
       adjacency_score: option.isAdjacent ? 1 : dto.numberOfPlots === 1 ? 1 : 0,
       plot_type_match: option.plots.every(
         (plot) => !dto.plotType || plot.plotType === dto.plotType,
@@ -689,8 +875,74 @@ export class PlotRecommendationService {
         option.plotIds.length === dto.numberOfPlots ? 1 : 0,
       area_match_score: areaMatch ? 1 : 0,
       price_to_budget_ratio: Math.min(1, option.estimatedTotal / dto.budgetMax),
-      historical_acceptance_rate: 0,
     };
+  }
+
+  private rankingSnapshot(recommendations: RecommendationOption[]) {
+    return recommendations.map((option, index) => ({
+      rank: index + 1,
+      optionId: option.optionId,
+      plotIds: option.plotIds,
+      score: option.score,
+      estimatedTotal: option.estimatedTotal,
+    }));
+  }
+
+  private async recordRecommendationRun(input: {
+    context?: RecommendationExecutionContext;
+    requirements: AgentRequirements;
+    candidateOptionIds: string[];
+    featureSnapshot: Record<string, Record<string, number>>;
+    deterministicRanking: ReturnType<
+      PlotRecommendationService['rankingSnapshot']
+    >;
+    mlRanking: ReturnType<PlotRecommendationService['rankingSnapshot']> | null;
+    finalRanking: ReturnType<PlotRecommendationService['rankingSnapshot']>;
+    modelVersion: string;
+    rankerEnabled: boolean;
+    fallbackReason?: string;
+  }) {
+    const recommendationRunId = `REC-${randomUUID()}`;
+    try {
+      await this.database.query(
+        `INSERT INTO ai_recommendation_runs
+           (recommendation_run_id, user_id, conversation_id,
+            source_message_id, requirement_snapshot, candidate_option_ids,
+            feature_snapshot, deterministic_ranking, ml_ranking,
+            final_ranking, model_version, ranker_enabled, fallback_reason)
+         VALUES
+           ($1, $2, $3, $4, $5::jsonb, $6::jsonb,
+            $7::jsonb, $8::jsonb, $9::jsonb,
+            $10::jsonb, $11, $12, $13)`,
+        [
+          recommendationRunId,
+          input.context?.userId ?? null,
+          input.context?.conversationId ?? null,
+          input.context?.sourceMessageId ?? null,
+          JSON.stringify(input.requirements),
+          JSON.stringify(input.candidateOptionIds),
+          JSON.stringify(input.featureSnapshot),
+          JSON.stringify(input.deterministicRanking),
+          JSON.stringify(input.mlRanking),
+          JSON.stringify(input.finalRanking),
+          input.modelVersion,
+          input.rankerEnabled,
+          input.fallbackReason ?? null,
+        ],
+      );
+      return recommendationRunId;
+    } catch (error) {
+      this.logger.warn(
+        JSON.stringify({
+          conversationId: input.context?.conversationId ?? null,
+          sourceMessageId: input.context?.sourceMessageId ?? null,
+          action: 'record_recommendation_run',
+          resultStatus: 'error',
+          errorName: error instanceof Error ? error.name : 'UnknownError',
+        }),
+      );
+      return undefined;
+    }
   }
 
   private toPosition(plot: PlotCandidate) {

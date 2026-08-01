@@ -25,6 +25,8 @@ export const envConfig = () => ({
     maxHistoryMessages: Number(process.env.AI_MAX_HISTORY_MESSAGES) || 40,
     autoApplyVerifiedCorrections:
       (process.env.AI_AUTO_APPLY_VERIFIED_CORRECTIONS ?? 'false') === 'true',
+    plotRankerEnabled:
+      (process.env.AI_PLOT_RANKER_ENABLED ?? 'false') === 'true',
     retrainMinSamples: Number(process.env.AI_RETRAIN_MIN_SAMPLES) || 20,
     openai: {
       apiKey: process.env.OPENAI_API_KEY,

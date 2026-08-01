@@ -1,152 +1,423 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { AutonomousLearningService } from './autonomous-learning.service';
 import { DatabaseService } from '../../database/database.service';
+import { AutonomousLearningService } from './autonomous-learning.service';
+import { AgentToolContext, MemoryProposal } from './tools/agent-tool.types';
+
+interface FakeOptions {
+  source?: string | null;
+  duplicateId?: number;
+  current?: Record<string, unknown> | null;
+  insertedId?: number;
+  signalId?: number;
+  run?: Record<string, unknown> | null;
+  failTransaction?: boolean;
+}
+
+function setup(options: FakeOptions = {}) {
+  const client = {
+    query: jest.fn((sql: string): { rows: Record<string, unknown>[] } => {
+      if (sql.includes('SELECT content') && sql.includes('FROM ai_messages')) {
+        return {
+          rows:
+            options.source === null
+              ? []
+              : [
+                  {
+                    content:
+                      options.source ??
+                      'Please remember that I prefer plots near the entrance.',
+                  },
+                ],
+        };
+      }
+      if (
+        sql.includes('FROM ai_learning_signals') &&
+        sql.includes('SELECT signal_id')
+      ) {
+        return { rows: [] };
+      }
+      if (sql.includes('FROM ai_recommendation_runs')) {
+        return { rows: options.run ? [options.run] : [] };
+      }
+      if (
+        sql.includes('content_hash = $3') &&
+        sql.includes('FROM ai_knowledge_entries')
+      ) {
+        return {
+          rows: options.duplicateId ? [{ id: options.duplicateId }] : [],
+        };
+      }
+      if (
+        sql.includes('FROM ai_knowledge_entries') &&
+        sql.includes('ORDER BY updated_at DESC')
+      ) {
+        return { rows: options.current ? [options.current] : [] };
+      }
+      if (
+        sql.includes('FROM ai_knowledge_entries') &&
+        sql.includes('ORDER BY effective_from DESC')
+      ) {
+        return { rows: options.current ? [options.current] : [] };
+      }
+      if (sql.includes('INSERT INTO ai_knowledge_entries')) {
+        return { rows: [{ id: options.insertedId ?? 100 }] };
+      }
+      if (sql.includes('INSERT INTO ai_learning_signals')) {
+        return { rows: [{ id: options.signalId ?? 200 }] };
+      }
+      if (sql.includes('MAX(version_number)')) {
+        return { rows: [{ versionNumber: 1 }] };
+      }
+      return { rows: [] };
+    }),
+  };
+  const database = {
+    transaction: jest.fn(
+      async (
+        callback: (transactionClient: typeof client) => Promise<unknown>,
+      ) => {
+        if (options.failTransaction) throw new Error('database unavailable');
+        return callback(client);
+      },
+    ),
+  };
+  return {
+    client,
+    database,
+    service: new AutonomousLearningService(
+      database as unknown as DatabaseService,
+    ),
+  };
+}
+
+const context = (
+  overrides: Partial<AgentToolContext> = {},
+): AgentToolContext => ({
+  conversationId: 10,
+  sourceMessageId: 20,
+  userId: 5,
+  role: 'customer',
+  sessionId: 'SES-1',
+  ...overrides,
+});
+
+const preference = (
+  overrides: Partial<MemoryProposal> = {},
+): MemoryProposal => ({
+  memoryType: 'user_preference',
+  category: 'plot_location',
+  title: 'Preferred plot location',
+  content: 'My family prefers plots near the entrance.',
+  requestedScope: 'global',
+  memoryKey: 'preferred_plot_location',
+  reason: 'Explicit reusable preference',
+  ...overrides,
+});
 
 describe('AutonomousLearningService', () => {
-  let service: AutonomousLearningService;
-  let db: any;
+  it('stores an explicit preference only for the authenticated owner', async () => {
+    const { client, service } = setup({ insertedId: 101 });
 
-  beforeEach(async () => {
-    db = {
-      query: jest.fn(),
-      queryOne: jest.fn(),
-      transaction: jest.fn(async (cb) => cb(db)),
-    };
+    const result = await service.processProposal(preference(), context());
 
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        AutonomousLearningService,
-        {
-          provide: DatabaseService,
-          useValue: db,
-        },
-      ],
-    }).compile();
-
-    service = module.get<AutonomousLearningService>(AutonomousLearningService);
+    expect(result).toMatchObject({
+      status: 'saved_user_memory',
+      knowledgeEntryId: 101,
+    });
+    const insert = client.query.mock.calls.find(([sql]) =>
+      String(sql).includes('INSERT INTO ai_knowledge_entries'),
+    );
+    expect(insert?.[1]).toEqual(
+      expect.arrayContaining([5, 'preferred_plot_location', 'customer']),
+    );
+    expect(String(insert?.[0])).toContain("'user'");
+    expect(String(insert?.[0])).toContain("'user_preference'");
   });
 
-  describe('processProposal', () => {
-    it('should ignore recommendation_feedback and map to ai_learning_signals', async () => {
-      db.query.mockResolvedValueOnce({ rows: [] });
+  it('keeps the same preference separate for two users', async () => {
+    const { client, service } = setup();
 
-      await service.processProposal(
-        {
-          knowledgeType: 'recommendation_feedback',
-          content: 'Option 2 is too expensive',
-          category: 'feedback',
-          title: 'Feedback',
-          requestedScope: 'user',
-          reason: 'Test',
-        },
-        {
-          conversationId: 10,
-          messageId: 20,
-          userId: 1,
-          role: 'customer',
-          sessionId: 'ses-1',
-        },
-      );
+    await service.processProposal(preference(), context({ userId: 5 }));
+    await service.processProposal(preference(), context({ userId: 6 }));
 
-      expect(db.query).toHaveBeenCalledWith(
-        expect.stringContaining('INSERT INTO ai_learning_signals'),
-        expect.any(Array),
-      );
+    const inserts = client.query.mock.calls.filter(([sql]) =>
+      String(sql).includes('INSERT INTO ai_knowledge_entries'),
+    );
+    expect(inserts).toHaveLength(2);
+    expect(inserts[0][1]?.[4]).toBe(5);
+    expect(inserts[1][1]?.[4]).toBe(6);
+    expect(inserts[0][1]?.[11]).not.toBe(inserts[1][1]?.[11]);
+  });
+
+  it('returns duplicate without creating another active record', async () => {
+    const { client, service } = setup({ duplicateId: 77 });
+
+    const result = await service.processProposal(preference(), context());
+
+    expect(result).toMatchObject({
+      status: 'duplicate',
+      knowledgeEntryId: 77,
+    });
+    expect(
+      client.query.mock.calls.some(([sql]) =>
+        String(sql).includes('INSERT INTO ai_knowledge_entries'),
+      ),
+    ).toBe(false);
+  });
+
+  it('supersedes a replaced preference and writes versions plus audit atomically', async () => {
+    const current = {
+      id: 40,
+      category: 'plot_location',
+      title: 'Near entrance',
+      content: 'I prefer plots near the entrance.',
+      knowledgeType: 'user_preference',
+      scope: 'user',
+      ownerUserId: 5,
+      memoryKey: 'preferred_plot_location',
+      validationStatus: 'active',
+      effectiveFrom: null,
+      effectiveTo: null,
+      isActive: true,
+    };
+    const { client, database, service } = setup({
+      source: 'I now prefer a quieter zone.',
+      current,
+      insertedId: 41,
     });
 
-    it('should return login_required if user_preference is proposed by unauthenticated user', async () => {
-      const result = await service.processProposal(
-        {
-          knowledgeType: 'user_preference',
-          content: 'likes trees',
-          category: 'preference',
-          title: 'trees',
-          requestedScope: 'user',
-          reason: 'Test',
-        },
-        {
-          conversationId: 10,
-          messageId: 20,
-          userId: null,
-          role: null,
-          sessionId: 'ses-1',
-        },
-      );
+    const result = await service.processProposal(
+      preference({
+        title: 'Quiet location',
+        content: 'I now prefer a quieter zone.',
+      }),
+      context(),
+    );
 
-      expect(result.status).toBe('login_required');
+    expect(result).toMatchObject({
+      status: 'saved_user_memory',
+      knowledgeEntryId: 41,
+    });
+    expect(database.transaction).toHaveBeenCalledTimes(1);
+    expect(
+      client.query.mock.calls.some(([sql]) =>
+        String(sql).includes("validation_status = 'superseded'"),
+      ),
+    ).toBe(true);
+    expect(
+      client.query.mock.calls.filter(([sql]) =>
+        String(sql).includes('INSERT INTO ai_knowledge_versions'),
+      ),
+    ).toHaveLength(2);
+    expect(
+      client.query.mock.calls.some(([sql]) =>
+        String(sql).includes('INSERT INTO audit_logs'),
+      ),
+    ).toBe(true);
+  });
+
+  it('does not create permanent anonymous user memory', async () => {
+    const { database, service } = setup();
+
+    const result = await service.processProposal(
+      preference(),
+      context({ userId: null, role: null }),
+    );
+
+    expect(result.status).toBe('login_required');
+    expect(database.transaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects sensitive psychological, religious, or medical profiling', async () => {
+    const { client, service } = setup({
+      source: 'Please remember that I have anxiety and follow this religion.',
     });
 
-    it('should insert user_preference into ai_knowledge_entries and supersede old ones', async () => {
-      db.query.mockResolvedValueOnce({ rows: [] }); // Update
-      db.query.mockResolvedValueOnce({ rows: [{ knowledge_entry_id: 100 }] }); // Insert
+    const result = await service.processProposal(
+      preference({
+        content:
+          'The user has anxiety, follows a religion, and has a medical condition.',
+      }),
+      context(),
+    );
 
-      const result = await service.processProposal(
-        {
-          knowledgeType: 'user_preference',
-          content: 'likes trees',
-          category: 'preference',
-          title: 'trees',
-          requestedScope: 'user',
-          reason: 'Test',
-        },
-        {
-          conversationId: 10,
-          messageId: 20,
-          userId: 5,
-          role: 'customer',
-          sessionId: 'ses-1',
-        },
-      );
+    expect(result.status).toBe('rejected');
+    expect(
+      client.query.mock.calls.some(([sql]) =>
+        String(sql).includes('INSERT INTO ai_knowledge_entries'),
+      ),
+    ).toBe(false);
+  });
 
-      expect(result.status).toBe('saved_user_memory');
+  it('quarantines a customer-provided business rule even when user scope is requested', async () => {
+    const { client, service } = setup({ insertedId: 301 });
+    const result = await service.processProposal(
+      {
+        memoryType: 'business_rule',
+        category: 'promotion',
+        title: 'Four plot promotion',
+        content: 'Buying four plots includes free cleaning.',
+        requestedScope: 'user',
+        reason: 'Customer claim',
+      },
+      context(),
+    );
+
+    expect(result.status).toBe('stored_for_validation');
+    const insert = client.query.mock.calls.find(([sql]) =>
+      String(sql).includes('INSERT INTO ai_knowledge_entries'),
+    );
+    expect(String(insert?.[0])).toContain("'global'");
+    expect(insert?.[1]?.[7]).toBe('quarantined');
+    expect(insert?.[1]?.[14]).toBe(false);
+  });
+
+  it('activates and audits a validated rule from the trusted admin role', async () => {
+    const { client, service } = setup({
+      source:
+        'Starting August 1, 2026, purchasing four plots includes free cleaning.',
+      insertedId: 302,
     });
+    const result = await service.processProposal(
+      {
+        memoryType: 'business_rule',
+        category: 'promotion_four_plots',
+        title: 'Four plot cleaning promotion',
+        content:
+          'Purchasing four plots includes one free grave-cleaning service.',
+        requestedScope: 'global',
+        reason: 'Administrator announcement',
+        effectiveFrom: '2026-08-01',
+      },
+      context({ role: 'admin', userId: 9 }),
+    );
 
-    it('should insert global_rule as pending if proposed by customer', async () => {
-      db.query.mockResolvedValueOnce({ rows: [{ knowledge_entry_id: 200 }] });
+    expect(result.status).toBe('verified_and_activated');
+    const insert = client.query.mock.calls.find(([sql]) =>
+      String(sql).includes('INSERT INTO ai_knowledge_entries'),
+    );
+    expect(insert?.[1]?.[7]).toBe('active');
+    expect(insert?.[1]?.[10]).toBe('admin');
+    expect(
+      client.query.mock.calls.some(([sql]) =>
+        String(sql).includes('INSERT INTO ai_knowledge_versions'),
+      ),
+    ).toBe(true);
+    expect(
+      client.query.mock.calls.some(([sql]) =>
+        String(sql).includes('INSERT INTO audit_logs'),
+      ),
+    ).toBe(true);
+  });
 
-      const result = await service.processProposal(
-        {
-          knowledgeType: 'business_rule',
-          content: 'New cemetery policy',
-          category: 'rule',
-          title: 'policy',
-          requestedScope: 'global',
-          reason: 'Test',
+  it('always quarantines natural-language information corrections', async () => {
+    const { service } = setup();
+    const result = await service.processProposal(
+      {
+        memoryType: 'information_correction',
+        category: 'plot_status',
+        title: 'Claimed plot status correction',
+        content: 'Plot A-01-001 is sold.',
+        requestedScope: 'global',
+        reason: 'Natural-language claim',
+      },
+      context({ role: 'admin', userId: 9 }),
+    );
+
+    expect(result.status).toBe('stored_for_validation');
+  });
+
+  it('stores recommendation feedback as a linked signal without a knowledge row or training side effect', async () => {
+    const { client, service } = setup({
+      source: 'I selected option B because option A was too far away.',
+      signalId: 501,
+      run: {
+        recommendationRunId: 'REC-1',
+        candidateOptionIds: ['OPT-001', 'OPT-002'],
+        featureSnapshot: {
+          'OPT-001': { zone_match: 1 },
+          'OPT-002': { zone_match: 1 },
         },
-        {
-          conversationId: 10,
-          messageId: 20,
-          userId: 5,
-          role: 'customer',
-          sessionId: 'ses-1',
-        },
-      );
-
-      expect(result.status).toBe('stored_for_validation');
+        requirementSnapshot: { numberOfPlots: 1 },
+        modelVersion: 'rule-based-v1',
+      },
     });
+    const result = await service.processProposal(
+      {
+        memoryType: 'recommendation_feedback',
+        category: 'plot_ranking',
+        title: 'Selected option B',
+        content: 'Option B was selected because A was too far away.',
+        requestedScope: 'user',
+        reason: 'Pairwise recommendation preference',
+        selectedOptionId: 'B',
+        rejectedOptionId: 'A',
+      },
+      context(),
+    );
 
-    it('should insert global_rule as active if proposed by admin', async () => {
-      db.query.mockResolvedValueOnce({ rows: [{ knowledge_entry_id: 200 }] });
-
-      const result = await service.processProposal(
-        {
-          knowledgeType: 'business_rule',
-          content: 'New cemetery policy',
-          category: 'rule',
-          title: 'policy',
-          requestedScope: 'global',
-          reason: 'Test',
-        },
-        {
-          conversationId: 10,
-          messageId: 20,
-          userId: 5,
-          role: 'admin',
-          sessionId: 'ses-1',
-        },
-      );
-
-      expect(result.status).toBe('verified_and_activated');
+    expect(result).toEqual({
+      status: 'stored_as_learning_signal',
+      message:
+        'Recommendation feedback was recorded as an analysis signal; no model was retrained.',
+      learningSignalId: 501,
     });
+    expect(
+      client.query.mock.calls.some(([sql]) =>
+        String(sql).includes('INSERT INTO ai_knowledge_entries'),
+      ),
+    ).toBe(false);
+    const signalInsert = client.query.mock.calls.find(([sql]) =>
+      String(sql).includes('INSERT INTO ai_learning_signals'),
+    );
+    expect(signalInsert?.[1]).toEqual(
+      expect.arrayContaining([
+        'REC-1',
+        'OPT-002',
+        'OPT-001',
+        'rule-based-v1',
+        true,
+      ]),
+    );
+    expect(
+      client.query.mock.calls.some(([sql]) =>
+        /ai_training_(?:runs|samples)|\/train/i.test(String(sql)),
+      ),
+    ).toBe(false);
+  });
+
+  it('keeps incomplete recommendation context analytics-only', async () => {
+    const { client, service } = setup({ source: 'I selected option B.' });
+    await service.processProposal(
+      {
+        memoryType: 'recommendation_feedback',
+        category: 'plot_ranking',
+        title: 'Selected option B',
+        content: 'I selected option B.',
+        requestedScope: 'user',
+        reason: 'Selection',
+        selectedOptionId: 'B',
+      },
+      context(),
+    );
+
+    const signalInsert = client.query.mock.calls.find(([sql]) =>
+      String(sql).includes('INSERT INTO ai_learning_signals'),
+    );
+    expect(signalInsert?.[1]?.[10]).toBe(false);
+  });
+
+  it('returns a structured error and never relies on invalid ON CONFLICT targets', async () => {
+    const failed = setup({ failTransaction: true });
+    await expect(
+      failed.service.processProposal(preference(), context()),
+    ).resolves.toMatchObject({ status: 'error' });
+
+    const successful = setup();
+    await successful.service.processProposal(preference(), context());
+    expect(
+      successful.client.query.mock.calls.some(([sql]) =>
+        String(sql).includes('ON CONFLICT'),
+      ),
+    ).toBe(false);
   });
 });

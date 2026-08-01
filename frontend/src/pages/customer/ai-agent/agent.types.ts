@@ -1,10 +1,3 @@
-export type FeedbackType =
-  | "helpful"
-  | "bad_recommendation"
-  | "wrong_information"
-  | "irrelevant_answer"
-  | "other";
-
 export interface AgentRecommendation {
   optionId: string;
   plotIds: number[];
@@ -20,6 +13,8 @@ export interface AgentRecommendation {
   isAdjacent: boolean;
   reasons: string[];
   tradeOffs: string[];
+  analysisSummary?: string;
+  accessSummary?: string | null;
   highlightPlotIds: number[];
 }
 
@@ -85,7 +80,14 @@ export interface AgentResponse {
     knowledgeVersion: string;
     fallbackUsed: boolean;
     fallbackReason?: string;
+    rankerFallbackReason?: string;
+    recommendationRunId?: string;
     traceId: string;
+    learningResults?: Array<{
+      status: string;
+      knowledgeEntryId?: number;
+      learningSignalId?: number;
+    }>;
   };
 }
 

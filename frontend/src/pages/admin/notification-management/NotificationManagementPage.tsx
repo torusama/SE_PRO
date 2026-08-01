@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import "../AdminCorePages.css";
 
 interface NotificationRow {
   id: number;
@@ -11,24 +12,16 @@ interface NotificationRow {
   createdAt: string;
 }
 
-const panel: React.CSSProperties = {
-  background: "var(--color-bg-card)",
-  border: "1px solid var(--color-border)",
-  borderRadius: 12,
-};
-
-const input: React.CSSProperties = {
-  width: "100%",
-  padding: "8px 10px",
-  borderRadius: 7,
-  border: "1px solid var(--color-border)",
-  background: "var(--color-bg-secondary)",
-  color: "var(--color-text-primary)",
-};
+const TABS = [
+  { value: "all", label: "Tất cả" },
+  { value: "unread", label: "Chưa đọc" },
+  { value: "broadcast", label: "Đã gửi chung" },
+] as const;
 
 export default function NotificationManagementPage() {
   const [rows, setRows] = useState<NotificationRow[]>([]);
-  const [tab, setTab] = useState<"all" | "unread" | "broadcast">("all");
+  const [tab, setTab] =
+    useState<(typeof TABS)[number]["value"]>("all");
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(true);
@@ -51,7 +44,7 @@ export default function NotificationManagementPage() {
   }, []);
 
   useEffect(() => {
-    void load();
+    queueMicrotask(() => void load());
   }, [load]);
 
   const visible = useMemo(
@@ -90,47 +83,93 @@ export default function NotificationManagementPage() {
   }
 
   return (
-    <div style={{ display: "grid", gap: 18 }}>
-      <header>
-        <h1 style={{ margin: 0, fontSize: 24 }}>Thông báo hệ thống</h1>
-        <p style={{ color: "var(--color-text-secondary)", margin: "4px 0 0" }}>
-          Quản lý và gửi thông báo tới khách hàng
-        </p>
+    <div className="admin-page admin-core-page admin-notification-page">
+      <header className="admin-page-header">
+        <div>
+          <h1>Thông báo hệ thống</h1>
+          <p className="admin-page-description">
+            Quản lý nội dung đã gửi và soạn thông báo mới cho khách hàng.
+          </p>
+        </div>
       </header>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 20 }}>
-        <section style={panel}>
-          <div style={{ padding: 16, display: "flex", gap: 8, borderBottom: "1px solid var(--color-border)" }}>
-            {(["all", "unread", "broadcast"] as const).map((value) => (
-              <button key={value} onClick={() => setTab(value)}>
-                {value === "all" ? "Tất cả" : value === "unread" ? "Chưa đọc" : "Broadcast"}
+
+      <div className="admin-notification-layout">
+        <section className="admin-core-panel">
+          <div className="admin-core-tabs" role="tablist" aria-label="Bộ lọc thông báo">
+            {TABS.map((item) => (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={tab === item.value}
+                className={tab === item.value ? "is-active" : ""}
+                key={item.value}
+                onClick={() => setTab(item.value)}
+              >
+                {item.label}
               </button>
             ))}
           </div>
-          <div style={{ padding: 12, display: "grid", gap: 10 }}>
-            {loading ? <div>Đang tải...</div> : visible.length === 0 ? (
-              <div>Không có thông báo.</div>
-            ) : visible.map((row) => (
-              <article key={row.id} style={{ padding: 12, border: "1px solid var(--color-border)", borderRadius: 9 }}>
-                <strong>{row.title}</strong>
-                <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 4 }}>{row.message}</div>
-                <div style={{ fontSize: 11, color: "var(--color-text-muted)", marginTop: 6 }}>
-                  {row.recipientName ?? "Khách hàng"} · {new Date(row.createdAt).toLocaleString("vi-VN")}
-                </div>
-              </article>
-            ))}
+
+          <div className="admin-notification-list">
+            {loading ? (
+              <div className="admin-core-empty">Đang tải...</div>
+            ) : visible.length === 0 ? (
+              <div className="admin-core-empty">Không có thông báo.</div>
+            ) : (
+              visible.map((row) => (
+                <article key={row.id}>
+                  <strong>{row.title}</strong>
+                  <p>{row.message}</p>
+                  <small>
+                    {row.recipientName ?? "Khách hàng"} ·{" "}
+                    {new Date(row.createdAt).toLocaleString("vi-VN")}
+                  </small>
+                </article>
+              ))
+            )}
           </div>
         </section>
-        <aside style={{ ...panel, padding: 20, alignSelf: "start", display: "grid", gap: 12 }}>
-          <h2 style={{ margin: 0, fontSize: 16 }}>Soạn thông báo</h2>
-          <label>Gửi đến<input value="Tất cả khách hàng" disabled style={input} /></label>
-          <label>Tiêu đề<input value={title} onChange={(event) => setTitle(event.target.value)} style={input} /></label>
-          <label>Nội dung<textarea value={content} onChange={(event) => setContent(event.target.value)} rows={5} style={input} /></label>
-          <label><input type="checkbox" checked readOnly /> Trong ứng dụng</label>
-          <label title="Chưa được backend hỗ trợ"><input type="checkbox" disabled /> Email (chưa hỗ trợ)</label>
-          <label title="Chưa được backend hỗ trợ"><input type="checkbox" disabled /> SMS (chưa hỗ trợ)</label>
-          {message && <div style={{ fontSize: 12 }}>{message}</div>}
-          <button onClick={() => void send()} disabled={sending}>{sending ? "Đang gửi..." : "Gửi ngay"}</button>
-          <button disabled title="Backend chưa hỗ trợ lên lịch">Lên lịch gửi (chưa hỗ trợ)</button>
+
+        <aside className="admin-core-panel admin-notification-compose">
+          <header className="admin-core-panel__header">
+            <div>
+              <h2>Soạn thông báo</h2>
+              <p>Gửi trong ứng dụng</p>
+            </div>
+          </header>
+          <div className="admin-notification-form">
+            <label>
+              <span>Gửi đến</span>
+              <input value="Tất cả khách hàng" disabled />
+            </label>
+            <label>
+              <span>Tiêu đề</span>
+              <input
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+              />
+            </label>
+            <label>
+              <span>Nội dung</span>
+              <textarea
+                value={content}
+                onChange={(event) => setContent(event.target.value)}
+                rows={6}
+              />
+            </label>
+            <p className="admin-notification-channel">
+              Kênh gửi: thông báo trong ứng dụng
+            </p>
+            {message && <div className="admin-notification-message">{message}</div>}
+            <button
+              type="button"
+              className="admin-notification-submit"
+              onClick={() => void send()}
+              disabled={sending}
+            >
+              {sending ? "Đang gửi..." : "Gửi ngay"}
+            </button>
+          </div>
         </aside>
       </div>
     </div>

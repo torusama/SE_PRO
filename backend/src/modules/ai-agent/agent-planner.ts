@@ -1,5 +1,10 @@
 import { BadRequestException } from '@nestjs/common';
 import { AgentRequirements } from './types/agent-response.types';
+import {
+  MEMORY_TYPES,
+  MemoryProposal,
+  USER_MEMORY_KEYS,
+} from './tools/agent-tool.types';
 
 export const AGENT_PLANNER_TOOL_NAME = 'plan_cemetery_concierge_action';
 
@@ -22,6 +27,8 @@ export const AGENT_PLANNER_TOOL = {
             'service_booking',
             'purchase_process',
             'bazi_suggestion',
+            'plot_competitiveness',
+            'customer_care',
             'general_question',
           ],
         },
@@ -37,6 +44,8 @@ export const AGENT_PLANNER_TOOL = {
             'cancel_pending_action',
             'get_purchase_process',
             'suggest_bazi_direction',
+            'analyze_plot_competitiveness',
+            'get_customer_care_overview',
             'none',
           ],
         },
@@ -111,30 +120,60 @@ export const AGENT_PLANNER_TOOL = {
             'Requested service date in YYYY-MM-DD format. Resolve relative Vietnamese dates from the current date supplied by the system.',
         },
         note: { type: 'string', maxLength: 1000 },
-        knowledgeProposals: {
+        memoryProposals: {
           type: 'array',
-          description: 'Optional knowledge updates or memory proposals detected from the user message. Use this to remember preferences or capture learning signals while still completing the primary action.',
+          description:
+            'Optional knowledge updates or memory proposals detected from the user message. Use this to remember preferences or capture learning signals while still completing the primary action.',
           items: {
             type: 'object',
+            additionalProperties: false,
             properties: {
-              category: { type: 'string' },
-              title: { type: 'string' },
-              content: { type: 'string' },
-              knowledgeType: {
+              category: { type: 'string', minLength: 1, maxLength: 50 },
+              title: { type: 'string', minLength: 1, maxLength: 200 },
+              content: { type: 'string', minLength: 1, maxLength: 5000 },
+              memoryType: {
                 type: 'string',
-                enum: [
-                  'user_preference',
-                  'business_rule',
-                  'faq',
-                  'information_correction',
-                  'recommendation_feedback',
-                ],
+                enum: MEMORY_TYPES,
               },
               requestedScope: { type: 'string', enum: ['user', 'global'] },
-              reason: { type: 'string' },
+              memoryKey: {
+                type: 'string',
+                enum: USER_MEMORY_KEYS,
+                description:
+                  'Stable replacement key for a user preference. Omit for non-preference knowledge.',
+              },
+              reason: { type: 'string', minLength: 1, maxLength: 1000 },
+              effectiveFrom: {
+                type: 'string',
+                description:
+                  'Optional ISO-8601 effective start extracted from the message.',
+              },
+              effectiveTo: {
+                type: 'string',
+                description:
+                  'Optional ISO-8601 effective end extracted from the message.',
+              },
+              selectedOptionId: {
+                type: 'string',
+                maxLength: 100,
+                description:
+                  'For recommendation feedback only; a user-reported option label or ID.',
+              },
+              rejectedOptionId: {
+                type: 'string',
+                maxLength: 100,
+                description:
+                  'For recommendation feedback only; a user-reported rejected option label or ID.',
+              },
             },
-            required: ['category', 'title', 'content', 'knowledgeType', 'requestedScope', 'reason'],
-            additionalProperties: false,
+            required: [
+              'category',
+              'title',
+              'content',
+              'memoryType',
+              'requestedScope',
+              'reason',
+            ],
           },
         },
       },
@@ -156,6 +195,8 @@ export type AgentPlanIntent =
   | 'service_booking'
   | 'purchase_process'
   | 'bazi_suggestion'
+  | 'plot_competitiveness'
+  | 'customer_care'
   | 'general_question';
 
 export type AgentPlanAction =
@@ -168,21 +209,9 @@ export type AgentPlanAction =
   | 'cancel_pending_action'
   | 'get_purchase_process'
   | 'suggest_bazi_direction'
+  | 'analyze_plot_competitiveness'
+  | 'get_customer_care_overview'
   | 'none';
-
-export interface KnowledgeProposal {
-  category: string;
-  title: string;
-  content: string;
-  knowledgeType:
-    | 'user_preference'
-    | 'business_rule'
-    | 'faq'
-    | 'information_correction'
-    | 'recommendation_feedback';
-  requestedScope: 'user' | 'global';
-  reason: string;
-}
 
 export interface AgentPlan {
   intent: AgentPlanIntent;
@@ -191,7 +220,7 @@ export interface AgentPlan {
   needsClarification: boolean;
   clarificationQuestion: string;
   requirements: AgentRequirements;
-  knowledgeProposals?: KnowledgeProposal[];
+  memoryProposals?: MemoryProposal[];
 }
 
 const INTENTS = new Set<AgentPlanIntent>([
@@ -201,6 +230,8 @@ const INTENTS = new Set<AgentPlanIntent>([
   'service_booking',
   'purchase_process',
   'bazi_suggestion',
+  'plot_competitiveness',
+  'customer_care',
   'general_question',
 ]);
 const ACTIONS = new Set<AgentPlanAction>([
@@ -213,6 +244,8 @@ const ACTIONS = new Set<AgentPlanAction>([
   'cancel_pending_action',
   'get_purchase_process',
   'suggest_bazi_direction',
+  'analyze_plot_competitiveness',
+  'get_customer_care_overview',
   'none',
 ]);
 
@@ -224,6 +257,68 @@ function optionalPositiveNumber(value: unknown) {
 
 function optionalString(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function boundedProposalString(
+  value: unknown,
+  maxLength: number,
+): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const normalized = value.trim().replace(/\s+/g, ' ');
+  const lowered = normalized.toLowerCase();
+  if (
+    !normalized ||
+    normalized.length > maxLength ||
+    lowered === 'undefined' ||
+    lowered === 'null'
+  ) {
+    return undefined;
+  }
+  return normalized;
+}
+
+function parseMemoryProposals(value: unknown): MemoryProposal[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const proposals: MemoryProposal[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+    const record = item as Record<string, unknown>;
+    const category = boundedProposalString(record.category, 50);
+    const title = boundedProposalString(record.title, 200);
+    const content = boundedProposalString(record.content, 5000);
+    const reason = boundedProposalString(record.reason, 1000);
+    if (
+      !category ||
+      !title ||
+      !content ||
+      !reason ||
+      !MEMORY_TYPES.includes(
+        record.memoryType as (typeof MEMORY_TYPES)[number],
+      ) ||
+      (record.requestedScope !== 'user' && record.requestedScope !== 'global')
+    ) {
+      continue;
+    }
+    const memoryKey = USER_MEMORY_KEYS.includes(
+      record.memoryKey as (typeof USER_MEMORY_KEYS)[number],
+    )
+      ? (record.memoryKey as (typeof USER_MEMORY_KEYS)[number])
+      : undefined;
+    proposals.push({
+      category,
+      title,
+      content,
+      memoryType: record.memoryType as MemoryProposal['memoryType'],
+      requestedScope: record.requestedScope,
+      memoryKey,
+      reason,
+      effectiveFrom: boundedProposalString(record.effectiveFrom, 50),
+      effectiveTo: boundedProposalString(record.effectiveTo, 50),
+      selectedOptionId: boundedProposalString(record.selectedOptionId, 100),
+      rejectedOptionId: boundedProposalString(record.rejectedOptionId, 100),
+    });
+  }
+  return proposals.length ? proposals : undefined;
 }
 
 export function parseAgentPlan(raw: string): AgentPlan {
@@ -304,15 +399,7 @@ export function parseAgentPlan(raw: string): AgentPlan {
     delete requirements.budgetMin;
   }
 
-  let knowledgeProposals: KnowledgeProposal[] | undefined = undefined;
-  if (Array.isArray(parsed.knowledgeProposals)) {
-    knowledgeProposals = parsed.knowledgeProposals.filter((p: any) => 
-      p && typeof p === 'object' && p.category && p.title && p.content && p.knowledgeType && p.requestedScope && p.reason
-    ) as KnowledgeProposal[];
-    if (knowledgeProposals.length === 0) {
-      knowledgeProposals = undefined;
-    }
-  }
+  const memoryProposals = parseMemoryProposals(parsed.memoryProposals);
 
   return {
     intent: parsed.intent as AgentPlanIntent,
@@ -328,7 +415,7 @@ export function parseAgentPlan(raw: string): AgentPlan {
     requirements: Object.fromEntries(
       Object.entries(requirements).filter(([, value]) => value !== undefined),
     ),
-    knowledgeProposals,
+    memoryProposals,
   };
 }
 

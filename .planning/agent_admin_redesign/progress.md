@@ -1,0 +1,32 @@
+# Progress
+
+- 2026-07-29: Started a dedicated persistent plan for the Admin AI Agent redesign.
+- 2026-07-29: Recorded the icon-free, sidebar-ordering, and server-wide learning-journal requirements.
+- 2026-07-29: Reviewed the original architecture brief and confirmed the frozen-LLM terminology constraint.
+- 2026-07-29: Audited the current sidebar, Admin AI page, and analytics panel; identified the per-user conversation tab as the main semantic mismatch.
+- 2026-07-29: Confirmed no OTP Dashboard exists in admin navigation and selected bottom-of-sidebar placement for the AI Agent section.
+- 2026-07-29: Reviewed existing frontend test patterns and available scripts.
+- 2026-07-29: Compared the AI page to the standard light admin theme and chose to replace its isolated dark-neon treatment.
+- 2026-07-29: Confirmed a unified journal can be built from existing persisted version, signal, and recommendation-run records without a database migration.
+- 2026-07-29: Locked the four-tab icon-free information architecture and corrected the navigation interpretation to bottom-of-sidebar placement.
+- 2026-07-29: Extended analytics with a privacy-safe `recentEvents` journal that unifies memory/knowledge versions, recommendation signals, and ranking runs.
+- 2026-07-29: Added backend unit expectations for unified journal mapping, empty state, period parameterization, and exclusion of user/message identifiers and signal explanations.
+- 2026-07-29: Rebuilt the Admin AI page around four text-only tabs and removed all conversation-history loading and rendering from the AI governance screen.
+- 2026-07-29: Added a dedicated server-wide Learning Journal panel with safe event summaries from memory, global knowledge, signals, and ranking runs.
+- 2026-07-29: Replaced the dark-neon stylesheet with a responsive light admin design and removed icon-like rating stars.
+- 2026-07-29: Moved the AI Agent navigation section from the top to the bottom of the admin sidebar.
+- 2026-07-29: Backend analytics unit test passed 2/2.
+- 2026-07-29: Logged and corrected a frontend test invocation from the wrong package directory.
+- 2026-07-29: Sidebar-order test passed; adjusted one journal-tab accessible-name matcher after the first focused frontend run.
+- 2026-07-29: Focused frontend suite passed 4/4 after the matcher correction.
+- 2026-07-29: Tightened API privacy by suppressing user-memory titles and validation details from analytics journal rows.
+- 2026-07-29: Targeted backend ESLint and Prettier checks passed; Nest production build passed.
+- 2026-07-29: Targeted frontend ESLint passed; TypeScript and Vite production build passed with only the repository’s existing large-chunk warning.
+- 2026-07-29: Executed the new journal SQL through the real Nest service against local PostgreSQL; the 30-day response mapped successfully and exposed no private-field keys.
+- 2026-07-29: Confirmed backend and frontend dev servers remained live after the redesign.
+- 2026-07-29: Full frontend regression passed: 12/12 files and 42/42 tests.
+- 2026-07-29: Full backend unit regression passed: 40/40 suites and 214/214 tests.
+- 2026-07-29: Admin authorization E2E passed 144/144; expected invalid-payload database logs were emitted by negative authorization cases.
+- 2026-07-29: Final source scan found no icon components, SVG, rating stars, or conversation rendering in the redesigned page.
+- 2026-07-29: Final `git diff --check` passed; live frontend returned HTTP 200 and the guarded backend endpoint returned the expected HTTP 401 without login.
+- 2026-07-29: Completed the Admin AI Agent redesign and server-wide learning journal.

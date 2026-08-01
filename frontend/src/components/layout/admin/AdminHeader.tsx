@@ -1,17 +1,67 @@
-// src/components/layout/admin/AdminHeader.tsx
-import type { CSSProperties } from "react";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
+import { ROUTES } from "@/constants/routes";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
-import { ROUTES } from "@/constants/routes";
-import { Bell } from "lucide-react";
+
+const PAGE_META: Record<string, { title: string; description: string }> = {
+  [ROUTES.ADMIN_DASHBOARD]: {
+    title: "Tổng quan",
+    description: "Tình hình vận hành nghĩa trang",
+  },
+  [ROUTES.ADMIN_ACTIVITY]: {
+    title: "Hoạt động",
+    description: "Nhật ký cập nhật gần đây",
+  },
+  [ROUTES.ADMIN_MAP]: {
+    title: "Bản đồ 2D",
+    description: "Sơ đồ và trạng thái các lô đất",
+  },
+  [ROUTES.ADMIN_LOTS]: {
+    title: "Quản lý lô đất",
+    description: "Thông tin, trạng thái và vị trí lô",
+  },
+  [ROUTES.ADMIN_REQUESTS]: {
+    title: "Xử lý yêu cầu",
+    description: "Tiếp nhận và theo dõi yêu cầu",
+  },
+  [ROUTES.ADMIN_CONTRACTS]: {
+    title: "Hợp đồng và sở hữu",
+    description: "Hồ sơ hợp đồng trong hệ thống",
+  },
+  [ROUTES.ADMIN_SERVICES]: {
+    title: "Quản lý dịch vụ",
+    description: "Danh mục và đơn đăng ký dịch vụ",
+  },
+  [ROUTES.ADMIN_NOTIFY]: {
+    title: "Thông báo",
+    description: "Nội dung gửi đến người dùng",
+  },
+  [ROUTES.ADMIN_TRANSFER]: {
+    title: "Chuyển nhượng",
+    description: "Hồ sơ chuyển quyền sử dụng lô",
+  },
+  [ROUTES.ADMIN_APPOINTMENTS]: {
+    title: "Lịch hẹn",
+    description: "Phê duyệt và quản lý lịch hẹn",
+  },
+  [ROUTES.ADMIN_REMINDERS]: {
+    title: "Nhắc lịch",
+    description: "Ngày giỗ và sự kiện tưởng niệm",
+  },
+  [ROUTES.ADMIN_AI_AGENT]: {
+    title: "AI Agent",
+    description: "Theo dõi tri thức và quá trình học",
+  },
+};
 
 export default function AdminHeader() {
+  const location = useLocation();
   const navigate = useNavigate();
-  const user = useAuthStore((s) => s.user);
-  const logout = useAuthStore((s) => s.logout);
+  const user = useAuthStore((state) => state.user);
+  const logout = useAuthStore((state) => state.logout);
   const [menuOpen, setMenuOpen] = useState(false);
+  const page = PAGE_META[location.pathname] ?? PAGE_META[ROUTES.ADMIN_DASHBOARD];
 
   function handleLogout() {
     api.post("/auth/logout").catch(() => {});
@@ -20,141 +70,74 @@ export default function AdminHeader() {
   }
 
   return (
-    <header
-      style={{
-        height: 52,
-        background: "#ffffff",
-        borderBottom: "1px solid #e5e2da",
-      }}
-      className="flex items-center justify-between px-7"
-    >
-      {/* Left */}
-      <div>
-        <div
-          style={{
-            fontSize: 16,
-            fontWeight: 600,
-            color: "#1a1a1a",
-          }}
-        >
-          Dashboard
-        </div>
-
-        <div
-          style={{
-            fontSize: 11,
-            color: "#888",
-          }}
-        >
-          Tổng quan hệ thống
-        </div>
+    <header className="admin-header">
+      <div className="admin-header__page">
+        <p className="admin-header__title">{page.title}</p>
+        <p className="admin-header__description">{page.description}</p>
       </div>
 
-      {/* Right */}
-      <div className="flex items-center gap-3">
-        <button
-          style={{
-            width: 34,
-            height: 34,
-            border: "1px solid #e5e2da",
-            borderRadius: 8,
-            background: "#fff",
-          }}
-          className="flex items-center justify-center hover:bg-[#E7F5F3]"
-        >
-          <Bell size={16} color="#555" />
-        </button>
+      {user && (
+        <div className="admin-account">
+          <button
+            type="button"
+            className="admin-account__trigger"
+            aria-expanded={menuOpen}
+            aria-haspopup="menu"
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            <span className="admin-account__name">{user.name}</span>
+            <span className="admin-account__hint">
+              {menuOpen ? "Đóng" : "Tài khoản"}
+            </span>
+          </button>
 
-        {user && (
-          <div style={{ position: "relative" }}>
-            <button
-              type="button"
-              onClick={() => setMenuOpen((v) => !v)}
-              style={{
-                color: "#333",
-                fontSize: 13,
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                padding: "4px 6px",
-              }}
-            >
-              {user.name}
-            </button>
-
-            {menuOpen && (
-              <div
-                style={{
-                  position: "absolute",
-                  top: "calc(100% + 6px)",
-                  right: 0,
-                  background: "#fff",
-                  border: "1px solid #e5e2da",
-                  borderRadius: 8,
-                  boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
-                  minWidth: 190,
-                  overflow: "hidden",
-                  zIndex: 20,
+          {menuOpen && (
+            <div className="admin-account__menu" role="menu">
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false);
+                  navigate(ROUTES.PROFILE);
                 }}
               >
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    navigate(ROUTES.PROFILE);
-                  }}
-                  style={menuItemStyle}
-                >
-                  Hồ sơ của tôi
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    navigate(ROUTES.APPOINTMENTS);
-                  }}
-                  style={menuItemStyle}
-                >
-                  Đặt và xem lịch hẹn
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    navigate(ROUTES.ADMIN_DASHBOARD);
-                  }}
-                  style={menuItemStyle}
-                >
-                  Trang quản trị
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    handleLogout();
-                  }}
-                  style={{ ...menuItemStyle, color: "#c0392b" }}
-                >
-                  Đăng xuất
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+                Hồ sơ của tôi
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false);
+                  navigate(ROUTES.APPOINTMENTS);
+                }}
+              >
+                Đặt và xem lịch hẹn
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false);
+                  navigate(ROUTES.ADMIN_DASHBOARD);
+                }}
+              >
+                Trang quản trị
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className="admin-account__logout"
+                onClick={() => {
+                  setMenuOpen(false);
+                  handleLogout();
+                }}
+              >
+                Đăng xuất
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </header>
   );
 }
-
-const menuItemStyle: CSSProperties = {
-  display: "block",
-  width: "100%",
-  textAlign: "left",
-  padding: "10px 16px",
-  fontSize: 13,
-  color: "#333",
-  background: "none",
-  border: "none",
-  borderBottom: "1px solid #f0efe9",
-  cursor: "pointer",
-};

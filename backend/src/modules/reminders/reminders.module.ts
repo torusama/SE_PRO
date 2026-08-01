@@ -11,5 +11,6 @@ import { RemindersService } from './reminders.service';
   imports: [NotificationsModule, EmailModule],
   controllers: [RemindersController, AdminRemindersController], // ← thêm AdminRemindersController
   providers: [RemindersService],
+  exports: [RemindersService],
 })
 export class RemindersModule {}

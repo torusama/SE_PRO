@@ -1,0 +1,22 @@
+# Findings
+
+- User explicitly limited this task to frontend; backend and ML service are out of scope.
+- The refined Admin AI Agent page is the canonical design reference for color, typography, spacing, motion, and icon-free controls.
+- The audit must cover shared admin layout plus all pages mounted below `/admin`, including pages that rely heavily on inline styles.
+- Context-mode instructions were loaded because the audit is a codebase-statistics task, but no `ctx_*` runtime tools are registered in this session. The fallback is bounded `rg`/PowerShell inspection by admin page group.
+- Initial inventory found 26 admin TSX/CSS files, 197 inline style objects, 7 inline SVG elements, 6 icon-like imports/usages, 7 emoji/decorative glyphs, and 2 gradients.
+- The largest visual-risk files are Map Management (1,380 TSX + 820 CSS), Service Management (592 TSX + 649 CSS), Requests (896 TSX with 58 inline styles), and Dashboard (32 inline styles).
+- Admin has 12 routed pages. Confirmed removable UI icons in Transfer, Service Management, AdminHeader, Reminder Management, Dashboard, and Requests.
+- Map Management’s inline SVG elements are the actual cemetery map/data visualization rather than decorative icons and must be preserved.
+- Shared layout is heavily inline-styled. `AdminHeader` always says “Dashboard / Tổng quan hệ thống” even on other routes and imports a decorative Bell icon.
+- Sidebar duplicates visual tokens inline, hard-codes a user name/initials, uses saturated teal active blocks, and adds an English `ADMIN PORTAL` badge; these differ from the refined Agent page.
+- A shared CSS layer imported by `AdminLayout` can normalize typography, buttons, cards, tables, forms, page headers, and responsive spacing across every routed admin page while page-specific CSS handles complex layouts.
+- Shared components should be refactored to semantic classes and route-aware header titles before page-by-page cleanup.
+- Dashboard is entirely inline-styled, uses colored KPI top borders, status dots, and a decorative arrow; its data and table structure can remain while the presentation moves to shared admin classes.
+- Activity is also entirely inline-styled and uses a saturated translucent teal selected-date treatment; it can be converted to the shared panel, toolbar, form, and text-tab patterns without changing filtering behavior.
+- The auth store already exposes `user.name` and `user.initials`, so Sidebar can remove its hard-coded administrator identity without any backend change.
+- All admin route constants are centralized, allowing AdminHeader to derive an accurate Vietnamese page title and description from the current pathname.
+- Remaining decorative icon work is concentrated in Transfer and Service Management, with emoji in Reminders and single glyphs in Dashboard/Requests. The Map SVGs remain exempt because they encode spatial data.
+- The existing Sidebar test only asserts menu order, so the semantic navigation refactor preserves its intended contract; assertions should be updated for correctly encoded Vietnamese text.
+- Contracts and Notifications are self-contained inline-style pages. Notifications is small enough for a complete class-based rewrite; Contracts can be safely migrated in-place or normalized through a page-scoped override without touching its PDF/signing behavior.
+- Requests uses many old neon/dark color literals even though its layout is structurally sound. A page root class plus scoped overrides/replacements can neutralize these accents while preserving the large approval workflow.

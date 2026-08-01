@@ -1,0 +1,99 @@
+# Findings
+
+## Baseline
+- Repository root: `D:\HCMUS\Năm 2\HK3\SE\PROJECT\SE_PRO`.
+- A previous read-only plan, `agent_feedback_audit`, documented that feedback moderation can create knowledge/training records but placeholder ranker features were unsafe.
+- The worktree already contains uncommitted changes in AI Agent migrations, autonomous learning, knowledge, feedback, PlotRanker, prompt, tool definitions, frontend Agent page, and migration README.
+- Existing migration files `012_ai_agent_learning.sql` and `015_ai_autonomous_learning.sql` are deleted while replacements `015_ai_agent_learning.sql` and `016_ai_autonomous_learning.sql` are untracked; numbering and actual contents must be audited before further edits.
+- Treat every existing worktree change as user-owned until its provenance and correctness are established.
+- Existing tracked edits are small (22 additions, 257 deletions) because the two replacement migrations are currently untracked and therefore absent from `git diff --stat`.
+- The repository contains `backend`, `frontend`, and `ml-service`; only `backend/package.json` and `frontend/package.json` are primary manifests. Ignore package manifests inside `.claude/worktrees` unless comparison is explicitly needed.
+- Current modified source files are limited to autonomous learning, feedback, knowledge retrieval, PlotRanker client, system prompt, tool definition, AgentPage, and migration documentation; planner/orchestrator/controller/types/tests have not yet been changed in this worktree.
+- Backend is NestJS/PostgreSQL with Jest; available scripts are `build`, `lint` (mutating `--fix`), `test`, and `test:e2e`.
+- Frontend is React/Vite with Vitest; available scripts are `build`, `lint`, and `test`.
+- ML service declares FastAPI, scikit-learn, joblib, pytest, and httpx dependencies; its exact files/tests remain to be mapped.
+- Relevant backend tests already exist for planner, tool registry, orchestrator helpers, autonomous learning, recommendation, and grounding, providing extension points rather than requiring a new testing framework.
+- Migration directory already contains duplicate historical prefixes `002` and `013`; the AI learning replacement currently uses `015` then `016`, so execution order must rely on the documented filenames and avoid adding another conflicting prefix.
+
+## Architecture discoveries
+- Orchestrator is large (1,348 lines) and already references `KnowledgeService`, passes conversation/message/user IDs around proposals, and invokes `propose_knowledge_update`; exact role propagation and combined-action behavior require close reading.
+- `AgentToolRegistryService` already exposes `propose_knowledge_update` and injects `AutonomousLearningService`, so the repair should converge existing paths rather than add a parallel unused endpoint.
+- `AutonomousLearningService` is only 174 lines despite the required classification/versioning/audit/transaction responsibilities; it is likely incomplete.
+- `KnowledgeService` is 201 lines and already has `getUserPromptContext(userId)`, indicating retrieval is partially wired.
+- The system prompt is 468 lines and AgentPage is 823 lines; changes must be focused and covered by existing tests.
+- Plot recommendation is 713 lines with an optional injected `PlotRankerClient`; rule-first fallback may already exist and needs verification/logging/config tightening.
+- Admin UI still exposes a manual PlotRanker retrain action. This can remain only if clearly presented as optional offline ranker training and gated; it must not imply foundation-model retraining.
+- A broad search produced too much unrelated output and was truncated. Future searches must use narrower file sets/patterns rather than repeat the same command.
+- `AiAgentController.chat()` uses `OptionalJwtAuthGuard` and passes the trusted `{id, role}` principal directly to `orchestrator.chat()`. The controller itself is not hard-coding `customer`.
+- The orchestrator extracts `userId` and `userRole` from that principal, owns conversation creation/loading, saves the source user message, and passes trusted IDs/role to both proposal execution and the primary tool execution.
+- Existing proposal processing is additive in the happy path: it loops through `plan.knowledgeProposals`, then still calls `executeAgentPlan()`. However it discards proposal results and logs failures with `console.error`, so the final response cannot truthfully report saved/duplicate/login-required/failure status.
+- Proposal processing currently occurs after booking/clarification early returns. A combined memory + booking/clarification request may therefore skip memory persistence even when a clear proposal exists.
+- `ensureConversation()` enforces exact ownership (including anonymous ownership) for an existing session ID, preventing a session from being silently rebound to another user.
+- Primary tool context already supports trusted `conversationId`, `sourceMessageId`, `userId`, `role`, and `sessionId`.
+- Planner schema currently calls additive proposals `knowledgeProposals`, not the requested `memoryProposals`, and uses field `knowledgeType`, not `memoryType`. It lacks `memoryKey`.
+- Proposal parsing is unsafe and inconsistent with the JSON schema: it uses `any` plus truthiness checks, does not reject invalid enums/scopes/literal `undefined`/`null`, imposes no string sizes, and casts unchecked values into `KnowledgeProposal`.
+- The planner's primary action union does not include a memory action, which is good for keeping memory additive, but prompt/parser tests must explicitly preserve a normal plot/service/booking action when proposals are present.
+- Existing plan requirements carry `preferNearEntrance` into deterministic recommendation inputs, providing a natural bridge for retrieved preferences once planner context is correctly supplied.
+- `createAgentPlan()` does not call `KnowledgeService` and supplies only the static system prompt, conversation history, trusted booking/UI context, and current message. Persisted user/global knowledge is therefore not retrieved into future planner turns.
+- `composeAgentResponse()` also does not receive persistent knowledge. For `action=none`, it explicitly limits itself to conversation history, so saved KB entries cannot affect future answers.
+- Composer prompt contains an unsafe instruction to track the user's emotional state. This conflicts with the prohibition on sensitive psychological/emotional profiling and must be removed/reframed to tone only from the current message without persistence/inference.
+- Tool type context is already narrow and trusted. However `propose_knowledge_update` tool definition wrongly exposes `sourceMessageId` as an LLM-controlled argument even though the registry ignores it; remove it from the public schema.
+- Tool definition and registry currently use `knowledgeType`; planner uses the same field, but the required architecture asks for `memoryType`. One canonical field must be selected and applied end-to-end.
+- Registry validates basic strings/enums and rejects literal null/undefined for the proposal, but uses `as any`, lacks `memoryKey`, lacks title/category/reason size limits, and passes a differently named `messageId` into the learning context.
+- Tool registry already ignores any untrusted user/role/status/source/model fields in args and derives execution context from the orchestrator, which should be preserved and tested.
+- `AutonomousLearningService` currently conflates classification with requested scope. A customer can submit `business_rule` with `requestedScope=user` and receive an active user record; types must force their allowed destination regardless of LLM scope.
+- Any authenticated user-scoped proposal is activated without checking that it is an explicit/safe `user_preference`; FAQ/correction/rule behavior is therefore unsafe.
+- Admin global content is activated solely from role without content/backend validation, conflict handling, validation evidence, or effective-date processing.
+- User replacement supersedes the current row before checking whether the new content is a duplicate. Because errors are caught inside the transaction callback, a failed insert can still commit the supersede, leaving no active preference.
+- User replacement creates neither `ai_knowledge_versions` nor `audit_logs`; global creation also has no version/audit record.
+- Hashing uses raw `title:content`, not normalized scope-aware/type-aware values. `memoryKey` is silently set to category and cannot carry stable canonical preference keys.
+- Learning-signal status/message incorrectly says `stored_for_training` and implies model training. It does not return an ID, recommendation run, selected/rejected option, snapshots, model version, or training-readiness state.
+- `getUserPromptContext()` already filters active/effective records and owner identity, but a single `updated_at DESC LIMIT 15` can let global rows crowd out user memory, ordering is not fully deterministic, and stored strings are injected without per-item/total length controls or a data-not-instructions warning.
+- Migration `016` drops the unique `knowledge_key` constraint while `KnowledgeService.applyApprovedCorrection()` still uses `ON CONFLICT (knowledge_key)`, causing a PostgreSQL conflict-target error on databases that applied `016`.
+- Migration lacks a distinct `knowledge_type` column and retains `confidence_score`, even though trusted/model-generated confidence must not drive security decisions.
+- Migration partial unique indexes include only proposed/active rows; quarantined duplicate claims can accumulate unchecked. Service-level duplicate queries are preferable for category-specific behavior.
+- `ai_learning_signals` has no `training_ready` marker and allows an unexplained `implicit_preference` signal type. It needs analytics-safe storage for incomplete signals without treating missing data as zeros.
+- Database transactions correctly roll back only when the callback throws. `AutonomousLearningService` must not swallow database errors inside the callback; catch outside the transaction.
+- Existing `FeedbackService` now only persists and moderates feedback/corrections; it no longer auto-creates placeholder training samples. This is aligned with the new policy and should be preserved while checking other consumers/tests.
+- `TrainingService.retrain()` is an explicit admin/manual PlotRanker workflow that trains only from approved `ai_training_samples` and creates a candidate. Deployment is a separate explicit method. It does not retrain the foundation LLM, but it needs terminology/UI clarity and must never consume incomplete signals automatically.
+- `PlotRankerClient` is already optional and returns `null` when disabled, empty, unavailable, invalid, or timed out. Recommendation first filters/builds deterministic options, then optionally re-scores them; deterministic operation remains available.
+- Current PlotRanker enablement checks raw config key `AI_PLOT_RANKER_ENABLED === 'true'`; config mapping/default and tests must ensure false-by-default behavior.
+- Recommendation currently logs neither deterministic order, feature input, ML order, final order, model version, nor fallback reason. The existing `ai_recommendation_logs` table may be reusable after its schema/usage is inspected.
+- Legacy `ai_recommendation_logs` is not used by current code and is shaped as a chatbot output log with required `session_id`, not a ranker execution trace. A dedicated `ai_recommendation_runs` table is cleaner for requirement/candidate/feature/deterministic/ML/final snapshots and signal linkage.
+- `audit_logs` supports actor `user_id`, action, entity type/id/key, and old/new JSON. Actor role and validation reason can live in the structured `new_value`; knowledge-version rows should also receive explicit actor/action/source fields for direct querying.
+- Environment config does not map `AI_PLOT_RANKER_ENABLED`; the client reads a raw key. Add `ai.plotRankerEnabled` with default `false` and consume the typed boolean.
+- Deterministic ranking currently gives entrance distance absolute precedence when requested, then score and price. ML cannot override that business preference because the same comparator is reused after ML scoring; this rule-first constraint is valuable.
+- One config search emitted a harmless Windows wildcard error. Future commands should pass only concrete paths.
+- Pre-existing worktree edits already removed fabricated `missing_features: deterministic_defaults` training samples from feedback approval, added effective-date retrieval, introduced the PlotRanker flag, standardized `user_preference`, and softened an unsafe psychological-profile prompt. These changes are directionally correct and must be retained while completing the architecture.
+- Current autonomous tests cover only five shallow statuses and do not assert SQL parameters, owner isolation, duplicates, replacement atomicity, version/audit rows, trusted role, retrieval, or failure isolation.
+- Planner tests do not cover any memory proposal, invalid proposal, memory key, or combined primary action.
+- Registry tests only cover malformed JSON and allowlisting; trusted-field rejection/ignoring and canonical proposal validation are untested.
+- Customer Agent CSS and page still contain feedback button/dialog state and styling; admin feedback moderation is used elsewhere, so remove only customer chat controls/state/API wiring and retain backend/admin infrastructure.
+- Broad frontend search was again too noisy and truncated; inspect only `AgentPage.tsx`, its test, and exact feedback CSS ranges next.
+- Exact inspection corrected the frontend finding: `AgentPage.tsx` and customer Agent TSX files already have no feedback handlers/state/dialog/API calls. Only dead feedback CSS and an unused `FeedbackType` declaration remain; remove those without touching admin moderation.
+- No repository `AGENTS.md` was found outside ignored worktrees, so no additional repository-local instructions apply.
+- ML service currently auto-trains and activates a synthetic seed PlotRanker during FastAPI startup when no active artifact exists. This violates the no-automatic-training/deployment policy and must be removed.
+- ML feature conversion silently maps every missing/invalid feature to `0.0`; both inference and approved-sample training accept incomplete dictionaries. Replace this with complete-vector validation so absence is not treated as a real zero.
+- Explicit `/train` always mixes synthetic seed data into candidates and can train with no approved real samples. Change the experiment to accept only complete approved samples by default; keep the seed dataset clearly demo-only and outside automatic/runtime training.
+- `/train` registers candidates with `activate=false`, and deployment/activation remains a separate admin action. Preserve that separation.
+- Admin UI repeatedly says generic “AI training/retrain” even though only the lightweight PlotRanker is involved. Update labels/confirmation/help text to say optional offline PlotRanker experiment and explicitly state the foundation LLM is unchanged.
+- Backend admin controller already guards ranker train/deploy endpoints with trusted admin auth. Endpoint messages can be clarified while retaining routes for compatibility.
+- Backend PlotRanker currently emits two fabricated feature values: `bazi_direction_match: 0` and `historical_acceptance_rate: 0` without authoritative data. Remove both from the active feature contract until they can be computed.
+- The other ranker features are derived from actual recommendation options/requirements and can form a complete vector.
+- `RecommendationResult` has no recommendation execution ID or ranker fallback reason. Add optional safe metadata for linking later feedback while keeping detailed feature/order snapshots in the database, not the customer response.
+- Assistant message metadata is already persisted and restored through `ConversationHistoryService`, so a recommendation run ID can survive future conversations without frontend changes.
+- Original tracked autonomous migration used `message_id`, required legacy `category/content`, and allowed `implicit_preference`. Migration 016 now backfills `source_message_id`, relaxes those obsolete required columns, and retains old implicit rows only as non-training-ready audit records.
+- User memory persistence now checks the stored source message for an explicit first-person/remember preference and rejects sensitive psychological, religious, and medical profiles before opening replacement state.
+- Global rules/FAQs are forced to global scope; only a trusted backend admin principal can activate them. Customer claims and all natural-language information corrections are quarantined.
+- Learning signals resolve selected/rejected labels only against candidate IDs from the latest actual recommendation run; incomplete context remains analytics-only with `training_ready=false`.
+
+## Validation results
+- Focused AI backend suites: 7/7 suites, 49/49 tests passed before adding the final sensitive-profile rejection case.
+- Full backend unit regression: 39/39 suites, 212/212 tests passed.
+- Backend E2E: 2/2 suites, 142/142 tests passed after correcting the stale test route.
+- ML service: 4/4 pytest cases passed using `ml-service/.venv`.
+- Frontend: 10/10 Vitest files, 38/38 tests passed; production build passed.
+- Backend production build passed.
+- Every changed AI backend/frontend source and test file passes targeted ESLint.
+- Full frontend lint still reports 29 errors/3 warnings in unrelated pages; full backend lint reports 39 errors/48 warnings in unrelated/pre-existing modules. All changed AI feature files pass targeted ESLint.
+- Migrations 015/016 passed live PostgreSQL execution in a disposable schema and passed a two-pass idempotency run with exactly one seeded knowledge row.

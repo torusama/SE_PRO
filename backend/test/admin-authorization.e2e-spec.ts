@@ -69,7 +69,8 @@ const adminRoutes: Array<{
   { method: 'post', path: '/admin/notifications/broadcast' },
   { method: 'get', path: '/admin/reminders' },
   { method: 'post', path: `/admin/reminders/${missingId}/notify-now` },
-  { method: 'get', path: '/admin/ai-activity' },
+  { method: 'get', path: '/ai-agent/admin/ai-activity' },
+  { method: 'get', path: '/admin/ai-agent/learning-analytics' },
   { method: 'get', path: '/schedule/admin/appointments' },
 ];
 

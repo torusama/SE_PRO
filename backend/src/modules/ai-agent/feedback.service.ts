@@ -138,25 +138,6 @@ export class FeedbackService {
         [id, status, adminId, dto.reviewNote ?? null],
       );
 
-      if (
-        action === 'approve' &&
-        feedback.feedback_type === 'bad_recommendation'
-      ) {
-        await client.query(
-          `INSERT INTO ai_training_samples
-             (feedback_id, features, label, dataset_version,
-              is_approved, approved_by)
-           VALUES (
-             $1,
-             '{"source":"approved_feedback","missing_features":"deterministic_defaults"}'::jsonb,
-             '{"label_selected":0}'::jsonb,
-             'feedback-v1',
-             TRUE,
-             $2
-           )`,
-          [id, adminId],
-        );
-      }
       return {
         ...result.rows[0],
         hasCorrection: !!feedback.corrected_content,

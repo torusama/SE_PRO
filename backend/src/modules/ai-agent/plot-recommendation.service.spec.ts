@@ -1,6 +1,7 @@
 import { DatabaseService } from '../../database/database.service';
 import { PlotAdjacencyService } from '../plots/plot-adjacency.service';
 import { BaziRuleService } from './bazi-rule.service';
+import { PlotRankerClient } from './plot-ranker.client';
 import { PlotRecommendationService } from './plot-recommendation.service';
 
 describe('PlotRecommendationService', () => {
@@ -129,6 +130,19 @@ describe('PlotRecommendationService', () => {
     expect(result.recommendations).toHaveLength(3);
     expect(result.recommendations[0].plotIds).toEqual([1]);
     expect(result.rankerVersion).toBe('availability-browse-v1');
+    expect(
+      result.recommendations.every(
+        (option) =>
+          option.analysisSummary.includes('Điểm cần cân nhắc:') &&
+          option.reasons.length >= 3 &&
+          option.tradeOffs.length >= 1,
+      ),
+    ).toBe(true);
+    expect(result.recommendations[1].tradeOffs).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('phương án tiết kiệm nhất'),
+      ]),
+    );
   });
 
   it('prioritizes verified entrance access without exposing raw geometry as advice', async () => {
@@ -175,5 +189,59 @@ describe('PlotRecommendationService', () => {
       maximumListedPrice: 90_000_000,
       scope: 'matching_available_inventory',
     });
+  });
+
+  it('uses deterministic ranking and logs a fallback trace when ML is unavailable', async () => {
+    const database = {
+      query: jest.fn().mockResolvedValueOnce(plots).mockResolvedValueOnce([]),
+    };
+    const ranker = {
+      predict: jest.fn().mockResolvedValue({
+        enabled: true,
+        prediction: null,
+        fallbackReason: 'ml_service_error',
+      }),
+    };
+    const service = new PlotRecommendationService(
+      database as unknown as DatabaseService,
+      new PlotAdjacencyService(),
+      new BaziRuleService(),
+      ranker as unknown as PlotRankerClient,
+    );
+
+    const result = await service.recommend(
+      {
+        budgetMax: 250_000_000,
+        numberOfPlots: 2,
+        needAdjacent: true,
+      },
+      {
+        userId: 7,
+        conversationId: 10,
+        sourceMessageId: 20,
+      },
+    );
+
+    expect(result.fallbackUsed).toBe(true);
+    expect(result.rankerVersion).toBe('rule-based-v1');
+    expect(result.rankerFallbackReason).toBe('ml_service_error');
+    expect(result.recommendations[0].plotIds).toEqual([1, 2]);
+    const traceInsert = database.query.mock.calls.find(([sql]) =>
+      String(sql).includes('INSERT INTO ai_recommendation_runs'),
+    );
+    expect(traceInsert?.[1]).toEqual(
+      expect.arrayContaining([
+        7,
+        10,
+        20,
+        'rule-based-v1',
+        true,
+        'ml_service_error',
+      ]),
+    );
+    expect(String(traceInsert?.[1]?.[6])).not.toContain(
+      'historical_acceptance_rate',
+    );
+    expect(String(traceInsert?.[1]?.[6])).not.toContain('bazi_direction_match');
   });
 });

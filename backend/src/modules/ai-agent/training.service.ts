@@ -28,9 +28,15 @@ export class TrainingService {
     const approved = await this.database.queryOne<{ count: number }>(
       `SELECT COUNT(*)::int AS count
        FROM ai_training_samples
-       WHERE is_approved = TRUE`,
+       WHERE is_approved = TRUE
+         AND training_ready = TRUE`,
     );
     const minSamples = this.config.get<number>('ai.retrainMinSamples') ?? 20;
+    if ((approved?.count ?? 0) < minSamples) {
+      throw new BadRequestException(
+        `PlotRanker training requires at least ${minSamples} complete, approved samples`,
+      );
+    }
     const datasetVersion =
       dto.datasetVersion ?? `dataset-${new Date().toISOString().slice(0, 10)}`;
     const provisionalVersion = `plot-ranker-${Date.now()}`;
@@ -56,6 +62,7 @@ export class TrainingService {
           `SELECT features, label
            FROM ai_training_samples
            WHERE is_approved = TRUE
+             AND training_ready = TRUE
            ORDER BY sample_id`,
         ),
       });
@@ -226,11 +233,16 @@ export class TrainingService {
   learningHistory() {
     return this.database.query(
       `SELECT v.version_id AS "versionId", v.version_name AS "versionName",
-              v.entity_type AS "entityType", v.entity_id AS "entityId",
-              v.field_name AS "fieldName", v.old_value AS "oldValue",
-              v.new_value AS "newValue", v.feedback_id AS "feedbackId",
-              v.change_reason AS "changeReason",
-              v.created_at AS "createdAt", u.full_name AS "createdBy"
+               v.version_number AS "versionNumber",
+               v.action_type AS "actionType",
+               v.entity_type AS "entityType", v.entity_id AS "entityId",
+               v.field_name AS "fieldName", v.old_value AS "oldValue",
+               v.new_value AS "newValue", v.feedback_id AS "feedbackId",
+               v.change_reason AS "changeReason",
+               v.source_message_id AS "sourceMessageId",
+               v.actor_role AS "actorRole",
+               v.validation_reason AS "validationReason",
+               v.created_at AS "createdAt", u.full_name AS "createdBy"
        FROM ai_knowledge_versions v
        LEFT JOIN users u ON u.user_id = v.created_by
        ORDER BY v.created_at DESC

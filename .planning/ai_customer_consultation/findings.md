@@ -1,0 +1,15 @@
+# Findings
+
+- The user reports that the customer-facing AI recommends one plot with only a few words, moves to another without analysis, and does not ask for missing information.
+- This task concerns conversational policy and recommendation explanation quality, not merely frontend presentation.
+- The AI flow is primarily in `backend/src/modules/ai-agent/`, with dedicated planner, orchestrator, prompt, recommendation, ranker, conversation-history, and proactive-concierge services plus unit tests.
+- Customer rendering is separated under `frontend/src/pages/customer/ai-agent/`; the first audit priority is backend response generation because the reported missing reasoning and follow-up questions originate before display.
+- The system prompt already explicitly requires progressive discovery, 2–3 grounded reasons for the strongest option, a real trade-off, proactive comparison, a clear recommendation, 220–380 words for full recommendations, and exactly one context-specific follow-up question.
+- Because the desired policy is already present in the prompt, the shallow output likely comes from a different response path (deterministic fallback/normalizer), model context truncation, structured response shaping, or frontend rendering rather than missing high-level prompt guidance alone.
+- The orchestrator sends the full policy plus authoritative recommendation JSON to the composer and asks for 220–380 Vietnamese words, but it accepts any grounded model response without enforcing minimum advisory depth, per-option coverage, trade-off coverage, or a closing question.
+- The deterministic `describeRecommendations()` fallback is substantially richer than the reported output: it names the preferred option, lists facts/reasons/trade-offs, compares up to three options, adds price context, gives a recommendation, and asks a next-step question.
+- The discovery gate already asks for budget and plot count on vague requests. Therefore the likely defects are (a) shallow LLM responses passing the grounding-only acceptance check and/or (b) frontend cards exposing only short `reasons` while hiding richer trade-off/analysis fields.
+- `isGroundedRecommendationNarrative()` currently validates only safety/grounding (unknown plot codes, impossible counts, unsupported Bazi/deposit claims). A one-sentence answer mentioning one valid code passes even when three options were returned.
+- Recommendation cards show core facts, up to four short reasons, and trade-offs, but have no per-option explanatory synthesis or comparison cue. The frontend response type also omits backend fields such as `accessSummary` and price-position context that could support richer grounded explanations.
+- Recommendation generation itself produces only generic reasons when the customer supplied few preferences: “within budget” and “available.” This makes each card feel repetitive even when the option facts differ.
+- The final API already returns the complete `RecommendationOption[]`, so richer grounded option fields can be exposed to the existing frontend without changing the route or envelope.

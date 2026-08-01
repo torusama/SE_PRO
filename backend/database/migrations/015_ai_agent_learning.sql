@@ -70,7 +70,7 @@ CREATE TABLE IF NOT EXISTS ai_feedback (
 
 CREATE TABLE IF NOT EXISTS ai_knowledge_entries (
     knowledge_entry_id  BIGSERIAL PRIMARY KEY,
-    knowledge_key       VARCHAR(150) NOT NULL UNIQUE,
+    knowledge_key       VARCHAR(150) NOT NULL,
     category            VARCHAR(50) NOT NULL,
     title               VARCHAR(200) NOT NULL,
     content             TEXT NOT NULL,
@@ -153,6 +153,8 @@ CREATE INDEX IF NOT EXISTS idx_ai_feedback_status
     ON ai_feedback(validation_status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_ai_training_runs_status
     ON ai_training_runs(status, started_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_ai_knowledge_entries_key
+    ON ai_knowledge_entries(knowledge_key);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_ai_model_versions_active
     ON ai_model_versions(status) WHERE status = 'active';
 

@@ -1,0 +1,22 @@
+# Findings
+
+- Existing Admin AI Agent page already loads conversations, feedback, PlotRanker training/model data, and knowledge version history.
+- There is no aggregate analytics endpoint or seminar-oriented dashboard yet.
+- Required raw data is available in `ai_knowledge_entries`, `ai_knowledge_versions`, `ai_learning_signals`, and `ai_recommendation_runs`.
+- `AiAgentAdminController` is already protected at class level by JWT + roles guards and the `admin` role; the analytics route should live there.
+- `AiAgentModule` can register a dedicated analytics service without changing public customer APIs.
+- The current page fetches all five admin datasets together and has an existing dark governance design system, responsive table, status pills, and timeline styles.
+- The current history UI does not expose action type, actor role, validation reason, signal readiness, ranker fallback, or aggregate counts.
+- No chart dependency is installed or needed: accessible horizontal bars and a CSS grid timeline can render the seminar metrics with native HTML/CSS.
+- Proposed response groups current-state KPIs, period activity, distributions, daily timeline, fallback reasons, and recent learning updates. Active memory/knowledge counts must be labeled as current state; event/run counts use the selected reporting period.
+- Knowledge-version records use `entity_type='knowledge_entry'`; their `new_value` snapshots include scope, knowledge type, memory key, validation status, and active state.
+- Frontend tests use Vitest, Testing Library, and the shared test setup with `jest-dom`; there is no existing Admin Agent page test, so a focused page test will be added.
+- `DatabaseService.query` returns typed PostgreSQL rows and supports independent aggregate queries; analytics can execute bounded read-only queries concurrently.
+- Live PostgreSQL validation executed every aggregate query successfully against migrations 015/016 in a disposable schema; the 30-day timeline returned exactly 30 points.
+- The production database layer uses a connection pool, so concurrent read-only dashboard queries are supported. The disposable validation used one raw client and emitted a harmless pg deprecation warning about concurrent calls.
+- Full regression passed after dashboard integration: backend unit 214/214, backend E2E 145/145, frontend 40/40.
+- The connected local development database still has the legacy AI schema: it lacks `knowledge_type/scope/validation_status`, `action_type`, `ai_learning_signals`, and `ai_recommendation_runs`. The new endpoint cannot run there until migrations 015/016 are applied.
+- The connected database was confirmed as local PostgreSQL `vinhhang` on IPv6 loopback (`::1:5432`), not a production host.
+- Idempotent migrations 015 then 016 were applied to the local development database; both analytics tables now exist.
+- The analytics service now executes successfully against the migrated local database and returns a 30-point timeline; the existing seed produces one active verified global knowledge item.
+- The architecture README previously listed planned admin subcomponents that never existed; it now documents the actual analytics component and guarded endpoint.

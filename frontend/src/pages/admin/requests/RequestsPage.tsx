@@ -74,30 +74,30 @@ const statusMeta: Record<string, { label: string; color: string; bg: string }> =
   {
     pending: {
       label: "Chờ duyệt",
-      color: "#F5A623",
-      bg: "rgba(245,166,35,0.16)",
+      color: "var(--admin-warning)",
+      bg: "#f6efe5",
     },
     submitted: {
       label: "Chờ duyệt",
-      color: "#F5A623",
-      bg: "rgba(245,166,35,0.16)",
+      color: "var(--admin-warning)",
+      bg: "#f6efe5",
     },
     approved: {
       label: "Đã duyệt",
-      color: "#00C8A0",
-      bg: "rgba(0,200,160,0.14)",
+      color: "var(--admin-positive)",
+      bg: "#e9f0ec",
     },
     rejected: {
       label: "Đã từ chối",
-      color: "#FF5C5C",
-      bg: "rgba(255,92,92,0.14)",
+      color: "var(--admin-danger)",
+      bg: "#f7e9e6",
     },
     cancelled: {
       label: "Đã hủy",
-      color: "#8DA5C0",
-      bg: "rgba(141,165,192,0.14)",
+      color: "var(--admin-muted)",
+      bg: "var(--admin-soft)",
     },
-    draft: { label: "Nháp", color: "#8DA5C0", bg: "rgba(141,165,192,0.14)" },
+    draft: { label: "Nháp", color: "var(--admin-muted)", bg: "var(--admin-soft)" },
   };
 
 const typeLabel: Record<ReservationType, string> = {
@@ -159,8 +159,8 @@ function formatDate(value?: string | null) {
 function StatusPill({ status }: { status: string }) {
   const meta = statusMeta[status] ?? {
     label: status,
-    color: "#8DA5C0",
-    bg: "rgba(141,165,192,0.14)",
+    color: "var(--admin-muted)",
+    bg: "var(--admin-soft)",
   };
   return (
     <span
@@ -390,7 +390,7 @@ export default function RequestsPage() {
   }, [selectedId, loadDetail]);
 
   return (
-    <div style={{ display: "grid", gap: 18 }}>
+    <div className="admin-page admin-requests-page" style={{ display: "grid", gap: 18 }}>
       <header
         style={{
           display: "flex",
@@ -433,8 +433,8 @@ export default function RequestsPage() {
           style={{
             ...panelStyle,
             padding: 14,
-            borderColor: "rgba(255,92,92,0.45)",
-            color: "#FFB3B3",
+            borderColor: "#e4c8bf",
+            color: "var(--admin-danger)",
           }}
         >
           {error}
@@ -446,8 +446,8 @@ export default function RequestsPage() {
           style={{
             ...panelStyle,
             padding: 14,
-            borderColor: "rgba(0,200,160,0.45)",
-            color: "#B8FFF0",
+            borderColor: "#bfd1c8",
+            color: "var(--admin-positive)",
           }}
         >
           {successMessage}
@@ -499,7 +499,7 @@ export default function RequestsPage() {
                         ? "3px solid var(--color-accent-teal)"
                         : "3px solid transparent",
                       background: active
-                        ? "rgba(0,200,160,0.08)"
+                        ? "var(--admin-soft)"
                         : "transparent",
                       color: "var(--color-text-primary)",
                       cursor: "pointer",
@@ -613,13 +613,13 @@ export default function RequestsPage() {
                     display: "grid",
                     gap: 6,
                     padding: "10px 12px",
-                    border: "1px solid rgba(245,166,35,0.35)",
+                    border: "1px solid #dfcfb8",
                     borderRadius: 8,
-                    background: "rgba(245,166,35,0.08)",
+                    background: "#f8f3ea",
                   }}
                 >
-                  <span style={{ ...labelStyle, color: "#F5A623" }}>
-                    ⚠ Ghi chú đặc biệt của khách (từ hồ sơ cá nhân)
+                  <span style={{ ...labelStyle, color: "var(--admin-warning)" }}>
+                    Ghi chú đặc biệt của khách (từ hồ sơ cá nhân)
                   </span>
                   <span style={{ fontSize: 13, whiteSpace: "pre-wrap" }}>
                     {detail.customerNotes}
@@ -641,7 +641,7 @@ export default function RequestsPage() {
                           padding: "10px 12px",
                           border: "1px solid var(--color-border)",
                           borderRadius: 8,
-                          background: "rgba(255,255,255,0.03)",
+                          background: "var(--admin-soft)",
                         }}
                       >
                         <strong>{plot.code}</strong>
@@ -692,7 +692,7 @@ export default function RequestsPage() {
                     padding: 14,
                     border: "1px solid var(--color-border)",
                     borderRadius: 8,
-                    background: "rgba(255,255,255,0.03)",
+                    background: "var(--admin-soft)",
                   }}
                 >
                   <div
@@ -852,7 +852,7 @@ export default function RequestsPage() {
                 <Button
                   variant="danger"
                   style={{
-                    background: canDecide ? "#dc3545" : "rgba(220,53,69,0.35)",
+                    background: canDecide ? "var(--admin-danger)" : "#d8c0bc",
                     color: "#fff",
                     border: "1px solid #dc3545",
                     minWidth: 110,
@@ -867,8 +867,8 @@ export default function RequestsPage() {
                   style={{
                     background: canDecide
                       ? "var(--color-accent-teal)"
-                      : "rgba(0,150,130,0.35)",
-                    color: "#0A1628",
+                      : "#c9c5bd",
+                    color: "var(--admin-paper)",
                     border: "1px solid var(--color-accent-teal)",
                     minWidth: 110,
                   }}

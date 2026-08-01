@@ -34,7 +34,11 @@ def approved_sample_rows(
         label = label_data.get("label_selected")
         if label not in (0, 1, "0", "1"):
             continue
-        rows.append(feature_vector(features))
+        try:
+            vector = feature_vector(features)
+        except ValueError:
+            continue
+        rows.append(vector)
         labels.append(int(label))
     return rows, labels
 
@@ -45,9 +49,15 @@ def train_candidate(
     approved_samples: list[dict[str, Any]] | None = None,
     version: str | None = None,
     activate: bool = False,
+    include_synthetic_seed: bool = False,
     registry: ModelRegistry | None = None,
 ) -> dict[str, Any]:
-    x_rows, labels = load_seed_dataset()
+    x_rows: list[list[float]] = []
+    labels: list[int] = []
+    if include_synthetic_seed:
+        seed_rows, seed_labels = load_seed_dataset()
+        x_rows.extend(seed_rows)
+        labels.extend(seed_labels)
     approved_x, approved_y = approved_sample_rows(approved_samples or [])
     x_rows.extend(approved_x)
     labels.extend(approved_y)

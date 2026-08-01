@@ -1,5 +1,3 @@
-from contextlib import asynccontextmanager
-
 from fastapi import FastAPI, HTTPException
 
 from .inference import predict_options
@@ -9,23 +7,9 @@ from .training import train_candidate
 
 registry = ModelRegistry()
 
-
-@asynccontextmanager
-async def lifespan(_: FastAPI):
-    if not registry.active_version():
-        train_candidate(
-            dataset_version="synthetic-seed-v1",
-            version="plot-ranker-v1.0",
-            activate=True,
-            registry=registry,
-        )
-    yield
-
-
 app = FastAPI(
     title="Cemetery PlotRanker",
     version="1.0.0",
-    lifespan=lifespan,
 )
 
 

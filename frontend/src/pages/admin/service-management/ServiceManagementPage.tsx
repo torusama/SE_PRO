@@ -1,16 +1,3 @@
-import {
-  CalendarDays,
-  CheckCircle2,
-  ChevronRight,
-  ClipboardList,
-  Clock3,
-  Image as ImageIcon,
-  LoaderCircle,
-  Search,
-  UserRound,
-  Wrench,
-  X,
-} from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '@/lib/api'
 import './ServiceManagementPage.css'
@@ -211,8 +198,7 @@ export default function ServiceManagementPage() {
           <p>Theo dõi, phân công và lưu lại toàn bộ quá trình phục vụ khách hàng.</p>
         </div>
         <button className="service-admin__refresh" onClick={() => void loadOrders()} disabled={loading}>
-          {loading ? <LoaderCircle className="spin" size={17} /> : <ClipboardList size={17} />}
-          Làm mới danh sách
+          {loading ? 'Đang làm mới…' : 'Làm mới danh sách'}
         </button>
       </header>
 
@@ -220,16 +206,15 @@ export default function ServiceManagementPage() {
       {error && <div className="service-alert service-alert--error">{error}</div>}
 
       <section className="service-stats" aria-label="Tổng quan đơn dịch vụ">
-        <Stat icon={<ClipboardList />} label="Tổng đơn" value={stats.total} tone="teal" />
-        <Stat icon={<Clock3 />} label="Chờ xác nhận" value={stats.waiting} tone="amber" />
-        <Stat icon={<Wrench />} label="Đang xử lý" value={stats.processing} tone="blue" />
-        <Stat icon={<CheckCircle2 />} label="Đã hoàn thành" value={stats.completed} tone="green" />
+        <Stat label="Tổng đơn" value={stats.total} tone="teal" />
+        <Stat label="Chờ xác nhận" value={stats.waiting} tone="amber" />
+        <Stat label="Đang xử lý" value={stats.processing} tone="blue" />
+        <Stat label="Đã hoàn thành" value={stats.completed} tone="green" />
       </section>
 
       <section className="service-panel">
         <div className="service-toolbar">
           <label className="service-search">
-            <Search size={17} />
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
@@ -250,10 +235,9 @@ export default function ServiceManagementPage() {
         </div>
 
         {loading ? (
-          <div className="service-empty"><LoaderCircle className="spin" />Đang tải đơn dịch vụ...</div>
+          <div className="service-empty">Đang tải đơn dịch vụ...</div>
         ) : filtered.length === 0 ? (
           <div className="service-empty">
-            <ClipboardList />
             <strong>Không có đơn phù hợp</strong>
             <span>Thử thay đổi từ khoá hoặc bộ lọc trạng thái.</span>
           </div>
@@ -297,7 +281,7 @@ export default function ServiceManagementPage() {
                         aria-label={`Xem ${orderCode(order.id)}`}
                         onClick={() => void openDetail(order.id)}
                       >
-                        <ChevronRight size={18} />
+                        Xem
                       </button>
                     </td>
                   </tr>
@@ -312,7 +296,7 @@ export default function ServiceManagementPage() {
         <div className="service-drawer-layer" role="presentation" onMouseDown={() => !detailLoading && setSelected(null)}>
           <aside className="service-drawer" role="dialog" aria-modal="true" aria-label="Chi tiết đơn dịch vụ" onMouseDown={(event) => event.stopPropagation()}>
             {detailLoading && !selected ? (
-              <div className="service-empty"><LoaderCircle className="spin" />Đang tải chi tiết...</div>
+              <div className="service-empty">Đang tải chi tiết...</div>
             ) : selected ? (
               <OrderDetail
                 order={selected}
@@ -328,10 +312,9 @@ export default function ServiceManagementPage() {
   )
 }
 
-function Stat({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: number; tone: string }) {
+function Stat({ label, value, tone }: { label: string; value: number; tone: string }) {
   return (
     <article className={`service-stat service-stat--${tone}`}>
-      <div className="service-stat__icon">{icon}</div>
       <div><strong>{value}</strong><span>{label}</span></div>
     </article>
   )
@@ -432,14 +415,14 @@ function OrderDetail({
           <h2>{order.serviceName}</h2>
           <StatusBadge status={order.status} />
         </div>
-        <button onClick={onClose} aria-label="Đóng chi tiết"><X /></button>
+        <button onClick={onClose} aria-label="Đóng chi tiết">Đóng</button>
       </div>
 
       <div className="service-drawer__body">
         {error && <div className="service-alert service-alert--error">{error}</div>}
 
         <section className="detail-card detail-customer">
-          <h3><UserRound size={17} />Thông tin khách hàng</h3>
+          <h3>Thông tin khách hàng</h3>
           <div className="detail-grid">
             <Detail label="Họ tên" value={order.customerName} />
             <Detail label="Mã lô" value={order.plotCode || 'Không gắn lô'} />
@@ -449,7 +432,7 @@ function OrderDetail({
         </section>
 
         <section className="detail-card">
-          <h3><CalendarDays size={17} />Thông tin yêu cầu</h3>
+          <h3>Thông tin yêu cầu</h3>
           <div className="detail-grid">
             <Detail label="Ngày gửi" value={formatDate(order.createdAt, true)} />
             <Detail label="Ngày khách yêu cầu" value={formatDate(order.requestedDate)} />
@@ -460,7 +443,7 @@ function OrderDetail({
 
         {!terminal && (
           <section className="detail-card detail-editor">
-            <h3><Wrench size={17} />Xử lý đơn</h3>
+            <h3>Xử lý đơn</h3>
             <div className="detail-form-grid">
               <label>
                 Trạng thái
@@ -487,20 +470,19 @@ function OrderDetail({
               </label>
             </div>
             <button className="service-primary" onClick={() => void save()} disabled={saving}>
-              {saving && <LoaderCircle className="spin" size={16} />}Lưu cập nhật
+              {saving ? 'Đang lưu…' : 'Lưu cập nhật'}
             </button>
           </section>
         )}
 
         {canComplete && (
           <section className="detail-card detail-completion">
-            <h3><CheckCircle2 size={17} />Xác nhận hoàn thành</h3>
+            <h3>Xác nhận hoàn thành</h3>
             <label>
               Ghi chú kết quả
               <textarea value={completionNote} onChange={(event) => setCompletionNote(event.target.value)} rows={3} maxLength={2000} placeholder="Mô tả công việc đã thực hiện..." />
             </label>
             <label className="evidence-picker">
-              <ImageIcon size={22} />
               <span><strong>Chọn ảnh bằng chứng</strong>Tối đa 10 ảnh JPG, PNG hoặc WEBP · 10 MB/ảnh</span>
               <input
                 type="file"
@@ -511,14 +493,14 @@ function OrderDetail({
             </label>
             {evidence.length > 0 && <p className="file-summary">Đã chọn {evidence.length} ảnh: {evidence.map((file) => file.name).join(', ')}</p>}
             <button className="service-primary" onClick={() => void complete()} disabled={saving}>
-              {saving && <LoaderCircle className="spin" size={16} />}Xác nhận dịch vụ hoàn thành
+              {saving ? 'Đang xác nhận…' : 'Xác nhận dịch vụ hoàn thành'}
             </button>
           </section>
         )}
 
         {order.status === 'completed' && (
           <section className="detail-card">
-            <h3><ImageIcon size={17} />Kết quả hoàn thành</h3>
+            <h3>Kết quả hoàn thành</h3>
             <p className="completion-note">{order.completionNote || 'Không có ghi chú hoàn thành.'}</p>
             <div className="evidence-grid">
               {(order.completionImages ?? []).map((filename) => (
@@ -529,7 +511,7 @@ function OrderDetail({
         )}
 
         <section className="detail-card">
-          <h3><Clock3 size={17} />Lịch sử xử lý</h3>
+          <h3>Lịch sử xử lý</h3>
           <div className="history-list">
             {(order.history ?? []).map((item) => (
               <article key={item.id}>
@@ -587,5 +569,5 @@ function EvidenceImage({ orderId, filename }: { orderId: number; filename: strin
     ? <div className="evidence-loading">Không tải được ảnh</div>
     : url
     ? <a href={url} target="_blank" rel="noreferrer"><img src={url} alt="Bằng chứng hoàn thành dịch vụ" /></a>
-    : <div className="evidence-loading"><LoaderCircle className="spin" /></div>
+    : <div className="evidence-loading">Đang tải ảnh…</div>
 }

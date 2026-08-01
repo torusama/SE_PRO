@@ -7,9 +7,15 @@ import { BaziRuleService } from './bazi-rule.service';
 import { RecommendPlotsDto } from './dto/recommend-plots.dto';
 import { KnowledgeService } from './knowledge.service';
 import { PlotRecommendationService } from './plot-recommendation.service';
-import { AgentToolName } from './tools/agent-tool.types';
-
 import { AutonomousLearningService } from './autonomous-learning.service';
+import { AgentInsightsService } from './agent-insights.service';
+import {
+  AgentToolContext,
+  AgentToolName,
+  MEMORY_TYPES,
+  MemoryProposal,
+  USER_MEMORY_KEYS,
+} from './tools/agent-tool.types';
 
 @Injectable()
 export class AgentToolRegistryService {
@@ -22,6 +28,8 @@ export class AgentToolRegistryService {
     'estimate_total_cost',
     'suggest_bazi_direction',
     'get_purchase_process',
+    'analyze_plot_competitiveness',
+    'get_customer_care_overview',
     'create_draft_reservation',
     'propose_knowledge_update',
   ]);
@@ -31,6 +39,7 @@ export class AgentToolRegistryService {
     private readonly bazi: BaziRuleService,
     private readonly knowledge: KnowledgeService,
     private readonly autoLearning: AutonomousLearningService,
+    private readonly insights: AgentInsightsService,
   ) {}
 
   isAllowed(name: string): name is AgentToolName {
@@ -52,47 +61,68 @@ export class AgentToolRegistryService {
   async execute(
     name: string,
     args: Record<string, unknown>,
-    context: Partial<import('./tools/agent-tool.types').AgentToolContext> = {},
+    context: Partial<AgentToolContext> = {},
   ) {
     if (!this.isAllowed(name)) {
       throw new BadRequestException(`Unknown AI tool: ${name}`);
     }
     switch (name) {
       case 'propose_knowledge_update': {
-        const category = this.requiredString(args.category, 'category');
-        const title = this.requiredString(args.title, 'title');
-        const content = this.requiredString(args.content, 'content');
-        const knowledgeType = this.requiredEnum(args.knowledgeType, 'knowledgeType', [
-          'user_preference',
-          'business_rule',
-          'faq',
-          'information_correction',
-          'recommendation_feedback'
-        ]);
-        const requestedScope = this.requiredEnum(args.requestedScope, 'requestedScope', ['user', 'global']);
-        const reason = this.requiredString(args.reason, 'reason');
-
-        if (content.length > 5000) {
-          throw new BadRequestException('Content is too large');
-        }
-
-        return this.autoLearning.processProposal(
-          {
-            category,
-            title,
-            content,
-            knowledgeType: knowledgeType as any,
-            requestedScope: requestedScope as any,
-            reason,
-          },
-          {
-            userId: context.userId,
-            role: context.role,
-            sessionId: context.sessionId,
-            messageId: context.sourceMessageId,
-            conversationId: context.conversationId,
-          },
+        this.rejectUntrustedContextFields(args);
+        const category = this.requiredString(args.category, 'category', 50);
+        const title = this.requiredString(args.title, 'title', 200);
+        const content = this.requiredString(args.content, 'content', 5000);
+        const memoryType = this.requiredEnum(
+          args.memoryType,
+          'memoryType',
+          MEMORY_TYPES,
         );
+        const requestedScope = this.requiredEnum(
+          args.requestedScope,
+          'requestedScope',
+          ['user', 'global'] as const,
+        );
+        const memoryKey =
+          args.memoryKey === undefined
+            ? undefined
+            : this.requiredEnum(args.memoryKey, 'memoryKey', USER_MEMORY_KEYS);
+        const reason = this.requiredString(args.reason, 'reason', 1000);
+        const proposal: MemoryProposal = {
+          category,
+          title,
+          content,
+          memoryType,
+          requestedScope,
+          memoryKey,
+          reason,
+          effectiveFrom: this.optionalProposalString(
+            args.effectiveFrom,
+            'effectiveFrom',
+            50,
+          ),
+          effectiveTo: this.optionalProposalString(
+            args.effectiveTo,
+            'effectiveTo',
+            50,
+          ),
+          selectedOptionId: this.optionalProposalString(
+            args.selectedOptionId,
+            'selectedOptionId',
+            100,
+          ),
+          rejectedOptionId: this.optionalProposalString(
+            args.rejectedOptionId,
+            'rejectedOptionId',
+            100,
+          ),
+        };
+        return this.autoLearning.processProposal(proposal, {
+          userId: context.userId ?? null,
+          role: context.role ?? null,
+          sessionId: context.sessionId ?? null,
+          sourceMessageId: context.sourceMessageId ?? null,
+          conversationId: context.conversationId ?? null,
+        });
       }
       case 'search_available_plots':
         return {
@@ -109,32 +139,46 @@ export class AgentToolRegistryService {
             : this.integer(args.maxGroups, 'maxGroups'),
         );
       case 'rank_plot_options':
-        return this.recommendations.recommend(this.toRecommendationInput(args));
+        return this.recommendations.recommend(
+          this.toRecommendationInput(args),
+          {
+            userId: context.userId ?? null,
+            conversationId: context.conversationId ?? null,
+            sourceMessageId: context.sourceMessageId ?? null,
+          },
+        );
       case 'browse_available_plots':
-        return this.recommendations.browseAvailablePlots({
-          numberOfPlots:
-            args.numberOfPlots === undefined
-              ? 1
-              : this.integer(args.numberOfPlots, 'numberOfPlots'),
-          preferredZone: this.optionalString(args.preferredZone),
-          preferredDirection: this.optionalString(args.preferredDirection),
-          plotType:
-            args.plotType === 'single' ||
-            args.plotType === 'double' ||
-            args.plotType === 'family'
-              ? args.plotType
-              : undefined,
-          minAreaSqm: this.optionalNumber(args.minAreaSqm),
-          maxAreaSqm: this.optionalNumber(args.maxAreaSqm),
-          needAdjacent:
-            typeof args.needAdjacent === 'boolean'
-              ? args.needAdjacent
-              : undefined,
-          preferNearEntrance:
-            typeof args.preferNearEntrance === 'boolean'
-              ? args.preferNearEntrance
-              : undefined,
-        });
+        return this.recommendations.browseAvailablePlots(
+          {
+            numberOfPlots:
+              args.numberOfPlots === undefined
+                ? 1
+                : this.integer(args.numberOfPlots, 'numberOfPlots'),
+            preferredZone: this.optionalString(args.preferredZone),
+            preferredDirection: this.optionalString(args.preferredDirection),
+            plotType:
+              args.plotType === 'single' ||
+              args.plotType === 'double' ||
+              args.plotType === 'family'
+                ? args.plotType
+                : undefined,
+            minAreaSqm: this.optionalNumber(args.minAreaSqm),
+            maxAreaSqm: this.optionalNumber(args.maxAreaSqm),
+            needAdjacent:
+              typeof args.needAdjacent === 'boolean'
+                ? args.needAdjacent
+                : undefined,
+            preferNearEntrance:
+              typeof args.preferNearEntrance === 'boolean'
+                ? args.preferNearEntrance
+                : undefined,
+          },
+          {
+            userId: context.userId ?? null,
+            conversationId: context.conversationId ?? null,
+            sourceMessageId: context.sourceMessageId ?? null,
+          },
+        );
       case 'get_service_suggestions':
         return {
           services: await this.recommendations.getServiceSuggestions(
@@ -158,6 +202,13 @@ export class AgentToolRegistryService {
         });
       case 'get_purchase_process':
         return this.knowledge.getPurchaseProcess();
+      case 'analyze_plot_competitiveness':
+        return this.insights.analyzePlotCompetitiveness(
+          this.requiredString(args.plotCode, 'plotCode', 50),
+        );
+      case 'get_customer_care_overview':
+        this.rejectUntrustedContextFields(args);
+        return this.insights.getCustomerCareOverview(context.userId ?? null);
       case 'create_draft_reservation':
         throw new ForbiddenException(
           'Draft creation requires explicit confirmation through the protected endpoint',
@@ -249,22 +300,71 @@ export class AgentToolRegistryService {
     });
   }
 
-  private requiredString(value: unknown, name: string) {
+  private requiredString(value: unknown, name: string, maxLength = 5000) {
     if (typeof value !== 'string') {
       throw new BadRequestException(`${name} must be a string`);
     }
-    const normalized = value.trim();
-    if (!normalized || normalized.toLowerCase() === 'undefined' || normalized.toLowerCase() === 'null') {
-      throw new BadRequestException(`${name} must not be empty or a literal null/undefined`);
+    const normalized = value.trim().replace(/\s+/g, ' ');
+    if (
+      !normalized ||
+      normalized.toLowerCase() === 'undefined' ||
+      normalized.toLowerCase() === 'null'
+    ) {
+      throw new BadRequestException(
+        `${name} must not be empty or a literal null/undefined`,
+      );
+    }
+    if (normalized.length > maxLength) {
+      throw new BadRequestException(
+        `${name} must not exceed ${maxLength} characters`,
+      );
     }
     return normalized;
   }
 
-  private requiredEnum(value: unknown, name: string, allowedValues: string[]) {
+  private requiredEnum<const T extends readonly string[]>(
+    value: unknown,
+    name: string,
+    allowedValues: T,
+  ): T[number] {
     const normalized = this.requiredString(value, name);
     if (!allowedValues.includes(normalized)) {
-      throw new BadRequestException(`${name} must be one of: ${allowedValues.join(', ')}`);
+      throw new BadRequestException(
+        `${name} must be one of: ${allowedValues.join(', ')}`,
+      );
     }
     return normalized;
+  }
+
+  private optionalProposalString(
+    value: unknown,
+    name: string,
+    maxLength: number,
+  ) {
+    if (value === undefined || value === null) return undefined;
+    return this.requiredString(value, name, maxLength);
+  }
+
+  private rejectUntrustedContextFields(args: Record<string, unknown>) {
+    const forbiddenFields = [
+      'userId',
+      'role',
+      'conversationId',
+      'sourceMessageId',
+      'isActive',
+      'validationStatus',
+      'sourceType',
+      'createdBy',
+      'actorRole',
+      'confidenceScore',
+      'modelVersion',
+      'recommendationRunId',
+    ];
+    const supplied = forbiddenFields.find((field) => field in args);
+    if (supplied) {
+      throw new BadRequestException(
+        `${supplied} must come from trusted backend context`,
+      );
+    }
   }
 }

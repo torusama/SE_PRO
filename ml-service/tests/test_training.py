@@ -1,8 +1,22 @@
 from pathlib import Path
 
+from app.features import FEATURE_NAMES
 from app.inference import predict_options
-from app.model_registry import MODEL_DIR, REGISTRY_PATH, ModelRegistry
+from app.model_registry import ModelRegistry
 from app.training import train_candidate
+
+
+def approved_samples():
+    return [
+        {
+            "features": {
+                name: (0.8 if (index + offset) % 2 else 0.2)
+                for offset, name in enumerate(FEATURE_NAMES)
+            },
+            "label": {"label_selected": index % 2},
+        }
+        for index in range(12)
+    ]
 
 
 def test_training_creates_reloadable_artifact_and_bounded_prediction(tmp_path, monkeypatch):
@@ -18,6 +32,7 @@ def test_training_creates_reloadable_artifact_and_bounded_prediction(tmp_path, m
         dataset_version="test-dataset",
         version="plot-ranker-test",
         activate=True,
+        approved_samples=approved_samples(),
         registry=registry,
     )
     artifact_path = Path(result["artifactPath"])
@@ -29,11 +44,7 @@ def test_training_creates_reloadable_artifact_and_bounded_prediction(tmp_path, m
         [
             {
                 "optionId": "OPT-001",
-                "features": {
-                    "budget_match_score": 0.9,
-                    "zone_match": 1,
-                    "adjacency_score": 1,
-                },
+                "features": {name: 0.9 for name in FEATURE_NAMES},
             }
         ],
         registry,
@@ -46,6 +57,7 @@ def test_training_creates_reloadable_artifact_and_bounded_prediction(tmp_path, m
         dataset_version="test-dataset-2",
         version="plot-ranker-candidate",
         activate=False,
+        approved_samples=approved_samples(),
         registry=registry,
     )
     switched = registry.activate("plot-ranker-candidate")

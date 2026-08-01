@@ -1,3 +1,5 @@
+import { MEMORY_TYPES, USER_MEMORY_KEYS } from './agent-tool.types';
+
 export const AGENT_TOOL_DEFINITIONS = [
   {
     type: 'function',
@@ -176,39 +178,70 @@ export const AGENT_TOOL_DEFINITIONS = [
   {
     type: 'function',
     function: {
-      name: 'propose_knowledge_update',
+      name: 'analyze_plot_competitiveness',
       description:
-        'Propose an update to the knowledge base or store an implicit psychological profile/user preference.',
+        'Analyze a real plot code using current internal request interest, comparable available inventory, and internal listed-price position. This is not an external market appraisal or investment forecast.',
       parameters: {
         type: 'object',
         additionalProperties: false,
         properties: {
-          category: { type: 'string' },
-          title: { type: 'string' },
-          content: { type: 'string' },
-          knowledgeType: {
+          plotCode: {
             type: 'string',
-            enum: [
-              'implicit_profile',
-              'explicit_preference',
-              'business_rule',
-              'faq',
-              'information_correction',
-              'recommendation_feedback',
-            ],
+            minLength: 1,
+            maxLength: 50,
+            description:
+              'Authoritative cemetery plot code, resolved from the current message or recent recommendation context.',
+          },
+        },
+        required: ['plotCode'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_customer_care_overview',
+      description:
+        'Get the authenticated customer account overview: owned plots, plot requests, service orders, upcoming appointments, and reminders. Never accepts a caller-supplied user ID.',
+      parameters: { type: 'object', additionalProperties: false },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'propose_knowledge_update',
+      description:
+        'Propose a persistent user preference, verified-knowledge candidate, or recommendation learning signal. This is application data storage, not foundation-model training.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          category: { type: 'string', minLength: 1, maxLength: 50 },
+          title: { type: 'string', minLength: 1, maxLength: 200 },
+          content: { type: 'string', minLength: 1, maxLength: 5000 },
+          memoryType: {
+            type: 'string',
+            enum: MEMORY_TYPES,
           },
           requestedScope: {
             type: 'string',
             enum: ['user', 'global'],
           },
-          sourceMessageId: { type: 'string' },
-          reason: { type: 'string' },
+          memoryKey: {
+            type: 'string',
+            enum: USER_MEMORY_KEYS,
+          },
+          reason: { type: 'string', minLength: 1, maxLength: 1000 },
+          effectiveFrom: { type: 'string' },
+          effectiveTo: { type: 'string' },
+          selectedOptionId: { type: 'string', maxLength: 100 },
+          rejectedOptionId: { type: 'string', maxLength: 100 },
         },
         required: [
           'category',
           'title',
           'content',
-          'knowledgeType',
+          'memoryType',
           'requestedScope',
           'reason',
         ],

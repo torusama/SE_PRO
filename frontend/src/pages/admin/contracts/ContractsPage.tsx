@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '@/lib/api'
 import { downloadContractPdf } from '@/lib/contractPdf'
+import '../AdminCorePages.css'
 
 interface Contract {
   id: number
@@ -149,8 +150,8 @@ export default function ContractsPage() {
   }
 
   return (
-    <div style={{ display: 'grid', gap: 18 }}>
-      <header>
+    <div className="admin-page admin-core-page admin-contracts-page" style={{ display: 'grid', gap: 18 }}>
+      <header className="admin-page-header">
         <h1 style={{ margin: 0, color: 'var(--color-text-primary)' }}>Hợp đồng tự động</h1>
         <p style={{ color: 'var(--color-text-secondary)', margin: '5px 0 0' }}>
           Hợp đồng được sinh khi admin duyệt yêu cầu mua lô phần mộ.

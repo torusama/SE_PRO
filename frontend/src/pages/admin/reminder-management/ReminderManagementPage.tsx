@@ -32,11 +32,11 @@ interface AdminReminder {
   lastNotifiedAt?: string | null
 }
 
-const TYPE_META: Record<ReminderType, { icon: string; label: string }> = {
-  death_anniversary: { icon: '🕯️', label: 'Ngày giỗ' },
-  memorial: { icon: '🙏', label: 'Tưởng niệm' },
-  maintenance: { icon: '🧹', label: 'Chăm sóc mộ' },
-  other: { icon: '🔔', label: 'Khác' },
+const TYPE_META: Record<ReminderType, { label: string }> = {
+  death_anniversary: { label: 'Ngày giỗ' },
+  memorial: { label: 'Tưởng niệm' },
+  maintenance: { label: 'Chăm sóc mộ' },
+  other: { label: 'Khác' },
 }
 
 const TYPE_FILTERS: { value: ReminderType | 'all'; label: string }[] = [
@@ -220,7 +220,7 @@ export default function ReminderManagementPage() {
                       {r.customerPhone && <div className="cell-secondary">{r.customerPhone}</div>}
                     </td>
                     <td>
-                      <div className="cell-primary">{meta.icon} {r.title}</div>
+                      <div className="cell-primary">{r.title}</div>
                       <div className="cell-secondary">{r.isRecurring ? 'Hàng năm' : 'Một lần'}</div>
                     </td>
                     <td><span className="type-pill">{meta.label}</span></td>

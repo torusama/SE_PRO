@@ -11,7 +11,11 @@
 
 Mistral-Nemotron được dùng làm **conversational agent và tool orchestrator**: hiểu câu người dùng, trích xuất yêu cầu, chọn tool cần gọi và diễn đạt kết quả.
 
-Mistral-Nemotron **không phải** model được project tự retrain sau mỗi feedback. Phần model do nhóm tự train là **PlotRanker**, một model nhỏ chuyên xếp hạng phương án lô đất. Các correction về giá, dịch vụ và quy trình được cập nhật vào **versioned Knowledge Base** sau khi được xác minh.
+Mistral-Nemotron **không phải** model được project retrain sau feedback. Thành
+phần có thể được thử nghiệm offline thủ công là **PlotRanker**, một model nhỏ
+chuyên xếp hạng phương án lô đất và tắt mặc định. Các correction về giá, dịch
+vụ và quy trình được cập nhật vào **versioned Knowledge Base** sau khi được xác
+minh.
 
 ---
 
@@ -278,9 +282,10 @@ Có thể hỗ trợ auto-approve chỉ khi correction trùng khớp với một
 AI_AUTO_APPLY_VERIFIED_CORRECTIONS=false
 ```
 
-## 2.13. Retrain model xếp hạng
+## 2.13. Tín hiệu đề xuất và thử nghiệm PlotRanker offline
 
-Feedback về chất lượng đề xuất được chuyển thành training sample sau khi duyệt.
+Feedback về chất lượng đề xuất được lưu trước tiên trong
+`ai_learning_signals`, không tự động trở thành training sample.
 
 Ví dụ:
 
@@ -288,22 +293,25 @@ Ví dụ:
 - User chọn phương án B.
 - User đánh giá A không phù hợp vì xa cổng.
 
-Hệ thống tạo sample mới cho PlotRanker.
+Hệ thống liên kết signal với recommendation run thật, requirements, candidate
+IDs và feature snapshot nếu các dữ liệu này tồn tại. Signal thiếu context vẫn
+được giữ để phân tích nhưng có `training_ready=false`.
 
-Retraining chạy theo batch:
+Một thử nghiệm PlotRanker trong tương lai chỉ được chạy offline và chủ động:
 
 ```text
-Đủ N sample đã duyệt hoặc admin bấm Retrain
+Admin chọn các signal/sample đầy đủ và đã duyệt
 → Tạo dataset version mới
 → Train candidate model
 → Đánh giá trên validation set
 → So sánh model hiện tại
-→ Deploy nếu đạt điều kiện
+→ Chờ admin phê duyệt deploy nếu đạt điều kiện
 → Giữ model cũ nếu không đạt
 → Ghi toàn bộ training run
 ```
 
-Không retrain sau từng message.
+Không train sau từng message, không tự deploy candidate và không thay đổi
+foundation LLM.
 
 ## 2.14. Learning history và audit
 
@@ -390,16 +398,16 @@ Feature MVP:
 budget_match_score
 zone_match
 preferred_direction_match
-bazi_direction_match
 adjacency_score
 plot_type_match
 number_of_plots_match
 area_match_score
 price_to_budget_ratio
-historical_acceptance_rate
 ```
 
-Các feature chưa có dữ liệu đáng tin thì không giả lập trong production path. Có thể thêm sau.
+Các feature chưa có dữ liệu đáng tin (ví dụ Bát tự hoặc historical acceptance)
+không được điền `0` hay giả lập trong production path. Chỉ bổ sung chúng sau khi
+có nguồn dữ liệu thật, định nghĩa feature ổn định và bộ mẫu đã được duyệt.
 
 Thuật toán ban đầu có thể chọn một trong:
 
@@ -489,10 +497,8 @@ AI_AGENT: '/tu-van-ai'
 ```text
 frontend/src/pages/admin/ai-agent/
 ├── AgentAdminPage.tsx
-├── FeedbackQueue.tsx
-├── KnowledgeHistory.tsx
-├── TrainingRuns.tsx
-└── ModelVersions.tsx
+├── AgentAdminPage.css
+└── LearningAnalyticsPanel.tsx
 ```
 
 Thêm route:
@@ -553,6 +559,7 @@ AI_FALLBACK_RULE_BASED=true
 AI_MAX_TOOL_ROUNDS=4
 AI_MAX_HISTORY_MESSAGES=20
 AI_AUTO_APPLY_VERIFIED_CORRECTIONS=false
+AI_PLOT_RANKER_ENABLED=false
 AI_RETRAIN_MIN_SAMPLES=20
 
 # Custom ranker
@@ -1043,7 +1050,14 @@ GET  /api/admin/ai-agent/model-versions
 POST /api/admin/ai-agent/model-versions/:id/deploy
 POST /api/admin/ai-agent/model-versions/:id/rollback
 GET  /api/admin/ai-agent/learning-history
+GET  /api/admin/ai-agent/learning-analytics?days=30
 ```
+
+`learning-analytics` chỉ dành cho admin và nhận cửa sổ báo cáo từ 7 đến 90 ngày.
+Response tách số liệu trạng thái hiện tại khỏi activity trong kỳ, gồm user
+memory, verified/quarantined knowledge, recommendation signals, PlotRanker
+run/fallback, timeline và các update gần nhất. Dashboard không hiển thị nội dung
+memory riêng tư và không được mô tả các số liệu này như foundation LLM tự train.
 
 ---
 
@@ -1276,13 +1290,11 @@ Cột gợi ý:
 budget_match_score
 zone_match
 preferred_direction_match
-bazi_direction_match
 adjacency_score
 plot_type_match
 number_of_plots_match
 area_match_score
 price_to_budget_ratio
-historical_acceptance_rate
 label_selected
 ```
 
@@ -1305,13 +1317,11 @@ Request:
         "budget_match_score": 0.95,
         "zone_match": 1,
         "preferred_direction_match": 1,
-        "bazi_direction_match": 0,
         "adjacency_score": 1,
         "plot_type_match": 1,
         "number_of_plots_match": 1,
         "area_match_score": 0.8,
-        "price_to_budget_ratio": 0.91,
-        "historical_acceptance_rate": 0.5
+        "price_to_budget_ratio": 0.91
       }
     }
   ]
@@ -1340,11 +1350,12 @@ POST /train
 
 Chỉ gọi từ backend admin flow, không expose trực tiếp ra public frontend.
 
-Request chứa dataset path/version hoặc approved samples.
+Request chứa dataset version và các approved samples đã được đánh dấu
+`training_ready=true`. Vector thiếu feature bị loại; không điền số 0 giả.
 
 Training service phải:
 
-1. Load current dataset + approved samples.
+1. Load các approved samples đầy đủ; synthetic seed chỉ dùng cho demo/test offline.
 2. Split train/validation có seed cố định.
 3. Train candidate.
 4. Tính metric.
@@ -1596,12 +1607,13 @@ Knowledge version before/after
 6. Hỏi lại cùng câu.
 7. Agent trả thông tin mới và metadata cho biết knowledge version mới.
 
-## Scenario C — Model tự retrain
+## Scenario C — Thu thập signal và thử nghiệm PlotRanker thủ công
 
 1. User đánh giá recommendation không phù hợp và chọn phương án khác.
-2. Admin duyệt feedback thành training sample.
-3. Trigger retrain.
-4. Dashboard hiển thị:
+2. Hệ thống lưu learning signal cùng recommendation context thật nếu có.
+3. Không có training hoặc deploy tự động.
+4. Khi đủ sample hoàn chỉnh, admin có thể chủ động chạy thử nghiệm offline.
+5. Dashboard hiển thị:
 
 ```text
 Training run ID
@@ -1639,8 +1651,10 @@ Task chỉ được xem là hoàn thành khi:
 - [ ] Admin approve/reject feedback được.
 - [ ] Approved correction tạo knowledge version và audit log.
 - [ ] Hỏi lại nhận thông tin mới sau correction.
-- [ ] Có PlotRanker service với model artifact/version.
-- [ ] Có approved training sample pipeline.
+- [ ] Learning signal không đi vào Knowledge Base và không tự train.
+- [ ] PlotRanker tắt mặc định; recommendation vẫn chạy bằng rule-based ranking.
+- [ ] Nếu bật PlotRanker, chỉ dùng model active hợp lệ và ghi ranking trace.
+- [ ] Approved training sample phải có vector đầy đủ và `training_ready=true`.
 - [ ] Có training run và metric thật.
 - [ ] Có deploy/rollback model version.
 - [ ] Có fallback khi NVIDIA hoặc ML service lỗi.
@@ -1709,11 +1723,11 @@ Thực hiện theo từng phase và build/test sau mỗi phase.
 
 1. Tạo FastAPI ML service.
 2. Seed synthetic dataset có ghi chú rõ ràng.
-3. Train v1.0.
-4. Predict integration.
-5. Rule-based fallback.
-6. Training sample pipeline.
-7. Retrain, metric, deploy và rollback.
+3. Không train/active model tự động khi service khởi động.
+4. Predict integration sau flag `AI_PLOT_RANKER_ENABLED`.
+5. Rule-based fallback là mặc định và source of truth.
+6. Thu thập learning signal có recommendation context thật.
+7. Thử nghiệm offline, metric, deploy và rollback đều do admin chủ động.
 
 ## Phase 6 — Final demo hardening
 

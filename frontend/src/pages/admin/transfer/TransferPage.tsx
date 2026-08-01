@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, ArrowRight, CheckCircle2, FileText, Search, Upload, X } from 'lucide-react'
 import { api } from '@/lib/api'
 import './TransferPage.css'
 
@@ -170,8 +169,8 @@ export default function TransferPage() {
         </div>
       </header>
 
-      {error && <div className="transfer-alert error" role="alert">{error}<button onClick={() => setError('')}><X size={16} /></button></div>}
-      {success && <div className="transfer-alert success" role="status"><CheckCircle2 size={18} />{success}<button onClick={() => setSuccess('')}><X size={16} /></button></div>}
+      {error && <div className="transfer-alert error" role="alert">{error}<button onClick={() => setError('')}>Ẩn</button></div>}
+      {success && <div className="transfer-alert success" role="status">{success}<button onClick={() => setSuccess('')}>Ẩn</button></div>}
 
       {step === 1 ? (
         <>
@@ -181,14 +180,14 @@ export default function TransferPage() {
               <button role="tab" aria-selected={mode === 'plot'} className={mode === 'plot' ? 'active' : ''} onClick={() => changeMode('plot')}>Tìm theo lô đất</button>
             </div>
             <div className="search-row">
-              <div className="search-input"><Search size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && void search()} placeholder={mode === 'customer' ? 'Tên, email, số điện thoại hoặc CCCD khách hàng' : 'Nhập mã hoặc ID lô đất'} /></div>
+              <div className="search-input"><input value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && void search()} placeholder={mode === 'customer' ? 'Tên, email, số điện thoại hoặc CCCD khách hàng' : 'Nhập mã hoặc ID lô đất'} /></div>
               <button className="primary-button" disabled={searching} onClick={() => void search()}>{searching ? 'Đang tìm…' : 'Tìm kiếm'}</button>
             </div>
           </section>
 
           <section className="transfer-card results-card">
             <div className="section-title"><div><h2>Kết quả tìm kiếm</h2><p>{results.length ? `${results.length} lô đất được tìm thấy` : 'Nhập thông tin để bắt đầu tìm kiếm'}</p></div>{selected.length > 0 && <strong>{selected.length} lô đã chọn</strong>}</div>
-            {results.length === 0 ? <div className="empty-state"><Search size={30} /><span>Chưa có dữ liệu hiển thị</span></div> : (
+            {results.length === 0 ? <div className="empty-state"><span>Chưa có dữ liệu hiển thị</span></div> : (
               <div className="plot-table-wrap"><table className="plot-table"><thead><tr><th /><th>LÔ ĐẤT</th><th>NGƯỜI ĐỨNG TÊN</th><th>LIÊN HỆ</th><th>HỢP ĐỒNG</th><th>TRẠNG THÁI</th></tr></thead><tbody>{results.map((plot) => {
                 const checked = selectedIds.has(plot.plotId)
                 const disabled = selected.length > 0 && selected[0].holderId !== plot.holderId
@@ -197,11 +196,11 @@ export default function TransferPage() {
             )}
           </section>
 
-          <div className="transfer-actions"><span>{selected.length ? `Đã chọn ${selected.length} lô của ${selectedHolder.holderName}` : 'Chưa chọn lô đất'}</span><button className="primary-button" disabled={!selected.length} onClick={() => { setError(''); setStep(2) }}>Tiếp tục <ArrowRight size={17} /></button></div>
+          <div className="transfer-actions"><span>{selected.length ? `Đã chọn ${selected.length} lô của ${selectedHolder.holderName}` : 'Chưa chọn lô đất'}</span><button className="primary-button" disabled={!selected.length} onClick={() => { setError(''); setStep(2) }}>Tiếp tục</button></div>
         </>
       ) : (
         <>
-          <button className="back-button" onClick={() => setStep(1)}><ArrowLeft size={17} /> Quay lại chọn lô</button>
+          <button className="back-button" onClick={() => setStep(1)}>Quay lại chọn lô</button>
           <div className="information-grid">
             <section className="transfer-card information-card locked-card">
               <div className="section-title"><div><p className="transfer-eyebrow">THÔNG TIN KHÔNG THỂ THAY ĐỔI</p><h2>Người đứng tên hiện tại</h2></div><span className="locked-label">Đã khóa</span></div>
@@ -229,9 +228,9 @@ export default function TransferPage() {
           </div>
 
           <section className="transfer-card documents-card">
-            <div className="section-title"><div><h2>Văn bản hợp đồng liên quan</h2><p>Tối đa 10 file, mỗi file không quá 10 MB. Hỗ trợ PDF, JPG, PNG, WEBP.</p></div><FileText size={22} /></div>
-            <label className="drop-zone"><Upload size={24} /><strong>Chọn file từ máy tính</strong><span>Ảnh hoặc tài liệu PDF</span><input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp" onChange={(event) => addFiles(event.target.files)} /></label>
-            {documents.length > 0 && <div className="file-list">{documents.map((file, index) => <div key={`${file.name}-${index}`}><FileText size={18} /><span><b>{file.name}</b><small>{(file.size / 1024 / 1024).toFixed(2)} MB</small></span><button onClick={() => setDocuments((current) => current.filter((_, itemIndex) => itemIndex !== index))}><X size={16} /></button></div>)}</div>}
+            <div className="section-title"><div><h2>Văn bản hợp đồng liên quan</h2><p>Tối đa 10 file, mỗi file không quá 10 MB. Hỗ trợ PDF, JPG, PNG, WEBP.</p></div></div>
+            <label className="drop-zone"><strong>Chọn file từ máy tính</strong><span>Ảnh hoặc tài liệu PDF</span><input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp" onChange={(event) => addFiles(event.target.files)} /></label>
+            {documents.length > 0 && <div className="file-list">{documents.map((file, index) => <div key={`${file.name}-${index}`}><span><b>{file.name}</b><small>{(file.size / 1024 / 1024).toFixed(2)} MB</small></span><button onClick={() => setDocuments((current) => current.filter((_, itemIndex) => itemIndex !== index))}>Xóa</button></div>)}</div>}
             <label className="admin-note">Ghi chú của admin<textarea rows={3} value={adminNote} onChange={(event) => setAdminNote(event.target.value)} placeholder="Nhập ghi chú cho giao dịch chuyển nhượng…" /></label>
           </section>
 
@@ -239,7 +238,7 @@ export default function TransferPage() {
         </>
       )}
 
-      {step === 1 && recent.length > 0 && <section className="transfer-card recent-card"><div className="section-title"><div><h2>Chuyển nhượng gần đây</h2><p>Lịch sử các giao dịch đã hoàn tất</p></div></div><div className="recent-list">{recent.map((item) => <div key={item.id}><b className="plot-code">{item.batchCode}</b><span>{item.previousHolderName} <ArrowRight size={14} /> {item.recipientName}</span><span>{item.plotCodes.join(', ')}</span><small>{new Date(item.createdAt).toLocaleString('vi-VN')}</small></div>)}</div></section>}
+      {step === 1 && recent.length > 0 && <section className="transfer-card recent-card"><div className="section-title"><div><h2>Chuyển nhượng gần đây</h2><p>Lịch sử các giao dịch đã hoàn tất</p></div></div><div className="recent-list">{recent.map((item) => <div key={item.id}><b className="plot-code">{item.batchCode}</b><span>{item.previousHolderName} đến {item.recipientName}</span><span>{item.plotCodes.join(', ')}</span><small>{new Date(item.createdAt).toLocaleString('vi-VN')}</small></div>)}</div></section>}
     </main>
   )
 }

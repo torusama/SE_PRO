@@ -1,0 +1,534 @@
+/*
+ * Page-level compatibility layer.
+ * These selectors align older admin screens with the Agent page while their
+ * feature-specific layouts and business behavior remain untouched.
+ */
+
+.admin-theme :is(
+  .appointment-admin,
+  .reminder-admin,
+  .service-admin,
+  .transfer-page,
+  .admin-map-page
+) {
+  width: 100%;
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: 0;
+  color: var(--admin-text);
+}
+
+.admin-theme :is(
+  .appointment-admin > header,
+  .reminder-admin-header,
+  .service-admin__header,
+  .transfer-header,
+  .admin-map-page-header
+) {
+  align-items: flex-end;
+  gap: 24px;
+  margin-bottom: 22px;
+}
+
+.admin-theme :is(
+  .appointment-admin,
+  .reminder-admin,
+  .service-admin,
+  .transfer-page,
+  .admin-map-page
+) h1 {
+  margin: 0;
+  color: var(--admin-ink);
+  font-family: var(--font-display, inherit);
+  font-size: clamp(25px, 2.4vw, 34px);
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1.15;
+}
+
+.admin-theme :is(
+  .appointment-admin > header,
+  .reminder-admin-header,
+  .service-admin__header,
+  .transfer-header,
+  .admin-map-page-header
+) p {
+  color: var(--admin-muted);
+  font-size: 11px;
+  letter-spacing: 0;
+  line-height: 1.55;
+  text-transform: none;
+}
+
+.admin-theme :is(
+  .appointment-admin,
+  .reminder-admin,
+  .service-admin,
+  .transfer-page,
+  .admin-map-page
+) :is(h2, h3) {
+  color: var(--admin-ink);
+  font-weight: 600;
+}
+
+.admin-theme :is(
+  .admin-appointment-list article,
+  .reminder-stat-card,
+  .reminder-toolbar,
+  .reminder-table-wrap,
+  .service-stat,
+  .service-panel,
+  .detail-card,
+  .transfer-card,
+  .admin-map-shell
+) {
+  border-color: var(--admin-line);
+  background: var(--admin-paper);
+  box-shadow: none;
+}
+
+.admin-theme :is(
+  .admin-appointment-list article,
+  .reminder-stat-card,
+  .service-stat,
+  .service-panel,
+  .detail-card,
+  .transfer-card,
+  .admin-map-shell
+) {
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease,
+    transform 180ms ease;
+}
+
+.admin-theme :is(
+  .admin-appointment-list article,
+  .transfer-card,
+  .detail-card
+):hover {
+  border-color: var(--admin-line-strong);
+}
+
+/* Appointment management */
+.admin-theme .pending-count {
+  border: 1px solid var(--admin-line);
+  border-radius: 9px;
+  background: var(--admin-soft);
+  color: var(--admin-text);
+}
+
+.admin-theme .pending-count b {
+  color: var(--admin-ink);
+  font-family: var(--font-display, inherit);
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.admin-theme .appointment-date {
+  border-color: var(--admin-line);
+}
+
+.admin-theme .appointment-date span {
+  color: var(--admin-accent);
+}
+
+.admin-theme .appointment-info :is(p, small) {
+  color: var(--admin-muted);
+}
+
+.admin-theme :is(.approve, .complete) {
+  border: 1px solid var(--admin-ink);
+  background: var(--admin-ink);
+  color: var(--admin-paper);
+}
+
+.admin-theme .reject {
+  border-color: #dfc5bf;
+  background: transparent;
+  color: var(--admin-danger);
+}
+
+.admin-theme .admin-status {
+  border-radius: 99px;
+  background: #f6efe5;
+  color: var(--admin-warning);
+}
+
+.admin-theme .admin-status.confirmed {
+  background: #e9f0ec;
+  color: var(--admin-positive);
+}
+
+.admin-theme .admin-status.cancelled {
+  background: #f7e9e6;
+  color: var(--admin-danger);
+}
+
+.admin-theme .admin-status.completed {
+  background: var(--admin-soft);
+  color: var(--admin-text);
+}
+
+/* Reminder management */
+.admin-theme .reminder-stat-grid {
+  gap: 0;
+  border-block: 1px solid var(--admin-line);
+}
+
+.admin-theme .reminder-stat-card,
+.admin-theme .reminder-stat-card.highlight {
+  border: 0;
+  border-right: 1px solid var(--admin-line);
+  border-radius: 0;
+  background: transparent;
+  padding: 18px;
+}
+
+.admin-theme .reminder-stat-card:first-child {
+  padding-left: 0;
+}
+
+.admin-theme .reminder-stat-card:last-child {
+  border-right: 0;
+}
+
+.admin-theme .reminder-stat-value {
+  color: var(--admin-ink);
+  font-family: var(--font-display, inherit);
+  font-size: 25px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+.admin-theme .reminder-stat-label {
+  color: var(--admin-muted);
+  font-size: 10px;
+}
+
+.admin-theme .reminder-toolbar {
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-radius);
+  padding: 12px;
+}
+
+/* Service management */
+.admin-theme .service-admin {
+  gap: 18px;
+}
+
+.admin-theme .service-admin__eyebrow {
+  margin-bottom: 4px;
+  color: var(--admin-muted);
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+}
+
+.admin-theme :is(.service-admin__refresh, .service-primary) {
+  border: 1px solid var(--admin-ink);
+  border-radius: 7px;
+  background: var(--admin-ink);
+  color: var(--admin-paper);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.admin-theme .service-stats {
+  gap: 0;
+  border-block: 1px solid var(--admin-line);
+}
+
+.admin-theme .service-stat {
+  min-height: 78px;
+  border: 0;
+  border-right: 1px solid var(--admin-line);
+  border-radius: 0;
+  background: transparent;
+  padding: 16px 18px;
+}
+
+.admin-theme .service-stat:first-child {
+  padding-left: 0;
+}
+
+.admin-theme .service-stat:last-child {
+  border-right: 0;
+}
+
+.admin-theme .service-stat strong {
+  color: var(--admin-ink);
+  font-family: var(--font-display, inherit);
+  font-size: 25px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+.admin-theme .service-stat span {
+  color: var(--admin-muted);
+  font-size: 10px;
+}
+
+.admin-theme .service-search {
+  border-color: var(--admin-line);
+  background: var(--admin-paper-strong);
+  color: var(--admin-muted);
+}
+
+.admin-theme .service-filters {
+  gap: 18px;
+  scrollbar-width: none;
+}
+
+.admin-theme .service-filters button {
+  border-radius: 0;
+  border-bottom: 2px solid transparent;
+  padding: 8px 0;
+}
+
+.admin-theme .service-filters button.active {
+  border-bottom-color: var(--admin-accent);
+  background: transparent;
+  color: var(--admin-ink);
+}
+
+.admin-theme .service-row-action {
+  min-width: 38px;
+  color: var(--admin-accent);
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.admin-theme .service-drawer {
+  border-left: 1px solid var(--admin-line);
+  background: var(--admin-paper);
+  box-shadow: -12px 0 34px rgba(43, 41, 38, 0.1);
+  animation: admin-drawer-enter 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.admin-theme .service-drawer__header > button {
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  color: var(--admin-muted);
+  font-size: 10px;
+  padding: 6px 0;
+}
+
+/* Transfer workflow */
+.admin-theme .transfer-stepper span {
+  border-color: var(--admin-line-strong);
+  color: var(--admin-muted);
+}
+
+.admin-theme .transfer-stepper span.active,
+.admin-theme .transfer-stepper span.done {
+  border-color: var(--admin-ink);
+  background: var(--admin-ink);
+  color: var(--admin-paper);
+}
+
+.admin-theme .transfer-stepper i {
+  background: var(--admin-line-strong);
+}
+
+.admin-theme .transfer-card {
+  border-radius: var(--admin-radius);
+}
+
+.admin-theme .mode-switch {
+  gap: 18px;
+  border-bottom: 1px solid var(--admin-line);
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.admin-theme .mode-switch button {
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 9px 0 8px;
+}
+
+.admin-theme .mode-switch button.active {
+  border-bottom-color: var(--admin-accent);
+  background: transparent;
+  box-shadow: none;
+  color: var(--admin-ink);
+}
+
+.admin-theme .primary-button {
+  border-color: var(--admin-ink);
+  background: var(--admin-ink);
+  color: var(--admin-paper);
+}
+
+.admin-theme .primary-button:hover:not(:disabled) {
+  background: #171614;
+}
+
+.admin-theme .secondary-button,
+.admin-theme .back-button {
+  border-color: var(--admin-line-strong);
+  background: transparent;
+  color: var(--admin-text);
+}
+
+.admin-theme .transfer-actions {
+  border-color: var(--admin-line);
+  background: var(--admin-paper);
+  box-shadow: 0 -8px 24px rgba(43, 41, 38, 0.05);
+}
+
+/* Map: retain the spatial SVG and semantic lot colors, simplify its chrome. */
+.admin-theme .admin-map-shell {
+  border-radius: var(--admin-radius);
+}
+
+.admin-theme .admin-map-zone-list i.all-zones {
+  background: var(--admin-line-strong);
+}
+
+.admin-theme .admin-map-zone-list button:hover,
+.admin-theme .admin-map-zone-list button.active {
+  border-color: var(--admin-line-strong);
+  background: var(--admin-soft);
+}
+
+.admin-theme .admin-map-mode-switch {
+  border-bottom: 1px solid var(--admin-line);
+  border-radius: 0;
+  background: transparent;
+}
+
+.admin-theme .admin-map-mode-switch button {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+}
+
+.admin-theme .admin-map-mode-switch button.active {
+  border-bottom-color: var(--admin-accent);
+  background: transparent;
+  color: var(--admin-ink);
+}
+
+.admin-theme :is(
+  .service-table tbody tr,
+  .plot-table tbody tr,
+  .reminder-table tbody tr,
+  .admin-core-table-wrap tbody tr
+) {
+  transition: background-color 150ms ease;
+}
+
+.admin-theme :is(
+  .service-table tbody tr,
+  .plot-table tbody tr,
+  .reminder-table tbody tr,
+  .admin-core-table-wrap tbody tr
+):hover {
+  background: var(--admin-soft);
+}
+
+.admin-theme :is(
+  .service-empty,
+  .empty-state,
+  .reminder-empty,
+  .admin-empty
+) {
+  animation: admin-content-enter 280ms ease both;
+}
+
+@keyframes admin-drawer-enter {
+  from {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes admin-content-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.admin-theme :is(
+  .admin-map-header-actions button,
+  .admin-map-management-actions button
+) {
+  border-color: var(--admin-line-strong);
+  border-radius: 7px;
+  background: var(--admin-paper);
+  color: var(--admin-text);
+}
+
+/* Horizontal scrolling should stay functional but visually quiet. */
+.admin-theme :is(
+  .admin-workspace,
+  .service-table-wrap,
+  .plot-table-wrap,
+  .reminder-table-wrap,
+  .admin-core-table-wrap,
+  .agent-admin__table-wrap
+) {
+  scrollbar-color: var(--admin-line-strong) transparent;
+  scrollbar-width: thin;
+}
+
+.admin-theme :is(
+  .admin-workspace,
+  .service-table-wrap,
+  .plot-table-wrap,
+  .reminder-table-wrap,
+  .admin-core-table-wrap,
+  .agent-admin__table-wrap
+)::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.admin-theme :is(
+  .admin-workspace,
+  .service-table-wrap,
+  .plot-table-wrap,
+  .reminder-table-wrap,
+  .admin-core-table-wrap,
+  .agent-admin__table-wrap
+)::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 99px;
+  background: var(--admin-line-strong);
+  background-clip: padding-box;
+}
+
+@media (max-width: 900px) {
+  .admin-theme :is(
+    .appointment-admin > header,
+    .reminder-admin-header,
+    .service-admin__header,
+    .transfer-header,
+    .admin-map-page-header
+  ) {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 720px) {
+  .admin-theme :is(.reminder-stat-grid, .service-stats) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-theme :is(.reminder-stat-card, .service-stat):nth-child(2) {
+    border-right: 0;
+  }
+}
