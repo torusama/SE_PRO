@@ -213,8 +213,7 @@ const RELATIONS = ["Vợ / Chồng", "Con", "Cha / Mẹ", "Anh / Em", "Khác"];
 
 export default function ProfilePage() {
   const user = useAuthStore((s) => s.user);
-  const setAuth = useAuthStore((s) => s.setAuth);
-  const token = useAuthStore((s) => s.token);
+  const setUser = useAuthStore((s) => s.setUser);
   const role = useAuthStore((s) => s.role);
   const setProfileComplete = useAuthStore((s) => s.setProfileComplete);
   const storeLogout = useAuthStore((s) => s.logout);
@@ -604,14 +603,8 @@ export default function ProfilePage() {
       });
       applyProfile(res.data.data);
       const profileIsComplete = Boolean(res.data.data.isProfileComplete);
-      if (user && token && role) {
-        setAuth(
-          { ...user, name: res.data.data.fullName },
-          token,
-          role as "customer" | "admin",
-          role === "admin" || profileIsComplete,
-        );
-      }
+      if (user) setUser({ ...user, name: res.data.data.fullName });
+      setProfileComplete(role === "admin" || profileIsComplete);
       applyProfile(res.data.data);
       showToast("✓ Đã lưu thông tin");
       if (profileIsComplete && routeState?.requireProfile) {

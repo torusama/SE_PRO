@@ -13,3 +13,10 @@
 - Staging recognizes the migration changes as a deliberate `012 -> 015` rename plus the new expanded `016` migration.
 - Staged scope contains 96 entries / about 11,085 insertions and 1,964 deletions across prior completed feature work.
 - Staged whitespace check passes and the bounded credential-pattern scan found no potential secret files.
+- Local checkpoint commit was created successfully, then rebased onto `ad8c93e` with no conflicts because the remote auth/profile files were disjoint from the local feature set.
+- The ML service has a repository-local `.venv` with its own Python executable; that is the correct runner rather than the system Python.
+- The first parallel wrapper stopped on the ML rejection before backend/frontend test output was captured; both logs remained empty and no Jest/Vitest process remained, so those suites must be rerun.
+- Remote `authStore.setAuth` intentionally resets `profileComplete` to `null` and now accepts only `(user, token, role)`.
+- `ProfilePage` was the only stale four-argument caller. After a successful profile save it should update the user name with `setUser` and write the authoritative completion value with `setProfileComplete`, avoiding an unnecessary auth reset/re-fetch.
+- Post-integration verification results: backend 43 suites / 235 tests and build pass; frontend 14 files / 47 tests and build pass; ML 4 tests pass.
+- Frontend build still emits the repository's known bundle-size/plugin-timing warnings, but no build error remains.
