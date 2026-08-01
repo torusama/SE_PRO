@@ -23,6 +23,7 @@ const REGISTRATION_OTP_TTL_MINUTES = 10;
 const REGISTRATION_TOKEN_TTL_MINUTES = 15;
 const REGISTRATION_OTP_COOLDOWN_SECONDS = 60;
 const REGISTRATION_OTP_MAX_ATTEMPTS = 5;
+const PASSWORD_RESET_COOLDOWN_SECONDS = 60;
 
 @Injectable()
 export class AuthService {
@@ -260,6 +261,117 @@ export class AuthService {
       [user.user_id],
     );
     return this.withToken(user, requestInfo);
+  }
+
+  async forgotPassword(rawEmail: string) {
+    const email = this.normalizeEmail(rawEmail);
+    const user = await this.database.queryOne<{
+      user_id: number;
+      is_active: boolean;
+    }>(
+      `SELECT user_id, is_active FROM users
+       WHERE LOWER(email) = $1 AND is_deleted = FALSE`,
+      [email],
+    );
+
+    // Không tiết lộ việc email có tồn tại hay không (chống dò email) — luôn
+    // trả về cùng một kết quả cho người gọi, chỉ thực sự gửi mail khi user
+    // tồn tại và đang hoạt động.
+    if (user && user.is_active) {
+      const current = await this.database.queryOne<{ created_at: Date }>(
+        `SELECT created_at FROM password_reset_tokens
+         WHERE user_id = $1
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [user.user_id],
+      );
+      if (current?.created_at) {
+        const elapsedSeconds =
+          (Date.now() - new Date(current.created_at).getTime()) / 1000;
+        if (elapsedSeconds < PASSWORD_RESET_COOLDOWN_SECONDS) {
+          const wait = Math.ceil(
+            PASSWORD_RESET_COOLDOWN_SECONDS - elapsedSeconds,
+          );
+          throw new BadRequestException(
+            `Vui lòng chờ ${wait} giây trước khi yêu cầu gửi lại liên kết.`,
+          );
+        }
+      }
+
+      const rawToken = randomBytes(32).toString('hex');
+      const tokenHash = this.hashRegistrationToken(rawToken);
+      await this.database.query(
+        `INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
+         VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
+        [user.user_id, tokenHash],
+      );
+
+      const frontendUrl =
+        this.config.get<string>('frontendUrl') ?? 'http://localhost:5173';
+      const resetLink = `${frontendUrl.replace(/\/$/, '')}/dat-lai-mat-khau?token=${rawToken}`;
+
+      await this.emailService.sendPasswordResetEmail(email, resetLink);
+    }
+
+    return {
+      sent: true,
+      message:
+        'Nếu email tồn tại trong hệ thống, liên kết đặt lại mật khẩu đã được gửi.',
+    };
+  }
+
+  async resetPassword(rawToken: string, newPassword: string) {
+    const tokenHash = this.hashRegistrationToken(rawToken);
+    const row = await this.database.queryOne<{
+      token_id: number;
+      user_id: number;
+      expires_at: Date;
+      used_at: Date | null;
+    }>(
+      `SELECT token_id, user_id, expires_at, used_at
+       FROM password_reset_tokens
+       WHERE token_hash = $1`,
+      [tokenHash],
+    );
+
+    if (!row) {
+      throw new BadRequestException(
+        'Liên kết đặt lại mật khẩu không hợp lệ.',
+      );
+    }
+    if (row.used_at) {
+      throw new BadRequestException(
+        'Liên kết này đã được sử dụng. Vui lòng yêu cầu liên kết mới.',
+      );
+    }
+    if (new Date(row.expires_at).getTime() <= Date.now()) {
+      throw new BadRequestException(
+        'Liên kết đặt lại mật khẩu đã hết hạn. Vui lòng yêu cầu liên kết mới.',
+      );
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await this.database.transaction(async (client) => {
+      await client.query(
+        'UPDATE users SET password_hash = $1, updated_at = NOW() WHERE user_id = $2',
+        [passwordHash, row.user_id],
+      );
+      await client.query(
+        'UPDATE password_reset_tokens SET used_at = NOW() WHERE token_id = $1',
+        [row.token_id],
+      );
+      // Vô hiệu hoá mọi token đặt lại mật khẩu khác đang chờ của user này.
+      await client.query(
+        `UPDATE password_reset_tokens SET used_at = NOW()
+         WHERE user_id = $1 AND used_at IS NULL`,
+        [row.user_id],
+      );
+    });
+
+    // Đăng xuất khỏi mọi phiên hiện tại để đảm bảo an toàn sau khi đổi mật khẩu.
+    await this.sessionsService.revokeOtherSessions(row.user_id, null);
+
+    return { reset: true };
   }
 
   async me(userId: number) {

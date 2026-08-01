@@ -3,6 +3,8 @@ export const ROUTES = {
   // === Auth ===
   LOGIN:    '/login',
   REGISTER: '/register',
+  FORGOT_PASSWORD: '/quen-mat-khau',
+  RESET_PASSWORD: '/dat-lai-mat-khau',
 
   // === Customer ===
   HOME:         '/',

@@ -44,14 +44,6 @@ export default function Navbar() {
       <ul className="site-nav-links">
         <li>
           <Link
-            to={ROUTES.AI_AGENT}
-            className={location.pathname === ROUTES.AI_AGENT ? "active" : ""}
-          >
-            {TXT.agent}
-          </Link>
-        </li>
-        <li>
-          <Link
             to={ROUTES.MAP}
             className={location.pathname === ROUTES.MAP ? "active" : ""}
           >
@@ -64,6 +56,14 @@ export default function Navbar() {
             className={location.pathname === ROUTES.SERVICES ? "active" : ""}
           >
             {TXT.services}
+          </Link>
+        </li>
+        <li>
+          <Link
+            to={ROUTES.AI_AGENT}
+            className={location.pathname === ROUTES.AI_AGENT ? "active" : ""}
+          >
+            {TXT.agent}
           </Link>
         </li>
       </ul>

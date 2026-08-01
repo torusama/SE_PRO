@@ -113,3 +113,14 @@ export async function verifyRegistrationOtpRequest(
   }>("/auth/register/email/verify-otp", { email, otpCode });
   return data.data.registrationToken;
 }
+
+export async function forgotPasswordRequest(email: string): Promise<void> {
+  await api.post("/auth/forgot-password", { email });
+}
+
+export async function resetPasswordRequest(
+  token: string,
+  newPassword: string,
+): Promise<void> {
+  await api.post("/auth/reset-password", { token, newPassword });
+}

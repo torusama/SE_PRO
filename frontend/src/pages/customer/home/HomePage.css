@@ -521,6 +521,12 @@ body {
   padding: 28px;
   position: relative;
   box-shadow: 0 0 60px rgba(123, 63, 228, 0.1);
+  cursor: pointer;
+  transition:
+    background 0.4s,
+    border-color 0.4s,
+    box-shadow 0.4s,
+    transform 0.3s;
 }
 .ai-chat::before {
   content: "AI CONCIERGE";
@@ -532,6 +538,52 @@ body {
   font-size: 9px;
   letter-spacing: 0.3em;
   color: var(--purple);
+  z-index: 1;
+}
+.ai-chat::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(to right, transparent, var(--teal), transparent);
+  transform: scaleX(0);
+  transition: transform 0.4s;
+}
+.ai-chat:hover,
+.ai-chat:focus-visible {
+  background: var(--teal-dim);
+  border-color: rgba(10, 255, 212, 0.4);
+  box-shadow: 0 0 60px rgba(10, 255, 212, 0.15);
+  transform: translateY(-2px);
+}
+.ai-chat:hover::after,
+.ai-chat:focus-visible::after {
+  transform: scaleX(1);
+}
+.ai-chat:focus-visible {
+  outline: none;
+}
+.ai-chat-cta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--teal);
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    opacity 0.3s,
+    transform 0.3s;
+}
+.ai-chat:hover .ai-chat-cta,
+.ai-chat:focus-visible .ai-chat-cta {
+  opacity: 1;
+  transform: translateY(0);
 }
 .chat-msg {
   display: flex;

@@ -440,8 +440,18 @@ export default function HomePage() {
             nghĩa trang thế hệ mới — thông minh, trang trọng, và đầy tâm.
           </p>
           <div className="hero-actions">
-            <button className="btn-primary">Khám phá bản đồ</button>
-            <button className="btn-ghost">Tư vấn AI</button>
+            <button
+              className="btn-primary"
+              onClick={() => navigate(ROUTES.MAP)}
+            >
+              Khám phá bản đồ
+            </button>
+            <button
+              className="btn-ghost"
+              onClick={() => navigate(ROUTES.AI_AGENT)}
+            >
+              Tư vấn AI
+            </button>
           </div>
         </div>
 
@@ -2049,7 +2059,16 @@ export default function HomePage() {
             </ul>
           </div>
 
-          <div className="ai-chat">
+          <div
+            className="ai-chat"
+            role="button"
+            tabIndex={0}
+            aria-label="Mở trợ lý AI tư vấn"
+            onClick={() => navigate(ROUTES.AI_AGENT)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") navigate(ROUTES.AI_AGENT);
+            }}
+          >
             <div className="chat-msg">
               <div className="chat-avatar ai">AI</div>
               <div className="chat-bubble ai">
@@ -2102,6 +2121,11 @@ export default function HomePage() {
               >
                 AI đang phân tích Bát tự...
               </span>
+            </div>
+
+            <div className="ai-chat-cta">
+              <span>Bấm để bắt đầu trò chuyện với Trợ lý AI</span>
+              <span>→</span>
             </div>
           </div>
         </div>

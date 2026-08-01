@@ -93,4 +93,37 @@ export class EmailService {
       `,
     });
   }
+
+  /** Gửi email chứa liên kết đặt lại mật khẩu (luồng "Quên mật khẩu"). */
+  async sendPasswordResetEmail(to: string, resetLink: string) {
+    if (!this.transporter) {
+      throw new Error(
+        'Máy chủ chưa cấu hình SMTP (SMTP_USER/SMTP_PASS). Vui lòng điền file backend/.env rồi khởi động lại server.',
+      );
+    }
+    const smtp = this.config.get<{ from?: string }>('smtp');
+
+    await this.transporter.sendMail({
+      from: smtp?.from ? `"Vĩnh Phúc Viên" <${smtp.from}>` : undefined,
+      to,
+      subject: '[Vĩnh Phúc Viên] Yêu cầu đặt lại mật khẩu',
+      text: `Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn.\n\nBấm vào liên kết sau để đặt mật khẩu mới (liên kết có hiệu lực trong 30 phút):\n${resetLink}\n\nNếu bạn không yêu cầu đặt lại mật khẩu, vui lòng bỏ qua email này — mật khẩu hiện tại của bạn vẫn an toàn.`,
+      html: `
+        <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
+          <h2 style="color:#0f766e;">Đặt lại mật khẩu</h2>
+          <p>Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn.</p>
+          <p style="margin: 24px 0;">
+            <a href="${resetLink}" style="background:#0f766e;color:#fff;padding:12px 22px;text-decoration:none;border-radius:4px;font-weight:600;display:inline-block;">
+              Đặt lại mật khẩu
+            </a>
+          </p>
+          <p>Hoặc dán liên kết sau vào trình duyệt:<br/>
+            <a href="${resetLink}">${resetLink}</a>
+          </p>
+          <p>Liên kết có hiệu lực trong <b>30 phút</b>.</p>
+          <p style="color:#888; font-size:12px;">Nếu bạn không yêu cầu đặt lại mật khẩu, vui lòng bỏ qua email này — mật khẩu hiện tại của bạn vẫn an toàn.</p>
+        </div>
+      `,
+    });
+  }
 }

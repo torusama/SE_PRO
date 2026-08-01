@@ -7,6 +7,8 @@ import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { SendRegistrationOtpDto } from './dto/send-registration-otp.dto';
 import { VerifyRegistrationOtpDto } from './dto/verify-registration-otp.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 
 function extractRequestInfo(req: Request) {
   return {
@@ -55,6 +57,25 @@ export class AuthController {
       success: true,
       message: 'Logged in',
       data: await this.authService.login(dto, extractRequestInfo(req)),
+    };
+  }
+
+  @Post('forgot-password')
+  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    const result = await this.authService.forgotPassword(dto.email);
+    return {
+      success: true,
+      message: result.message,
+      data: { sent: result.sent },
+    };
+  }
+
+  @Post('reset-password')
+  async resetPassword(@Body() dto: ResetPasswordDto) {
+    return {
+      success: true,
+      message: 'Mật khẩu đã được đặt lại thành công.',
+      data: await this.authService.resetPassword(dto.token, dto.newPassword),
     };
   }
 

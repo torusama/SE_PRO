@@ -1,50 +1,33 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { useAuthStore } from "@/store/authStore";
-import { loginRequest } from "@/lib/authService";
+import { Link } from "react-router-dom";
 import { ROUTES } from "@/constants/routes";
-import "./LoginPage.css";
+import { forgotPasswordRequest } from "@/lib/authService";
+import "./ForgotPasswordPage.css";
 
-export default function LoginPage() {
+export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-
-  const navigate = useNavigate();
-  const setAuth = useAuthStore.getState().setAuth;
+  const [sent, setSent] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
-    if (!email || !password) {
-      setError("Vui lòng nhập đầy đủ email và mật khẩu.");
+    if (!email) {
+      setError("Vui lòng nhập địa chỉ email.");
       return;
     }
 
     setLoading(true);
     try {
-      const { user, token, role } = await loginRequest({
-        email,
-        password,
-      });
-      setAuth(user, token, role);
-      navigate(role === "admin" ? ROUTES.ADMIN_DASHBOARD : ROUTES.HOME);
+      await forgotPasswordRequest(email);
+      setSent(true);
     } catch (err: any) {
-      let message: string;
-
-      if (err?.response) {
-        message =
-          err.response.data?.message ??
-          `Đăng nhập thất bại (mã lỗi ${err.response.status}).`;
-      } else if (err?.request) {
-        message =
-          "Không thể kết nối đến máy chủ. Vui lòng kiểm tra backend đã chạy chưa (xem VITE_API_URL trong .env).";
-      } else {
-        message =
-          err?.message ?? "Đã xảy ra lỗi không xác định, vui lòng thử lại.";
-      }
+      const message =
+        err?.response?.data?.message ??
+        err?.message ??
+        "Không thể gửi liên kết đặt lại mật khẩu, vui lòng thử lại.";
       setError(message);
     } finally {
       setLoading(false);
@@ -64,10 +47,10 @@ export default function LoginPage() {
             xmlns="http://www.w3.org/2000/svg"
           >
             <defs>
-              <filter id="loginBlur1">
+              <filter id="forgotBlur1">
                 <feGaussianBlur stdDeviation="18" />
               </filter>
-              <filter id="loginBlur2">
+              <filter id="forgotBlur2">
                 <feGaussianBlur stdDeviation="8" />
               </filter>
             </defs>
@@ -80,7 +63,7 @@ export default function LoginPage() {
               ry="220"
               fill="#C9BFA8"
               opacity="0.22"
-              filter="url(#loginBlur1)"
+              filter="url(#forgotBlur1)"
             />
             <ellipse
               cx="100"
@@ -89,7 +72,7 @@ export default function LoginPage() {
               ry="180"
               fill="#BFB49C"
               opacity="0.18"
-              filter="url(#loginBlur1)"
+              filter="url(#forgotBlur1)"
             />
             <ellipse
               cx="400"
@@ -98,7 +81,7 @@ export default function LoginPage() {
               ry="150"
               fill="#C5BAA2"
               opacity="0.15"
-              filter="url(#loginBlur1)"
+              filter="url(#forgotBlur1)"
             />
 
             {/* Mountain silhouettes */}
@@ -208,17 +191,19 @@ export default function LoginPage() {
         {/* Center quote */}
         <div className="left-center">
           <p className="left-quote">
-            Nơi ký ức
+            Mỗi hành trình
             <br />
-            được <em>lưu giữ</em> mãi,
+            đều có thể
             <br />
-            nơi yêu thương
+            <em>bắt đầu</em> lại,
             <br />
-            <em>vượt thời gian.</em>
+            chỉ với một
+            <br />
+            <em>liên kết xác thực.</em>
           </p>
           <p className="left-sub">
-            Hệ thống quản lý nghĩa trang thế hệ mới — trang trọng, thông minh,
-            và đầy tâm.
+            Khôi phục quyền truy cập an toàn để tiếp tục sử dụng hệ thống Vĩnh
+            Phúc Viên.
           </p>
         </div>
 
@@ -249,35 +234,35 @@ export default function LoginPage() {
             xmlns="http://www.w3.org/2000/svg"
           >
             <defs>
-              <filter id="loginWb">
+              <filter id="forgotWb">
                 <feGaussianBlur stdDeviation="22" />
               </filter>
             </defs>
             <path
               d="M50 200 Q120 170 190 195 Q220 180 240 200 Q205 222 155 216 Q90 218 50 200Z"
               fill="#9A7A3A"
-              filter="url(#loginWb)"
+              filter="url(#forgotWb)"
             />
             <path
               d="M300 100 Q370 78 430 98 Q450 88 462 102 Q440 118 400 113 Q330 115 300 100Z"
               fill="#9A7A3A"
-              filter="url(#loginWb)"
+              filter="url(#forgotWb)"
             />
             <path
               d="M100 700 Q170 678 230 697 Q250 688 264 700 Q244 716 204 712 Q130 714 100 700Z"
               fill="#8B4A2C"
-              filter="url(#loginWb)"
+              filter="url(#forgotWb)"
             />
             <path
               d="M350 800 Q400 782 450 798 Q462 790 470 800 Q454 812 424 808 Q362 810 350 800Z"
               fill="#2D5A3D"
-              filter="url(#loginWb)"
+              filter="url(#forgotWb)"
             />
           </svg>
         </div>
 
         {/* Back link */}
-        <Link className="back" to="/">
+        <Link className="back" to={ROUTES.HOME}>
           <svg
             viewBox="0 0 24 24"
             fill="none"
@@ -290,20 +275,13 @@ export default function LoginPage() {
         </Link>
 
         <div className="card">
-          {/* Tabs */}
-          <div className="tabs">
-            <span className="tab active">Đăng nhập</span>
-            <Link className="tab" to="/register">
-              Đăng ký
-            </Link>
-          </div>
-
-          {/* LOGIN PANEL */}
+          {/* FORGOT PASSWORD PANEL */}
           <div className="panel active">
             <div className="form-header">
-              <h1 className="form-title">Chào mừng trở lại</h1>
+              <h1 className="form-title">Quên mật khẩu</h1>
               <p className="form-desc">
-                Đăng nhập để tiếp tục sử dụng hệ thống.
+                Nhập địa chỉ email đã đăng ký. Chúng tôi sẽ gửi liên kết đặt
+                lại mật khẩu đến hộp thư của bạn.
               </p>
             </div>
 
@@ -316,18 +294,6 @@ export default function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />
-              </div>
-              <div className="field">
-                <label>Mật khẩu</label>
-                <input
-                  type="password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </div>
-              <div className="forgot">
-                <Link to={ROUTES.FORGOT_PASSWORD}>Quên mật khẩu?</Link>
               </div>
 
               {error && (
@@ -343,12 +309,19 @@ export default function LoginPage() {
               )}
 
               <button className="submit" type="submit" disabled={loading}>
-                {loading ? "Đang đăng nhập..." : "Đăng nhập"}
+                {loading ? "Đang gửi..." : "Gửi liên kết"}
               </button>
             </form>
 
+            {sent && (
+              <div className="msg-box">
+                Liên kết đặt lại mật khẩu đã được gửi. Vui lòng kiểm tra email
+                của bạn (bao gồm cả thư rác).
+              </div>
+            )}
+
             <div className="alt-link">
-              Chưa có tài khoản? <Link to="/register">Đăng ký ngay</Link>
+              Đã nhớ mật khẩu? <Link to={ROUTES.LOGIN}>Đăng nhập</Link>
             </div>
           </div>
         </div>
