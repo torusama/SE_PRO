@@ -1,32 +1,64 @@
-import React, { useState } from "react";
-import "./ResetPassword.css";
+import { useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { ROUTES } from "@/constants/routes";
+import { resetPasswordRequest } from "@/lib/authService";
+import "./ResetPasswordPage.css";
 
-interface ResetPasswordProps {
-  onSubmit?: (newPassword: string, confirmPassword: string) => void;
-  onBackToHome?: () => void;
-  onGoToRegister?: () => void;
-  homeHref?: string;
-}
+export default function ResetPasswordPage() {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const token = searchParams.get("token") ?? "";
 
-export default function ResetPassword({
-  onSubmit,
-  onBackToHome,
-  onGoToRegister,
-  homeHref = "landing.html",
-}: ResetPasswordProps) {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
 
-  const handleSubmit = (e: React.MouseEvent<HTMLButtonElement>) => {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    onSubmit?.(newPassword, confirmPassword);
-  };
+    setError(null);
+
+    if (!token) {
+      setError(
+        "Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn. Vui lòng yêu cầu gửi lại liên kết mới.",
+      );
+      return;
+    }
+    if (!newPassword || !confirmPassword) {
+      setError("Vui lòng nhập đầy đủ mật khẩu mới.");
+      return;
+    }
+    if (newPassword.length < 8) {
+      setError("Mật khẩu mới phải có ít nhất 8 ký tự.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setError("Mật khẩu xác nhận không khớp.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await resetPasswordRequest(token, newPassword);
+      setSuccess(true);
+      setTimeout(() => navigate(ROUTES.LOGIN), 2000);
+    } catch (err: any) {
+      const message =
+        err?.response?.data?.message ??
+        err?.message ??
+        "Không thể đặt lại mật khẩu, liên kết có thể đã hết hạn. Vui lòng thử lại.";
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
-    <div className="reset-password-page">
+    <div className="login-page">
       {/* LEFT PANEL */}
-      <div className="rp-left">
-        <div className="rp-left-bg">
+      <div className="left">
+        <div className="left-bg">
           <svg
             width="100%"
             height="100%"
@@ -35,29 +67,30 @@ export default function ResetPassword({
             xmlns="http://www.w3.org/2000/svg"
           >
             <defs>
-              <filter id="blur1">
+              <filter id="resetBlur1">
                 <feGaussianBlur stdDeviation="18" />
               </filter>
-              <filter id="blur2">
+              <filter id="resetBlur2">
                 <feGaussianBlur stdDeviation="8" />
               </filter>
             </defs>
-            <ellipse cx="500" cy="200" rx="280" ry="220" fill="#C9BFA8" opacity=".22" filter="url(#blur1)" />
-            <ellipse cx="100" cy="650" rx="200" ry="180" fill="#BFB49C" opacity=".18" filter="url(#blur1)" />
-            <ellipse cx="400" cy="800" rx="250" ry="150" fill="#C5BAA2" opacity=".15" filter="url(#blur1)" />
+
+            <ellipse cx="500" cy="200" rx="280" ry="220" fill="#C9BFA8" opacity="0.22" filter="url(#resetBlur1)" />
+            <ellipse cx="100" cy="650" rx="200" ry="180" fill="#BFB49C" opacity="0.18" filter="url(#resetBlur1)" />
+            <ellipse cx="400" cy="800" rx="250" ry="150" fill="#C5BAA2" opacity="0.15" filter="url(#resetBlur1)" />
 
             <path
               d="M0 700 L60 580 L130 640 L200 520 L280 600 L360 480 L440 570 L520 460 L600 540 L600 900 L0 900Z"
               fill="#1A1410"
-              opacity=".05"
+              opacity="0.05"
             />
             <path
               d="M0 760 L80 660 L160 710 L260 600 L360 670 L450 580 L550 640 L600 590 L600 900 L0 900Z"
               fill="#1A1410"
-              opacity=".07"
+              opacity="0.07"
             />
 
-            <g opacity=".1" stroke="#1A1410" fill="none">
+            <g opacity="0.1" stroke="#1A1410" fill="none">
               <line x1="520" y1="0" x2="510" y2="900" strokeWidth="3" strokeLinecap="round" />
               <line x1="535" y1="0" x2="525" y2="900" strokeWidth="1.5" strokeLinecap="round" />
               <line x1="548" y1="50" x2="540" y2="900" strokeWidth="2" strokeLinecap="round" />
@@ -72,13 +105,13 @@ export default function ResetPassword({
               <path d="M510 590 Q488 562 460 578" strokeWidth="1.5" strokeLinecap="round" />
             </g>
 
-            <g opacity=".08" fill="#1A1410">
+            <g opacity="0.08" fill="#1A1410">
               <path d="M40 260 Q90 240 140 258 Q160 248 175 262 Q148 278 100 274 Q62 276 40 260Z" />
               <path d="M60 280 Q100 268 140 280 Q155 272 163 281 Q145 290 110 288 Q72 290 60 280Z" />
               <path d="M200 150 Q250 132 300 148 Q318 140 330 152 Q306 166 260 162 Q220 164 200 150Z" />
             </g>
 
-            <g opacity=".1" fill="none" stroke="#8B4A2C">
+            <g opacity="0.1" fill="none" stroke="#8B4A2C">
               <path
                 d="M0 400 Q80 350 160 380 Q220 360 260 320 Q300 290 320 240"
                 strokeWidth="2.5"
@@ -86,22 +119,22 @@ export default function ResetPassword({
               />
               <path d="M160 380 Q140 420 150 460" strokeWidth="2" strokeLinecap="round" />
               <path d="M220 360 Q250 400 240 440" strokeWidth="1.5" strokeLinecap="round" />
-              <circle cx="260" cy="320" r="6" fill="#8B4A2C" opacity=".3" />
-              <circle cx="320" cy="240" r="5" fill="#8B4A2C" opacity=".25" />
-              <circle cx="150" cy="460" r="4" fill="#8B4A2C" opacity=".2" />
-              <circle cx="240" cy="440" r="4" fill="#8B4A2C" opacity=".2" />
-              <circle cx="280" cy="340" r="3" fill="#8B4A2C" opacity=".2" />
+              <circle cx="260" cy="320" r="6" fill="#8B4A2C" opacity="0.3" />
+              <circle cx="320" cy="240" r="5" fill="#8B4A2C" opacity="0.25" />
+              <circle cx="150" cy="460" r="4" fill="#8B4A2C" opacity="0.2" />
+              <circle cx="240" cy="440" r="4" fill="#8B4A2C" opacity="0.2" />
+              <circle cx="280" cy="340" r="3" fill="#8B4A2C" opacity="0.2" />
             </g>
           </svg>
         </div>
 
-        <div className="rp-left-logo">
-          <span className="rp-name">Vĩnh Phúc Viên</span>
-          <span className="rp-hanzi">永 福 苑</span>
+        <div className="left-logo">
+          <span className="name">Vĩnh Phúc Viên</span>
+          <span className="hanzi">永 福 苑</span>
         </div>
 
-        <div className="rp-left-center">
-          <p className="rp-left-quote">
+        <div className="left-center">
+          <p className="left-quote">
             Nơi ký ức
             <br />
             được <em>lưu giữ</em> mãi,
@@ -110,123 +143,115 @@ export default function ResetPassword({
             <br />
             <em>vượt thời gian.</em>
           </p>
-          <p className="rp-left-sub">
+          <p className="left-sub">
             Hệ thống quản lý nghĩa trang thế hệ mới — trang trọng, thông minh, và đầy tâm.
           </p>
         </div>
 
-        <div className="rp-pills">
-          <span className="rp-pill">Bản đồ 2D</span>
-          <span className="rp-pill">AI Concierge</span>
-          <span className="rp-pill">Đặt dịch vụ</span>
-          <span className="rp-pill">Nhắc ngày giỗ</span>
+        <div className="pills">
+          <span className="pill">Bản đồ 2D</span>
+          <span className="pill">AI Concierge</span>
+          <span className="pill">Đặt dịch vụ</span>
+          <span className="pill">Nhắc ngày giỗ</span>
         </div>
 
-        <div className="rp-seal">
+        <div className="seal">
           永
           <br />
           福
-          <br />
-          苑
+          <br />苑
         </div>
       </div>
 
       {/* RIGHT PANEL */}
-      <div className="rp-right">
-        <div className="rp-right-bg">
+      <div className="right">
+        <div className="right-bg">
           <svg width="100%" height="100%" viewBox="0 0 500 900" xmlns="http://www.w3.org/2000/svg">
             <defs>
-              <filter id="wb">
+              <filter id="resetWb">
                 <feGaussianBlur stdDeviation="22" />
               </filter>
             </defs>
             <path
               d="M50 200 Q120 170 190 195 Q220 180 240 200 Q205 222 155 216 Q90 218 50 200Z"
               fill="#9A7A3A"
-              filter="url(#wb)"
+              filter="url(#resetWb)"
             />
             <path
               d="M300 100 Q370 78 430 98 Q450 88 462 102 Q440 118 400 113 Q330 115 300 100Z"
               fill="#9A7A3A"
-              filter="url(#wb)"
+              filter="url(#resetWb)"
             />
             <path
               d="M100 700 Q170 678 230 697 Q250 688 264 700 Q244 716 204 712 Q130 714 100 700Z"
               fill="#8B4A2C"
-              filter="url(#wb)"
+              filter="url(#resetWb)"
             />
             <path
               d="M350 800 Q400 782 450 798 Q462 790 470 800 Q454 812 424 808 Q362 810 350 800Z"
               fill="#2D5A3D"
-              filter="url(#wb)"
+              filter="url(#resetWb)"
             />
           </svg>
         </div>
 
-        <a
-          className="rp-back"
-          href={homeHref}
-          onClick={(e) => {
-            if (onBackToHome) {
-              e.preventDefault();
-              onBackToHome();
-            }
-          }}
-        >
+        <Link className="back" to={ROUTES.HOME}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
             <path d="M19 12H5M5 12l7-7M5 12l7 7" />
           </svg>
           Trang chủ
-        </a>
+        </Link>
 
-        <div className="rp-card">
-          <div className="rp-tabs">
-            <button className="rp-tab active">Đặt lại mật khẩu</button>
+        <div className="card">
+          <div className="tabs">
+            <span className="tab active">Đặt lại mật khẩu</span>
           </div>
 
-          <div className="rp-panel active" id="panel-login">
-            <div className="rp-form-header">
-              <h1 className="rp-form-title">Đặt lại mật khẩu</h1>
-              <p className="rp-form-desc">Đặt lại để tiếp tục sử dụng hệ thống.</p>
+          <div className="panel active">
+            <div className="form-header">
+              <h1 className="form-title">Đặt lại mật khẩu</h1>
+              <p className="form-desc">Nhập mật khẩu mới để tiếp tục sử dụng hệ thống.</p>
             </div>
 
-            <div className="rp-field">
-              <label>Mật khẩu mới</label>
-              <input
-                type="password"
-                placeholder="Nhập mật khẩu mới"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-              />
-            </div>
-            <div className="rp-field">
-              <label>Xác nhận mật khẩu</label>
-              <input
-                type="password"
-                placeholder="Nhập lại mật khẩu"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-              />
-            </div>
-            <div className="rp-forgot">
-              <a href="#"></a>
-            </div>
+            {!success ? (
+              <form onSubmit={handleSubmit}>
+                <div className="field">
+                  <label>Mật khẩu mới</label>
+                  <input
+                    type="password"
+                    placeholder="Nhập mật khẩu mới"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                  />
+                </div>
+                <div className="field">
+                  <label>Xác nhận mật khẩu</label>
+                  <input
+                    type="password"
+                    placeholder="Nhập lại mật khẩu"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                  />
+                </div>
 
-            <button className="rp-submit" onClick={handleSubmit}>
-              Đặt lại mật khẩu
-            </button>
+                {error && (
+                  <div style={{ color: "#d4453a", fontSize: "12px", marginBottom: "12px" }}>
+                    {error}
+                  </div>
+                )}
 
-            <div className="rp-alt-link">
-              <a
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  onGoToRegister?.();
-                }}
-              >
-                {" "}
-                ngay
-              </a>
+                <button className="submit" type="submit" disabled={loading}>
+                  {loading ? "Đang xử lý..." : "Đặt lại mật khẩu"}
+                </button>
+              </form>
+            ) : (
+              <div className="msg-box">
+                Đặt lại mật khẩu thành công! Đang chuyển đến trang đăng nhập...
+              </div>
+            )}
+
+            <div className="alt-link">
+              Đã nhớ mật khẩu? <Link to={ROUTES.LOGIN}>Đăng nhập ngay</Link>
             </div>
           </div>
         </div>

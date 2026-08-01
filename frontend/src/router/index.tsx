@@ -42,12 +42,14 @@ import AgentAdminPage from "@/pages/admin/ai-agent/AgentAdminPage";
 import LoginPage from "@/pages/auth/LoginPage";
 import RegisterPage from "@/pages/auth/RegisterPage";
 import ForgotPasswordPage from "@/pages/auth/ForgotPasswordPage";
+import ResetPasswordPage from "@/pages/auth/ResetPasswordPage";
 
 const router = createBrowserRouter([
   // === Auth (không có layout) ===
   { path: ROUTES.LOGIN, element: <LoginPage /> },
   { path: ROUTES.REGISTER, element: <RegisterPage /> },
   { path: ROUTES.FORGOT_PASSWORD, element: <ForgotPasswordPage /> },
+  { path: ROUTES.RESET_PASSWORD, element: <ResetPasswordPage /> },
 
   // === Trang chủ — KHÔNG bọc CustomerLayout vì HomePage đã tự có nav + footer riêng ===
   { path: ROUTES.HOME, element: <HomePage /> },
