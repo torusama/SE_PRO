@@ -8,7 +8,7 @@ Preserve the complete current worktree, integrate the latest `origin/main`, reso
 - [completed] Commit the intended local worktree as a recoverable checkpoint.
 - [completed] Pull/rebase the latest `origin/main` and resolve conflicts if present.
 - [completed] Run proportional post-integration tests/builds and inspect the final diff/history.
-- [in_progress] Push `main` to `origin` and verify local/remote commit parity.
+- [completed] Push `main` to `origin` and verify local/remote commit parity.
 
 ## Safety constraints
 - Preserve every existing local change unless it is clearly generated, sensitive, or unrelated junk.

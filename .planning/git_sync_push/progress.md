@@ -16,3 +16,5 @@
 - Targeted lint also exposed unrelated legacy ref-access findings in the profile image viewer; recorded as existing debt rather than changing unrelated behavior during sync.
 - After the auth-store integration fix, frontend tests pass again (14 files / 47 tests) and the production frontend build passes.
 - Final post-rebase diff check passes; local branch is one feature commit ahead of `origin/main` before committing the integration fix.
+- Committed the auth-store integration fix as `0e9b94b`.
+- Pushed `main` successfully; `origin/main` and local `HEAD` both resolved to `0e9b94b632994f9b33cb192b9496b0c53b2bce62`, with a clean worktree at verification time.
