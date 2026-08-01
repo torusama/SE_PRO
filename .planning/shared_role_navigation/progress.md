@@ -1,0 +1,54 @@
+# Progress
+
+- Loaded planning/context-mode instructions; context-mode runtime remains unavailable.
+- Confirmed a clean synced worktree before starting.
+- Created the role-aware navigation implementation plan.
+# Progress
+
+- Located the customer navbar, admin layout/header, Home hero title, and existing admin account-menu link.
+- Confirmed the customer and admin shells currently use separate navigation structures, which explains the inconsistent cards.
+- Next: inspect the exact CSS, route map/guards, and existing tests before implementing the shared component.
+- Confirmed the compact customer brand has a class-name styling bug and captured the exact Home hero font/gradient/shadow treatment.
+- Confirmed the admin header's light theme requires a visual variant of the same shared navigation component.
+- A read-only inspection command tried to assign PowerShell's reserved `HOME` variable and failed for that one file segment; no source files were changed. Future commands will use task-specific variable names.
+- Next: inspect the Home header JSX, admin sidebar/header tests, route guards, and responsive constraints.
+- Confirmed Home has a third independent header implementation and already has access to auth role.
+- Confirmed the route layer already guards all `/admin` pages with `RequireAdmin`.
+- Chose stable application routes for the shared cards instead of page-local hash links; exact labels and tests will be finalized after reading the existing test expectations and responsive CSS.
+- Read existing admin-header tests and confirmed text links can be introduced without restoring icon-button clutter.
+- Found that the intended display font is not actually loaded; selected the already bundled Vietnamese-capable `Playfair Display` for both large and compact wordmarks.
+- Inventory is complete. Next: implement reusable `BrandWordmark` and `PrimaryNavigation`, wire all three headers, and add focused role/route tests.
+- Implemented the shared wordmark and primary navigation.
+- Wired the shared navigation into Home, the customer layout navbar, and every admin page through `AdminHeader`.
+- Added role visibility and nested-admin active-state tests, and extended the admin header test.
+- Initial diff hygiene found only a trailing blank-line warning in `Navbar.css`; next: correct it, run focused tests/build/lint, then perform live visual checks.
+- Corrected diff whitespace, passed 4 focused tests, and passed the production build.
+- Next: run the broader test/lint checks, inspect the final diff, then launch the app for desktop/mobile visual smoke testing.
+- Full regression suite passed (49/49).
+- Global lint is blocked by 27 existing errors across unrelated pages; no errors were reported in this task's files. Next: run scoped lint, inspect final diff, then launch and visually verify the UI.
+- Scoped lint passed for all changed TSX files.
+- Browser automation is unavailable through the current tool set. Next: check local browser/runtime availability, launch the app, perform the strongest available smoke test, and complete final diff review.
+- Confirmed the existing Vite server is serving this repo on port 5173 and found local headless Chrome support.
+- Next: capture and inspect desktop/mobile Home screenshots, then verify admin structure via tests and final source/diff review.
+- Captured and inspected public Home at desktop and mobile widths.
+- Desktop passed visual smoke; mobile revealed a clipped login CTA. Next: fix the responsive header cascade, recapture mobile, then inspect the admin header via an isolated authenticated component render or structural test.
+- Added deterministic grid-area placement to the responsive Home and customer headers.
+- Initial recapture was unreliable due Chrome process/write behavior. Next: use a unique temporary browser profile and scale, then decide whether any further mobile CSS change is needed.
+- Isolated capture confirmed the shared text/card rendering is intact; remaining 390px crop is consistent with headless Chromium's minimum layout width.
+- Next: add a conservative ≤420px compact rule, verify the dependable 500px capture, inject isolated mock admin auth for a visual admin-header smoke test, and finish diff review.
+- Confirmed the safe admin-preview strategy: isolated localStorage plus blocking the profile refresh request in the temporary headless session, with no backend writes.
+- Next: add the extra-small CSS guard, capture 500px Home and isolated admin desktop, then finish verification and cleanup.
+- Added the ≤420px compact safety rule and passed the reliable 500px Home visual smoke test.
+- Next: render the isolated mock-admin header, inspect it, rerun final focused verification/diff checks, remove temporary screenshots/profile, and complete the task.
+- Attempted an isolated, non-backend admin screenshot; the protected route correctly redirected once the temporary synthetic session was not retained.
+- Kept authorization unchanged and will rely on passing admin component tests plus source/build verification for the protected view.
+- Next: rerun tests/build/scoped lint after the responsive patch, inspect final diff, remove all temporary browser artifacts, and complete planning records.
+- Final focused tests, scoped lint, production build, and diff whitespace checks all passed.
+- Verified the exact temporary review directory is safely contained under `frontend`; next: remove it, inspect final status/source diff, and mark the plan complete.
+- Removed screenshots, diagnostic script, and non-ignored browser profile files. A follow-up found ignored Chrome cache remnants still under the exact temporary directory.
+- Next: path-scoped ignored-file cleanup, final status/diff check, then mark all phases complete and hand off.
+- Removed the remaining ignored Chrome cache after an exact-path dry run. All disposable screenshots, profiles, and diagnostic helpers are now gone and are not recoverable; application source was untouched.
+- Next: mark phases complete and perform one final status/diff check.
+- All plan phases are complete.
+- Final status contains only the intended frontend source/tests and planning records; no generated browser artifacts remain.
+- Vite is still running at `http://127.0.0.1:5173/`.

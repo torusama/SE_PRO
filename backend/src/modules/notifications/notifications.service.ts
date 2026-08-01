@@ -51,6 +51,17 @@ export class NotificationsService {
     return row;
   }
 
+  async markUnread(userId: number, id: number) {
+    const row = await this.database.queryOne(
+      `UPDATE notifications SET is_read = FALSE, read_at = NULL
+       WHERE notification_id = $1 AND user_id = $2
+       RETURNING notification_id AS id, is_read AS "isRead"`,
+      [id, userId],
+    );
+    if (!row) throw new NotFoundException('Không tìm thấy thông báo này.');
+    return row;
+  }
+
   async readAll(userId: number) {
     await this.database.query(
       `UPDATE notifications SET is_read = TRUE, read_at = NOW()
@@ -58,6 +69,14 @@ export class NotificationsService {
       [userId],
     );
     return { updated: true };
+  }
+
+  async deleteAll(userId: number) {
+    const result = await this.database.query(
+      'DELETE FROM notifications WHERE user_id = $1 RETURNING notification_id',
+      [userId],
+    );
+    return { deleted: result.length };
   }
 
   async createInApp(

@@ -7,7 +7,7 @@ import AdminHeader from "./AdminHeader";
 describe("Admin Header", () => {
   afterEach(() => {
     cleanup();
-    useAuthStore.setState({ user: null });
+    useAuthStore.setState({ user: null, role: null });
   });
 
   it("shows metadata for the current admin route", () => {
@@ -23,8 +23,9 @@ describe("Admin Header", () => {
     ).toBeInTheDocument();
   });
 
-  it("does not render a decorative notification icon button", () => {
+  it("renders the shared notification and account controls", () => {
     useAuthStore.setState({
+      role: "admin",
       user: {
         id: "admin-1",
         name: "Nguyễn An",
@@ -39,7 +40,16 @@ describe("Admin Header", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getAllByRole("button")).toHaveLength(1);
-    expect(screen.getByRole("button")).toHaveTextContent("Nguyễn An");
+    expect(screen.getAllByRole("button")).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "Thông báo" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "Mở menu tài khoản của Nguyễn An",
+      }),
+    ).toHaveTextContent("Nguyễn An");
+    expect(screen.getByRole("link", { name: "Admin" })).toHaveAttribute(
+      "href",
+      "/admin",
+    );
   });
 });

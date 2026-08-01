@@ -1,8 +1,7 @@
-import { useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { ROUTES } from "@/constants/routes";
-import { api } from "@/lib/api";
-import { useAuthStore } from "@/store/authStore";
+import PrimaryNavigation from "@/components/layout/shared/PrimaryNavigation";
+import AccountActions from "@/components/layout/shared/AccountActions";
 
 const PAGE_META: Record<string, { title: string; description: string }> = {
   [ROUTES.ADMIN_DASHBOARD]: {
@@ -57,17 +56,7 @@ const PAGE_META: Record<string, { title: string; description: string }> = {
 
 export default function AdminHeader() {
   const location = useLocation();
-  const navigate = useNavigate();
-  const user = useAuthStore((state) => state.user);
-  const logout = useAuthStore((state) => state.logout);
-  const [menuOpen, setMenuOpen] = useState(false);
   const page = PAGE_META[location.pathname] ?? PAGE_META[ROUTES.ADMIN_DASHBOARD];
-
-  function handleLogout() {
-    api.post("/auth/logout").catch(() => {});
-    logout();
-    navigate(ROUTES.LOGIN);
-  }
 
   return (
     <header className="admin-header">
@@ -76,68 +65,12 @@ export default function AdminHeader() {
         <p className="admin-header__description">{page.description}</p>
       </div>
 
-      {user && (
-        <div className="admin-account">
-          <button
-            type="button"
-            className="admin-account__trigger"
-            aria-expanded={menuOpen}
-            aria-haspopup="menu"
-            onClick={() => setMenuOpen((open) => !open)}
-          >
-            <span className="admin-account__name">{user.name}</span>
-            <span className="admin-account__hint">
-              {menuOpen ? "Đóng" : "Tài khoản"}
-            </span>
-          </button>
+      <PrimaryNavigation
+        className="admin-header__navigation"
+        variant="light"
+      />
 
-          {menuOpen && (
-            <div className="admin-account__menu" role="menu">
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  setMenuOpen(false);
-                  navigate(ROUTES.PROFILE);
-                }}
-              >
-                Hồ sơ của tôi
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  setMenuOpen(false);
-                  navigate(ROUTES.APPOINTMENTS);
-                }}
-              >
-                Đặt và xem lịch hẹn
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  setMenuOpen(false);
-                  navigate(ROUTES.ADMIN_DASHBOARD);
-                }}
-              >
-                Trang quản trị
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                className="admin-account__logout"
-                onClick={() => {
-                  setMenuOpen(false);
-                  handleLogout();
-                }}
-              >
-                Đăng xuất
-              </button>
-            </div>
-          )}
-        </div>
-      )}
+      <AccountActions variant="light" className="admin-account" />
     </header>
   );
 }

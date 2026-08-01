@@ -2,14 +2,13 @@ import {
   Bot,
   CircleAlert,
   LoaderCircle,
-  Menu,
   MessageCircle,
-  PanelLeftClose,
   Plus,
   Send,
   Sparkles,
   Square,
   Trash2,
+  X,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent, KeyboardEvent, MouseEvent } from "react";
@@ -110,9 +109,12 @@ export default function AgentPage() {
   const requestControllerRef = useRef<AbortController | null>(null);
   const requestStartedAtRef = useRef(0);
   const presentationTimersRef = useRef<number[]>([]);
+  const canPersistConversations = Boolean(
+    token && (role === "customer" || role === "admin"),
+  );
 
   const loadConversations = useCallback(async () => {
-    if (!token || role !== "customer") {
+    if (!canPersistConversations) {
       setConversations([]);
       return;
     }
@@ -125,7 +127,7 @@ export default function AgentPage() {
     } finally {
       setHistoryLoading(false);
     }
-  }, [role, token]);
+  }, [canPersistConversations]);
 
   const restoreConversation = useCallback((detail: ConversationDetail) => {
     const restoredRecommendations =
@@ -155,6 +157,17 @@ export default function AgentPage() {
   useEffect(() => {
     messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
+
+  useEffect(() => {
+    if (!sidebarOpen) return;
+
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") setSidebarOpen(false);
+    };
+
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [sidebarOpen]);
 
   useEffect(() => {
     if (!loading) return;
@@ -370,7 +383,7 @@ export default function AgentPage() {
           animatePresentation: true,
         },
       ]);
-      if (token && role === "customer") {
+      if (canPersistConversations) {
         await loadConversations();
       }
     } catch (requestError: unknown) {
@@ -540,7 +553,11 @@ export default function AgentPage() {
       className={`agent-page ${sidebarOpen ? "sidebar-open" : ""} ${mapOpen ? "map-open" : ""}`}
     >
       <section className="agent-shell">
-        <aside className="agent-sidebar" aria-label="Lịch sử trò chuyện">
+        <aside
+          id="agent-conversation-panel"
+          className="agent-sidebar"
+          aria-label="Lịch sử trò chuyện"
+        >
           <div className="agent-sidebar-brand">
             <div className="agent-sidebar-brandmark">
               <Sparkles size={16} />
@@ -555,7 +572,7 @@ export default function AgentPage() {
               aria-label="Đóng lịch sử"
               onClick={() => setSidebarOpen(false)}
             >
-              <PanelLeftClose size={18} />
+              <X size={18} />
             </button>
           </div>
 
@@ -570,7 +587,7 @@ export default function AgentPage() {
               {historyLoading && <LoaderCircle size={13} className="spin" />}
             </div>
 
-            {!token || role !== "customer" ? (
+            {!canPersistConversations ? (
               <div className="agent-history-empty">
                 <MessageCircle size={19} />
                 <p>Đăng nhập để lưu và xem lại các cuộc trò chuyện.</p>
@@ -654,9 +671,11 @@ export default function AgentPage() {
                 type="button"
                 className="agent-menu-button"
                 aria-label="Mở lịch sử"
+                aria-controls="agent-conversation-panel"
+                aria-expanded={sidebarOpen}
                 onClick={() => setSidebarOpen(true)}
               >
-                <Menu size={19} />
+                <MessageCircle size={18} />
               </button>
               <div className="agent-identity">
                 <div className="agent-avatar">

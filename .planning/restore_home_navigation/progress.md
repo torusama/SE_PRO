@@ -1,0 +1,23 @@
+# Progress
+
+- Started a corrective frontend-only pass based on the user's clarified visual reference.
+- Next: inspect the current shared navigation stylesheet and hero eyebrow markup/style, then apply the minimal correction.
+- Confirmed the shared component's role/route logic can remain unchanged; only its CSS needs to return to the old Home text-link style.
+- Located the exact hero eyebrow markup and typography.
+- Next: restyle shared navigation, update the Vietnamese eyebrow, then run focused verification and visual smoke checks.
+- Removed all pill/card borders, fills, radii, and translate-hover treatment from shared navigation; restored the old Home plain uppercase text language and 32px desktop spacing.
+- Applied exact viewport centering to Home, customer, and admin desktop headers while retaining the responsive second row.
+- Replaced the mixed-language hero eyebrow with a centered Vietnamese-only line in Be Vietnam Pro.
+- Next: run focused tests/build/lint and capture a fresh Home screenshot for visual confirmation.
+- Focused tests, scoped lint, and production build all pass.
+- Next: capture and inspect the current Home at desktop/mobile widths, then run final diff hygiene and clean temporary artifacts.
+- Desktop capture command reported an unsupported `New-Item -LiteralPath` parameter, but Chrome successfully generated the screenshot at the explicit temporary path. Next: inspect that image without repeating the failed setup.
+- Inspected the desktop screenshot: navigation visual/centering pass; eyebrow copy/centering pass but contrast fails due its delayed opacity animation.
+- Next: make the eyebrow immediately visible with stronger readable typography, recapture, then clean artifacts and finish diff checks.
+- Made the eyebrow immediately visible and more legible; visual recapture passes its content, contrast, font, and centering.
+- Next: clean the exact temporary screenshot/profile directory, run final test/diff checks, and complete the plan.
+- Removed all temporary visual-review screenshots and browser profile data after an exact-path dry run; these disposable artifacts are not recoverable and no application source was removed.
+- Next: run final diff/status verification and mark the plan complete.
+- Final source checks confirm 32px old-Home spacing, uppercase text-only navigation, exact desktop centering across all three headers, and the Vietnamese-only eyebrow typography.
+- `git diff --check` passes, temporary artifacts are absent, and the dev server remains live at `http://127.0.0.1:5173/`.
+- All phases are complete.

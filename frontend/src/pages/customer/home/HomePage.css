@@ -51,45 +51,34 @@ body {
   left: 0;
   right: 0;
   z-index: 100;
-  display: flex;
+  display: grid;
+  height: 78px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  padding: 20px 48px;
+  gap: clamp(18px, 3vw, 48px);
+  padding: 0 48px;
   background: linear-gradient(to bottom, rgba(5, 7, 26, 0.9), transparent);
   backdrop-filter: blur(2px);
 }
-.nav-logo {
-  font-family: "Cinzel Decorative", serif;
-  font-size: 13px;
-  letter-spacing: 0.15em;
-  color: var(--teal);
-  text-shadow: 0 0 20px var(--teal-glow);
-}
-.nav-logo span {
-  color: var(--gold);
-}
-.nav-links {
-  display: flex;
-  gap: 32px;
-  list-style: none;
+.home-nav__primary {
   position: absolute;
-  left: 50%;
   top: 50%;
+  left: 50%;
   transform: translate(-50%, -50%);
+  width: max-content;
+  max-width: 100%;
 }
-.nav-links a {
-  color: var(--muted);
-  font-size: 12px;
-  letter-spacing: 0.12em;
-  text-decoration: none;
-  text-transform: uppercase;
-  transition: color 0.3s;
-}
-.nav-links a:hover {
-  color: var(--teal);
-  text-shadow: 0 0 10px var(--teal-glow);
+.home-nav__actions {
+  grid-column: 3;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  gap: 18px;
 }
 .nav-cta {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
   border: 1px solid var(--teal);
   color: var(--teal);
   padding: 8px 20px;
@@ -104,87 +93,6 @@ body {
 .nav-cta:hover {
   background: var(--teal-dim);
   box-shadow: 0 0 20px var(--teal-glow);
-}
-
-/* Khối avatar tròn + tên (đồng bộ với .site-nav-user trong Navbar.tsx dùng ở các trang khác) */
-.home-nav-user {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  padding: 0;
-  font-family: "Inter", sans-serif;
-}
-.home-nav-avatar {
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  border: 1px solid var(--teal);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  color: var(--teal);
-  background: var(--teal-dim);
-  flex-shrink: 0;
-}
-.home-nav-username {
-  font-size: 14px;
-  color: var(--muted);
-  white-space: nowrap;
-}
-.home-nav-menu {
-  position: absolute;
-  right: 0;
-  top: 46px;
-  background: var(--deep);
-  border: 1px solid var(--teal-dim);
-  border-radius: 8px;
-  min-width: 190px;
-  overflow: hidden;
-  z-index: 200;
-}
-.home-nav-menu button {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 10px 14px;
-  font-size: 12px;
-  color: var(--muted);
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-family: "Inter", sans-serif;
-}
-.home-nav-menu button:hover {
-  color: var(--white);
-  background: var(--teal-dim);
-}
-.home-nav-menu button.danger {
-  color: #ff6b6b;
-}
-
-.home-bell-btn {
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  border: 1px solid var(--teal-dim);
-  background: none;
-  color: var(--teal);
-  font-size: 15px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.3s;
-  flex-shrink: 0;
-}
-.home-bell-btn:hover {
-  background: var(--teal-dim);
-  box-shadow: 0 0 20px var(--teal-glow);
-  border-color: var(--teal);
 }
 
 /* ===== HERO ===== */
@@ -220,17 +128,20 @@ body {
 }
 
 .hero-eyebrow {
-  font-family: "Noto Serif SC", serif;
-  font-size: 13px;
-  letter-spacing: 0.4em;
-  color: var(--gold);
-  margin-bottom: 20px;
-  opacity: 0;
-  animation: fadeUp 1s 0.5s forwards;
+  max-width: 560px;
+  margin: 0 auto 20px;
+  font-family: "Be Vietnam Pro", "Inter", sans-serif;
+  font-size: clamp(13px, 1.05vw, 15px);
+  font-weight: 600;
+  line-height: 1.6;
+  letter-spacing: 0.06em;
+  text-align: center;
+  color: #e0b95d;
 }
 
 .hero-title {
-  font-family: "Cinzel Decorative", serif;
+  font-family: "Playfair Display", Georgia, serif;
+  font-weight: 600;
   font-size: clamp(32px, 6vw, 72px);
   line-height: 1.1;
   margin-bottom: 16px;
@@ -245,7 +156,7 @@ body {
   background-clip: text;
   filter: drop-shadow(0 0 30px rgba(10, 255, 212, 0.3));
   opacity: 0;
-  animation: fadeUp 1s 0.8s forwards;
+  animation: fadeUp 500ms 80ms forwards;
 }
 
 .hero-sub {
@@ -255,7 +166,7 @@ body {
   letter-spacing: 0.3em;
   margin-bottom: 36px;
   opacity: 0;
-  animation: fadeUp 1s 1s forwards;
+  animation: fadeUp 500ms 140ms forwards;
 }
 
 .hero-desc {
@@ -266,7 +177,7 @@ body {
   color: var(--muted);
   font-weight: 300;
   opacity: 0;
-  animation: fadeUp 1s 1.2s forwards;
+  animation: fadeUp 500ms 200ms forwards;
 }
 
 .hero-actions {
@@ -275,7 +186,7 @@ body {
   justify-content: center;
   flex-wrap: wrap;
   opacity: 0;
-  animation: fadeUp 1s 1.4s forwards;
+  animation: fadeUp 500ms 260ms forwards;
 }
 
 .btn-primary {
@@ -323,7 +234,7 @@ body {
   align-items: center;
   gap: 8px;
   opacity: 0;
-  animation: fadeUp 1s 2s forwards;
+  animation: fadeUp 500ms 340ms forwards;
 }
 .scroll-hint span {
   font-size: 10px;
@@ -723,7 +634,7 @@ body {
 @keyframes fadeUp {
   from {
     opacity: 0;
-    transform: translateY(24px);
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
@@ -788,10 +699,27 @@ body {
 
 @media (max-width: 768px) {
   .home-nav {
+    height: auto;
+    min-height: 78px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px 18px;
     padding: 16px 20px;
   }
-  .nav-links {
-    display: none;
+  .home-nav__primary {
+    position: static;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    transform: none;
+    width: 100%;
+    justify-self: stretch;
+  }
+  .home-nav__actions,
+  .nav-cta {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .home-nav__actions {
+    gap: 10px;
   }
   .home-section {
     padding: 60px 20px;
@@ -806,5 +734,42 @@ body {
   }
   .stats-row {
     grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-title,
+  .hero-sub,
+  .hero-desc,
+  .hero-actions,
+  .scroll-hint,
+  .scroll-line {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .hero-title,
+  .hero-sub,
+  .hero-desc,
+  .hero-actions,
+  .scroll-hint {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 420px) {
+  .home-nav {
+    gap: 10px;
+    padding: 14px;
+  }
+
+  .home-nav .brand-wordmark {
+    font-size: 17px;
+  }
+
+  .nav-cta {
+    padding: 7px 10px;
+    font-size: 9px;
+    letter-spacing: 0.08em;
   }
 }

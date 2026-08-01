@@ -1,21 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/store/authStore";
 import { ROUTES } from "@/constants/routes";
+import BrandWordmark from "@/components/layout/shared/BrandWordmark";
+import PrimaryNavigation from "@/components/layout/shared/PrimaryNavigation";
+import AccountActions from "@/components/layout/shared/AccountActions";
 import "./HomePage.css";
 
 export default function HomePage() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const role = useAuthStore((s) => s.role);
-  const logout = useAuthStore((s) => s.logout);
-  const [menuOpen, setMenuOpen] = useState(false);
-
-  function handleLogout() {
-    logout();
-    setMenuOpen(false);
-    navigate(ROUTES.LOGIN);
-  }
 
   useEffect(() => {
     // ===== FIREFLY ANIMATION =====
@@ -98,8 +93,8 @@ export default function HomePage() {
     );
     revealEls.forEach((el) => {
       el.style.opacity = "0";
-      el.style.transform = "translateY(20px)";
-      el.style.transition = "opacity 0.7s ease, transform 0.7s ease";
+      el.style.transform = "translateY(10px)";
+      el.style.transition = "opacity 360ms ease, transform 360ms ease";
       observer.observe(el);
     });
 
@@ -113,73 +108,19 @@ export default function HomePage() {
   return (
     <>
       {/* NAV */}
-      <nav className="home-nav">
-        <div className="nav-logo">
-          VĨNH PHÚC <span>VIÊN</span>
-        </div>
-        <ul className="nav-links">
-          <li>
-            <a
-              href={ROUTES.MAP}
-              onClick={(e) => {
-                e.preventDefault();
-                navigate(ROUTES.MAP);
-              }}
-            >
-              Bản đồ
-            </a>
-          </li>
-          <li>
-            <a href="#features">Chức năng</a>
-          </li>
-          <li>
-            <a href="#ai">AI Tư vấn</a>
-          </li>
-        </ul>
+      <header className="home-nav">
+        <BrandWordmark />
+        <PrimaryNavigation className="home-nav__primary" />
         {user ? (
-          <div style={{ display: "flex", alignItems: "center", gap: "18px" }}>
-            <button
-              type="button"
-              className="home-bell-btn"
-              title="Thông báo"
-              onClick={() => navigate(ROUTES.NOTIFICATION)}
-            >
-              🔔
-            </button>
-
-            <div style={{ position: "relative" }}>
-              <button
-                type="button"
-                className="home-nav-user"
-                onClick={() => setMenuOpen((v) => !v)}
-              >
-                <span className="home-nav-avatar">{user.initials}</span>
-                <span className="home-nav-username">{user.name}</span>
-              </button>
-
-              {menuOpen && (
-                <div className="home-nav-menu">
-                  <button
-                    onClick={() => {
-                      setMenuOpen(false);
-                      navigate(ROUTES.PROFILE);
-                    }}
-                  >
-                    Hồ sơ của tôi
-                  </button>
-                  <button className="danger" onClick={handleLogout}>
-                    Đăng xuất
-                  </button>
-                </div>
-              )}
-            </div>
+          <div className="home-nav__actions">
+            <AccountActions variant="dark" />
           </div>
         ) : (
           <button className="nav-cta" onClick={() => navigate(ROUTES.LOGIN)}>
             Đăng nhập
           </button>
         )}
-      </nav>
+      </header>
 
       {/* HERO */}
       <div className="hero">
@@ -430,9 +371,7 @@ export default function HomePage() {
 
         {/* Content */}
         <div className="hero-content">
-          <p className="hero-eyebrow">
-            花 好 月 圓 — Hệ thống Quản lý Nghĩa trang
-          </p>
+          <p className="hero-eyebrow">Hệ thống quản lý nghĩa trang</p>
           <h1 className="hero-title">Vĩnh Phúc Viên</h1>
           <p className="hero-sub">永 福 苑</p>
           <p className="hero-desc">

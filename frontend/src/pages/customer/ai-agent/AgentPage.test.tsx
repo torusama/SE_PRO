@@ -113,8 +113,67 @@ describe("AgentPage automatic map presentation", () => {
     expect(
       screen.getByText("Tìm một nơi an yên, phù hợp với gia đình bạn"),
     ).toBeInTheDocument();
-    expect(screen.queryByText("Đang mở cuộc trò chuyện…")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Đang mở cuộc trò chuyện…"),
+    ).not.toBeInTheDocument();
     expect(apiMock.post).not.toHaveBeenCalled();
+  });
+
+  it("recognizes an authenticated admin and loads that account's conversations", async () => {
+    authState.token = "admin-token";
+    authState.role = "admin";
+    authState.user = { id: 1, name: "Quản trị viên", initials: "QT" };
+    apiMock.get.mockResolvedValue({
+      data: {
+        data: [
+          {
+            sessionId: "admin-session",
+            title: "Tư vấn khu A",
+            preview: "Tìm lô phù hợp",
+            updatedAt: "2026-08-01T08:00:00.000Z",
+          },
+        ],
+      },
+    });
+
+    render(
+      <MemoryRouter>
+        <AgentPage />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() =>
+      expect(apiMock.get).toHaveBeenCalledWith("/ai-agent/conversations"),
+    );
+    expect(
+      screen.queryByText("Đăng nhập để lưu và xem lại các cuộc trò chuyện."),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Tư vấn khu A")).toBeInTheDocument();
+  });
+
+  it("opens and dismisses the conversation panel without changing the chat", () => {
+    const { container } = render(
+      <MemoryRouter>
+        <AgentPage />
+      </MemoryRouter>,
+    );
+
+    const page = container.firstElementChild;
+    const opener = screen.getByRole("button", { name: "Mở lịch sử" });
+
+    expect(page).not.toHaveClass("sidebar-open");
+    expect(opener).toHaveAttribute("aria-expanded", "false");
+
+    fireEvent.click(opener);
+    expect(page).toHaveClass("sidebar-open");
+    expect(opener).toHaveAttribute("aria-expanded", "true");
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(page).not.toHaveClass("sidebar-open");
+
+    fireEvent.click(opener);
+    fireEvent.click(screen.getAllByRole("button", { name: "Đóng lịch sử" })[1]);
+    expect(page).not.toHaveClass("sidebar-open");
   });
 
   it("opens the contextual map after an AI plot recommendation", async () => {

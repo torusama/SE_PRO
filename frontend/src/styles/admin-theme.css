@@ -69,18 +69,18 @@
   position: relative;
   z-index: 20;
   display: flex;
-  min-height: 64px;
+  height: 78px;
+  min-height: 78px;
   align-items: center;
   justify-content: space-between;
   gap: 24px;
   border-bottom: 1px solid var(--admin-line);
   background: rgba(255, 253, 250, 0.96);
-  padding: 10px clamp(20px, 2.5vw, 38px);
+  padding: 0 clamp(20px, 2.5vw, 38px);
 }
 
 .admin-header__page,
 .admin-header__page p,
-.admin-account__trigger span,
 .admin-sidebar p {
   margin: 0;
 }
@@ -99,77 +99,16 @@
   line-height: 1.4;
 }
 
+.admin-header__navigation {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  max-width: max-content;
+}
+
 .admin-account {
   position: relative;
-}
-
-.admin-account__trigger {
-  display: grid;
-  justify-items: end;
-  gap: 1px;
-  border: 0;
-  background: transparent;
-  color: var(--admin-text);
-  cursor: pointer;
-  font: inherit;
-  padding: 5px 0 5px 14px;
-}
-
-.admin-account__name {
-  font-size: 12px;
-  font-weight: 650;
-}
-
-.admin-account__hint {
-  color: var(--admin-muted);
-  font-size: 10px;
-}
-
-.admin-account__trigger:hover .admin-account__name,
-.admin-account__trigger:focus-visible .admin-account__name {
-  color: var(--admin-accent);
-}
-
-.admin-account__menu {
-  position: absolute;
-  top: calc(100% + 9px);
-  right: 0;
-  min-width: 196px;
-  overflow: hidden;
-  border: 1px solid var(--admin-line);
-  border-radius: var(--admin-radius-small);
-  background: var(--admin-paper-strong);
-  box-shadow: 0 14px 34px rgba(43, 41, 38, 0.1);
-  transform-origin: top right;
-  animation: admin-menu-enter 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-.admin-account__menu button {
-  display: block;
-  width: 100%;
-  border: 0;
-  border-bottom: 1px solid var(--admin-line);
-  background: transparent;
-  color: var(--admin-text);
-  cursor: pointer;
-  font: inherit;
-  font-size: 12px;
-  padding: 10px 14px;
-  text-align: left;
-}
-
-.admin-account__menu button:last-child {
-  border-bottom: 0;
-}
-
-.admin-account__menu button:hover,
-.admin-account__menu button:focus-visible {
-  background: var(--admin-soft);
-  color: var(--admin-ink);
-}
-
-.admin-account__menu .admin-account__logout {
-  color: var(--admin-danger);
 }
 
 .admin-sidebar {
@@ -419,22 +358,11 @@
 @keyframes admin-page-enter {
   from {
     opacity: 0;
-    transform: translateY(7px);
+    transform: translateY(4px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
-  }
-}
-
-@keyframes admin-menu-enter {
-  from {
-    opacity: 0;
-    transform: translateY(-4px) scale(0.985);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
   }
 }
 
@@ -458,6 +386,22 @@
   .admin-workspace {
     padding-inline: 18px;
   }
+
+  .admin-header {
+    height: auto;
+    min-height: 78px;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+  }
+
+  .admin-header__navigation {
+    position: static;
+    order: 3;
+    width: 100%;
+    max-width: 100%;
+    margin-inline: 0;
+    transform: none;
+  }
 }
 
 @media (max-width: 700px) {
@@ -472,8 +416,7 @@
     flex-basis: 164px;
   }
 
-  .admin-header__description,
-  .admin-account__hint {
+  .admin-header__description {
     display: none;
   }
 

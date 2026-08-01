@@ -82,7 +82,7 @@ export class AiAgentController {
 
   @Get('conversations')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('customer')
+  @Roles('customer', 'admin')
   async conversationList(@CurrentUser() user: AuthenticatedUser) {
     return {
       success: true,
@@ -93,7 +93,7 @@ export class AiAgentController {
 
   @Get('conversations/:sessionId')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('customer')
+  @Roles('customer', 'admin')
   async conversation(
     @CurrentUser() user: AuthenticatedUser,
     @Param('sessionId') sessionId: string,
@@ -107,7 +107,7 @@ export class AiAgentController {
 
   @Delete('conversations/:sessionId')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('customer')
+  @Roles('customer', 'admin')
   async deleteConversation(
     @CurrentUser() user: AuthenticatedUser,
     @Param('sessionId') sessionId: string,

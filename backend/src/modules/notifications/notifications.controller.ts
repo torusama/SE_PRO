@@ -1,7 +1,9 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  Header,
   Param,
   Patch,
   Post,
@@ -22,13 +24,16 @@ import {
   type AdminRequestContext,
 } from '../../common/decorators/admin-request-context.decorator';
 
+type AuthenticatedUser = { id: number };
+
 @UseGuards(JwtAuthGuard)
 @Controller('notifications')
 export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 
   @Get()
-  async list(@CurrentUser() user: any) {
+  @Header('Cache-Control', 'no-store')
+  async list(@CurrentUser() user: AuthenticatedUser) {
     return {
       success: true,
       data: await this.notificationsService.list(user.id),
@@ -36,7 +41,8 @@ export class NotificationsController {
   }
 
   @Get('unread-count')
-  async unreadCount(@CurrentUser() user: any) {
+  @Header('Cache-Control', 'no-store')
+  async unreadCount(@CurrentUser() user: AuthenticatedUser) {
     return {
       success: true,
       data: await this.notificationsService.unreadCount(user.id),
@@ -44,18 +50,37 @@ export class NotificationsController {
   }
 
   @Patch(':id/read')
-  async read(@CurrentUser() user: any, @Param('id') id: string) {
+  async read(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return {
       success: true,
       data: await this.notificationsService.markRead(user.id, Number(id)),
     };
   }
 
+  @Patch(':id/unread')
+  async unread(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+  ) {
+    return {
+      success: true,
+      data: await this.notificationsService.markUnread(user.id, Number(id)),
+    };
+  }
+
   @Patch('read-all')
-  async readAll(@CurrentUser() user: any) {
+  async readAll(@CurrentUser() user: AuthenticatedUser) {
     return {
       success: true,
       data: await this.notificationsService.readAll(user.id),
+    };
+  }
+
+  @Delete()
+  async clear(@CurrentUser() user: AuthenticatedUser) {
+    return {
+      success: true,
+      data: await this.notificationsService.deleteAll(user.id),
     };
   }
 }
