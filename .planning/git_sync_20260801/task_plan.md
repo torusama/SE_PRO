@@ -7,10 +7,10 @@ Safely preserve the current worktree, integrate the latest remote branch, resolv
 ## Phases
 
 - [completed] Inspect branch, upstream, status, local commits, and worktree scope.
-- [in_progress] Commit the intended local work without losing unrelated changes.
-- [pending] Fetch/pull the upstream branch and resolve any conflicts.
-- [pending] Run proportionate verification and push the integrated branch.
-- [pending] Confirm remote/local commit alignment and clean status.
+- [completed] Commit the intended local work without losing unrelated changes.
+- [completed] Fetch/pull the upstream branch and resolve any conflicts.
+- [completed] Run proportionate verification and push the integrated branch.
+- [completed] Confirm remote/local commit alignment and clean status.
 
 ## Constraints
 
