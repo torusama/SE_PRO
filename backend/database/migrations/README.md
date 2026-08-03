@@ -79,5 +79,6 @@ Thứ tự hiện tại:
 13. `019_contract_plot_trigger_compatibility.sql`
 14. `020_backfill_contract_base_content.sql`
 15. `021_remove_archived_pdf_and_e_signature.sql`
+16. `022_signed_contract_evidence_documents.sql`
 
 `015` phải chạy trước `016`; thứ tự tên file của runner bảo đảm dependency này.

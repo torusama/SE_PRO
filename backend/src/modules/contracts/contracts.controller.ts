@@ -32,10 +32,20 @@ import {
 } from '../../common/decorators/admin-request-context.decorator';
 
 const signedEvidenceTypes = new Map([
-  ['image/jpeg', '.jpg'],
-  ['image/png', '.png'],
-  ['image/webp', '.webp'],
+  ['application/pdf', '.pdf'],
+  ['application/msword', '.doc'],
+  [
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    '.docx',
+  ],
 ]);
+
+export function isSignedEvidenceDocument(
+  mimetype: string,
+  originalname: string,
+) {
+  return signedEvidenceTypes.get(mimetype) === extname(originalname).toLowerCase();
+}
 
 const signedEvidenceUpload = FilesInterceptor('evidence', 10, {
   storage: diskStorage({
@@ -45,16 +55,11 @@ const signedEvidenceUpload = FilesInterceptor('evidence', 10, {
   }),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_request, file, callback) => {
-    const expectedExtension = signedEvidenceTypes.get(file.mimetype);
-    const actualExtension = extname(file.originalname).toLowerCase();
-    const valid =
-      Boolean(expectedExtension) &&
-      (expectedExtension === actualExtension ||
-        (expectedExtension === '.jpg' && actualExtension === '.jpeg'));
+    const valid = isSignedEvidenceDocument(file.mimetype, file.originalname);
     callback(
       valid
         ? null
-        : new BadRequestException('Chỉ chấp nhận ảnh JPG, PNG hoặc WEBP'),
+        : new BadRequestException('Chỉ chấp nhận tệp PDF, DOC hoặc DOCX'),
       valid,
     );
   },
@@ -158,7 +163,7 @@ export class ContractsController {
     try {
       return {
         success: true,
-        message: 'Đã lưu ảnh hợp đồng ký offline',
+        message: 'Đã lưu tài liệu hợp đồng ký offline',
         data: await this.contractsService.saveSignedEvidence(
           Number(id),
           user.id,

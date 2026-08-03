@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api } from '@/lib/api'
-import { composeContractDocument, downloadContractPdf } from '@/lib/contractPdf'
+import { composeContractDocument, createContractPdfBlob, downloadContractPdf } from '@/lib/contractPdf'
 import '../AdminCorePages.css'
 
 interface ContractPlot {
@@ -64,6 +64,17 @@ const money = new Intl.NumberFormat('vi-VN', {
   maximumFractionDigits: 0,
 })
 
+const signedEvidenceExtensions: Record<string, string> = {
+  'application/pdf': '.pdf',
+  'application/msword': '.doc',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+}
+
+function isSignedEvidenceDocument(file: File) {
+  const extension = file.name.slice(file.name.lastIndexOf('.')).toLowerCase()
+  return signedEvidenceExtensions[file.type] === extension
+}
+
 function errorMessage(error: unknown, fallback: string) {
   if (typeof error === 'object' && error && 'response' in error) {
     const message = (error as { response?: { data?: { message?: string } } }).response?.data?.message
@@ -87,6 +98,11 @@ export default function ContractsPage() {
   const [paymentAmount, setPaymentAmount] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('cash')
   const [paymentNote, setPaymentNote] = useState('')
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState('')
+  const [pdfPreviewLoading, setPdfPreviewLoading] = useState(false)
+  const [pdfPreviewError, setPdfPreviewError] = useState('')
+  const pdfPreviewUrlRef = useRef<string | null>(null)
+  const pdfPreviewSequence = useRef(0)
 
   const load = useCallback(async (preferredId?: number) => {
     setLoading(true)
@@ -170,6 +186,45 @@ export default function ContractsPage() {
       )
     : ''
 
+  useEffect(() => {
+    const contractCode = selected?.contractCode
+    if (!contractCode || !previewContent) return
+    const sequence = ++pdfPreviewSequence.current
+    let cancelled = false
+    const timer = window.setTimeout(() => {
+      setPdfPreviewLoading(true)
+      setPdfPreviewError('')
+      void createContractPdfBlob({
+        contractCode,
+        contractDate: selected?.contractDate,
+        contractContent: previewContent,
+      }).then((blob) => {
+        if (cancelled || sequence !== pdfPreviewSequence.current) return
+        const nextUrl = URL.createObjectURL(blob)
+        if (pdfPreviewUrlRef.current) URL.revokeObjectURL(pdfPreviewUrlRef.current)
+        pdfPreviewUrlRef.current = nextUrl
+        setPdfPreviewUrl(nextUrl)
+      }).catch((error: unknown) => {
+        if (!cancelled && sequence === pdfPreviewSequence.current) {
+          setPdfPreviewError(errorMessage(error, 'Không thể tạo bản xem trước PDF.'))
+        }
+      }).finally(() => {
+        if (!cancelled && sequence === pdfPreviewSequence.current) {
+          setPdfPreviewLoading(false)
+        }
+      })
+    }, 350)
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [previewContent, selected?.contractCode, selected?.contractDate])
+
+  useEffect(() => () => {
+    if (pdfPreviewUrlRef.current) URL.revokeObjectURL(pdfPreviewUrlRef.current)
+  }, [])
+
   const savePendingInheritance = async () => {
     if (!selected || !canEditInheritance) return
     if (inheritance === (selected.inheritanceContent ?? '')) return
@@ -186,14 +241,9 @@ export default function ContractsPage() {
     ))
   }
 
-  const printContract = () => {
-    if (!selected) return
-    const popup = window.open('', '_blank', 'width=900,height=700')
-    if (!popup) return
-    popup.document.write(`<html><head><title>${selected.contractCode}</title><style>body{font-family:"Times New Roman",serif;max-width:800px;margin:40px auto;line-height:1.6;white-space:pre-wrap} @media print{body{margin:20mm}}</style></head><body></body></html>`)
-    popup.document.body.textContent = previewContent
-    popup.document.close()
-    popup.print()
+  const openPdfPreview = () => {
+    if (!pdfPreviewUrl) return
+    window.open(`${pdfPreviewUrl}#view=FitH`, '_blank', 'noopener,noreferrer')
   }
 
   const saveContractToDevice = async () => {
@@ -241,6 +291,18 @@ export default function ContractsPage() {
 
   const uploadSignedEvidence = async (files: File[]) => {
     if (!selected || files.length === 0) return
+    if (files.some((file) => !isSignedEvidenceDocument(file))) {
+      setMessage('Chỉ chấp nhận tệp PDF, DOC hoặc DOCX đúng định dạng.')
+      return
+    }
+    if (files.some((file) => file.size > 10 * 1024 * 1024)) {
+      setMessage('Mỗi tệp minh chứng không được vượt quá 10 MB.')
+      return
+    }
+    if ((selected.signedEvidence?.length ?? 0) + files.length > 10) {
+      setMessage('Mỗi hợp đồng chỉ được lưu tối đa 10 tệp minh chứng.')
+      return
+    }
     const form = new FormData()
     files.forEach((file) => form.append('evidence', file))
     setSaving(true)
@@ -249,19 +311,28 @@ export default function ContractsPage() {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
       await load(selected.id)
-      setMessage(`Đã lưu ${files.length} ảnh minh chứng hợp đồng ký offline.`)
+      setMessage(`Đã lưu ${files.length} tài liệu minh chứng hợp đồng ký offline.`)
     } catch (error) {
-      setMessage(errorMessage(error, 'Không thể lưu ảnh minh chứng.'))
+      setMessage(errorMessage(error, 'Không thể lưu tài liệu minh chứng.'))
     } finally {
       setSaving(false)
     }
   }
 
-  const openPrivateFile = async (url: string) => {
+  const openPrivateFile = async (url: string, evidence: SignedEvidence) => {
     try {
       const response = await api.get(url, { responseType: 'blob' })
       const objectUrl = URL.createObjectURL(response.data)
-      window.open(objectUrl, '_blank')
+      if (evidence.mimeType === 'application/pdf') {
+        window.open(objectUrl, '_blank')
+      } else {
+        const link = document.createElement('a')
+        link.href = objectUrl
+        link.download = evidence.originalName
+        document.body.appendChild(link)
+        link.click()
+        link.remove()
+      }
       window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000)
     } catch (error) {
       setMessage(errorMessage(error, 'Không thể mở tệp.'))
@@ -319,7 +390,7 @@ export default function ContractsPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
               <div><small>Mã hợp đồng</small><h2 style={{ margin: '3px 0', color: 'var(--color-accent-teal)' }}>{selected.contractCode}</h2><b>{statusLabel[selected.status]}</b></div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button onClick={printContract}>In hợp đồng</button>
+                <button disabled={!pdfPreviewUrl || pdfPreviewLoading} onClick={openPdfPreview}>Mở PDF toàn màn hình</button>
                 <button disabled={saving} onClick={saveContractToDevice}>Tải PDF để ký</button>
               </div>
             </div>
@@ -359,26 +430,42 @@ export default function ContractsPage() {
             <div style={{ marginTop: 18 }}>
               <label htmlFor="inheritance"><b>Thông tin/nguyện vọng về thừa kế</b></label>
               <textarea id="inheritance" value={inheritance} maxLength={10000} disabled={!canEditInheritance} onChange={(event) => setInheritance(event.target.value)} rows={7} style={{ width: '100%', boxSizing: 'border-box', padding: 12, borderRadius: 8, background: canEditInheritance ? '#fff' : '#eee', color: '#000', border: '1px solid #d1d5db' }} />
-              {!canEditInheritance && <small style={{ display: 'block' }}>Nội dung đã bị khóa vì hợp đồng đã có ảnh minh chứng ký offline.</small>}
+              {!canEditInheritance && <small style={{ display: 'block' }}>Nội dung đã bị khóa vì hợp đồng đã có tài liệu minh chứng ký offline.</small>}
               <small>{inheritanceState === 'saving' ? 'Đang tự lưu...' : inheritanceState === 'saved' ? 'Đã tự lưu' : inheritanceState === 'error' ? 'Tự lưu thất bại' : ''}</small>
             </div>
 
-            <details open style={{ marginTop: 18 }}>
-              <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Bản xem trước hợp đồng cập nhật trực tiếp</summary>
-              <pre style={{ whiteSpace: 'pre-wrap', fontFamily: '"Times New Roman", serif', fontSize: 15, lineHeight: 1.65, padding: 18, background: '#fff', color: '#000', border: '1px solid #d1d5db', borderRadius: 8, maxHeight: 520, overflow: 'auto' }}>{previewContent || 'Hợp đồng cũ chưa có nội dung snapshot.'}</pre>
-            </details>
+            <section style={{ marginTop: 18 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
+                <b>Bản xem trước PDF hợp đồng</b>
+                <small style={{ color: '#4b5563' }}>Khổ A4 · bản tải xuống sử dụng cùng định dạng</small>
+              </div>
+              {pdfPreviewLoading && <p style={{ margin: '8px 0', fontSize: 13 }}>Đang cập nhật bản xem trước PDF...</p>}
+              {pdfPreviewError && <p style={{ color: '#a33' }}>{pdfPreviewError}</p>}
+              {pdfPreviewUrl && (
+                <iframe
+                  title={`Bản xem trước PDF ${selected.contractCode}`}
+                  src={`${pdfPreviewUrl}#toolbar=0&navpanes=0&view=FitH`}
+                  style={{ width: '100%', height: 760, display: 'block', border: '1px solid #cbd5e1', borderRadius: 8, background: '#525659' }}
+                />
+              )}
+              {!pdfPreviewUrl && !pdfPreviewLoading && !pdfPreviewError && (
+                <div style={{ minHeight: 220, display: 'grid', placeItems: 'center', border: '1px solid #cbd5e1', borderRadius: 8, background: '#f3f4f6' }}>
+                  Chưa có nội dung để tạo bản xem trước PDF.
+                </div>
+              )}
+            </section>
 
             <div style={{ marginTop: 22, borderTop: '1px solid var(--color-border)', paddingTop: 18 }}>
               <b>Hợp đồng đã kí</b>
-              <p style={{ fontSize: 12 }}>JPG, PNG hoặc WEBP; tối đa 10 ảnh, 10 MB mỗi ảnh.</p>
+              <p style={{ fontSize: 12 }}>Chỉ hỗ trợ PDF, DOC hoặc DOCX; tối đa 10 tệp, 10 MB mỗi tệp.</p>
               <label style={{ display: 'inline-block', border: '1px solid var(--color-border)', borderRadius: 6, padding: '8px 12px', cursor: 'pointer' }}>
-                Chọn ảnh minh chứng
-                <input type="file" multiple accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" disabled={saving} style={{ display: 'none' }} onChange={(event) => { const files = Array.from(event.target.files ?? []); if (files.length) void uploadSignedEvidence(files); event.target.value = '' }} />
+                Chọn tài liệu minh chứng
+                <input type="file" multiple accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.pdf,.doc,.docx" disabled={saving} style={{ display: 'none' }} onChange={(event) => { const files = Array.from(event.target.files ?? []); if (files.length) void uploadSignedEvidence(files); event.target.value = '' }} />
               </label>
               <div style={{ display: 'grid', gap: 7, marginTop: 10 }}>
                 {(selected.signedEvidence ?? []).map((evidence) => (
-                  <button key={evidence.id} onClick={() => void openPrivateFile(`/admin/contracts/${selected.id}/signed-evidence/${encodeURIComponent(evidence.filename)}`)} style={{ textAlign: 'left', padding: 9 }}>
-                    Xem ảnh · {evidence.originalName} · {(evidence.size / 1024 / 1024).toFixed(2)} MB
+                  <button key={evidence.id} onClick={() => void openPrivateFile(`/admin/contracts/${selected.id}/signed-evidence/${encodeURIComponent(evidence.filename)}`, evidence)} style={{ textAlign: 'left', padding: 9 }}>
+                    {evidence.mimeType === 'application/pdf' ? 'Xem PDF' : 'Tải tệp Word'} · {evidence.originalName} · {(evidence.size / 1024 / 1024).toFixed(2)} MB
                   </button>
                 ))}
               </div>
@@ -386,7 +473,7 @@ export default function ContractsPage() {
 
             {selected.status === 'draft' && <div style={{ marginTop: 18, padding: 14, border: '1px solid #008573', borderRadius: 8, background: '#eefaf8' }}>
               <b>Bước cuối: kích hoạt hợp đồng và quyền sở hữu</b>
-              <p style={{ fontSize: 12 }}>Nút chỉ khả dụng sau khi hợp đồng đã được thanh toán đầy đủ và đã lưu ít nhất một ảnh minh chứng. Thao tác sẽ chuyển tất cả lô trong hợp đồng từ “đã giữ” sang “đã bán” và tạo lịch sử sở hữu cho người mua.</p>
+              <p style={{ fontSize: 12 }}>Nút chỉ khả dụng sau khi hợp đồng đã được thanh toán đầy đủ và đã lưu ít nhất một tài liệu minh chứng. Thao tác sẽ chuyển tất cả lô trong hợp đồng từ “đã giữ” sang “đã bán” và tạo lịch sử sở hữu cho người mua.</p>
               <button disabled={saving || selected.paymentStatus !== 'paid' || (selected.signedEvidence?.length ?? 0) === 0} onClick={() => void activateOwnership()} style={{ padding: '10px 16px', background: '#008573', color: '#fff', border: 0, borderRadius: 7, fontWeight: 700 }}>
                 Xác nhận đã ký và chuyển quyền sở hữu
               </button>

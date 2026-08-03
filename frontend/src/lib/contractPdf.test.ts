@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { composeContractDocument } from './contractPdf'
+import { composeContractDocument, createContractPdfElement } from './contractPdf'
 
 describe('composeContractDocument', () => {
   const base = 'ĐIỀU 1. ĐỐI TƯỢNG\nLô A và lô B\n\nĐIỀU 3. QUYỀN VÀ NGHĨA VỤ\nGiữ nguyên\n\nĐIỀU 5. THỜI HẠN\nNội dung'
@@ -32,5 +32,38 @@ describe('composeContractDocument', () => {
     ])
     expect(result).toContain('1. Lô A-01, Khu A, diện tích 5 m².')
     expect(result).toContain('1. Lô A-01: 12.000.000 đồng.')
+  })
+
+  it('builds a formal A4-style document with headings and two signature columns', () => {
+    const element = createContractPdfElement({
+      contractCode: 'HD-2026-01',
+      contractDate: '2026-08-03',
+      contractContent: `CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM
+Độc lập - Tự do - Hạnh phúc
+
+HỢP ĐỒNG DỊCH VỤ
+Số: HD-2026-01
+
+BÊN A - ĐƠN VỊ CUNG CẤP
+Tên: Vĩnh Phúc Viên
+
+ĐIỀU 1. ĐỐI TƯỢNG HỢP ĐỒNG
+Nội dung hợp đồng.
+
+ĐẠI DIỆN BÊN A                              BÊN B
+(Ký, ghi rõ họ tên, chức vụ, đóng dấu)       (Ký, ghi rõ họ tên)`,
+    })
+
+    expect(element.dataset.contractPdf).toBe('true')
+    expect(element.querySelector('h1')).toHaveTextContent('HỢP ĐỒNG DỊCH VỤ')
+    expect(element.querySelector('h2')).toHaveTextContent('BÊN A - ĐƠN VỊ CUNG CẤP')
+    expect(element).toHaveTextContent('Ngày 03 tháng 08 năm 2026')
+    expect(element.querySelector('[data-pdf-section="signatures"]')?.children).toHaveLength(2)
+    expect(
+      Array.from(element.querySelectorAll('h1, h2, p')).every((textElement) =>
+        (textElement as HTMLElement).style.getPropertyPriority('color') === 'important'
+        && (textElement as HTMLElement).style.color === 'rgb(0, 0, 0)',
+      ),
+    ).toBe(true)
   })
 })

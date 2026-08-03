@@ -15,18 +15,21 @@ export default function UserAccountMenu({
 }: UserAccountMenuProps) {
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
+  const role = useAuthStore((state) => state.role);
   const logout = useAuthStore((state) => state.logout);
 
   if (!user) return null;
 
-  const items: AccountMenuItem[] = [
-    { label: "Hồ sơ cá nhân", onSelect: () => navigate(ROUTES.PROFILE) },
-    { label: "Lô của tôi", onSelect: () => navigate(ROUTES.MY_LOTS) },
-    {
-      label: "Lịch hẹn tư vấn",
-      onSelect: () => navigate(ROUTES.APPOINTMENTS),
-    },
-  ];
+  const items: AccountMenuItem[] = role === "admin"
+    ? []
+    : [
+        { label: "Hồ sơ cá nhân", onSelect: () => navigate(ROUTES.PROFILE) },
+        { label: "Lô của tôi", onSelect: () => navigate(ROUTES.MY_LOTS) },
+        {
+          label: "Lịch hẹn tư vấn",
+          onSelect: () => navigate(ROUTES.APPOINTMENTS),
+        },
+      ];
 
   items.push({
     label: "Đăng xuất",

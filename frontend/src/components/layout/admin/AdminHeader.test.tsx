@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { useAuthStore } from "@/store/authStore";
@@ -46,5 +46,15 @@ describe("Admin Header", () => {
         name: "Mở menu tài khoản của Nguyễn An",
       }),
     ).toHaveTextContent("Nguyễn An");
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Mở menu tài khoản của Nguyễn An",
+      }),
+    );
+    expect(screen.getByRole("menuitem", { name: "Đăng xuất" })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Hồ sơ cá nhân" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Lô của tôi" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Lịch hẹn tư vấn" })).not.toBeInTheDocument();
   });
 });

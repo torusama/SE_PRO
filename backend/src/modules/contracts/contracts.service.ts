@@ -279,7 +279,7 @@ export class ContractsService {
     }>,
   ) {
     if (!files.length) {
-      throw new BadRequestException('At least one signed contract image is required');
+      throw new BadRequestException('At least one signed contract document is required');
     }
     return this.database.transaction(async (client) => {
       const contract = await client.query<{
@@ -306,7 +306,7 @@ export class ContractsService {
       );
       if (Number(count.rows[0]?.total ?? 0) + files.length > 10) {
         throw new BadRequestException(
-          'A contract can store at most 10 signed evidence images',
+          'A contract can store at most 10 signed evidence documents',
         );
       }
 
@@ -397,7 +397,7 @@ export class ContractsService {
       );
       if (!evidence.rows.length) {
         throw new BadRequestException(
-          'Upload at least one signed contract image before activating ownership',
+          'Upload at least one signed contract document before activating ownership',
         );
       }
       const plots = await client.query<{
