@@ -8,6 +8,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/store/authStore'
 import { ROUTES } from '@/constants/routes'
+import DemoPaymentPanel from '@/components/payment/DemoPaymentPanel'
 import './ServicePage.css'
 
 type Tab = 'catalogue' | 'book' | 'track'
@@ -141,6 +142,7 @@ export default function ServicePage() {
   // Đặt dịch vụ mới
   const [selectedServiceId, setSelectedServiceId] = useState<number | null>(null)
   const [selectedPlotId, setSelectedPlotId] = useState<number | null>(null)
+  const [applyScope, setApplyScope] = useState<'single' | 'all'>('single')
   const [requestedDate, setRequestedDate] = useState('')
   const [note, setNote] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -246,6 +248,8 @@ export default function ServicePage() {
 
   const selectedServiceType = serviceTypes.find((s) => s.id === selectedServiceId) ?? null
   const selectedPlot = ownedPlots.find((p) => p.plotId === selectedPlotId) ?? null
+  const applyToAllPlots = ownedPlots.length >= 2 && applyScope === 'all'
+  const totalPrice = selectedServiceType ? selectedServiceType.basePrice * (applyToAllPlots ? ownedPlots.length : 1) : 0
 
   function goToLogin() {
     navigate(ROUTES.LOGIN, { state: { from: { pathname: ROUTES.SERVICES } } })
@@ -271,19 +275,50 @@ export default function ServicePage() {
       setSubmitError('Vui lòng chọn loại dịch vụ.')
       return
     }
+    if (ownedPlots.length === 0) {
+      setSubmitError('Bạn cần sở hữu ít nhất một lô phần mộ để đặt dịch vụ này.')
+      return
+    }
+    if (ownedPlots.length >= 2 && applyScope === 'single' && !selectedPlotId) {
+      setSubmitError('Vui lòng chọn lô phần mộ muốn thực hiện dịch vụ, hoặc chọn áp dụng cho tất cả các mộ.')
+      return
+    }
+    if (!requestedDate) {
+      setSubmitError('Vui lòng chọn ngày mong muốn thực hiện dịch vụ.')
+      return
+    }
+
     setSubmitting(true)
     setSubmitError('')
     setSubmitOk('')
     try {
-      await api.post('/service-orders', {
-        serviceTypeId: selectedServiceId,
-        plotId: selectedPlotId ?? undefined,
-        requestedDate: requestedDate || undefined,
-        note: note.trim() || undefined,
-      })
-      setSubmitOk('Đã gửi yêu cầu đặt dịch vụ. Bạn sẽ nhận được thông báo khi được xác nhận.')
+      if (applyToAllPlots) {
+        // Áp dụng cho tất cả các mộ: tạo một đơn dịch vụ riêng cho từng lô,
+        // tổng chi phí hiển thị cho khách = đơn giá x số lô.
+        for (const plot of ownedPlots) {
+          await api.post('/service-orders', {
+            serviceTypeId: selectedServiceId,
+            plotId: plot.plotId,
+            requestedDate: requestedDate || undefined,
+            note: note.trim() || undefined,
+          })
+        }
+        setSubmitOk(
+          `Đã gửi yêu cầu đặt dịch vụ cho toàn bộ ${ownedPlots.length} lô phần mộ vào ngày ${formatDate(requestedDate)}, ` +
+          `tổng chi phí dự kiến ${money.format(totalPrice)}. Bạn sẽ nhận được thông báo khi từng đơn được xác nhận.`
+        )
+      } else {
+        await api.post('/service-orders', {
+          serviceTypeId: selectedServiceId,
+          plotId: selectedPlotId ?? undefined,
+          requestedDate: requestedDate || undefined,
+          note: note.trim() || undefined,
+        })
+        setSubmitOk(`Đã gửi yêu cầu đặt dịch vụ vào ngày ${formatDate(requestedDate)}. Bạn sẽ nhận được thông báo khi được xác nhận.`)
+      }
       setNote('')
       setRequestedDate('')
+      setApplyScope('single')
       await loadAll()
       openTrack()
     } catch (err) {
@@ -379,6 +414,10 @@ export default function ServicePage() {
             setSelectedServiceId={setSelectedServiceId}
             selectedPlotId={selectedPlotId}
             setSelectedPlotId={setSelectedPlotId}
+            applyScope={applyScope}
+            setApplyScope={setApplyScope}
+            applyToAllPlots={applyToAllPlots}
+            totalPrice={totalPrice}
             selectedServiceType={selectedServiceType}
             selectedPlot={selectedPlot}
             requestedDate={requestedDate}
@@ -389,6 +428,7 @@ export default function ServicePage() {
             submitError={submitError}
             submitOk={submitOk}
             onSubmit={() => void submitBooking()}
+            onGoToMap={() => navigate(ROUTES.MAP)}
           />
         )}
 
@@ -540,6 +580,10 @@ function BookTab(props: {
   setSelectedServiceId: (id: number) => void
   selectedPlotId: number | null
   setSelectedPlotId: (id: number | null) => void
+  applyScope: 'single' | 'all'
+  setApplyScope: (scope: 'single' | 'all') => void
+  applyToAllPlots: boolean
+  totalPrice: number
   selectedServiceType: ServiceType | null
   selectedPlot: Contract | null
   requestedDate: string
@@ -550,32 +594,81 @@ function BookTab(props: {
   submitError: string
   submitOk: string
   onSubmit: () => void
+  onGoToMap: () => void
 }) {
   const {
     serviceTypes, ownedPlots, selectedServiceId, setSelectedServiceId, selectedPlotId, setSelectedPlotId,
+    applyScope, setApplyScope, applyToAllPlots, totalPrice,
     selectedServiceType, selectedPlot, requestedDate, setRequestedDate, note, setNote,
-    submitting, submitError, submitOk, onSubmit,
+    submitting, submitError, submitOk, onSubmit, onGoToMap,
   } = props
+
+  const hasPlots = ownedPlots.length > 0
+  const todayStr = new Date().toISOString().slice(0, 10)
+
+  // Khách chưa sở hữu lô phần mộ nào: chặn đặt dịch vụ, hướng khách sang mua/đăng ký lô trước.
+  if (!hasPlots) {
+    return (
+      <section>
+        <div className="empty-state no-plot-block">
+          <div className="empty-icon">⚱️</div>
+          <p>
+            Bạn cần sở hữu ít nhất một lô phần mộ để đặt dịch vụ.<br />
+            Vui lòng chọn và đăng ký lô phần mộ trước khi đặt dịch vụ chăm sóc, tưởng niệm.
+          </p>
+          <button className="btn-gold" style={{ marginTop: 16 }} onClick={onGoToMap}>Xem lô phần mộ →</button>
+        </div>
+      </section>
+    )
+  }
 
   return (
     <section>
-      {ownedPlots.length > 0 && (
-        <div className="lot-banner">
-          <div className="lot-icon">⚱️</div>
-          <div className="lot-info">
-            <h3>Lô phần mộ áp dụng</h3>
-            <p>{selectedPlot ? `${selectedPlot.plotCode}${selectedPlot.zoneName ? ` · ${selectedPlot.zoneName}` : ''}` : 'Chưa chọn lô'}</p>
-          </div>
-          {ownedPlots.length > 1 && (
-            <div className="lot-select">
-              <select value={selectedPlotId ?? ''} onChange={(e) => setSelectedPlotId(e.target.value ? Number(e.target.value) : null)}>
-                {ownedPlots.map((p) => (
-                  <option key={p.plotId} value={p.plotId}>{p.plotCode}{p.zoneName ? ` · ${p.zoneName}` : ''}</option>
-                ))}
-              </select>
-            </div>
-          )}
+      <div className="lot-banner">
+        <div className="lot-icon">⚱️</div>
+        <div className="lot-info">
+          <h3>Lô phần mộ áp dụng</h3>
+          <p>
+            {ownedPlots.length === 1
+              ? `${selectedPlot ? selectedPlot.plotCode : ownedPlots[0].plotCode}${ownedPlots[0].zoneName ? ` · ${ownedPlots[0].zoneName}` : ''}`
+              : applyToAllPlots
+                ? `Tất cả ${ownedPlots.length} lô phần mộ của bạn`
+                : selectedPlot ? `${selectedPlot.plotCode}${selectedPlot.zoneName ? ` · ${selectedPlot.zoneName}` : ''}` : 'Chưa chọn lô'}
+          </p>
         </div>
+        {ownedPlots.length > 1 && (
+          <div className="scope-toggle">
+            <button
+              type="button"
+              className={`filter-chip ${applyScope === 'single' ? 'active' : ''}`}
+              onClick={() => setApplyScope('single')}
+            >
+              Một lô cụ thể
+            </button>
+            <button
+              type="button"
+              className={`filter-chip ${applyScope === 'all' ? 'active' : ''}`}
+              onClick={() => setApplyScope('all')}
+            >
+              Tất cả các mộ ({ownedPlots.length})
+            </button>
+          </div>
+        )}
+        {ownedPlots.length > 1 && applyScope === 'single' && (
+          <div className="lot-select">
+            <select value={selectedPlotId ?? ''} onChange={(e) => setSelectedPlotId(e.target.value ? Number(e.target.value) : null)}>
+              <option value="">— Chọn lô phần mộ —</option>
+              {ownedPlots.map((p) => (
+                <option key={p.plotId} value={p.plotId}>{p.plotCode}{p.zoneName ? ` · ${p.zoneName}` : ''}</option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
+      {applyToAllPlots && (
+        <p className="field-hint" style={{ marginTop: -14, marginBottom: 24 }}>
+          Dịch vụ sẽ được đặt riêng cho từng lô trong tổng số {ownedPlots.length} lô phần mộ bạn đang sở hữu.
+        </p>
       )}
 
       <div className="form-grid">
@@ -591,18 +684,13 @@ function BookTab(props: {
                 </div>
               ))}
             </div>
-            {ownedPlots.length === 0 && (
-              <p className="field-hint" style={{ marginTop: 14 }}>
-                Bạn chưa có lô phần mộ nào được ghi nhận sở hữu — vẫn có thể đặt dịch vụ không gắn với lô cụ thể.
-              </p>
-            )}
           </div>
 
           <div className="form-section">
             <div className="section-label">Thời gian & ghi chú</div>
             <div className="field">
-              <label>Ngày mong muốn thực hiện</label>
-              <input type="date" value={requestedDate} onChange={(e) => setRequestedDate(e.target.value)} />
+              <label>Ngày mong muốn thực hiện *</label>
+              <input type="date" min={todayStr} value={requestedDate} onChange={(e) => setRequestedDate(e.target.value)} required />
             </div>
             <div className="field">
               <label>Yêu cầu đặc biệt (không bắt buộc)</label>
@@ -620,16 +708,23 @@ function BookTab(props: {
             </div>
             <div className="summary-item">
               <span className="summary-item-name">Lô phần mộ</span>
-              <span className="summary-item-val">{selectedPlot ? selectedPlot.plotCode : 'Không chọn'}</span>
+              <span className="summary-item-val">
+                {applyToAllPlots ? `Tất cả (${ownedPlots.length} lô)` : selectedPlot ? selectedPlot.plotCode : 'Chưa chọn'}
+              </span>
             </div>
             <div className="summary-item">
               <span className="summary-item-name">Ngày thực hiện</span>
               <span className="summary-item-val">{requestedDate ? formatDate(requestedDate) : 'Chưa chọn'}</span>
             </div>
             <div className="summary-total">
-              <span className="summary-total-label">Đơn giá</span>
-              <span className="summary-total-price">{selectedServiceType ? money.format(selectedServiceType.basePrice) : '—'}</span>
+              <span className="summary-total-label">{applyToAllPlots ? 'Tổng cộng' : 'Đơn giá'}</span>
+              <span className="summary-total-price">{selectedServiceType ? money.format(totalPrice) : '—'}</span>
             </div>
+            {applyToAllPlots && selectedServiceType && (
+              <p className="field-hint" style={{ marginTop: -8, textAlign: 'right' }}>
+                {money.format(selectedServiceType.basePrice)} × {ownedPlots.length} lô
+              </p>
+            )}
             <p className="summary-note">Đơn sẽ ở trạng thái chờ xác nhận cho đến khi ban quản lý duyệt. Bạn sẽ nhận thông báo ngay khi có cập nhật.</p>
 
             {submitError && <div className="form-error">{submitError}</div>}
@@ -769,6 +864,10 @@ function TrackTab(props: {
                               <p>{detail.note || 'Không có ghi chú thêm.'}</p>
                             </div>
                           </div>
+
+                          {detail.status === 'confirmed' && (
+                            <DemoPaymentPanel orderId={detail.id} amount={detail.amount} variant="customer" />
+                          )}
 
                           <div className="detail-block">
                             <h4>Lịch sử tiến độ</h4>

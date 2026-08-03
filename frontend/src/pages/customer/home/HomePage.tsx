@@ -1,22 +1,24 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/store/authStore";
 import { ROUTES } from "@/constants/routes";
 import BrandWordmark from "@/components/layout/shared/BrandWordmark";
 import PrimaryNavigation from "@/components/layout/shared/PrimaryNavigation";
 import AccountActions from "@/components/layout/shared/AccountActions";
+import { HomeAgentPreview, HomeMapPreview } from "./HomeFunctionPreviews";
 import "./HomePage.css";
 
 export default function HomePage() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const role = useAuthStore((s) => s.role);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // ===== FIREFLY ANIMATION =====
-    const canvas = document.getElementById(
-      "fireflies",
-    ) as HTMLCanvasElement | null;
+    const root = rootRef.current;
+    if (!root) return;
+    const canvas = root.querySelector<HTMLCanvasElement>("#fireflies");
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
@@ -74,39 +76,40 @@ export default function HomePage() {
     }
     draw();
 
-    // ===== SCROLL REVEAL =====
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((e) => {
-          if (e.isIntersecting) {
-            const el = e.target as HTMLElement;
-            el.style.opacity = "1";
-            el.style.transform = "translateY(0)";
-          }
-        });
-      },
-      { threshold: 0.1 },
-    );
+    // ===== LOWER-SECTION REVEAL =====
+    const revealEls = root.querySelectorAll<HTMLElement>("[data-reveal]");
+    const reduceMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    let observer: IntersectionObserver | undefined;
 
-    const revealEls = document.querySelectorAll<HTMLElement>(
-      ".feature-card, .stat-card, .section-title, .section-lead",
-    );
-    revealEls.forEach((el) => {
-      el.style.opacity = "0";
-      el.style.transform = "translateY(10px)";
-      el.style.transition = "opacity 360ms ease, transform 360ms ease";
-      observer.observe(el);
-    });
+    if (reduceMotion) {
+      revealEls.forEach((el) => el.classList.add("is-visible"));
+    } else {
+      root.classList.add("home-motion-ready");
+      observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (!entry.isIntersecting) return;
+            entry.target.classList.add("is-visible");
+            observer?.unobserve(entry.target);
+          });
+        },
+        { threshold: 0.14, rootMargin: "0px 0px -8%" },
+      );
+      revealEls.forEach((el) => observer?.observe(el));
+    }
 
     return () => {
       window.removeEventListener("resize", resize);
       cancelAnimationFrame(rafId);
-      observer.disconnect();
+      observer?.disconnect();
+      root.classList.remove("home-motion-ready");
     };
   }, []);
 
   return (
-    <>
+    <div ref={rootRef} className="home-page">
       {/* NAV */}
       <header className="home-nav">
         <BrandWordmark />
@@ -265,19 +268,6 @@ export default function HomePage() {
             opacity="0.06"
           />
 
-          {/* Pagoda silhouette left */}
-          <g fill="#060C22" stroke="#7B3FE4" strokeWidth="0.5" opacity="0.8">
-            <rect x="60" y="600" width="80" height="120" />
-            <polygon points="60,600 100,565 140,600" />
-            <polygon points="50,590 100,550 150,590" />
-            <rect x="85" y="680" width="30" height="40" />
-          </g>
-
-          {/* Pagoda glow */}
-          <g opacity="0.15" filter="url(#glowStrong)">
-            <rect x="60" y="600" width="80" height="120" fill="#7B3FE4" />
-          </g>
-
           {/* Cloud wisps */}
           <g opacity="0.25">
             <path
@@ -432,19 +422,19 @@ export default function HomePage() {
           style={{ maxWidth: "1200px", margin: "0 auto", padding: "0 48px" }}
         >
           <div className="stats-row">
-            <div className="stat-card">
+            <div className="stat-card" data-reveal>
               <div className="stat-num">2,400+</div>
               <div className="stat-label">Lô đất quản lý</div>
             </div>
-            <div className="stat-card">
+            <div className="stat-card" data-reveal>
               <div className="stat-num">14</div>
               <div className="stat-label">Chức năng hệ thống</div>
             </div>
-            <div className="stat-card">
+            <div className="stat-card" data-reveal>
               <div className="stat-num">24/7</div>
               <div className="stat-label">AI Concierge Agent</div>
             </div>
-            <div className="stat-card">
+            <div className="stat-card" data-reveal>
               <div className="stat-num">2D</div>
               <div className="stat-label">Bản đồ tương tác</div>
             </div>
@@ -453,21 +443,28 @@ export default function HomePage() {
       </div>
 
       {/* MAP SECTION */}
-      <section id="map" className="home-section">
+      <section id="map" className="home-section home-section--map">
         <div className="map-section">
-          <div>
-            <p className="section-eyebrow">Bản đồ nghĩa trang</p>
-            <h2 className="section-title">
-              Bản đồ <em>2D tương tác</em>
+          <div className="map-section__copy">
+            <p className="home-section-eyebrow" data-reveal>
+              Bản đồ nghĩa trang
+            </p>
+            <h2
+              className="home-section-title home-section-title--paired"
+              data-reveal
+            >
+              <span>Bản đồ</span>
+              <em>2D tương tác</em>
             </h2>
-            <p className="section-lead">
+            <p className="home-section-lead" data-reveal>
               Xem toàn bộ nghĩa trang qua sơ đồ trực quan. Mỗi lô đất hiển thị
               trạng thái rõ ràng — còn trống, đã giữ chỗ, hay đã bán — chỉ với
               một cái nhìn.
             </p>
             <div
+              className="map-section__legend"
+              data-reveal
               style={{
-                marginTop: "32px",
                 display: "flex",
                 gap: "16px",
                 flexWrap: "wrap",
@@ -556,22 +553,20 @@ export default function HomePage() {
             </div>
 
             <button
-              className="nav-cta"
-              style={{ marginTop: "28px" }}
+              className="home-section-cta"
+              type="button"
+              data-reveal
               onClick={() => navigate(ROUTES.MAP)}
             >
               Xem bản đồ đầy đủ →
             </button>
           </div>
 
-          {/* Mini 2D Map (bản xem trước — bấm vào để mở bản đồ tương tác thật) */}
-          <div
-            className="map-canvas"
-            onClick={() => navigate(ROUTES.MAP)}
-            style={{ cursor: "pointer" }}
-            title="Bấm để mở bản đồ tương tác đầy đủ"
-          >
+          {/* Mini 2D Map (bản xem trước) */}
+          <div className="map-canvas" data-reveal>
+            <HomeMapPreview />
             <svg
+              className="home-map-preview__legacy"
               width="100%"
               height="100%"
               viewBox="0 0 400 300"
@@ -1756,27 +1751,81 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* SERVICES INTRO */}
+      <section id="services" className="home-section home-section--services">
+        <div className="service-intro">
+          <div className="service-intro__copy">
+            <p className="home-section-eyebrow" data-reveal>
+              Dịch vụ nghĩa trang
+            </p>
+            <h2
+              className="home-section-title home-section-title--paired"
+              data-reveal
+            >
+              <span>Chăm sóc chu đáo,</span>
+              <em>trọn vẹn từng dịp</em>
+            </h2>
+            <p className="home-section-lead" data-reveal>
+              Từ chăm sóc định kỳ đến nghi lễ tưởng niệm, gia đình có thể gửi
+              yêu cầu và theo dõi tiến độ rõ ràng ngay trên hệ thống.
+            </p>
+            <button
+              className="home-section-cta"
+              type="button"
+              data-reveal
+              onClick={() => navigate(ROUTES.SERVICES)}
+            >
+              Xem các dịch vụ →
+            </button>
+          </div>
+
+          <div className="service-intro__list">
+            <article className="service-intro__item" data-reveal>
+              <span>01</span>
+              <div>
+                <h3>Chăm sóc định kỳ</h3>
+                <p>Vệ sinh, thay hoa và thắp hương theo lịch của gia đình.</p>
+              </div>
+            </article>
+            <article className="service-intro__item" data-reveal>
+              <span>02</span>
+              <div>
+                <h3>Tưởng niệm & lễ nghi</h3>
+                <p>Chuẩn bị chu đáo cho ngày giỗ, lễ viếng và dịp đặc biệt.</p>
+              </div>
+            </article>
+            <article className="service-intro__item" data-reveal>
+              <span>03</span>
+              <div>
+                <h3>Dịch vụ mai táng</h3>
+                <p>
+                  Hỗ trợ sắp xếp các hạng mục cần thiết với tiến độ rõ ràng.
+                </p>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
       {/* FEATURES */}
       <div className="wide-bg" id="features">
-        <section
-          className="home-section"
-          style={{ paddingTop: "60px", paddingBottom: "60px" }}
-        >
-          <p className="section-eyebrow" style={{ textAlign: "center" }}>
+        <section className="home-section home-section--features">
+          <p
+            className="home-section-eyebrow"
+            style={{ textAlign: "center" }}
+            data-reveal
+          >
             Chức năng hệ thống
           </p>
           <h2
-            className="section-title"
-            style={{
-              textAlign: "center",
-              maxWidth: "600px",
-              margin: "0 auto 12px",
-            }}
+            className="home-section-title home-section-title--centered"
+            data-reveal
           >
-            Đầy đủ chức năng, <em>một nền tảng</em>
+            <span>Đầy đủ chức năng,</span> <em>một nền tảng</em>
           </h2>
           <p
-            className="section-lead"
+            className="home-section-lead"
+            data-reveal
             style={{ textAlign: "center", margin: "0 auto" }}
           >
             Từ đặt lô đến quản lý hợp đồng — mọi nghiệp vụ đều trong tầm tay.
@@ -1785,6 +1834,7 @@ export default function HomePage() {
           <div className="features-grid">
             <div
               className="feature-card"
+              data-reveal
               role="button"
               tabIndex={0}
               onClick={() => navigate(ROUTES.MAP)}
@@ -1802,6 +1852,7 @@ export default function HomePage() {
             </div>
             <div
               className="feature-card"
+              data-reveal
               role="button"
               tabIndex={0}
               onClick={() => navigate(ROUTES.MAP)}
@@ -1819,6 +1870,7 @@ export default function HomePage() {
             </div>
             <div
               className="feature-card"
+              data-reveal
               role="button"
               tabIndex={0}
               onClick={() => navigate(ROUTES.SERVICES)}
@@ -1837,12 +1889,21 @@ export default function HomePage() {
             </div>
             <div
               className="feature-card"
+              data-reveal
               role="button"
               tabIndex={0}
-              onClick={() => navigate(role === "admin" ? ROUTES.ADMIN_REMINDERS : ROUTES.REMINDERS)}
+              onClick={() =>
+                navigate(
+                  role === "admin" ? ROUTES.ADMIN_REMINDERS : ROUTES.REMINDERS,
+                )
+              }
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ")
-                  navigate(role === "admin" ? ROUTES.ADMIN_REMINDERS : ROUTES.REMINDERS);
+                  navigate(
+                    role === "admin"
+                      ? ROUTES.ADMIN_REMINDERS
+                      : ROUTES.REMINDERS,
+                  );
               }}
               style={{ cursor: "pointer" }}
             >
@@ -1855,6 +1916,7 @@ export default function HomePage() {
             </div>
             <div
               className="feature-card"
+              data-reveal
               role="button"
               tabIndex={0}
               onClick={() => navigate(ROUTES.MY_LOTS)}
@@ -1871,7 +1933,7 @@ export default function HomePage() {
                 đất bạn đang sở hữu.
               </div>
             </div>
-            <div className="feature-card feature-card-action">
+            <div className="feature-card feature-card-action" data-reveal>
               <div className="feature-num">HẸN GẶP TRỰC TIẾP</div>
               <div className="feature-name">Đặt lịch hẹn</div>
               <div className="feature-desc">
@@ -1891,181 +1953,56 @@ export default function HomePage() {
       </div>
 
       {/* AI SECTION */}
-      <section id="ai" className="home-section">
+      <section id="ai" className="home-section home-section--ai">
         <div className="ai-section">
-          <div>
-            <p className="section-eyebrow">AI Cemetery Concierge</p>
-            <h2 className="section-title">
-              Trợ lý tư vấn <em>thông minh</em>
+          <div className="ai-section__copy">
+            <p className="home-section-eyebrow" data-reveal>
+              AI Cemetery Concierge
+            </p>
+            <h2
+              className="home-section-title home-section-title--paired"
+              data-reveal
+            >
+              <span>Trợ lý tư vấn</span>
+              <em>thông minh</em>
             </h2>
-            <p className="section-lead">
+            <p className="home-section-lead" data-reveal>
               AI Cemetery Concierge Agent lắng nghe nhu cầu của bạn — ngân sách,
               số lô, vị trí, thậm chí hướng mộ theo Bát tự — rồi gợi ý lô đất
               phù hợp nhất và highlight trực tiếp trên bản đồ.
             </p>
-            <ul
-              style={{
-                marginTop: "28px",
-                listStyle: "none",
-                display: "flex",
-                flexDirection: "column",
-                gap: "12px",
-              }}
-            >
-              <li
-                style={{
-                  display: "flex",
-                  gap: "12px",
-                  alignItems: "flex-start",
-                }}
-              >
-                <span
-                  style={{
-                    color: "var(--teal)",
-                    fontSize: "14px",
-                    marginTop: "2px",
-                  }}
-                >
-                  ◈
-                </span>
-                <span style={{ fontSize: "13px", color: "var(--muted)" }}>
-                  Hỏi đáp đa lượt về nhu cầu gia đình
-                </span>
+            <ul className="ai-points" data-reveal>
+              <li>
+                <span className="ai-points__marker">◈</span>
+                <span>Hỏi đáp đa lượt về nhu cầu gia đình</span>
               </li>
-              <li
-                style={{
-                  display: "flex",
-                  gap: "12px",
-                  alignItems: "flex-start",
-                }}
-              >
-                <span
-                  style={{
-                    color: "var(--teal)",
-                    fontSize: "14px",
-                    marginTop: "2px",
-                  }}
-                >
-                  ◈
-                </span>
-                <span style={{ fontSize: "13px", color: "var(--muted)" }}>
-                  So sánh và lọc lô đất phù hợp tự động
-                </span>
+              <li>
+                <span className="ai-points__marker">◈</span>
+                <span>So sánh và lọc lô đất phù hợp tự động</span>
               </li>
-              <li
-                style={{
-                  display: "flex",
-                  gap: "12px",
-                  alignItems: "flex-start",
-                }}
-              >
-                <span
-                  style={{
-                    color: "var(--teal)",
-                    fontSize: "14px",
-                    marginTop: "2px",
-                  }}
-                >
-                  ◈
-                </span>
-                <span style={{ fontSize: "13px", color: "var(--muted)" }}>
-                  Ước tính tổng chi phí và gợi ý dịch vụ kèm theo
-                </span>
+              <li>
+                <span className="ai-points__marker">◈</span>
+                <span>Ước tính tổng chi phí và gợi ý dịch vụ kèm theo</span>
               </li>
-              <li
-                style={{
-                  display: "flex",
-                  gap: "12px",
-                  alignItems: "flex-start",
-                }}
-              >
-                <span
-                  style={{
-                    color: "var(--gold)",
-                    fontSize: "14px",
-                    marginTop: "2px",
-                  }}
-                >
-                  ◈
-                </span>
-                <span style={{ fontSize: "13px", color: "var(--muted)" }}>
-                  Tư vấn hướng mộ theo Bát tự{" "}
-                  <em style={{ color: "var(--gold)", fontSize: "11px" }}>
-                    (tham khảo)
-                  </em>
+              <li>
+                <span className="ai-points__marker is-reference">◈</span>
+                <span>
+                  Tư vấn hướng mộ theo Bát tự <em>(tham khảo)</em>
                 </span>
               </li>
             </ul>
+            <button
+              className="home-section-cta"
+              type="button"
+              data-reveal
+              onClick={() => navigate(ROUTES.AI_AGENT)}
+            >
+              Mở trợ lý AI →
+            </button>
           </div>
 
-          <div
-            className="ai-chat"
-            role="button"
-            tabIndex={0}
-            aria-label="Mở trợ lý AI tư vấn"
-            onClick={() => navigate(ROUTES.AI_AGENT)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") navigate(ROUTES.AI_AGENT);
-            }}
-          >
-            <div className="chat-msg">
-              <div className="chat-avatar ai">AI</div>
-              <div className="chat-bubble ai">
-                Xin chào, tôi là trợ lý tư vấn của Vĩnh Phúc Viên. Xin cho biết
-                ngân sách dự kiến và số lô quý khách cần?
-              </div>
-            </div>
-            <div className="chat-msg">
-              <div className="chat-bubble user" style={{ marginLeft: "auto" }}>
-                Gia đình tôi cần 3 lô liền kề, ngân sách khoảng 300 triệu. Muốn
-                ở khu yên tĩnh, gần hồ.
-              </div>
-              <div className="chat-avatar user">KH</div>
-            </div>
-            <div className="chat-msg">
-              <div className="chat-avatar ai">AI</div>
-              <div className="chat-bubble ai">
-                Tôi tìm thấy{" "}
-                <strong style={{ color: "#C8F241" }}>4 cụm lô phù hợp</strong>{" "}
-                tại Khu B, hàng 3–5, gần hồ phản chiếu. Khu này yên tĩnh, có
-                bóng cây che. Quý khách có muốn tôi gợi ý thêm theo hướng mộ Bát
-                tự không?
-              </div>
-            </div>
-            <div className="chat-msg">
-              <div className="chat-bubble user" style={{ marginLeft: "auto" }}>
-                Vâng, ngày sinh của ông nội là 15/03/1940.
-              </div>
-              <div className="chat-avatar user">KH</div>
-            </div>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "10px",
-                marginLeft: "40px",
-              }}
-            >
-              <div className="chat-typing">
-                <div className="dot"></div>
-                <div className="dot"></div>
-                <div className="dot"></div>
-              </div>
-              <span
-                style={{
-                  fontSize: "11px",
-                  color: "var(--muted)",
-                  letterSpacing: "0.1em",
-                }}
-              >
-                AI đang phân tích Bát tự...
-              </span>
-            </div>
-
-            <div className="ai-chat-cta">
-              <span>Bấm để bắt đầu trò chuyện với Trợ lý AI</span>
-              <span>→</span>
-            </div>
+          <div className="agent-preview-card" data-reveal>
+            <HomeAgentPreview />
           </div>
         </div>
       </section>
@@ -2098,6 +2035,6 @@ export default function HomePage() {
         </div>
         <div className="footer-copy">Nhóm 8 · 2026 · Dự án môn học</div>
       </footer>
-    </>
+    </div>
   );
 }

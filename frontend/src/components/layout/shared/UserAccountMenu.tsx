@@ -15,7 +15,6 @@ export default function UserAccountMenu({
 }: UserAccountMenuProps) {
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
-  const role = useAuthStore((state) => state.role);
   const logout = useAuthStore((state) => state.logout);
 
   if (!user) return null;
@@ -28,13 +27,6 @@ export default function UserAccountMenu({
       onSelect: () => navigate(ROUTES.APPOINTMENTS),
     },
   ];
-
-  if (role === "admin") {
-    items.push({
-      label: "Trang quản trị",
-      onSelect: () => navigate(ROUTES.ADMIN_DASHBOARD),
-    });
-  }
 
   items.push({
     label: "Đăng xuất",

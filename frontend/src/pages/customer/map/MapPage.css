@@ -127,6 +127,24 @@
 .map-page .breadcrumb .current {
   color: var(--teal-soft);
 }
+.map-page .map-help-btn {
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid rgba(10, 255, 212, 0.3);
+  background: transparent;
+  color: var(--teal-glow);
+  cursor: pointer;
+  transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+.map-page .map-help-btn:hover {
+  background: rgba(10, 255, 212, 0.1);
+  color: var(--text-main, #d4e8e0);
+  border-color: var(--teal-glow);
+}
 
 /* ---------- 3-column layout ---------- */
 .map-page .app-body {

@@ -155,7 +155,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="register-page">
+    <div className="login-page">
       {/* LEFT PANEL */}
       <div className="left">
         <div className="left-bg">

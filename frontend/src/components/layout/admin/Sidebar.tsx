@@ -1,4 +1,4 @@
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import { ROUTES } from "../../../constants/routes";
 import { useAuthStore } from "@/store/authStore";
 
@@ -47,18 +47,10 @@ const MENU: MenuGroup[] = [
 ];
 
 export default function Sidebar() {
-  const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
 
   return (
     <aside className="admin-sidebar">
-      <div className="admin-sidebar__brand">
-        <button type="button" onClick={() => navigate(ROUTES.HOME)}>
-          Vĩnh Phúc Viên
-        </button>
-        <p>Quản trị nghĩa trang</p>
-      </div>
-
       <nav className="admin-sidebar__nav" aria-label="Điều hướng quản trị">
         {MENU.map((group) => (
           <section className="admin-nav-group" key={group.section}>

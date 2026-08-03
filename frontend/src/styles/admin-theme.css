@@ -40,16 +40,16 @@
 
 .admin-shell {
   display: flex;
+  flex-direction: column;
   height: 100vh;
   overflow: hidden;
   background: var(--admin-canvas);
 }
 
-.admin-shell__body {
+.admin-shell__lower {
   display: flex;
   flex: 1;
-  min-width: 0;
-  flex-direction: column;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -109,6 +109,23 @@
 
 .admin-account {
   position: relative;
+}
+
+.admin-header .brand-wordmark {
+  background: none;
+  -webkit-background-clip: unset;
+  background-clip: unset;
+  -webkit-text-fill-color: unset;
+  color: var(--admin-ink);
+  filter: none;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.admin-header .brand-wordmark:hover,
+.admin-header .brand-wordmark:focus-visible {
+  color: var(--admin-accent);
+  filter: none;
 }
 
 .admin-sidebar {
