@@ -31,7 +31,8 @@ const SLOT_SELECT = `
 
 const APPOINTMENT_SELECT = `
   a.appointment_id AS id, a.slot_id AS "slotId", a.host_user_id AS "hostUserId",
-  a.requester_id AS "requesterId", a.appointment_date AS "appointmentDate",
+  a.requester_id AS "requesterId",
+  TO_CHAR(a.appointment_date, 'YYYY-MM-DD') AS "appointmentDate",
   a.start_time AS "startTime", a.end_time AS "endTime", a.status, a.note,
   a.created_at AS "createdAt",
   host.full_name AS "hostName", requester.full_name AS "requesterName"

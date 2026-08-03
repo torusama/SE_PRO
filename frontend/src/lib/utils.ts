@@ -11,6 +11,17 @@ export function formatDate(dateStr: string): string {
   return d.toLocaleDateString('vi-VN')
 }
 
+/** Format ngày lịch từ API, hỗ trợ cả YYYY-MM-DD và chuỗi ISO cũ. */
+export function formatCalendarDate(dateStr: string): string {
+  const normalized = /^\d{4}-\d{2}-\d{2}$/.test(dateStr)
+    ? `${dateStr}T00:00:00+07:00`
+    : dateStr
+  const d = new Date(normalized)
+  return Number.isNaN(d.getTime())
+    ? 'Ngày không hợp lệ'
+    : d.toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
+}
+
 /** Ghép class names (thay thế clsx nhẹ) */
 export function cn(...classes: (string | undefined | false | null)[]): string {
   return classes.filter(Boolean).join(' ')
