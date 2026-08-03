@@ -3,92 +3,77 @@
 Đây là thư mục migration duy nhất của backend. Không tạo migration dưới
 `backend/src`.
 
-Ngày 26/07/2026, các migration lịch sử `002`–`014` đã được squash thành baseline
-hậu-schema:
+## Migration runner
 
-```text
-001_consolidated_schema.sql
+Backend tự chạy migration trước khi các service bắt đầu truy vấn database.
+Runner:
+
+- đọc các file `NNN_descriptive_name.sql` theo thứ tự tên file;
+- khóa PostgreSQL advisory để nhiều instance không chạy migration đồng thời;
+- chạy từng file và ghi ledger `schema_migrations` trong cùng transaction;
+- lưu SHA-256 checksum và dừng startup nếu một file đã áp dụng bị sửa;
+- dừng startup ngay khi migration thất bại.
+
+Tên file đầy đủ là định danh migration. Repository còn một số prefix lịch sử
+trùng nhau, vì vậy không được chỉ dùng phần số để xác định migration. Migration
+mới tiếp theo dùng prefix `018`; không tạo thêm prefix trùng.
+
+Runner quản lý transaction và tự bỏ lớp `BEGIN`/`COMMIT` bao ngoài của các file
+legacy trong lúc thực thi, nhưng vẫn checksum nguyên văn file để tương thích
+ledger. Migration mới không cần tự bao transaction và phải additive/idempotent
+khi có thể. Không sửa hoặc đổi tên file đã có trong `schema_migrations`; hãy
+tạo migration mới.
+
+Các biến môi trường:
+
+```env
+DB_MIGRATIONS_ENABLED=true
+# Chỉ cần khi SQL không nằm ở backend/database/migrations:
+# DB_MIGRATIONS_DIR=/absolute/path/to/migrations
 ```
 
-Khi tạo database local mới, chạy từ thư mục `backend`:
+Có thể chạy runner độc lập từ thư mục `backend`:
+
+```powershell
+npm run migration:run
+```
+
+Production đã build có thể dùng `npm run migration:run:prod`.
+
+## Database mới
+
+`database/DBase.sql` là schema nền và seed, không phải migration idempotent nên
+phải được nạp đúng một lần khi tạo database rỗng:
 
 ```powershell
 $env:PGCLIENTENCODING="UTF8"
 psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f database/DBase.sql
-psql $env:DATABASE_URL -v ON_ERROR_STOP=1 `
-  -f database/migrations/001_consolidated_schema.sql
+npm run migration:run
 ```
 
-`DBase.sql` tạo schema nền và seed. Migration `001` bổ sung hồ sơ/bảo mật,
-phiên đăng nhập, lịch hẹn, hợp đồng mở rộng, workflow chuyển quyền legacy,
-chuyển nhượng admin và seed khu E–H.
+Sau bước nền, `npm run start:dev` và `npm run start:prod` đều tự áp dụng các
+migration còn thiếu. Nếu bảng nền `users` chưa tồn tại, runner dừng và hướng
+dẫn nạp `DBase.sql` thay vì cố chạy trên database chưa hoàn chỉnh.
 
-Migration mới phải additive/idempotent khi có thể và được liệt kê tại file này.
-Dự án hiện chưa có migration runner hoặc ledger; sự tồn tại của file không
-chứng minh database local đã chạy file đó.
+## Database cũ chưa có ledger
 
-## Migration sau baseline
+Lần chạy đầu tiên sẽ chạy lại các migration hiện có theo thứ tự rồi ghi ledger.
+Các file hiện tại được thiết kế additive/idempotent cho quá trình chuyển tiếp
+này. File tồn tại trong repository không còn là bằng chứng migration đã chạy;
+`schema_migrations` mới là source of truth.
 
-Chạy theo đúng thứ tự tên file:
+Thứ tự hiện tại:
 
-1. `002_add_service_order_history.sql`: bảo đảm bảng lịch sử đơn dịch vụ tồn tại.
-2. `012_reminder_notify_emails.sql`: thêm cấu hình email cho nhắc lịch.
-3. `013_admin_audit_entity_key.sql`: thêm `audit_logs.entity_key` để định danh
-   entity UUID. Migration chỉ bổ sung cột và index, không xóa dữ liệu cũ.
-4. `014_registration_email_verifications.sql`: thêm trạng thái OTP tạm thời để
-   xác thực email trước khi tạo tài khoản khách hàng.
-5. `015_ai_agent_learning.sql`: tạo conversations, messages, tool calls,
-   feedback, Knowledge Base, knowledge versions và metadata PlotRanker.
-6. `016_ai_autonomous_learning.sql`: mở rộng Knowledge Base cho bộ nhớ cô lập
-   theo user, validation/effective dates/version audit; tạo recommendation runs
-   và learning signals tách khỏi factual knowledge.
+1. `001_consolidated_schema.sql`
+2. `002_add_service_order_history.sql`
+3. `002_offline_signing_contract_activation.sql`
+4. `012_reminder_notify_emails.sql`
+5. `013_add_service_order_rework.sql`
+6. `013_admin_audit_entity_key.sql`
+7. `013_fix_cemetery_zone_encoding.sql`
+8. `014_registration_email_verifications.sql`
+9. `015_ai_agent_learning.sql`
+10. `016_ai_autonomous_learning.sql`
+11. `017_password_reset_tokens.sql`
 
-## Khởi tạo đầy đủ AI Agent
-
-Thứ tự phụ thuộc của các bảng là:
-
-1. `audit_logs` và `users` từ `DBase.sql`/baseline; migration `013` bổ sung
-   `audit_logs.entity_key`.
-2. `ai_conversations`.
-3. `ai_messages` và `ai_tool_calls`.
-4. `ai_feedback`.
-5. `ai_knowledge_entries`.
-6. `ai_knowledge_versions`.
-7. `ai_training_runs`, `ai_model_versions` và `ai_training_samples` (chỉ cho
-   PlotRanker tùy chọn).
-8. `ai_recommendation_runs`.
-9. `ai_learning_signals`.
-
-Các bước trên được đóng gói theo đúng dependency trong `015` rồi `016`. Với
-database mới, chạy:
-
-```powershell
-$env:PGCLIENTENCODING="UTF8"
-psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f database/DBase.sql
-psql $env:DATABASE_URL -v ON_ERROR_STOP=1 `
-  -f database/migrations/001_consolidated_schema.sql
-psql $env:DATABASE_URL -v ON_ERROR_STOP=1 `
-  -f database/migrations/013_admin_audit_entity_key.sql
-psql $env:DATABASE_URL -v ON_ERROR_STOP=1 `
-  -f database/migrations/015_ai_agent_learning.sql
-psql $env:DATABASE_URL -v ON_ERROR_STOP=1 `
-  -f database/migrations/016_ai_autonomous_learning.sql
-```
-
-`015` và `016` là hai prefix AI Agent duy nhất và phải chạy theo thứ tự đó.
-Không chạy file autonomous-learning lịch sử mang prefix cũ sau `016`.
-
-Áp dụng migration `013` từ thư mục `backend`:
-
-```powershell
-$env:PGCLIENTENCODING="UTF8"
-psql $env:DATABASE_URL -v ON_ERROR_STOP=1 `
-  -f database/migrations/013_admin_audit_entity_key.sql
-```
-
-Rollback thủ công, chỉ khi chưa có consumer sử dụng cột:
-
-```sql
-DROP INDEX IF EXISTS idx_audit_logs_entity_key;
-ALTER TABLE audit_logs DROP COLUMN IF EXISTS entity_key;
-```
+`015` phải chạy trước `016`; thứ tự tên file của runner bảo đảm dependency này.

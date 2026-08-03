@@ -2,10 +2,10 @@
 
 NestJS + TypeScript backend for the cemetery management system. The API uses PostgreSQL through raw `pg.Pool` queries and keeps the existing schema in `database/DBase.sql`.
 
-The base schema and seed live in `database/DBase.sql`. Historical migrations
-were squashed into `database/migrations/001_consolidated_schema.sql`; see the
-migration README for fresh-database execution notes. Do not add migrations
-under `src`.
+The base schema and seed live in `database/DBase.sql`. Versioned migrations
+live in `database/migrations` and run automatically during application startup.
+The runner uses the `schema_migrations` ledger; see the migration README for
+fresh and existing database notes. Do not add migrations under `src`.
 
 ## Requirements
 
@@ -28,7 +28,7 @@ Create and load the database:
 ```bash
 createdb cemetery_db
 psql -d cemetery_db -f database/DBase.sql
-psql -d cemetery_db -v ON_ERROR_STOP=1 -f database/migrations/001_consolidated_schema.sql
+npm run migration:run
 ```
 
 Run the API:
@@ -49,6 +49,7 @@ http://localhost:3001/api
 NODE_ENV=development
 PORT=3001
 DATABASE_URL=postgresql://postgres:password@localhost:5432/cemetery_db
+DB_MIGRATIONS_ENABLED=true
 JWT_SECRET=change_this_secret
 JWT_EXPIRES_IN=1d
 FRONTEND_URL=http://localhost:3000
@@ -82,6 +83,8 @@ Start Command: npm run start:prod
 ```
 
 Set production env vars in Render, especially `DATABASE_URL`, `JWT_SECRET`, `FRONTEND_URL`, and `PORT`.
+Keep the `database/migrations` directory in the deployment artifact because the
+production startup runs pending migrations from it.
 
 ## API Documentation
 
