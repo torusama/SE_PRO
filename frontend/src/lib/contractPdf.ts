@@ -1,17 +1,61 @@
 interface ContractPdfData {
   contractCode: string
   contractContent?: string | null
-  inheritanceContent?: string | null
-  partyASignatureName?: string | null
-  partyASignedAt?: string | null
-  partyBSignatureName?: string | null
-  partyBSignedAt?: string | null
 }
 
-function signatureLine(name?: string | null, signedAt?: string | null) {
-  if (!name) return 'Chưa ký'
-  const date = signedAt ? new Date(signedAt).toLocaleString('vi-VN') : ''
-  return `${name}${date ? ` — ${date}` : ''}`
+const GENERAL_TERMS = 'Hai bên đã đọc, hiểu, tự nguyện ký và chịu trách nhiệm về thông tin cung cấp. Hợp đồng được lập thành các bản có giá trị như nhau.'
+const SIGNATURE_BLOCK = `ĐẠI DIỆN BÊN A                              BÊN B
+(Ký, ghi rõ họ tên, chức vụ, đóng dấu)       (Ký, ghi rõ họ tên)`
+
+interface ContractDocumentPlot {
+  code: string
+  zoneName?: string | null
+  areaSqm?: number | null
+  agreedPrice: number
+}
+
+function upgradePurchaseBase(baseContent: string, plots: ContractDocumentPlot[]) {
+  if (!plots.length) return baseContent
+  const article1 = /ĐIỀU\s+1\s*\./iu.exec(baseContent)
+  const article3 = /ĐIỀU\s+3\s*\./iu.exec(baseContent)
+  if (!article1 || !article3 || article3.index <= article1.index) return baseContent
+  const details = plots.map((plot, index) =>
+    `${index + 1}. Lô ${plot.code}${plot.zoneName ? `, ${plot.zoneName}` : ''}, diện tích ${plot.areaSqm ?? '...'} m².`,
+  ).join('\n')
+  const prices = plots.map((plot, index) =>
+    `${index + 1}. Lô ${plot.code}: ${Number(plot.agreedPrice).toLocaleString('vi-VN')} đồng.`,
+  ).join('\n')
+  const total = plots.reduce((sum, plot) => sum + Number(plot.agreedPrice), 0).toLocaleString('vi-VN')
+  const articles = `ĐIỀU 1. ĐỐI TƯỢNG HỢP ĐỒNG
+Bên A cung cấp cho Bên B quyền sử dụng các vị trí phần mộ sau theo dữ liệu hệ thống:
+${details}
+Các vị trí trên được sử dụng theo quy hoạch và quy chế quản lý nghĩa trang. Hợp đồng này không mặc nhiên là hợp đồng chuyển nhượng quyền sử dụng đất.
+
+ĐIỀU 2. GIÁ TRỊ VÀ THANH TOÁN
+${prices}
+Tổng giá trị hợp đồng: ${total} đồng. Thời hạn, phương thức và chứng từ thanh toán thực hiện theo thỏa thuận/phiếu thu hợp lệ của hai bên.`
+  return [baseContent.slice(0, article1.index).trim(), articles, baseContent.slice(article3.index).trim()]
+    .filter(Boolean)
+    .join('\n\n')
+}
+
+export function composeContractDocument(
+  baseContent: string,
+  inheritanceContent: string,
+  plots: ContractDocumentPlot[] = [],
+) {
+  const inheritance = inheritanceContent.trim()
+  const legacyFreeBase = baseContent.trim().replace(/(?:\r?\n)+\s*ĐIỀU\s+6\s*\.[\s\S]*$/iu, '').trim()
+  const stableBase = upgradePurchaseBase(legacyFreeBase, plots)
+  const sections = [stableBase]
+  if (inheritance) {
+    sections.push(`ĐIỀU 6. THÔNG TIN/NGUYỆN VỌNG VỀ THỪA KẾ\n${inheritance}`)
+  }
+  sections.push(
+    `ĐIỀU ${inheritance ? 7 : 6}. ĐIỀU KHOẢN CHUNG\n${GENERAL_TERMS}`,
+    SIGNATURE_BLOCK,
+  )
+  return sections.join('\n\n')
 }
 
 export async function downloadContractPdf(contract: ContractPdfData) {
@@ -31,27 +75,6 @@ export async function downloadContractPdf(contract: ContractPdfData) {
   content.style.whiteSpace = 'pre-wrap'
   content.textContent = contract.contractContent || 'Hợp đồng chưa có nội dung điện tử.'
   documentRoot.appendChild(content)
-
-  const appendix = document.createElement('section')
-  appendix.style.cssText = 'margin-top:28px;padding-top:18px;border-top:1px solid #000;page-break-inside:avoid'
-  const appendixTitle = document.createElement('h3')
-  appendixTitle.textContent = 'THÔNG TIN/NGUYỆN VỌNG THỪA KẾ'
-  appendixTitle.style.cssText = 'font-size:15px;margin:0 0 8px;text-align:center'
-  const appendixContent = document.createElement('div')
-  appendixContent.style.whiteSpace = 'pre-wrap'
-  appendixContent.textContent = contract.inheritanceContent || '[Chưa có nội dung]'
-  appendix.append(appendixTitle, appendixContent)
-  documentRoot.appendChild(appendix)
-
-  const signatures = document.createElement('section')
-  signatures.style.cssText = 'margin-top:28px;padding-top:18px;border-top:1px solid #000;page-break-inside:avoid'
-  signatures.innerHTML = '<h3 style="font-size:15px;margin:0 0 12px;text-align:center">XÁC NHẬN CHỮ KÝ ĐIỆN TỬ</h3>'
-  const partyA = document.createElement('p')
-  partyA.textContent = `Bên A: ${signatureLine(contract.partyASignatureName, contract.partyASignedAt)}`
-  const partyB = document.createElement('p')
-  partyB.textContent = `Bên B: ${signatureLine(contract.partyBSignatureName, contract.partyBSignedAt)}`
-  signatures.append(partyA, partyB)
-  documentRoot.appendChild(signatures)
 
   await html2pdf()
     .set({

@@ -369,10 +369,11 @@ describe('ReservationsService', () => {
         ) {
           return result([
             { id: 1, code: 'A-01-001', status: 'pending', price: 100 },
+            { id: 2, code: 'A-01-002', status: 'pending', price: 150 },
           ]);
         }
         if (sql.includes('UPDATE plots')) {
-          return result([], 1);
+          return result([], 2);
         }
         return result();
       });
@@ -385,7 +386,7 @@ describe('ReservationsService', () => {
       });
       expect(client.query).toHaveBeenCalledWith(
         expect.stringContaining('UPDATE plots'),
-        [[1], 'reserved'],
+        [[1, 2], 'reserved'],
       );
       expect(client.query).toHaveBeenCalledWith(
         expect.stringContaining('INSERT INTO notifications'),
@@ -414,10 +415,11 @@ describe('ReservationsService', () => {
         ) {
           return result([
             { id: 1, code: 'A-01-001', status: 'pending', price: 100 },
+            { id: 2, code: 'A-01-002', status: 'pending', price: 150 },
           ]);
         }
         if (sql.includes('UPDATE plots')) {
-          return result([], 1);
+          return result([], 2);
         }
         if (sql.includes('SELECT full_name')) {
           return result([
@@ -430,28 +432,42 @@ describe('ReservationsService', () => {
           ]);
         }
         if (sql.includes('INSERT INTO contracts')) {
-          return result([{ id: 99, contractCode: 'HD-2026-10-1' }]);
+          return result([{ id: 99, contractCode: 'HD-2026-10' }]);
         }
         return result();
       });
 
       await expect(service.approve(1, 10)).resolves.toMatchObject({
         plotStatus: 'reserved',
-        contracts: [{ id: 99, contractCode: 'HD-2026-10-1' }],
+        contracts: [{ id: 99, contractCode: 'HD-2026-10' }],
       });
       expect(client.query).toHaveBeenCalledWith(
         expect.stringContaining('UPDATE plots'),
-        [[1], 'reserved'],
+        [[1, 2], 'reserved'],
       );
       expect(client.query).toHaveBeenCalledWith(
         expect.stringContaining('INSERT INTO contracts'),
         expect.arrayContaining([
-          expect.stringMatching(/^HD-\d{4}-10-1$/),
+          expect.stringMatching(/^HD-\d{4}-10$/),
           10,
           7,
           1,
+          250,
         ]),
       );
+      expect(client.query).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO contract_plots'),
+        [99, 1, 100],
+      );
+      expect(client.query).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO contract_plots'),
+        [99, 2, 150],
+      );
+      const contractInsert = client.query.mock.calls.find(([sql]) =>
+        String(sql).includes('INSERT INTO contracts'),
+      );
+      expect(String(contractInsert?.[1]?.[8])).toContain('Lô A-01-001: 100 đồng');
+      expect(String(contractInsert?.[1]?.[8])).toContain('Lô A-01-002: 150 đồng');
       expect(client.query).toHaveBeenCalledWith(
         expect.stringContaining("'draft'"),
         expect.any(Array),

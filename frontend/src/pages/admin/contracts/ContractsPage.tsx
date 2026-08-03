@@ -1,12 +1,30 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { api } from '@/lib/api'
-import { downloadContractPdf } from '@/lib/contractPdf'
+import { composeContractDocument, downloadContractPdf } from '@/lib/contractPdf'
 import '../AdminCorePages.css'
+
+interface ContractPlot {
+  id: number
+  code: string
+  zoneName?: string | null
+  areaSqm?: number | null
+  agreedPrice: number
+}
+
+interface SignedEvidence {
+  id: number
+  filename: string
+  originalName: string
+  mimeType: string
+  size: number
+  createdAt: string
+}
 
 interface Contract {
   id: number
   contractCode: string
-  status: 'active' | 'expired' | 'transferred' | 'cancelled'
+  status: 'draft' | 'active' | 'expired' | 'transferred' | 'cancelled'
   totalAmount: number
   paidAmount: number
   paymentStatus: string
@@ -15,15 +33,15 @@ interface Contract {
   customerIdCard?: string
   customerAddress?: string
   plotCode: string
+  plotCodes?: string[]
+  plots?: ContractPlot[]
   zoneName: string
   contractContent?: string
+  contractBaseContent?: string
   inheritanceContent?: string
   inheritanceUpdatedAt?: string
-  pdfUrl?: string
-  partyASignatureName?: string
-  partyASignedAt?: string
-  partyBSignatureName?: string
-  partyBSignedAt?: string
+  canEditInheritance?: boolean
+  signedEvidence?: SignedEvidence[]
 }
 
 const panel: React.CSSProperties = {
@@ -32,71 +50,142 @@ const panel: React.CSSProperties = {
   borderRadius: 12,
 }
 
+const statusLabel: Record<Contract['status'], string> = {
+  draft: 'Chờ ký offline',
+  active: 'Đã kích hoạt sở hữu',
+  expired: 'Hết hạn',
+  transferred: 'Đã chuyển nhượng',
+  cancelled: 'Đã hủy',
+}
+
+const money = new Intl.NumberFormat('vi-VN', {
+  style: 'currency',
+  currency: 'VND',
+  maximumFractionDigits: 0,
+})
+
+function errorMessage(error: unknown, fallback: string) {
+  if (typeof error === 'object' && error && 'response' in error) {
+    const message = (error as { response?: { data?: { message?: string } } }).response?.data?.message
+    if (message) return message
+  }
+  return fallback
+}
+
 export default function ContractsPage() {
+  const [searchParams] = useSearchParams()
+  const requestedContractId = Number(searchParams.get('contractId')) || undefined
   const [contracts, setContracts] = useState<Contract[]>([])
   const [selectedId, setSelectedId] = useState<number>()
   const [search, setSearch] = useState('')
   const [inheritance, setInheritance] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [inheritanceState, setInheritanceState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [message, setMessage] = useState('')
-  const [signatureName, setSignatureName] = useState('')
-  const [accepted, setAccepted] = useState(false)
+  const inheritanceTimer = useRef<number | null>(null)
 
-  const load = async () => {
+  const load = useCallback(async (preferredId?: number) => {
     setLoading(true)
     try {
       const response = await api.get('/admin/contracts', { params: { page: 1, pageSize: 100 } })
       const rows: Contract[] = response.data.data?.items ?? []
       setContracts(rows)
-      setSelectedId((current) => current ?? rows[0]?.id)
+      setSelectedId((current) => {
+        const target = preferredId ?? current
+        return rows.some((row) => row.id === target) ? target : rows[0]?.id
+      })
+    } catch (error) {
+      setMessage(errorMessage(error, 'Không thể tải danh sách hợp đồng.'))
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
-  useEffect(() => { void load() }, [])
+  useEffect(() => {
+    // Loading the server snapshot is the intended mount/query synchronization.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void load(requestedContractId)
+  }, [load, requestedContractId])
 
   const filtered = useMemo(() => {
     const keyword = search.trim().toLocaleLowerCase('vi')
     if (!keyword) return contracts
     return contracts.filter((item) =>
-      [item.contractCode, item.customerName, item.plotCode]
+      [item.contractCode, item.customerName, ...(item.plotCodes ?? [item.plotCode])]
         .some((value) => value?.toLocaleLowerCase('vi').includes(keyword)),
     )
   }, [contracts, search])
 
   const selected = contracts.find((item) => item.id === selectedId)
+  const canEditInheritance = Boolean(
+    selected && (selected.canEditInheritance ?? selected.status === 'draft'),
+  )
 
   useEffect(() => {
+    // Reset the editable draft when the administrator selects another contract.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setInheritance(selected?.inheritanceContent ?? '')
+    setInheritanceState('idle')
     setMessage('')
-  }, [selected])
+  }, [selectedId, selected?.inheritanceContent])
 
-  const saveInheritance = async () => {
-    if (!selected) return
-    setSaving(true)
-    setMessage('')
-    try {
-      await api.patch(`/admin/contracts/${selected.id}/inheritance`, { content: inheritance })
-      setContracts((items) => items.map((item) =>
-        item.id === selected.id ? { ...item, inheritanceContent: inheritance } : item,
-      ))
-      setMessage('Đã lưu nội dung thừa kế.')
-    } catch {
-      setMessage('Không thể lưu. Vui lòng kiểm tra lại.')
-    } finally {
-      setSaving(false)
+  useEffect(() => {
+    if (!selected || !canEditInheritance) return
+    if (inheritance === (selected.inheritanceContent ?? '')) return
+    inheritanceTimer.current = window.setTimeout(async () => {
+      setInheritanceState('saving')
+      try {
+        const response = await api.patch(`/admin/contracts/${selected.id}/inheritance`, {
+          content: inheritance,
+        })
+        const updated = response.data.data
+        setContracts((items) => items.map((item) =>
+          item.id === selected.id ? { ...item, ...updated } : item,
+        ))
+        setInheritanceState('saved')
+      } catch {
+        setInheritanceState('error')
+      }
+    }, 600)
+    return () => {
+      if (inheritanceTimer.current !== null) {
+        window.clearTimeout(inheritanceTimer.current)
+        inheritanceTimer.current = null
+      }
     }
+  }, [canEditInheritance, inheritance, selected])
+
+  const previewContent = selected
+    ? composeContractDocument(
+        selected.contractBaseContent || selected.contractContent || '',
+        inheritance,
+        selected.plots ?? [],
+      )
+    : ''
+
+  const savePendingInheritance = async () => {
+    if (!selected || !canEditInheritance) return
+    if (inheritance === (selected.inheritanceContent ?? '')) return
+    if (inheritanceTimer.current !== null) {
+      window.clearTimeout(inheritanceTimer.current)
+      inheritanceTimer.current = null
+    }
+    const response = await api.patch(`/admin/contracts/${selected.id}/inheritance`, {
+      content: inheritance,
+    })
+    const updated = response.data.data
+    setContracts((items) => items.map((item) =>
+      item.id === selected.id ? { ...item, ...updated } : item,
+    ))
   }
 
   const printContract = () => {
     if (!selected) return
-    const printable = `${selected.contractContent ?? ''}\n\nPHỤ LỤC/THÔNG TIN THỪA KẾ DO ADMIN XÁC NHẬN\n${selected.inheritanceContent || '[Chưa có nội dung]'}`
     const popup = window.open('', '_blank', 'width=900,height=700')
     if (!popup) return
     popup.document.write(`<html><head><title>${selected.contractCode}</title><style>body{font-family:"Times New Roman",serif;max-width:800px;margin:40px auto;line-height:1.6;white-space:pre-wrap} @media print{body{margin:20mm}}</style></head><body></body></html>`)
-    popup.document.body.textContent = printable
+    popup.document.body.textContent = previewContent
     popup.document.close()
     popup.print()
   }
@@ -106,66 +195,77 @@ export default function ContractsPage() {
     setSaving(true)
     setMessage('')
     try {
-      await downloadContractPdf(selected)
-      setMessage('Đã tải PDF hợp đồng về máy.')
-    } catch {
-      setMessage('Không thể tạo file PDF.')
-    } finally { setSaving(false) }
+      await savePendingInheritance()
+      await downloadContractPdf({ ...selected, contractContent: previewContent })
+      setMessage('Đã tải PDF hợp đồng về máy để ký offline.')
+    } catch (error) {
+      setMessage(errorMessage(error, 'Không thể tạo file PDF.'))
+    } finally {
+      setSaving(false)
+    }
   }
 
-  const signAdmin = async () => {
-    if (!selected || !accepted || signatureName.trim().length < 2) return
-    setSaving(true)
-    try {
-      await api.post(`/admin/contracts/${selected.id}/sign`, { signatureName, accepted })
-      await load()
-      setMessage('Đã ký điện tử với tư cách Bên A.')
-    } catch {
-      setMessage('Không thể ký hợp đồng.')
-    } finally { setSaving(false) }
-  }
-
-  const uploadPdf = async (file: File) => {
-    if (!selected) return
+  const uploadSignedEvidence = async (files: File[]) => {
+    if (!selected || files.length === 0) return
     const form = new FormData()
-    form.append('pdf', file)
+    files.forEach((file) => form.append('evidence', file))
     setSaving(true)
     try {
-      await api.post(`/admin/contracts/${selected.id}/pdf`, form, { headers: { 'Content-Type': 'multipart/form-data' } })
-      await load()
-      setMessage('Đã lưu PDF hợp đồng.')
-    } catch {
-      setMessage('Không thể lưu PDF.')
-    } finally { setSaving(false) }
+      await api.post(`/admin/contracts/${selected.id}/signed-evidence`, form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      await load(selected.id)
+      setMessage(`Đã lưu ${files.length} ảnh minh chứng hợp đồng ký offline.`)
+    } catch (error) {
+      setMessage(errorMessage(error, 'Không thể lưu ảnh minh chứng.'))
+    } finally {
+      setSaving(false)
+    }
   }
 
-  const openPdf = async () => {
-    if (!selected) return
+  const openPrivateFile = async (url: string) => {
     try {
-      const response = await api.get(`/admin/contracts/${selected.id}/pdf`, { responseType: 'blob' })
-      const url = URL.createObjectURL(response.data)
-      window.open(url, '_blank')
-      window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
-    } catch { setMessage('Không thể mở PDF.') }
+      const response = await api.get(url, { responseType: 'blob' })
+      const objectUrl = URL.createObjectURL(response.data)
+      window.open(objectUrl, '_blank')
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000)
+    } catch (error) {
+      setMessage(errorMessage(error, 'Không thể mở tệp.'))
+    }
+  }
+
+  const activateOwnership = async () => {
+    if (!selected) return
+    const ok = window.confirm(
+      `Xác nhận hợp đồng ${selected.contractCode} đã được ký hợp lệ và chuyển ${selected.plots?.length ?? 1} lô sang quyền sở hữu của ${selected.customerName}?`,
+    )
+    if (!ok) return
+    setSaving(true)
+    setMessage('')
+    try {
+      await savePendingInheritance()
+      const response = await api.post(`/admin/contracts/${selected.id}/activate-ownership`)
+      await load(selected.id)
+      setMessage(`Đã kích hoạt quyền sở hữu cho ${response.data.data.ownershipCreated} lô.`)
+    } catch (error) {
+      setMessage(errorMessage(error, 'Không thể kích hoạt quyền sở hữu.'))
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
     <div className="admin-page admin-core-page admin-contracts-page" style={{ display: 'grid', gap: 18 }}>
       <header className="admin-page-header">
-        <h1 style={{ margin: 0, color: 'var(--color-text-primary)' }}>Hợp đồng tự động</h1>
+        <h1 style={{ margin: 0, color: 'var(--color-text-primary)' }}>Hợp đồng và sở hữu</h1>
         <p style={{ color: 'var(--color-text-secondary)', margin: '5px 0 0' }}>
-          Hợp đồng được sinh khi admin duyệt yêu cầu mua lô phần mộ.
+          Duyệt yêu cầu mua tạo hợp đồng nháp; chỉ kích hoạt sở hữu sau khi có minh chứng ký offline.
         </p>
       </header>
 
-      <input
-        value={search}
-        onChange={(event) => setSearch(event.target.value)}
-        placeholder="Tìm mã hợp đồng, khách hàng hoặc mã lô..."
-        style={{ ...panel, padding: '10px 12px', color: 'var(--color-text-primary)', maxWidth: 420 }}
-      />
+      <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm mã hợp đồng, khách hàng hoặc mã lô..." style={{ ...panel, padding: '10px 12px', color: 'var(--color-text-primary)', maxWidth: 420 }} />
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(340px, .8fr) minmax(480px, 1.2fr)', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(340px, .8fr) minmax(520px, 1.2fr)', gap: 16 }}>
         <section style={{ ...panel, overflow: 'hidden' }}>
           <div style={{ padding: 16, borderBottom: '1px solid var(--color-border)', fontWeight: 600 }}>Danh sách ({filtered.length})</div>
           {loading && <div style={{ padding: 20 }}>Đang tải...</div>}
@@ -173,8 +273,8 @@ export default function ContractsPage() {
           {filtered.map((item) => (
             <button key={item.id} onClick={() => setSelectedId(item.id)} style={{ width: '100%', textAlign: 'left', padding: 14, border: 0, borderBottom: '1px solid var(--color-border)', cursor: 'pointer', background: item.id === selectedId ? 'rgba(0,200,160,.1)' : 'transparent', color: 'var(--color-text-primary)' }}>
               <strong style={{ color: 'var(--color-accent-teal)' }}>{item.contractCode}</strong>
-              <div style={{ marginTop: 5 }}>{item.customerName} · {item.plotCode}</div>
-              <small style={{ color: 'var(--color-text-secondary)' }}>{item.totalAmount.toLocaleString('vi-VN')} đ · {item.status}</small>
+              <div style={{ marginTop: 5 }}>{item.customerName} · {(item.plotCodes ?? [item.plotCode]).join(', ')}</div>
+              <small style={{ color: 'var(--color-text-secondary)' }}>{money.format(item.totalAmount)} · {statusLabel[item.status]}</small>
             </button>
           ))}
         </section>
@@ -182,44 +282,65 @@ export default function ContractsPage() {
         <section style={{ ...panel, padding: 20, color: '#000000' }}>
           {!selected && <div>Chọn một hợp đồng để xem.</div>}
           {selected && <>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-              <div><small>Mã hợp đồng</small><h2 style={{ margin: '3px 0', color: 'var(--color-accent-teal)' }}>{selected.contractCode}</h2></div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={printContract} style={{ height: 38, padding: '0 16px', cursor: 'pointer' }}>In hợp đồng</button>
-                <button disabled={saving} onClick={saveContractToDevice} style={{ height: 38, padding: '0 16px', cursor: 'pointer' }}>Tải PDF về máy</button>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+              <div><small>Mã hợp đồng</small><h2 style={{ margin: '3px 0', color: 'var(--color-accent-teal)' }}>{selected.contractCode}</h2><b>{statusLabel[selected.status]}</b></div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button onClick={printContract}>In hợp đồng</button>
+                <button disabled={saving} onClick={saveContractToDevice}>Tải PDF để ký</button>
               </div>
             </div>
             <p><b>Bên B:</b> {selected.customerName} — CCCD: {selected.customerIdCard || 'chưa cập nhật'}</p>
-            <p><b>Vị trí:</b> {selected.plotCode}, {selected.zoneName}</p>
-            <details open style={{ marginTop: 18 }}>
-              <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Nội dung hợp đồng đã sinh</summary>
-              <pre style={{ whiteSpace: 'pre-wrap', fontFamily: '"Times New Roman", serif', fontSize: 15, lineHeight: 1.65, padding: 18, background: '#ffffff', color: '#000000', border: '1px solid #d1d5db', borderRadius: 8, maxHeight: 430, overflow: 'auto' }}>{selected.contractContent || 'Hợp đồng cũ chưa có nội dung snapshot.'}</pre>
-            </details>
+
+            <div style={{ marginTop: 16 }}>
+              <b>Đối tượng hợp đồng và giá trị từng lô</b>
+              <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
+                {(selected.plots ?? []).map((plot) => (
+                  <div key={plot.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, padding: 10, border: '1px solid #d1d5db', borderRadius: 7 }}>
+                    <span><strong>{plot.code}</strong>{plot.zoneName ? ` · ${plot.zoneName}` : ''}{plot.areaSqm ? ` · ${plot.areaSqm} m²` : ''}</span>
+                    <b>{money.format(plot.agreedPrice)}</b>
+                  </div>
+                ))}
+                <div style={{ textAlign: 'right', fontSize: 16 }}><b>Tổng cộng: {money.format(selected.totalAmount)}</b></div>
+              </div>
+            </div>
+
             <div style={{ marginTop: 18 }}>
-              <label htmlFor="inheritance"><b>Thông tin/nguyện vọng thừa kế (chỉ admin)</b></label>
-              <p style={{ fontSize: 12, color: '#000000' }}>Để trống nếu người mua chưa cung cấp. Nội dung này không thay thế di chúc hoặc thủ tục thừa kế theo pháp luật.</p>
-              <textarea id="inheritance" value={inheritance} maxLength={10000} onChange={(event) => setInheritance(event.target.value)} rows={8} style={{ width: '100%', boxSizing: 'border-box', padding: 12, borderRadius: 8, background: '#ffffff', color: '#000000', border: '1px solid #d1d5db' }} />
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10 }}>
-                <button disabled={saving} onClick={saveInheritance} style={{ padding: '9px 18px', background: 'var(--color-accent-teal)', border: 0, borderRadius: 7, cursor: 'pointer' }}>{saving ? 'Đang lưu...' : 'Lưu bằng văn bản'}</button>
-                <span style={{ fontSize: 12 }}>{message}</span>
+              <label htmlFor="inheritance"><b>Thông tin/nguyện vọng về thừa kế</b></label>
+              <textarea id="inheritance" value={inheritance} maxLength={10000} disabled={!canEditInheritance} onChange={(event) => setInheritance(event.target.value)} rows={7} style={{ width: '100%', boxSizing: 'border-box', padding: 12, borderRadius: 8, background: canEditInheritance ? '#fff' : '#eee', color: '#000', border: '1px solid #d1d5db' }} />
+              {!canEditInheritance && <small style={{ display: 'block' }}>Nội dung đã bị khóa vì hợp đồng đã có ảnh minh chứng ký offline.</small>}
+              <small>{inheritanceState === 'saving' ? 'Đang tự lưu...' : inheritanceState === 'saved' ? 'Đã tự lưu' : inheritanceState === 'error' ? 'Tự lưu thất bại' : ''}</small>
+            </div>
+
+            <details open style={{ marginTop: 18 }}>
+              <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Bản xem trước hợp đồng cập nhật trực tiếp</summary>
+              <pre style={{ whiteSpace: 'pre-wrap', fontFamily: '"Times New Roman", serif', fontSize: 15, lineHeight: 1.65, padding: 18, background: '#fff', color: '#000', border: '1px solid #d1d5db', borderRadius: 8, maxHeight: 520, overflow: 'auto' }}>{previewContent || 'Hợp đồng cũ chưa có nội dung snapshot.'}</pre>
+            </details>
+
+            <div style={{ marginTop: 22, borderTop: '1px solid var(--color-border)', paddingTop: 18 }}>
+              <b>Hợp đồng đã kí</b>
+              <p style={{ fontSize: 12 }}>JPG, PNG hoặc WEBP; tối đa 10 ảnh, 10 MB mỗi ảnh.</p>
+              <label style={{ display: 'inline-block', border: '1px solid var(--color-border)', borderRadius: 6, padding: '8px 12px', cursor: 'pointer' }}>
+                Chọn ảnh minh chứng
+                <input type="file" multiple accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" disabled={saving} style={{ display: 'none' }} onChange={(event) => { const files = Array.from(event.target.files ?? []); if (files.length) void uploadSignedEvidence(files); event.target.value = '' }} />
+              </label>
+              <div style={{ display: 'grid', gap: 7, marginTop: 10 }}>
+                {(selected.signedEvidence ?? []).map((evidence) => (
+                  <button key={evidence.id} onClick={() => void openPrivateFile(`/admin/contracts/${selected.id}/signed-evidence/${encodeURIComponent(evidence.filename)}`)} style={{ textAlign: 'left', padding: 9 }}>
+                    Xem ảnh · {evidence.originalName} · {(evidence.size / 1024 / 1024).toFixed(2)} MB
+                  </button>
+                ))}
               </div>
             </div>
-            <div style={{ marginTop: 22, borderTop: '1px solid var(--color-border)', paddingTop: 18 }}>
-              <b>Chữ ký điện tử</b>
-              <p style={{ fontSize: 12 }}>Bên A: {selected.partyASignatureName || 'Chưa ký'} · Bên B: {selected.partyBSignatureName || 'Chưa ký'}</p>
-              {!selected.partyASignatureName && <div style={{ display: 'grid', gap: 8 }}>
-                <input value={signatureName} onChange={(event) => setSignatureName(event.target.value)} placeholder="Họ tên người đại diện Bên A" style={{ padding: 9, background: '#ffffff', color: '#000000', border: '1px solid #d1d5db', borderRadius: 6 }} />
-                <label style={{ fontSize: 12, color: '#000000' }}><input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} /> Tôi đã kiểm tra nội dung và đồng ý ký với tư cách Bên A.</label>
-                <button disabled={saving || !accepted} onClick={signAdmin} style={{ padding: 9 }}>Xác nhận ký điện tử</button>
-              </div>}
-            </div>
-            <div style={{ marginTop: 22, borderTop: '1px solid var(--color-border)', paddingTop: 18 }}>
-              <b>Lưu bản PDF</b>
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 10 }}>
-                <label style={{ border: '1px solid var(--color-border)', borderRadius: 6, padding: '8px 12px', cursor: 'pointer' }}>Tải PDF lên<input type="file" accept="application/pdf,.pdf" disabled={saving} style={{ display: 'none' }} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadPdf(file); event.target.value = '' }} /></label>
-                {selected.pdfUrl && <button onClick={openPdf} style={{ padding: '8px 12px', color: 'var(--color-accent-teal)' }}>Xem PDF đã lưu</button>}
-              </div>
-            </div>
+
+            {selected.status === 'draft' && <div style={{ marginTop: 18, padding: 14, border: '1px solid #008573', borderRadius: 8, background: '#eefaf8' }}>
+              <b>Bước cuối: kích hoạt hợp đồng và quyền sở hữu</b>
+              <p style={{ fontSize: 12 }}>Nút chỉ khả dụng sau khi đã lưu ít nhất một ảnh minh chứng. Thao tác sẽ chuyển tất cả lô trong hợp đồng từ “đã giữ” sang “đã bán” và tạo lịch sử sở hữu cho người mua.</p>
+              <button disabled={saving || (selected.signedEvidence?.length ?? 0) === 0} onClick={() => void activateOwnership()} style={{ padding: '10px 16px', background: '#008573', color: '#fff', border: 0, borderRadius: 7, fontWeight: 700 }}>
+                Xác nhận đã ký và chuyển quyền sở hữu
+              </button>
+            </div>}
+
+            {message && <p style={{ marginTop: 14, color: message.includes('Không') ? '#a33' : '#006b5c' }}>{message}</p>}
           </>}
         </section>
       </div>

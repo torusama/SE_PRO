@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Button from "@/components/ui/Button";
+import { ROUTES } from "@/constants/routes";
 import { api } from "@/lib/api";
 
 type ReservationType = "reserve" | "purchase";
@@ -198,6 +200,7 @@ function isVisibleRequest(request: ReservationSummary) {
 }
 
 export default function RequestsPage() {
+  const navigate = useNavigate();
   const [requests, setRequests] = useState<ReservationSummary[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [detail, setDetail] = useState<ReservationDetail | null>(null);
@@ -206,6 +209,10 @@ export default function RequestsPage() {
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [createdContract, setCreatedContract] = useState<{
+    id: number;
+    contractCode: string;
+  } | null>(null);
   const [decisionLoading, setDecisionLoading] = useState<DecisionAction | null>(
     null,
   );
@@ -310,21 +317,26 @@ export default function RequestsPage() {
     const ok = window.confirm(
       isReject
         ? `Từ chối yêu cầu #${current.id}? Lô pending sẽ được mở lại nếu không còn yêu cầu hợp lệ khác.`
-        : `Duyệt yêu cầu #${current.id}? Lô sẽ chuyển sang ${current.type === "purchase" ? "đã bán" : "đã giữ chỗ"}.`,
+        : `Duyệt yêu cầu #${current.id}? Lô sẽ chuyển sang trạng thái đã giữ; quyền sở hữu chỉ được kích hoạt sau khi xác minh hợp đồng ký offline.`,
     );
     if (!ok) return;
 
     setDecisionLoading(action);
     setError("");
     setSuccessMessage("");
+    setCreatedContract(null);
     try {
-      await api.patch(`/admin/reservations/${current.id}/${action}`, {
+      const response = await api.patch(`/admin/reservations/${current.id}/${action}`, {
         adminNote: adminNote.trim() || undefined,
       });
+      const contract = response.data.data?.contracts?.[0] ?? null;
+      setCreatedContract(contract);
       setSuccessMessage(
         isReject
           ? `Đã từ chối yêu cầu #${current.id}.`
-          : `Đã duyệt yêu cầu #${current.id}.`,
+          : contract
+            ? `Đã duyệt yêu cầu #${current.id} và tự động tạo hợp đồng ${contract.contractCode}.`
+            : `Đã duyệt yêu cầu #${current.id}.`,
       );
       const nextId = await loadRequests(current.id);
       if (nextId) await loadDetail(nextId);
@@ -450,7 +462,15 @@ export default function RequestsPage() {
             color: "var(--admin-positive)",
           }}
         >
-          {successMessage}
+          <span>{successMessage}</span>
+          {createdContract ? (
+            <Button
+              style={{ marginLeft: 12 }}
+              onClick={() => navigate(`${ROUTES.ADMIN_CONTRACTS}?contractId=${createdContract.id}`)}
+            >
+              Mở hợp đồng
+            </Button>
+          ) : null}
         </div>
       ) : null}
 

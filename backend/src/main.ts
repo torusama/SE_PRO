@@ -16,7 +16,7 @@ async function bootstrap() {
   // Ensure local upload dirs exist (avatars, documents, etc.)
   const uploadsDir = join(process.cwd(), 'uploads', 'avatars');
   fs.mkdirSync(uploadsDir, { recursive: true });
-  fs.mkdirSync(join(process.cwd(), 'uploads', 'contracts'), {
+  fs.mkdirSync(join(process.cwd(), 'uploads', 'contract-evidence'), {
     recursive: true,
   });
   fs.mkdirSync(join(process.cwd(), 'uploads', 'transfers'), {

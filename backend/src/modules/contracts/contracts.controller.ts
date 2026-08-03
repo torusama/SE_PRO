@@ -8,14 +8,15 @@ import {
   Post,
   Query,
   Res,
-  UploadedFile,
+  UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
-import { extname } from 'path';
-import { basename, join } from 'path';
+import { randomUUID } from 'crypto';
+import { unlink } from 'fs/promises';
+import { basename, extname, join } from 'path';
 import type { Response } from 'express';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -23,7 +24,6 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { ContractsService } from './contracts.service';
 import { UpdateInheritanceDto } from './dto/update-inheritance.dto';
-import { SignContractDto } from './dto/sign-contract.dto';
 import { AdminContractQueryDto } from './dto/admin-contract-query.dto';
 import { RecordPaymentDto } from './dto/record-payment.dto';
 import {
@@ -31,30 +31,34 @@ import {
   type AdminRequestContext,
 } from '../../common/decorators/admin-request-context.decorator';
 
-const contractPdfUpload = FileInterceptor('pdf', {
+const signedEvidenceTypes = new Map([
+  ['image/jpeg', '.jpg'],
+  ['image/png', '.png'],
+  ['image/webp', '.webp'],
+]);
+
+const signedEvidenceUpload = FilesInterceptor('evidence', 10, {
   storage: diskStorage({
-    destination: './uploads/contracts',
+    destination: './uploads/contract-evidence',
     filename: (_request, file, callback) =>
-      callback(
-        null,
-        `contract-${Date.now()}-${Math.round(Math.random() * 1e9)}${extname(file.originalname).toLowerCase()}`,
-      ),
+      callback(null, `${randomUUID()}${signedEvidenceTypes.get(file.mimetype)}`),
   }),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_request, file, callback) => {
+    const expectedExtension = signedEvidenceTypes.get(file.mimetype);
+    const actualExtension = extname(file.originalname).toLowerCase();
     const valid =
-      file.mimetype === 'application/pdf' &&
-      extname(file.originalname).toLowerCase() === '.pdf';
+      Boolean(expectedExtension) &&
+      (expectedExtension === actualExtension ||
+        (expectedExtension === '.jpg' && actualExtension === '.jpeg'));
     callback(
-      valid ? null : new BadRequestException('Only PDF files are accepted'),
+      valid
+        ? null
+        : new BadRequestException('Chỉ chấp nhận ảnh JPG, PNG hoặc WEBP'),
       valid,
     );
   },
 });
-
-interface UploadedPdf {
-  filename: string;
-}
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller()
@@ -143,109 +147,69 @@ export class ContractsController {
     };
   }
 
-  @Post('my/contracts/:id/sign')
-  async signMine(
-    @CurrentUser() user: any,
-    @Param('id') id: string,
-    @Body() body: SignContractDto,
-  ) {
-    if (!body.accepted)
-      throw new BadRequestException('Signature consent is required');
-    return {
-      success: true,
-      message: 'Đã ký hợp đồng',
-      data: await this.contractsService.signAsBuyer(
-        user.id,
-        Number(id),
-        body.signatureName,
-      ),
-    };
-  }
-
-  @Post('admin/contracts/:id/sign')
+  @Post('admin/contracts/:id/signed-evidence')
   @Roles('admin')
-  async signAdmin(
-    @CurrentUser() user: any,
+  @UseInterceptors(signedEvidenceUpload)
+  async uploadSignedEvidence(
+    @CurrentUser() user: { id: number },
     @Param('id') id: string,
-    @Body() body: SignContractDto,
+    @UploadedFiles() files: Express.Multer.File[],
   ) {
-    if (!body.accepted)
-      throw new BadRequestException('Signature consent is required');
-    return {
-      success: true,
-      message: 'Đã ký hợp đồng',
-      data: await this.contractsService.signAsAdmin(
-        user.id,
-        Number(id),
-        body.signatureName,
-      ),
-    };
+    try {
+      return {
+        success: true,
+        message: 'Đã lưu ảnh hợp đồng ký offline',
+        data: await this.contractsService.saveSignedEvidence(
+          Number(id),
+          user.id,
+          files ?? [],
+        ),
+      };
+    } catch (error) {
+      await Promise.all(
+        (files ?? []).map((file) => unlink(file.path).catch(() => undefined)),
+      );
+      throw error;
+    }
   }
 
-  @Post('my/contracts/:id/pdf')
-  @UseInterceptors(contractPdfUpload)
-  async uploadMyPdf(
-    @CurrentUser() user: any,
-    @Param('id') id: string,
-    @UploadedFile() file?: UploadedPdf,
-  ) {
-    if (!file) throw new BadRequestException('PDF file is required');
-    return {
-      success: true,
-      message: 'Đã lưu PDF',
-      data: await this.contractsService.savePdf(
-        Number(id),
-        user.id,
-        `/uploads/contracts/${file.filename}`,
-        false,
-      ),
-    };
-  }
-
-  @Post('admin/contracts/:id/pdf')
+  @Get('admin/contracts/:id/signed-evidence/:filename')
   @Roles('admin')
-  @UseInterceptors(contractPdfUpload)
-  async uploadAdminPdf(
-    @CurrentUser() user: any,
+  async signedEvidence(
     @Param('id') id: string,
-    @UploadedFile() file?: UploadedPdf,
-  ) {
-    if (!file) throw new BadRequestException('PDF file is required');
-    return {
-      success: true,
-      message: 'Đã lưu PDF',
-      data: await this.contractsService.savePdf(
-        Number(id),
-        user.id,
-        `/uploads/contracts/${file.filename}`,
-        true,
-      ),
-    };
-  }
-
-  @Get('my/contracts/:id/pdf')
-  async downloadMyPdf(
-    @CurrentUser() user: any,
-    @Param('id') id: string,
+    @Param('filename') filename: string,
     @Res() response: Response,
   ) {
-    const url = await this.contractsService.getPdf(Number(id), user.id, false);
-    return response.download(
-      join(process.cwd(), 'uploads', 'contracts', basename(url)),
+    const evidence = await this.contractsService.getSignedEvidence(
+      Number(id),
+      basename(filename),
     );
+    return response.sendFile(evidence.filename, {
+      root: join(process.cwd(), 'uploads', 'contract-evidence'),
+      headers: {
+        'Content-Type': evidence.mimeType,
+        'Content-Disposition': `inline; filename="${evidence.filename}"`,
+        'Cache-Control': 'private, max-age=300',
+      },
+    });
   }
 
-  @Get('admin/contracts/:id/pdf')
+  @Post('admin/contracts/:id/activate-ownership')
   @Roles('admin')
-  async downloadAdminPdf(
-    @CurrentUser() user: any,
+  async activateOwnership(
+    @CurrentUser() user: { id: number },
     @Param('id') id: string,
-    @Res() response: Response,
+    @CurrentAdminContext() context: AdminRequestContext,
   ) {
-    const url = await this.contractsService.getPdf(Number(id), user.id, true);
-    return response.download(
-      join(process.cwd(), 'uploads', 'contracts', basename(url)),
-    );
+    return {
+      success: true,
+      message: 'Đã kích hoạt hợp đồng và quyền sở hữu',
+      data: await this.contractsService.activateOwnership(
+        Number(id),
+        user.id,
+        context,
+      ),
+    };
   }
 
   @Get('my/contracts')

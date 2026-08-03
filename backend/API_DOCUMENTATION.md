@@ -247,7 +247,7 @@ Admin approve/reject body: `{ "adminNote": "OK" }`
 Approval/rejection are transaction-safe:
 
 - Approve `reserve`: request becomes `approved`; related plots become `reserved`; one `request_approved` notification is created for the customer.
-- Approve `purchase`: request becomes `approved`; related plots become `reserved` and draft contracts are created; one `request_approved` notification is created for the customer. The plots become `sold` only after the offline signing appointment is completed.
+- Approve `purchase`: request becomes `approved`; related plots become `reserved` and one draft contract is created with all selected plots and their agreed prices. The plots become `sold` only after an admin uploads signed-contract evidence and explicitly activates ownership.
 - Reject: request becomes `rejected`; related pending plots return to `available` only when no other valid request still claims them; one `request_rejected` notification is created for the customer.
 
 Only `pending` requests are valid for new decisions. Existing `submitted` records are also tolerated for backward compatibility. Already approved/rejected requests return an error and do not create duplicate notifications.
@@ -261,10 +261,19 @@ Only `pending` requests are valid for new decisions. Existing `submitted` record
 | POST   | `/admin/contracts/from-reservation/:reservationId` | Yes  | admin          |
 | PATCH  | `/admin/contracts/:id/status`                      | Yes  | admin          |
 | POST   | `/admin/contracts/:id/payments`                    | Yes  | admin          |
+| PATCH  | `/admin/contracts/:id/inheritance`                 | Yes  | admin          |
+| POST   | `/admin/contracts/:id/signed-evidence`             | Yes  | admin          |
+| GET    | `/admin/contracts/:id/signed-evidence/:filename`   | Yes  | admin          |
+| POST   | `/admin/contracts/:id/activate-ownership`          | Yes  | admin          |
 | GET    | `/my/contracts`                                    | Yes  | customer/admin |
 | GET    | `/my/contracts/:id`                                | Yes  | customer/admin |
 
 Payment body: `{ "amount": 1000000, "paymentMethod": "cash", "referenceCode": "ABC", "note": "Deposit" }`
+
+`signed-evidence` is multipart with up to 10 `evidence` image fields (JPG, PNG or WEBP,
+10 MB each). `activate-ownership` requires a draft contract with at least one evidence image;
+it activates the contract, creates current ownership records for every `contract_plots` row and
+marks all included plots as sold in one transaction.
 
 `GET /my/contracts` and `GET /my/contracts/:id` now also return plot/zone context used by the
 customer profile page ("Lô đất của tôi" tab): `plotId`, `areaSqm`, `direction`, `plotType`,

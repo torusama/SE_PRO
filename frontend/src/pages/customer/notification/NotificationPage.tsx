@@ -68,12 +68,6 @@ const TYPE_META: Record<
     tagClass: "tag-payment",
     group: "contract",
   },
-  contract_pdf_ready: {
-    icon: "📥",
-    iconClass: "type-payment",
-    tagClass: "tag-payment",
-    group: "contract",
-  },
   service_submitted: {
     icon: "🌸",
     iconClass: "type-service",

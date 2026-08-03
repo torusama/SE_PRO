@@ -63,6 +63,7 @@ interface Contract {
   plotId: number
   plotCode: string
   zoneName?: string
+  plots?: Array<{ id: number; code: string; zoneName?: string | null }>
 }
 
 const CATEGORY_LABEL: Record<Category, string> = {
@@ -195,7 +196,16 @@ export default function ServicePage() {
       setServiceTypes(typesRes.data.data ?? [])
       const loadedOrders = ordersRes.data.data ?? []
       setOrders(loadedOrders)
-      const plots = (contractsRes.data.data ?? []).filter((c) => ['active', 'completed'].includes(c.status))
+      const plots = (contractsRes.data.data ?? [])
+        .filter((contract) => ['active', 'completed'].includes(contract.status))
+        .flatMap((contract) => contract.plots?.length
+          ? contract.plots.map((plot) => ({
+              ...contract,
+              plotId: plot.id,
+              plotCode: plot.code,
+              zoneName: plot.zoneName ?? undefined,
+            }))
+          : [contract])
       setOwnedPlots(plots)
       if (plots.length && selectedPlotId === null) setSelectedPlotId(plots[0].plotId)
       const requestedOrderId = Number(searchParams.get('order'))

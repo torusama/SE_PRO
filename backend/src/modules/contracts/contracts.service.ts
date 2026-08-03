@@ -3,7 +3,6 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { createHash } from 'crypto';
 import { DatabaseService } from '../../database/database.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AdminContractQueryDto } from './dto/admin-contract-query.dto';
@@ -11,6 +10,11 @@ import { RecordPaymentDto } from './dto/record-payment.dto';
 import { paginate } from '../../common/interfaces/paginated-response.interface';
 import type { AdminRequestContext } from '../../common/decorators/admin-request-context.decorator';
 import { AdminAuditService } from '../admin-audit/admin-audit.service';
+import {
+  composeContractContent,
+  extractContractBaseContent,
+  upgradePurchaseContractBase,
+} from './contract-content';
 
 const money = new Intl.NumberFormat('vi-VN', {
   style: 'currency',
@@ -19,6 +23,7 @@ const money = new Intl.NumberFormat('vi-VN', {
 });
 
 const CONTRACT_STATUS_LABEL: Record<string, string> = {
+  draft: 'đang chờ ký offline',
   active: 'đang hiệu lực',
   completed: 'đã hoàn tất',
   cancelled: 'đã huỷ',
@@ -43,7 +48,13 @@ export class ContractsService {
     if (query.search) {
       const p = add(`%${query.search}%`);
       conditions.push(
-        `(c.contract_code ILIKE ${p} OR u.full_name ILIKE ${p} OR p.plot_code ILIKE ${p})`,
+        `(c.contract_code ILIKE ${p} OR u.full_name ILIKE ${p} OR p.plot_code ILIKE ${p}
+          OR EXISTS (
+            SELECT 1 FROM contract_plots search_cp
+            JOIN plots search_plot ON search_plot.plot_id = search_cp.plot_id
+            WHERE search_cp.contract_id = c.contract_id
+              AND search_plot.plot_code ILIKE ${p}
+          ))`,
       );
     }
     if (query.status) conditions.push(`c.status = ${add(query.status)}`);
@@ -122,16 +133,34 @@ export class ContractsService {
   }
 
   async createFromReservation(reservationId: number, adminId: number) {
-    const rows = await this.database.query(
-      `INSERT INTO contracts (contract_code, request_id, user_id, plot_id, total_amount, created_by, group_contract_code)
-       SELECT CONCAT('HD-', rr.request_id, '-', rp.plot_id), rr.request_id, rr.user_id, rp.plot_id,
-              rp.plot_price, $2, CONCAT('GRP-', rr.request_id, '-', TO_CHAR(NOW(), 'YYYYMMDD'))
-       FROM reservation_requests rr JOIN request_plots rp ON rp.request_id = rr.request_id
-       WHERE rr.request_id = $1
-       ON CONFLICT (contract_code) DO NOTHING
-       RETURNING contract_id AS id, contract_code AS "contractCode"`,
-      [reservationId, adminId],
+    void adminId;
+    const reservation = await this.database.queryOne<{
+      type: string;
+      status: string;
+    }>(
+      `SELECT request_type AS type, status
+       FROM reservation_requests
+       WHERE request_id = $1 AND is_deleted = FALSE`,
+      [reservationId],
     );
+    if (!reservation) throw new NotFoundException('Reservation not found');
+    if (reservation.type !== 'purchase' || reservation.status !== 'approved') {
+      throw new BadRequestException(
+        'Contract is created automatically when a purchase request is approved',
+      );
+    }
+    const rows = await this.database.query(
+      `SELECT contract_id AS id, contract_code AS "contractCode", status
+       FROM contracts
+       WHERE request_id = $1 AND is_deleted = FALSE
+       ORDER BY contract_id`,
+      [reservationId],
+    );
+    if (!rows.length) {
+      throw new BadRequestException(
+        'No contract was created for this approved request; review the approval transaction',
+      );
+    }
     return rows;
   }
 
@@ -158,147 +187,294 @@ export class ContractsService {
   }
 
   async updateInheritance(id: number, content: string, adminId: number) {
-    const contract = await this.database.queryOne<any>(
-      `UPDATE contracts
-       SET inheritance_content = $2, inheritance_updated_by = $3,
-           inheritance_updated_at = NOW(), updated_at = NOW()
-       WHERE contract_id = $1 AND is_deleted = FALSE
-       RETURNING contract_id AS id, contract_code AS "contractCode",
-                 inheritance_content AS "inheritanceContent",
-                 inheritance_updated_at AS "inheritanceUpdatedAt",
-                 user_id AS "userId"`,
-      [id, content.trim() || null, adminId],
-    );
-    if (!contract) throw new NotFoundException('Contract not found');
-
-    await this.notificationsService.createInApp(
-      contract.userId,
-      'contract_updated',
-      'Hợp đồng đã được cập nhật',
-      `Nội dung thừa kế/thụ hưởng của hợp đồng ${contract.contractCode} vừa được cập nhật.`,
-      'contract',
-      contract.id,
-    );
-
-    return contract;
-  }
-
-  async signAsBuyer(userId: number, id: number, signatureName: string) {
-    return this.sign(id, userId, signatureName, 'b');
-  }
-
-  async signAsAdmin(adminId: number, id: number, signatureName: string) {
-    return this.sign(id, adminId, signatureName, 'a');
-  }
-
-  private async sign(
-    id: number,
-    signerId: number,
-    signatureName: string,
-    party: 'a' | 'b',
-  ) {
-    const contract = await this.database.queryOne<any>(
-      `SELECT contract_id, user_id, status, contract_content,
-              inheritance_content, party_${party}_signed_at
-       FROM contracts WHERE contract_id = $1 AND is_deleted = FALSE`,
-      [id],
-    );
-    if (!contract) throw new NotFoundException('Contract not found');
-    if (party === 'b' && Number(contract.user_id) !== signerId) {
-      throw new NotFoundException('Contract not found');
-    }
-    if (contract.status !== 'active') {
-      throw new BadRequestException('Only active contracts can be signed');
-    }
-    if (contract[`party_${party}_signed_at`]) {
-      throw new BadRequestException('This party has already signed');
-    }
-
-    const signedAt = new Date();
-    const cleanName = signatureName.trim();
-    const hash = createHash('sha256')
-      .update(
-        [
-          id,
-          signerId,
-          party,
-          cleanName,
-          signedAt.toISOString(),
-          contract.contract_content ?? '',
-          contract.inheritance_content ?? '',
-        ].join('|'),
-      )
-      .digest('hex');
-    const result = await this.database.queryOne<any>(
-      `UPDATE contracts SET
-         party_${party}_signed_by = $2,
-         party_${party}_signature_name = $3,
-         party_${party}_signed_at = $4,
-         party_${party}_signature_hash = $5,
-         updated_at = NOW()
-       WHERE contract_id = $1
-       RETURNING contract_id AS id, contract_code AS "contractCode",
-         party_${party}_signature_name AS "signatureName",
-         party_${party}_signed_at AS "signedAt",
-         party_${party}_signature_hash AS "signatureHash"`,
-      [id, signerId, cleanName, signedAt, hash],
-    );
-
-    const signerLabel = party === 'a' ? 'Ban quản lý nghĩa trang' : 'Bạn';
-    await this.notificationsService.createInApp(
-      contract.user_id,
-      'contract_updated',
-      party === 'a' ? 'Hợp đồng đã được ký xác nhận' : 'Đã ghi nhận chữ ký',
-      `${signerLabel} vừa ký hợp đồng ${result.contractCode}.`,
-      'contract',
-      id,
-    );
-
-    return result;
-  }
-
-  async savePdf(
-    id: number,
-    actorId: number,
-    relativeUrl: string,
-    isAdmin: boolean,
-  ) {
-    const row = await this.database.queryOne<any>(
-      `UPDATE contracts SET pdf_url = $3, pdf_uploaded_by = $2,
-              pdf_uploaded_at = NOW(), updated_at = NOW()
-       WHERE contract_id = $1 AND is_deleted = FALSE
-         AND ($4::boolean = TRUE OR user_id = $2)
-       RETURNING contract_id AS id, contract_code AS "contractCode",
-                 pdf_url AS "pdfUrl", pdf_uploaded_at AS "pdfUploadedAt",
-                 user_id AS "userId"`,
-      [id, actorId, relativeUrl, isAdmin],
-    );
-    if (!row) throw new NotFoundException('Contract not found');
-
-    if (isAdmin) {
-      await this.notificationsService.createInApp(
-        row.userId,
-        'contract_pdf_ready',
-        'Bản PDF hợp đồng đã sẵn sàng',
-        `Hợp đồng ${row.contractCode} đã có bản PDF, bạn có thể tải về để lưu trữ.`,
-        'contract',
-        row.id,
+    return this.database.transaction(async (client) => {
+      const locked = await client.query<any>(
+        `SELECT contract_id AS id, contract_code AS "contractCode",
+                user_id AS "userId", status, contract_content AS "contractContent",
+                contract_base_content AS "contractBaseContent",
+                inheritance_content AS "inheritanceContent",
+                EXISTS (
+                  SELECT 1 FROM contract_signed_evidence evidence
+                  WHERE evidence.contract_id = contracts.contract_id
+                ) AS "hasSignedEvidence"
+         FROM contracts
+         WHERE contract_id = $1 AND is_deleted = FALSE
+         FOR UPDATE`,
+        [id],
       );
-    }
-
-    return row;
+      const before = locked.rows[0];
+      if (!before) throw new NotFoundException('Contract not found');
+      const canEditLegacyActive =
+        before.status === 'active' &&
+        !before.hasSignedEvidence;
+      if (before.status !== 'draft' && !canEditLegacyActive) {
+        throw new BadRequestException(
+          'Inheritance information is locked after signed evidence is recorded',
+        );
+      }
+      const cleanContent = content.trim() || null;
+      let baseContent = extractContractBaseContent(
+        before.contractBaseContent || before.contractContent,
+      );
+      const contractPlots = await client.query<{
+        code: string;
+        zoneName: string | null;
+        areaSqm: number | null;
+        price: number;
+      }>(
+        `SELECT p.plot_code AS code, z.zone_name AS "zoneName",
+                p.area_sqm::float AS "areaSqm", cp.agreed_price::float AS price
+         FROM contract_plots cp
+         JOIN plots p ON p.plot_id = cp.plot_id
+         JOIN cemetery_zones z ON z.zone_id = p.zone_id
+         WHERE cp.contract_id = $1
+         ORDER BY p.plot_code`,
+        [id],
+      );
+      baseContent = upgradePurchaseContractBase(baseContent, contractPlots.rows);
+      const renderedContent = composeContractContent(baseContent, cleanContent);
+      const updated = await client.query<any>(
+        `UPDATE contracts
+         SET inheritance_content = $2, inheritance_updated_by = $3,
+             inheritance_updated_at = NOW(), contract_base_content = $4,
+             contract_content = $5, updated_at = NOW()
+         WHERE contract_id = $1
+         RETURNING contract_id AS id, contract_code AS "contractCode",
+                   inheritance_content AS "inheritanceContent",
+                   inheritance_updated_at AS "inheritanceUpdatedAt",
+                   contract_base_content AS "contractBaseContent",
+                   contract_content AS "contractContent", user_id AS "userId"`,
+        [id, cleanContent, adminId, baseContent, renderedContent],
+      );
+      const contract = updated.rows[0];
+      await this.notificationsService.createInAppWithClient(
+        client,
+        contract.userId,
+        'contract_updated',
+        'Hợp đồng đã được cập nhật',
+        `Nội dung thừa kế/thụ hưởng của hợp đồng ${contract.contractCode} vừa được cập nhật.`,
+        'contract',
+        contract.id,
+      );
+      await this.audit?.record(client, {
+        action: 'contract.inheritance.update',
+        entityType: 'contract',
+        entityId: id,
+        before: { inheritanceContent: before.inheritanceContent },
+        after: { inheritanceContent: cleanContent },
+        context: { adminId, ipAddress: null, userAgent: null },
+      });
+      return contract;
+    });
   }
 
-  async getPdf(id: number, actorId: number, isAdmin: boolean) {
-    const row = await this.database.queryOne<{ pdfUrl: string | null }>(
-      `SELECT pdf_url AS "pdfUrl" FROM contracts
-       WHERE contract_id = $1 AND is_deleted = FALSE
-         AND ($3::boolean = TRUE OR user_id = $2)`,
-      [id, actorId, isAdmin],
+  async saveSignedEvidence(
+    id: number,
+    adminId: number,
+    files: Array<{
+      filename: string;
+      originalname: string;
+      mimetype: string;
+      size: number;
+    }>,
+  ) {
+    if (!files.length) {
+      throw new BadRequestException('At least one signed contract image is required');
+    }
+    return this.database.transaction(async (client) => {
+      const contract = await client.query<{
+        id: number;
+        status: string;
+      }>(
+        `SELECT contract_id AS id, status
+         FROM contracts
+         WHERE contract_id = $1 AND is_deleted = FALSE
+         FOR UPDATE`,
+        [id],
+      );
+      if (!contract.rows[0]) throw new NotFoundException('Contract not found');
+      if (!['draft', 'active'].includes(contract.rows[0].status)) {
+        throw new BadRequestException(
+          'Signed evidence cannot be added to this contract status',
+        );
+      }
+      const count = await client.query<{ total: number }>(
+        `SELECT COUNT(*)::int AS total
+         FROM contract_signed_evidence
+         WHERE contract_id = $1`,
+        [id],
+      );
+      if (Number(count.rows[0]?.total ?? 0) + files.length > 10) {
+        throw new BadRequestException(
+          'A contract can store at most 10 signed evidence images',
+        );
+      }
+
+      const saved: unknown[] = [];
+      for (const file of files) {
+        const inserted = await client.query(
+          `INSERT INTO contract_signed_evidence
+             (contract_id, stored_filename, original_name, mime_type, size_bytes, uploaded_by)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           RETURNING evidence_id AS id, stored_filename AS filename,
+                     original_name AS "originalName", mime_type AS "mimeType",
+                     size_bytes AS size, created_at AS "createdAt"`,
+          [
+            id,
+            file.filename,
+            file.originalname.slice(0, 255),
+            file.mimetype,
+            file.size,
+            adminId,
+          ],
+        );
+        saved.push(inserted.rows[0]);
+      }
+      await this.audit?.record(client, {
+        action: 'contract.signed_evidence.upload',
+        entityType: 'contract',
+        entityId: id,
+        after: { evidenceCount: saved.length },
+        context: { adminId, ipAddress: null, userAgent: null },
+      });
+      return saved;
+    });
+  }
+
+  async getSignedEvidence(id: number, filename: string) {
+    const evidence = await this.database.queryOne<{
+      filename: string;
+      mimeType: string;
+    }>(
+      `SELECT stored_filename AS filename, mime_type AS "mimeType"
+       FROM contract_signed_evidence
+       WHERE contract_id = $1 AND stored_filename = $2`,
+      [id, filename],
     );
-    if (!row) throw new NotFoundException('Contract not found');
-    if (!row.pdfUrl) throw new NotFoundException('Contract PDF not found');
-    return row.pdfUrl;
+    if (!evidence) throw new NotFoundException('Signed evidence not found');
+    return evidence;
+  }
+
+  async activateOwnership(
+    id: number,
+    adminId: number,
+    context?: AdminRequestContext,
+  ) {
+    return this.database.transaction(async (client) => {
+      const locked = await client.query<{
+        id: number;
+        contractCode: string;
+        userId: number;
+        status: string;
+      }>(
+        `SELECT contract_id AS id, contract_code AS "contractCode",
+                user_id AS "userId", status
+         FROM contracts
+         WHERE contract_id = $1 AND is_deleted = FALSE
+         FOR UPDATE`,
+        [id],
+      );
+      const contract = locked.rows[0];
+      if (!contract) throw new NotFoundException('Contract not found');
+      if (contract.status !== 'draft') {
+        throw new BadRequestException(
+          'Only draft contracts can activate ownership',
+        );
+      }
+      const evidence = await client.query(
+        `SELECT evidence_id
+         FROM contract_signed_evidence
+         WHERE contract_id = $1
+         LIMIT 1`,
+        [id],
+      );
+      if (!evidence.rows.length) {
+        throw new BadRequestException(
+          'Upload at least one signed contract image before activating ownership',
+        );
+      }
+      const plots = await client.query<{
+        id: number;
+        code: string;
+        status: string;
+      }>(
+        `SELECT p.plot_id AS id, p.plot_code AS code, p.status
+         FROM contract_plots cp
+         JOIN plots p ON p.plot_id = cp.plot_id
+         WHERE cp.contract_id = $1
+         ORDER BY p.plot_id
+         FOR UPDATE OF p`,
+        [id],
+      );
+      if (!plots.rows.length) {
+        throw new BadRequestException('Contract does not contain any plots');
+      }
+      if (plots.rows.some((plot) => plot.status !== 'reserved')) {
+        throw new BadRequestException(
+          'All contract plots must still be reserved before ownership activation',
+        );
+      }
+      const currentOwnership = await client.query(
+        `SELECT ownership_id
+         FROM ownership_records
+         WHERE plot_id = ANY($1::int[]) AND is_current = TRUE
+         LIMIT 1`,
+        [plots.rows.map((plot) => plot.id)],
+      );
+      if (currentOwnership.rows.length) {
+        throw new BadRequestException(
+          'One or more plots already have a current owner',
+        );
+      }
+
+      const updated = await client.query(
+        `UPDATE contracts
+         SET status = 'active', effective_date = COALESCE(effective_date, CURRENT_DATE),
+             notes = COALESCE(notes || E'\n', '') ||
+               'Signed offline contract evidence verified by admin.',
+             updated_at = NOW()
+         WHERE contract_id = $1
+         RETURNING contract_id AS id, contract_code AS "contractCode", status`,
+        [id],
+      );
+      const ownership = await client.query<{ total: number }>(
+        `SELECT COUNT(*)::int AS total
+         FROM ownership_records
+         WHERE contract_id = $1 AND is_current = TRUE`,
+        [id],
+      );
+      if (Number(ownership.rows[0]?.total ?? 0) !== plots.rows.length) {
+        throw new BadRequestException(
+          'Ownership records could not be created for every contract plot',
+        );
+      }
+      await this.notificationsService.createInAppWithClient(
+        client,
+        contract.userId,
+        'ownership_activated',
+        'Hợp đồng và quyền sở hữu đã có hiệu lực',
+        `Hợp đồng ${contract.contractCode} đã được xác nhận ký offline. Quyền sở hữu ${plots.rows.length} lô đã được ghi nhận.`,
+        'contract',
+        id,
+      );
+      await this.audit?.record(client, {
+        action: 'contract.ownership.activate',
+        entityType: 'contract',
+        entityId: id,
+        before: { status: contract.status },
+        after: {
+          status: 'active',
+          plotIds: plots.rows.map((plot) => plot.id),
+          plotCodes: plots.rows.map((plot) => plot.code),
+        },
+        context: context ?? { adminId, ipAddress: null, userAgent: null },
+      });
+      return {
+        ...updated.rows[0],
+        ownershipCreated: plots.rows.length,
+        plotCodes: plots.rows.map((plot) => plot.code),
+      };
+    });
   }
 
   async addPayment(
@@ -401,16 +577,17 @@ export class ContractsService {
                    (c.total_amount - c.paid_amount)::float AS "remainingAmount",
                    c.payment_status AS "paymentStatus", c.contract_date AS "contractDate",
                    c.effective_date AS "effectiveDate", c.expiry_date AS "expiryDate",
-                   c.pdf_url AS "pdfUrl", c.contract_content AS "contractContent",
+                   c.contract_content AS "contractContent",
+                   c.contract_base_content AS "contractBaseContent",
                    c.inheritance_content AS "inheritanceContent",
                    c.inheritance_updated_at AS "inheritanceUpdatedAt",
-                   c.party_a_signature_name AS "partyASignatureName",
-                   c.party_a_signed_at AS "partyASignedAt",
-                   c.party_a_signature_hash AS "partyASignatureHash",
-                   c.party_b_signature_name AS "partyBSignatureName",
-                   c.party_b_signed_at AS "partyBSignedAt",
-                   c.party_b_signature_hash AS "partyBSignatureHash",
-                   c.pdf_uploaded_at AS "pdfUploadedAt",
+                   (c.status = 'draft' OR (
+                     c.status = 'active'
+                     AND NOT EXISTS (
+                       SELECT 1 FROM contract_signed_evidence edit_lock
+                       WHERE edit_lock.contract_id = c.contract_id
+                     )
+                   )) AS "canEditInheritance",
                    u.full_name AS "customerName",
                    CASE WHEN u.id_card_number IS NULL THEN NULL
                         ELSE CONCAT('******', RIGHT(u.id_card_number, 4)) END AS "customerIdCard",
@@ -420,12 +597,50 @@ export class ContractsService {
                    p.direction, p.plot_type AS "plotType", p.row_number AS "rowNumber",
                    p.column_number AS "columnNumber",
                    z.zone_name AS "zoneName", z.zone_code AS "zoneCode",
-                   o.deceased_name AS "deceasedName", o.burial_date AS "burialDate"
+                   o.deceased_name AS "deceasedName", o.burial_date AS "burialDate",
+                   COALESCE(contract_plot_data.plot_codes, ARRAY[p.plot_code]) AS "plotCodes",
+                   COALESCE(
+                     contract_plot_data.plots,
+                     JSONB_BUILD_ARRAY(JSONB_BUILD_OBJECT(
+                       'id', p.plot_id,
+                       'code', p.plot_code,
+                       'zoneName', z.zone_name,
+                       'areaSqm', p.area_sqm::float,
+                       'agreedPrice', c.total_amount::float
+                     ))
+                   ) AS plots,
+                   COALESCE(evidence_data.items, '[]'::jsonb) AS "signedEvidence"
             FROM contracts c
             JOIN users u ON u.user_id = c.user_id
             JOIN plots p ON p.plot_id = c.plot_id
             JOIN cemetery_zones z ON z.zone_id = p.zone_id
             LEFT JOIN ownership_records o ON o.plot_id = p.plot_id AND o.is_current = TRUE
+            LEFT JOIN LATERAL (
+              SELECT ARRAY_AGG(cp_plot.plot_code ORDER BY cp_plot.plot_code) AS plot_codes,
+                     JSONB_AGG(JSONB_BUILD_OBJECT(
+                       'id', cp_plot.plot_id,
+                       'code', cp_plot.plot_code,
+                       'zoneName', cp_zone.zone_name,
+                       'areaSqm', cp_plot.area_sqm::float,
+                       'agreedPrice', cp.agreed_price::float
+                     ) ORDER BY cp_plot.plot_code) AS plots
+              FROM contract_plots cp
+              JOIN plots cp_plot ON cp_plot.plot_id = cp.plot_id
+              JOIN cemetery_zones cp_zone ON cp_zone.zone_id = cp_plot.zone_id
+              WHERE cp.contract_id = c.contract_id
+            ) contract_plot_data ON TRUE
+            LEFT JOIN LATERAL (
+              SELECT JSONB_AGG(JSONB_BUILD_OBJECT(
+                       'id', evidence_id,
+                       'filename', stored_filename,
+                       'originalName', original_name,
+                       'mimeType', mime_type,
+                       'size', size_bytes,
+                       'createdAt', created_at
+                     ) ORDER BY created_at, evidence_id) AS items
+              FROM contract_signed_evidence
+              WHERE contract_id = c.contract_id
+            ) evidence_data ON TRUE
             ${suffix}`;
   }
 }

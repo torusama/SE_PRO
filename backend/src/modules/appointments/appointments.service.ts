@@ -274,7 +274,7 @@ export class AppointmentsService {
       );
 
       if (dto.status === 'completed') {
-        await this.advanceExistingContractWorkflow(
+        await this.markContractsAwaitingSignedEvidence(
           client,
           current.reservationRequestId,
         );
@@ -358,15 +358,14 @@ export class AppointmentsService {
     return appointment;
   }
 
-  private async advanceExistingContractWorkflow(
+  private async markContractsAwaitingSignedEvidence(
     client: PoolClient,
     requestId: number,
   ) {
     await client.query(
       `UPDATE contracts
-       SET status = 'active',
-           effective_date = COALESCE(effective_date, CURRENT_DATE),
-           notes = COALESCE(notes || E'\n', '') || 'Offline signing appointment completed.',
+       SET notes = COALESCE(notes || E'\n', '') ||
+             'Offline signing appointment completed; awaiting signed evidence verification.',
            updated_at = NOW()
        WHERE request_id = $1 AND status = 'draft' AND is_deleted = FALSE`,
       [requestId],

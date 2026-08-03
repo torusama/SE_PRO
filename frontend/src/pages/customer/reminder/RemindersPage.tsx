@@ -57,6 +57,7 @@ interface Contract {
   plotId: number
   plotCode: string
   zoneName?: string
+  plots?: Array<{ id: number; code: string; zoneName?: string | null }>
 }
 
 const TYPE_META: Record<ReminderType, { icon: string; label: string; dot: string }> = {
@@ -148,7 +149,18 @@ export default function RemindersPage() {
         api.get<ApiResponse<Contract[]>>('/my/contracts'),
       ])
       setReminders(reminderRes.data.data ?? [])
-      setOwnedPlots((contractRes.data.data ?? []).filter((c) => ['active', 'completed'].includes(c.status)))
+      setOwnedPlots(
+        (contractRes.data.data ?? [])
+          .filter((contract) => ['active', 'completed'].includes(contract.status))
+          .flatMap((contract) => contract.plots?.length
+            ? contract.plots.map((plot) => ({
+                ...contract,
+                plotId: plot.id,
+                plotCode: plot.code,
+                zoneName: plot.zoneName ?? undefined,
+              }))
+            : [contract]),
+      )
     } catch (err) {
       setError(getErrorMessage(err))
     } finally {

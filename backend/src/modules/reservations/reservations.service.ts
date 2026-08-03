@@ -19,6 +19,7 @@ import { AdminReservationQueryDto } from './dto/admin-reservation-query.dto';
 import { paginate } from '../../common/interfaces/paginated-response.interface';
 import type { AdminRequestContext } from '../../common/decorators/admin-request-context.decorator';
 import { AdminAuditService } from '../admin-audit/admin-audit.service';
+import { composeContractContent } from '../contracts/contract-content';
 
 type ReservationStatus = 'pending' | 'submitted' | 'approved' | 'rejected';
 
@@ -53,6 +54,8 @@ interface PlotRow extends QueryResultRow {
   mapWidth?: number | string | null;
   mapHeight?: number | string | null;
   areaSqm?: number | string | null;
+  zoneCode?: string | null;
+  zoneName?: string | null;
 }
 
 interface LockedReservationRow extends QueryResultRow {
@@ -398,8 +401,8 @@ export class ReservationsService implements OnModuleInit {
       const plots = await this.lockRequestPlots(client, id);
       this.assertPlotsPending(plots);
 
-      // Approval only reserves the plots. A purchase is not completed until the
-      // offline signing appointment has been completed.
+      // Approval only reserves the plots. Ownership is activated separately
+      // after an administrator uploads the signed-contract evidence.
       const finalPlotStatus = 'reserved';
       const plotIds = plots.map((plot) => plot.id);
       const plotUpdate = await client.query(
@@ -487,43 +490,55 @@ export class ReservationsService implements OnModuleInit {
         this.config?.get<string>('contractSellerRepresentative') ?? '',
       title: this.config?.get<string>('contractSellerTitle') ?? '',
     };
-    const groupCode = `GRP-${request.request_id}-${new Date()
-      .toISOString()
-      .slice(0, 10)
-      .replaceAll('-', '')}`;
-    const created: Array<{ id: number; contractCode: string }> = [];
+    const code = `HD-${new Date().getFullYear()}-${request.request_id}`;
+    const groupCode = `GRP-${request.request_id}`;
+    const baseContent = this.renderPurchaseContractBase(
+      code,
+      seller,
+      buyer,
+      plots,
+    );
+    const content = composeContractContent(baseContent);
+    const totalAmount = plots.reduce(
+      (total, plot) => total + Number(plot.price),
+      0,
+    );
+    const inserted = await client.query<{
+      id: number;
+      contractCode: string;
+    }>(
+      `INSERT INTO contracts
+         (contract_code, request_id, user_id, plot_id, total_amount,
+          created_by, group_contract_code, ownership_source, contract_base_content,
+          contract_content, inheritance_content, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'purchase', $8, $9, NULL, 'draft')
+       RETURNING contract_id AS id, contract_code AS "contractCode"`,
+      [
+        code,
+        request.request_id,
+        request.user_id,
+        plots[0].id,
+        totalAmount,
+        adminId,
+        groupCode,
+        baseContent,
+        content,
+      ],
+    );
+    const contract = inserted.rows[0];
 
     for (const plot of plots) {
-      const code = `HD-${new Date().getFullYear()}-${request.request_id}-${plot.id}`;
-      const content = this.renderPurchaseContract(code, seller, buyer, plot);
-      const inserted = await client.query<{
-        id: number;
-        contractCode: string;
-      }>(
-        `INSERT INTO contracts
-           (contract_code, request_id, user_id, plot_id, total_amount,
-            created_by, group_contract_code, ownership_source, contract_content,
-            inheritance_content, status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, 'purchase', $8, NULL, 'draft')
-         ON CONFLICT DO NOTHING
-         RETURNING contract_id AS id, contract_code AS "contractCode"`,
-        [
-          code,
-          request.request_id,
-          request.user_id,
-          plot.id,
-          Number(plot.price),
-          adminId,
-          groupCode,
-          content,
-        ],
+      await client.query(
+        `INSERT INTO contract_plots (contract_id, plot_id, agreed_price)
+         VALUES ($1, $2, $3)`,
+        [contract.id, plot.id, Number(plot.price)],
       );
-      if (inserted.rows[0]) created.push(inserted.rows[0]);
     }
-    return created;
+
+    return [contract];
   }
 
-  private renderPurchaseContract(
+  private renderPurchaseContractBase(
     code: string,
     seller: {
       name: string;
@@ -538,9 +553,23 @@ export class ReservationsService implements OnModuleInit {
       phone_number: string | null;
       address: string | null;
     },
-    plot: PlotRow,
+    plots: PlotRow[],
   ) {
-    const money = Number(plot.price).toLocaleString('vi-VN');
+    const plotDetails = plots
+      .map(
+        (plot, index) =>
+          `${index + 1}. Lô ${plot.code}${plot.zoneName ? `, ${plot.zoneName}` : ''}, diện tích ${plot.areaSqm ?? '...'} m².`,
+      )
+      .join('\n');
+    const plotPrices = plots
+      .map(
+        (plot, index) =>
+          `${index + 1}. Lô ${plot.code}: ${Number(plot.price).toLocaleString('vi-VN')} đồng.`,
+      )
+      .join('\n');
+    const total = plots
+      .reduce((sum, plot) => sum + Number(plot.price), 0)
+      .toLocaleString('vi-VN');
     return `CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM
 Độc lập - Tự do - Hạnh phúc
 
@@ -564,10 +593,13 @@ CCCD/CMND: ${buyer.id_card_number || '................................'}
 Điện thoại: ${buyer.phone_number || '................................'}
 
 ĐIỀU 1. ĐỐI TƯỢNG HỢP ĐỒNG
-Bên A cung cấp cho Bên B quyền sử dụng vị trí phần mộ mã ${plot.code}, diện tích ${plot.areaSqm ?? '...'} m², theo quy hoạch và quy chế quản lý nghĩa trang. Hợp đồng này không mặc nhiên là hợp đồng chuyển nhượng quyền sử dụng đất.
+Bên A cung cấp cho Bên B quyền sử dụng các vị trí phần mộ sau:
+${plotDetails}
+Các vị trí trên được sử dụng theo quy hoạch và quy chế quản lý nghĩa trang. Hợp đồng này không mặc nhiên là hợp đồng chuyển nhượng quyền sử dụng đất.
 
 ĐIỀU 2. GIÁ TRỊ VÀ THANH TOÁN
-Giá trị hợp đồng: ${money} đồng. Thời hạn, phương thức và chứng từ thanh toán thực hiện theo thỏa thuận/phiếu thu hợp lệ của hai bên.
+${plotPrices}
+Tổng giá trị hợp đồng: ${total} đồng. Thời hạn, phương thức và chứng từ thanh toán thực hiện theo thỏa thuận/phiếu thu hợp lệ của hai bên.
 
 ĐIỀU 3. QUYỀN VÀ NGHĨA VỤ CỦA BÊN A
 Bàn giao đúng vị trí, cung cấp thông tin quy chế; quản lý, bảo vệ hạ tầng chung; tôn trọng quyền hợp pháp của Bên B; thông báo các khoản phí và thay đổi có liên quan theo hợp đồng và pháp luật.
@@ -576,16 +608,7 @@ Bàn giao đúng vị trí, cung cấp thông tin quy chế; quản lý, bảo v
 Thanh toán đầy đủ; sử dụng đúng mục đích mai táng, đúng quy hoạch, nội quy, vệ sinh và môi trường; không tự ý chuyển giao, thay đổi hiện trạng hoặc sử dụng vị trí vào mục đích khác khi chưa được chấp thuận hợp lệ.
 
 ĐIỀU 5. THỜI HẠN, CHẤM DỨT VÀ GIẢI QUYẾT TRANH CHẤP
-Thời hạn và thời điểm có hiệu lực được ghi tại phần ký kết. Hai bên ưu tiên thương lượng; nếu không thành, tranh chấp được giải quyết tại cơ quan có thẩm quyền theo pháp luật Việt Nam.
-
-ĐIỀU 6. THÔNG TIN/NGUYỆN VỌNG VỀ THỪA KẾ
-[ĐỂ TRỐNG - CHỈ ADMIN CẬP NHẬT BẰNG VĂN BẢN SAU KHI KIỂM TRA HỒ SƠ, Ý CHÍ CỦA BÊN B VÀ QUY ĐỊNH PHÁP LUẬT. Nội dung này không thay thế di chúc, văn bản khai nhận/phân chia di sản hoặc thủ tục thừa kế bắt buộc.]
-
-ĐIỀU 7. ĐIỀU KHOẢN CHUNG
-Hai bên đã đọc, hiểu, tự nguyện ký và chịu trách nhiệm về thông tin cung cấp. Hợp đồng được lập thành các bản có giá trị như nhau.
-
-ĐẠI DIỆN BÊN A                              BÊN B
-(Ký, ghi rõ họ tên, chức vụ, đóng dấu)       (Ký, ghi rõ họ tên)`;
+Thời hạn và thời điểm có hiệu lực được ghi tại phần ký kết. Hai bên ưu tiên thương lượng; nếu không thành, tranh chấp được giải quyết tại cơ quan có thẩm quyền theo pháp luật Việt Nam.`;
   }
 
   async reject(
@@ -691,13 +714,16 @@ Hai bên đã đọc, hiểu, tự nguyện ký và chịu trách nhiệm về t
 
   private async lockRequestPlots(client: PoolClient, requestId: number) {
     const result = await client.query<PlotRow>(
-      `SELECT p.plot_id AS id, p.plot_code AS code, p.status, p.price::float AS price,
-              p.zone_id AS "zoneId", p.row_number AS "rowNumber",
-              p.column_number AS "columnNumber", p.map_x AS "mapX",
-              p.map_y AS "mapY", p.map_width AS "mapWidth",
-              p.map_height AS "mapHeight"
+      `SELECT p.plot_id AS id, p.plot_code AS code, p.status,
+              rp.plot_price::float AS price,
+               p.zone_id AS "zoneId", p.row_number AS "rowNumber",
+               p.column_number AS "columnNumber", p.map_x AS "mapX",
+               p.map_y AS "mapY", p.map_width AS "mapWidth",
+               p.map_height AS "mapHeight", p.area_sqm::float AS "areaSqm",
+               z.zone_code AS "zoneCode", z.zone_name AS "zoneName"
        FROM request_plots rp
        JOIN plots p ON p.plot_id = rp.plot_id
+       JOIN cemetery_zones z ON z.zone_id = p.zone_id
        WHERE rp.request_id = $1
        ORDER BY p.plot_id
        FOR UPDATE`,

@@ -10,7 +10,9 @@ function setup(handler?: (sql: string, params?: unknown[]) => any) {
   const database = {
     queryOne: jest.fn(),
     query: jest.fn(),
-    transaction: jest.fn(async (callback: any) => callback(client)),
+    transaction: jest.fn((callback: (value: typeof client) => unknown) =>
+      Promise.resolve(callback(client)),
+    ),
   };
   const notifications = {
     createInApp: jest.fn(),
@@ -31,6 +33,89 @@ function setup(handler?: (sql: string, params?: unknown[]) => any) {
 }
 
 describe('ContractsService admin operations', () => {
+  it('allows an unsigned legacy active contract to adopt the new inheritance template', async () => {
+    const legacyBase =
+      'ĐIỀU 1. ĐỐI TƯỢNG\nNội dung\n\nĐIỀU 3. QUYỀN VÀ NGHĨA VỤ\nGiữ nguyên\n\nĐIỀU 6. THÔNG TIN CŨ\n[ĐỂ TRỐNG - CHỈ ADMIN CẬP NHẬT]';
+    const { client, service } = setup((sql) => {
+      if (sql.includes('FOR UPDATE')) {
+        return {
+          rows: [
+            {
+              id: 1,
+              contractCode: 'HD-1',
+              userId: 2,
+              status: 'active',
+              contractContent: legacyBase,
+              contractBaseContent: null,
+              inheritanceContent: null,
+              partyASignedAt: null,
+              partyBSignedAt: null,
+              hasSignedEvidence: false,
+            },
+          ],
+        };
+      }
+      if (sql.includes('UPDATE contracts')) {
+        return {
+          rows: [
+            {
+              id: 1,
+              contractCode: 'HD-1',
+              userId: 2,
+              inheritanceContent: 'Nội dung mới',
+            },
+          ],
+        };
+      }
+      if (sql.includes('FROM contract_plots cp')) {
+        return {
+          rows: [
+            {
+              code: 'A-01',
+              zoneName: 'Khu A',
+              areaSqm: 5,
+              price: 12000000,
+            },
+          ],
+        };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+
+    await expect(
+      service.updateInheritance(1, 'Nội dung mới', 9),
+    ).resolves.toMatchObject({ inheritanceContent: 'Nội dung mới' });
+    const updateCall = client.query.mock.calls.find(([sql]) =>
+      String(sql).includes('UPDATE contracts'),
+    );
+    expect(updateCall?.[1]?.[3]).not.toContain('CHỈ ADMIN CẬP NHẬT');
+    expect(updateCall?.[1]?.[3]).toContain('1. Lô A-01');
+    expect(updateCall?.[1]?.[4]).toContain('Nội dung mới');
+  });
+
+  it('keeps an active contract locked after signed evidence is recorded', async () => {
+    const { service } = setup((sql) => {
+      if (sql.includes('FOR UPDATE')) {
+        return {
+          rows: [
+            {
+              id: 1,
+              status: 'active',
+              hasSignedEvidence: true,
+              partyASignedAt: null,
+              partyBSignedAt: null,
+            },
+          ],
+        };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+
+    await expect(
+      service.updateInheritance(1, 'Không được sửa', 9),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
   it('returns a paginated filtered contract list', async () => {
     const { database, service } = setup();
     database.queryOne.mockResolvedValue({ total: '1' });
@@ -151,6 +236,75 @@ describe('ContractsService admin operations', () => {
     expect(audit.record).toHaveBeenCalledWith(
       client,
       expect.objectContaining({ action: 'contract.payment.record' }),
+    );
+  });
+
+  it('requires signed evidence before ownership activation', async () => {
+    const { service } = setup((sql) => {
+      if (sql.includes('FROM contracts') && sql.includes('FOR UPDATE')) {
+        return {
+          rows: [
+            { id: 1, contractCode: 'HD-2026-10', userId: 7, status: 'draft' },
+          ],
+        };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+
+    await expect(service.activateOwnership(1, 9)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+
+  it('activates one contract and creates ownership for all included plots', async () => {
+    const { client, notifications, audit, service } = setup((sql) => {
+      if (sql.includes('FROM contracts') && sql.includes('FOR UPDATE')) {
+        return {
+          rows: [
+            { id: 1, contractCode: 'HD-2026-10', userId: 7, status: 'draft' },
+          ],
+        };
+      }
+      if (sql.includes('FROM contract_signed_evidence')) {
+        return { rows: [{ evidence_id: 3 }] };
+      }
+      if (sql.includes('FROM contract_plots') && sql.includes('FOR UPDATE')) {
+        return {
+          rows: [
+            { id: 11, code: 'A-01-001', status: 'reserved' },
+            { id: 12, code: 'A-01-002', status: 'reserved' },
+          ],
+        };
+      }
+      if (sql.includes('FROM ownership_records') && sql.includes('ANY')) {
+        return { rows: [] };
+      }
+      if (sql.includes("SET status = 'active'")) {
+        return { rows: [{ id: 1, contractCode: 'HD-2026-10', status: 'active' }] };
+      }
+      if (sql.includes('COUNT(*)::int') && sql.includes('ownership_records')) {
+        return { rows: [{ total: 2 }] };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+
+    await expect(service.activateOwnership(1, 9)).resolves.toMatchObject({
+      status: 'active',
+      ownershipCreated: 2,
+      plotCodes: ['A-01-001', 'A-01-002'],
+    });
+    expect(notifications.createInAppWithClient).toHaveBeenCalledWith(
+      client,
+      7,
+      'ownership_activated',
+      expect.any(String),
+      expect.stringContaining('2 lô'),
+      'contract',
+      1,
+    );
+    expect(audit.record).toHaveBeenCalledWith(
+      client,
+      expect.objectContaining({ action: 'contract.ownership.activate' }),
     );
   });
 });

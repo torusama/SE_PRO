@@ -11,9 +11,9 @@ describe('ContractsController admin guards', () => {
     'updateStatus',
     'addPayment',
     'updateInheritance',
-    'signAdmin',
-    'uploadAdminPdf',
-    'downloadAdminPdf',
+    'uploadSignedEvidence',
+    'signedEvidence',
+    'activateOwnership',
   ] as const)('%s requires admin role', (method) => {
     expect(Reflect.getMetadata(ROLES_KEY, controller[method])).toEqual([
       'admin',

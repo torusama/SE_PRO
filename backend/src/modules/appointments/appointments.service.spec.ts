@@ -254,7 +254,7 @@ describe('AppointmentsService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('completes appointment and advances existing contracts conditionally', async () => {
+  it('completes appointment without activating ownership before evidence verification', async () => {
     const { client, service } = createService((sql) => {
       if (sql.includes('FOR UPDATE OF oa')) return result([appointmentRow]);
       if (sql.includes('UPDATE offline_appointments')) {
@@ -274,9 +274,14 @@ describe('AppointmentsService', () => {
       [10],
     );
     expect(client.query).toHaveBeenCalledWith(
-      expect.stringContaining("SET status = 'active'"),
+      expect.stringContaining('awaiting signed evidence verification'),
       [10],
     );
+    expect(
+      client.query.mock.calls.some(([sql]) =>
+        String(sql).includes("SET status = 'active'"),
+      ),
+    ).toBe(false);
   });
 
   it('throws not found for missing appointment', async () => {

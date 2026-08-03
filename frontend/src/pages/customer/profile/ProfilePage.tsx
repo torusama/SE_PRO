@@ -100,7 +100,6 @@ interface BackendLot {
   contractDate: string;
   effectiveDate: string | null;
   expiryDate: string | null;
-  pdfUrl: string | null;
   plotId: number;
   plotCode: string;
   areaSqm: number | null;
@@ -2129,16 +2128,6 @@ function LotDetail({
                       sub="Tất cả giao dịch & dịch vụ"
                       onClick={() => showToast("Đang mở lịch sử yêu cầu…")}
                     />
-                    <ActionBtn
-                      icon="📄"
-                      title="Tải hợp đồng"
-                      sub="PDF bản gốc có chữ ký số"
-                      onClick={() =>
-                        lot.pdfUrl
-                          ? window.open(lot.pdfUrl, "_blank")
-                          : showToast("Chưa có file hợp đồng.")
-                      }
-                    />
                   </>
                 ) : (
                   <>
@@ -2154,16 +2143,6 @@ function LotDetail({
                       title="Xem trạng thái lô"
                       sub="Tiến độ xử lý đặt cọc"
                       onClick={() => onOpenModal("status-lot")}
-                    />
-                    <ActionBtn
-                      icon="📄"
-                      title="Hợp đồng đặt cọc"
-                      sub="PDF bản tạm thời"
-                      onClick={() =>
-                        lot.pdfUrl
-                          ? window.open(lot.pdfUrl, "_blank")
-                          : showToast("Chưa có file hợp đồng.")
-                      }
                     />
                     <ActionBtn
                       icon="❌"

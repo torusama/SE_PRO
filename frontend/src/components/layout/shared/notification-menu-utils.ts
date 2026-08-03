@@ -16,7 +16,6 @@ const TYPE_LABELS: Record<string, string> = {
   request_cancelled: "Yêu cầu đã hủy",
   contract_created: "Hợp đồng mới",
   contract_updated: "Cập nhật hợp đồng",
-  contract_pdf_ready: "Hợp đồng sẵn sàng",
   service_submitted: "Dịch vụ mới",
   service_pending_confirm: "Chờ xác nhận dịch vụ",
   service_confirmed: "Dịch vụ đã xác nhận",

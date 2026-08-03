@@ -3,7 +3,7 @@ import { AdminListQueryDto } from '../../../common/dto/admin-list-query.dto';
 
 export class AdminContractQueryDto extends AdminListQueryDto {
   @IsOptional()
-  @IsIn(['active', 'completed', 'cancelled', 'expired', 'transferred'])
+  @IsIn(['draft', 'active', 'completed', 'cancelled', 'expired', 'transferred'])
   status?: string;
 
   @IsOptional()

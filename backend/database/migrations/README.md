@@ -16,7 +16,7 @@ Runner:
 
 Tên file đầy đủ là định danh migration. Repository còn một số prefix lịch sử
 trùng nhau, vì vậy không được chỉ dùng phần số để xác định migration. Migration
-mới tiếp theo dùng prefix `018`; không tạo thêm prefix trùng.
+mới tiếp theo dùng prefix `022`; không tạo thêm prefix trùng.
 
 Runner quản lý transaction và tự bỏ lớp `BEGIN`/`COMMIT` bao ngoài của các file
 legacy trong lúc thực thi, nhưng vẫn checksum nguyên văn file để tương thích
@@ -75,5 +75,9 @@ Thứ tự hiện tại:
 9. `015_ai_agent_learning.sql`
 10. `016_ai_autonomous_learning.sql`
 11. `017_password_reset_tokens.sql`
+12. `018_purchase_contract_workflow.sql`
+13. `019_contract_plot_trigger_compatibility.sql`
+14. `020_backfill_contract_base_content.sql`
+15. `021_remove_archived_pdf_and_e_signature.sql`
 
 `015` phải chạy trước `016`; thứ tự tên file của runner bảo đảm dependency này.

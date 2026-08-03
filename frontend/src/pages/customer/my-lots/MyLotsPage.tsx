@@ -50,9 +50,10 @@ interface Contract {
   customerName?: string;
   plotId?: number;
   plotCode?: string;
+  plotCodes?: string[];
+  plots?: Array<{ id: number; code: string; zoneName?: string | null }>;
   zoneName?: string;
   deceasedName?: string | null;
-  pdfUrl?: string | null;
 }
 
 type ServiceOrderStatus =
@@ -257,11 +258,9 @@ export default function MyLotsPage() {
         />
         <SummaryCard
           label="Lô đã sở hữu"
-          value={
-            contracts.filter((item) =>
-              ["active", "completed"].includes(item.status),
-            ).length
-          }
+          value={contracts
+            .filter((item) => ["active", "completed"].includes(item.status))
+            .reduce((total, item) => total + (item.plots?.length ?? 1), 0)}
         />
         <SummaryCard label="Dịch vụ đã đặt" value={serviceOrders.length} />
       </section>
@@ -347,8 +346,8 @@ export default function MyLotsPage() {
                       {contract.contractCode}
                     </strong>
                     <div style={styles.muted}>
-                      Lô {contract.plotCode || "-"}
-                      {contract.zoneName ? ` · ${contract.zoneName}` : ""}
+                      Lô {(contract.plotCodes ?? [contract.plotCode || "-"]).join(", ")}
+                      {contract.zoneName && (contract.plotCodes?.length ?? 1) === 1 ? ` · ${contract.zoneName}` : ""}
                       {contract.deceasedName
                         ? ` · An táng: ${contract.deceasedName}`
                         : ""}
@@ -374,22 +373,16 @@ export default function MyLotsPage() {
                   />
                 </div>
                 <div style={styles.cardActions}>
-                  {contract.pdfUrl ? (
-                    <button
-                      type="button"
-                      style={styles.linkButton}
-                      onClick={() => void downloadContractPdf(contract)}
-                      disabled={downloadingId === contract.id}
-                    >
-                      {downloadingId === contract.id
-                        ? "Đang tải..."
-                        : "📄 Tải hợp đồng / giấy xác nhận sở hữu"}
-                    </button>
-                  ) : (
-                    <span style={styles.mutedHint}>
-                      Chưa có bản PDF hợp đồng — vui lòng liên hệ ban quản lý.
-                    </span>
-                  )}
+                  <button
+                    type="button"
+                    style={styles.linkButton}
+                    onClick={() => void downloadContractPdf(contract)}
+                    disabled={downloadingId === contract.id}
+                  >
+                    {downloadingId === contract.id
+                      ? "Đang tải..."
+                      : "📄 Tải hợp đồng / giấy xác nhận sở hữu"}
+                  </button>
                 </div>
               </article>
             ))}
