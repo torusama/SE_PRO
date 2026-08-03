@@ -38,6 +38,8 @@ import {
   getHeadingLabel,
 } from "@/lib/cemeteryMapVisuals";
 import { useAuthStore } from "@/store/authStore";
+import { HelpCircle } from "lucide-react";
+import GuidePopup, { type GuideStep } from "@/components/guide/GuidePopup";
 import "./MapPage.css";
 
 type PlotStatus = "available" | "pending" | "reserved" | "sold" | "locked";
@@ -193,6 +195,26 @@ const T = {
   myApprovedPurchase:
     "L\u00f4 n\u00e0y \u0111\u00e3 \u0111\u01b0\u1ee3c duy\u1ec7t mua cho b\u1ea1n",
 };
+
+const MAP_GUIDE_STORAGE_KEY = "hideGuide_mapPage";
+const MAP_GUIDE_STEPS: GuideStep[] = [
+  {
+    title: "Bước 1: Chọn lô đất",
+    desc: "Người dùng lựa chọn lô đất còn trống trên bản đồ quy hoạch của dự án. Hệ thống hiển thị đầy đủ thông tin của lô đất để xem trước.",
+  },
+  {
+    title: "Bước 2: Đăng ký giữ chỗ",
+    desc: "Người dùng nhấn 'Giữ chỗ' để gửi yêu cầu giữ lô đất đã chọn. Hệ thống xác nhận yêu cầu và chuyển sang bước tiếp theo.",
+  },
+  {
+    title: "Bước 3: Xem hồ sơ pháp lý và đặt lịch",
+    desc: "Hệ thống hiển thị giấy tờ pháp lý dưới dạng PDF. Sau khi xem, người dùng chọn ngày và giờ để gặp nhân viên tư vấn ký hợp đồng.",
+  },
+  {
+    title: "Bước 4: Hoàn tất giao dịch",
+    desc: "Sau khi ký hợp đồng và hoàn tất thủ tục, hệ thống cập nhật quyền sở hữu lô đất cho người mua.",
+  },
+];
 
 const STATUS_OPTIONS: Array<{ value: StatusFilter; label: string }> = [
   { value: "all", label: "T\u1ea5t c\u1ea3" },
@@ -626,6 +648,13 @@ export default function MapPage() {
   );
   const [routePlotId, setRoutePlotId] = useState<string | null>(null);
   const [clusterPlots, setClusterPlots] = useState<MapPlot[]>([]);
+
+  const [guideOpen, setGuideOpen] = useState(false);
+  useEffect(() => {
+    if (localStorage.getItem(MAP_GUIDE_STORAGE_KEY) !== "true") {
+      setGuideOpen(true);
+    }
+  }, []);
   const [adjacencyWarning, setAdjacencyWarning] = useState("");
   const [hoverPlot, setHoverPlot] = useState<MapPlot | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -1173,7 +1202,24 @@ export default function MapPage() {
         <a href={ROUTES.HOME}>{T.home}</a>
         <span className="sep">/</span>
         <span className="current">{T.pageTitle}</span>
+        <button
+          type="button"
+          className="map-help-btn"
+          aria-label="Xem hướng dẫn sử dụng"
+          onClick={() => setGuideOpen(true)}
+        >
+          <HelpCircle size={18} strokeWidth={1.8} />
+        </button>
       </div>
+
+      <GuidePopup
+        open={guideOpen}
+        onClose={() => setGuideOpen(false)}
+        title="Quy trình giữ chỗ và mua lô đất"
+        steps={MAP_GUIDE_STEPS}
+        storageKey={MAP_GUIDE_STORAGE_KEY}
+        finishLabel="Bắt đầu chọn lô đất"
+      />
 
       <div className="app-body">
         <aside className="sidebar-left">
