@@ -28,15 +28,6 @@ type AuditEvent = {
 
 const money = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 0 });
 
-function StatCard({ value, label }: { value: string; label: string }) {
-  return (
-    <article className="admin-core-stat">
-      <strong>{value}</strong>
-      <span>{label}</span>
-    </article>
-  );
-}
-
 export default function DashboardPage() {
   const navigate = useNavigate();
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -101,25 +92,6 @@ export default function DashboardPage() {
       </header>
 
       {error && <div className="admin-core-alert">{error}</div>}
-
-      <section className="admin-core-stats" aria-label="Số liệu tổng quan">
-        <StatCard
-          value={money.format(summary?.totalPlots ?? 0)}
-          label="Tổng lô đất"
-        />
-        <StatCard
-          value={money.format(summary?.totalContracts ?? 0)}
-          label="Tổng hợp đồng"
-        />
-        <StatCard
-          value={money.format(summary?.pendingRequests ?? 0)}
-          label="Yêu cầu đang chờ"
-        />
-        <StatCard
-          value={`${money.format(summary?.totalPaid ?? 0)} đ`}
-          label="Khoản đã thanh toán"
-        />
-      </section>
 
       <div className="admin-core-split">
         <section className="admin-core-panel">
