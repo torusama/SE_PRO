@@ -207,7 +207,7 @@ describe('ContractsService admin operations', () => {
       if (sql.includes('INSERT INTO payment_transactions')) {
         return { rows: [{ id: 8, amount: 100, paymentMethod: 'cash' }] };
       }
-      if (sql.includes('UPDATE contracts')) {
+      if (sql.includes('FROM contracts') && !sql.includes('FOR UPDATE')) {
         return {
           rows: [
             {
@@ -224,6 +224,10 @@ describe('ContractsService admin operations', () => {
       return { rows: [], rowCount: 0 };
     });
     await service.addPayment(1, { amount: 100, paymentMethod: 'cash' }, 9);
+    expect(client.query).not.toHaveBeenCalledWith(
+      expect.stringContaining('SET paid_amount = paid_amount +'),
+      expect.anything(),
+    );
     expect(notifications.createInAppWithClient).toHaveBeenCalledWith(
       client,
       expect.anything(),
@@ -239,12 +243,41 @@ describe('ContractsService admin operations', () => {
     );
   });
 
-  it('requires signed evidence before ownership activation', async () => {
+  it('rejects ownership activation until the contract is fully paid', async () => {
     const { service } = setup((sql) => {
       if (sql.includes('FROM contracts') && sql.includes('FOR UPDATE')) {
         return {
           rows: [
-            { id: 1, contractCode: 'HD-2026-10', userId: 7, status: 'draft' },
+            {
+              id: 1,
+              contractCode: 'HD-2026-10',
+              userId: 7,
+              status: 'draft',
+              paymentStatus: 'partial',
+            },
+          ],
+        };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+
+    await expect(service.activateOwnership(1, 9)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+
+  it('requires signed evidence after the contract is fully paid', async () => {
+    const { service } = setup((sql) => {
+      if (sql.includes('FROM contracts') && sql.includes('FOR UPDATE')) {
+        return {
+          rows: [
+            {
+              id: 1,
+              contractCode: 'HD-2026-10',
+              userId: 7,
+              status: 'draft',
+              paymentStatus: 'paid',
+            },
           ],
         };
       }
@@ -261,7 +294,13 @@ describe('ContractsService admin operations', () => {
       if (sql.includes('FROM contracts') && sql.includes('FOR UPDATE')) {
         return {
           rows: [
-            { id: 1, contractCode: 'HD-2026-10', userId: 7, status: 'draft' },
+            {
+              id: 1,
+              contractCode: 'HD-2026-10',
+              userId: 7,
+              status: 'draft',
+              paymentStatus: 'paid',
+            },
           ],
         };
       }

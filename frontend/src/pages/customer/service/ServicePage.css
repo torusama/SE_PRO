@@ -167,6 +167,8 @@
 .service-page .lot-info p { font-size: 13px; color: var(--text-muted); }
 .service-page .lot-select { margin-left: auto; }
 .service-page .lot-select select { background: rgba(4, 6,14, 0.8); border: 0.5px solid var(--border-soft); border-radius: 20px; padding: 8px 16px; color: var(--gold); font-size: 12px; font-family: 'Be Vietnam Pro', sans-serif; }
+.service-page .scope-toggle { display: flex; gap: 8px; margin-left: auto; }
+.service-page .no-plot-block p { max-width: 420px; margin: 0 auto; }
 
 .service-page .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; align-items: start; }
 .service-page .form-col { display: flex; flex-direction: column; gap: 24px; }

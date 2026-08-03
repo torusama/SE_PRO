@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '@/lib/api'
+import DemoPaymentPanel from '@/components/payment/DemoPaymentPanel'
 import './ServiceManagementPage.css'
 
 type OrderStatus =
@@ -440,6 +441,26 @@ function OrderDetail({
             <Detail label="Ghi chú khách hàng" value={order.note || 'Không có ghi chú'} wide />
           </div>
         </section>
+
+        {order.status === 'confirmed' && (
+          <DemoPaymentPanel
+            orderId={order.id}
+            amount={order.amount}
+            variant="admin"
+            onConfirmed={async () => {
+              setSaving(true)
+              setError('')
+              try {
+                await api.patch(`/admin/service-orders/${order.id}`, { status: 'in_progress' })
+                onSaved('Đã xác nhận thanh toán và chuyển đơn sang trạng thái Thực hiện.')
+              } catch (requestError) {
+                setError(getErrorMessage(requestError))
+              } finally {
+                setSaving(false)
+              }
+            }}
+          />
+        )}
 
         {!terminal && (
           <section className="detail-card detail-editor">

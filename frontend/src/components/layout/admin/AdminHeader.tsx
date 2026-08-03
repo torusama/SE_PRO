@@ -1,5 +1,4 @@
 import BrandWordmark from "@/components/layout/shared/BrandWordmark";
-import PrimaryNavigation from "@/components/layout/shared/PrimaryNavigation";
 import AccountActions from "@/components/layout/shared/AccountActions";
 
 export default function AdminHeader() {
@@ -7,12 +6,11 @@ export default function AdminHeader() {
     <header className="admin-header">
       <BrandWordmark />
 
-      <PrimaryNavigation
-        className="admin-header__navigation"
+      <AccountActions
         variant="light"
+        className="admin-account"
+        showNotification={false}
       />
-
-      <AccountActions variant="light" className="admin-account" />
     </header>
   );
 }

@@ -84,6 +84,9 @@ export default function ContractsPage() {
   const [inheritanceState, setInheritanceState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [message, setMessage] = useState('')
   const inheritanceTimer = useRef<number | null>(null)
+  const [paymentAmount, setPaymentAmount] = useState('')
+  const [paymentMethod, setPaymentMethod] = useState('cash')
+  const [paymentNote, setPaymentNote] = useState('')
 
   const load = useCallback(async (preferredId?: number) => {
     setLoading(true)
@@ -127,6 +130,9 @@ export default function ContractsPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setInheritance(selected?.inheritanceContent ?? '')
     setInheritanceState('idle')
+    setPaymentAmount('')
+    setPaymentMethod('cash')
+    setPaymentNote('')
     setMessage('')
   }, [selectedId, selected?.inheritanceContent])
 
@@ -205,6 +211,34 @@ export default function ContractsPage() {
     }
   }
 
+  const recordPayment = async () => {
+    if (!selected) return
+    const amount = Number(paymentAmount.replace(/[^\d]/g, ''))
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setMessage('Nhập số tiền thanh toán hợp lệ.')
+      return
+    }
+    if (amount > selected.totalAmount - selected.paidAmount) {
+      setMessage('Số tiền vượt quá giá trị còn phải thanh toán.')
+      return
+    }
+    setSaving(true)
+    setMessage('')
+    try {
+      await api.post(`/admin/contracts/${selected.id}/payments`, {
+        amount,
+        paymentMethod,
+        note: paymentNote.trim() || undefined,
+      })
+      await load(selected.id)
+      setMessage('Đã ghi nhận thanh toán offline.')
+    } catch (error) {
+      setMessage(errorMessage(error, 'Không thể ghi nhận thanh toán.'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const uploadSignedEvidence = async (files: File[]) => {
     if (!selected || files.length === 0) return
     const form = new FormData()
@@ -259,7 +293,7 @@ export default function ContractsPage() {
       <header className="admin-page-header">
         <h1 style={{ margin: 0, color: 'var(--color-text-primary)' }}>Hợp đồng và sở hữu</h1>
         <p style={{ color: 'var(--color-text-secondary)', margin: '5px 0 0' }}>
-          Duyệt yêu cầu mua tạo hợp đồng nháp; chỉ kích hoạt sở hữu sau khi có minh chứng ký offline.
+          Duyệt yêu cầu mua tạo hợp đồng nháp; chỉ kích hoạt sở hữu sau khi thanh toán đủ và có minh chứng ký offline.
         </p>
       </header>
 
@@ -290,7 +324,6 @@ export default function ContractsPage() {
               </div>
             </div>
             <p><b>Bên B:</b> {selected.customerName} — CCCD: {selected.customerIdCard || 'chưa cập nhật'}</p>
-
             <div style={{ marginTop: 16 }}>
               <b>Đối tượng hợp đồng và giá trị từng lô</b>
               <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
@@ -302,6 +335,25 @@ export default function ContractsPage() {
                 ))}
                 <div style={{ textAlign: 'right', fontSize: 16 }}><b>Tổng cộng: {money.format(selected.totalAmount)}</b></div>
               </div>
+            </div>
+
+            <div style={{ marginTop: 18, borderTop: '1px solid var(--color-border)', paddingTop: 18 }}>
+              <b>Thanh toán</b>
+              <p style={{ fontSize: 13 }}>
+                Đã thanh toán: {money.format(selected.paidAmount)} / {money.format(selected.totalAmount)} · {selected.paymentStatus}
+              </p>
+              {selected.status === 'draft' && selected.paymentStatus !== 'paid' && <div style={{ display: 'grid', gridTemplateColumns: 'minmax(160px, 1fr) minmax(140px, .7fr)', gap: 8 }}>
+                <input value={paymentAmount} inputMode="numeric" onChange={(event) => setPaymentAmount(event.target.value)} placeholder="Số tiền đã nhận" style={{ padding: 9, background: '#ffffff', color: '#000000', border: '1px solid #d1d5db', borderRadius: 6 }} />
+                <select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)} style={{ padding: 9, background: '#ffffff', color: '#000000', border: '1px solid #d1d5db', borderRadius: 6 }}>
+                  <option value="cash">Tiền mặt</option>
+                  <option value="bank_transfer">Chuyển khoản</option>
+                  <option value="card">Thẻ</option>
+                  <option value="other">Khác</option>
+                </select>
+                <input value={paymentNote} onChange={(event) => setPaymentNote(event.target.value)} placeholder="Ghi chú thanh toán (không bắt buộc)" style={{ gridColumn: '1 / -1', padding: 9, background: '#ffffff', color: '#000000', border: '1px solid #d1d5db', borderRadius: 6 }} />
+                 <button disabled={saving} onClick={recordPayment} style={{ justifySelf: 'start', padding: '9px 18px' }}>Ghi nhận thanh toán</button>
+              </div>}
+              {selected.paymentStatus === 'paid' && <small>Hợp đồng đã được thanh toán đầy đủ.</small>}
             </div>
 
             <div style={{ marginTop: 18 }}>
@@ -334,8 +386,8 @@ export default function ContractsPage() {
 
             {selected.status === 'draft' && <div style={{ marginTop: 18, padding: 14, border: '1px solid #008573', borderRadius: 8, background: '#eefaf8' }}>
               <b>Bước cuối: kích hoạt hợp đồng và quyền sở hữu</b>
-              <p style={{ fontSize: 12 }}>Nút chỉ khả dụng sau khi đã lưu ít nhất một ảnh minh chứng. Thao tác sẽ chuyển tất cả lô trong hợp đồng từ “đã giữ” sang “đã bán” và tạo lịch sử sở hữu cho người mua.</p>
-              <button disabled={saving || (selected.signedEvidence?.length ?? 0) === 0} onClick={() => void activateOwnership()} style={{ padding: '10px 16px', background: '#008573', color: '#fff', border: 0, borderRadius: 7, fontWeight: 700 }}>
+              <p style={{ fontSize: 12 }}>Nút chỉ khả dụng sau khi hợp đồng đã được thanh toán đầy đủ và đã lưu ít nhất một ảnh minh chứng. Thao tác sẽ chuyển tất cả lô trong hợp đồng từ “đã giữ” sang “đã bán” và tạo lịch sử sở hữu cho người mua.</p>
+              <button disabled={saving || selected.paymentStatus !== 'paid' || (selected.signedEvidence?.length ?? 0) === 0} onClick={() => void activateOwnership()} style={{ padding: '10px 16px', background: '#008573', color: '#fff', border: 0, borderRadius: 7, fontWeight: 700 }}>
                 Xác nhận đã ký và chuyển quyền sở hữu
               </button>
             </div>}

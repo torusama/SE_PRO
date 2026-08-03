@@ -111,6 +111,23 @@
   position: relative;
 }
 
+.admin-header .brand-wordmark {
+  background: none;
+  -webkit-background-clip: unset;
+  background-clip: unset;
+  -webkit-text-fill-color: unset;
+  color: var(--admin-ink);
+  filter: none;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.admin-header .brand-wordmark:hover,
+.admin-header .brand-wordmark:focus-visible {
+  color: var(--admin-accent);
+  filter: none;
+}
+
 .admin-sidebar {
   display: flex;
   width: 228px;

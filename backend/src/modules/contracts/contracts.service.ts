@@ -366,9 +366,11 @@ export class ContractsService {
         contractCode: string;
         userId: number;
         status: string;
+        paymentStatus: string;
       }>(
         `SELECT contract_id AS id, contract_code AS "contractCode",
-                user_id AS "userId", status
+                user_id AS "userId", status,
+                payment_status AS "paymentStatus"
          FROM contracts
          WHERE contract_id = $1 AND is_deleted = FALSE
          FOR UPDATE`,
@@ -379,6 +381,11 @@ export class ContractsService {
       if (contract.status !== 'draft') {
         throw new BadRequestException(
           'Only draft contracts can activate ownership',
+        );
+      }
+      if (contract.paymentStatus !== 'paid') {
+        throw new BadRequestException(
+          'The contract must be paid in full before ownership can be activated',
         );
       }
       const evidence = await client.query(
@@ -461,7 +468,10 @@ export class ContractsService {
         action: 'contract.ownership.activate',
         entityType: 'contract',
         entityId: id,
-        before: { status: contract.status },
+        before: {
+          status: contract.status,
+          paymentStatus: contract.paymentStatus,
+        },
         after: {
           status: 'active',
           plotIds: plots.rows.map((plot) => plot.id),
@@ -524,16 +534,16 @@ export class ContractsService {
           adminId,
         ],
       );
+      // trg_payment_accum updates paid_amount (and trg_contract_payment_status
+      // derives payment_status) synchronously after the payment insert.
+      // Read that result instead of adding the amount a second time here.
       const contract = await client.query(
-        `UPDATE contracts
-         SET paid_amount = paid_amount + $2,
-             payment_status = CASE WHEN paid_amount + $2 >= total_amount THEN 'paid' ELSE 'partial' END,
-             updated_at = NOW()
-         WHERE contract_id = $1
-         RETURNING contract_id AS id, contract_code AS "contractCode", user_id AS "userId",
-                   paid_amount::float AS "paidAmount", total_amount::float AS "totalAmount",
-                   payment_status AS "paymentStatus"`,
-        [id, body.amount],
+        `SELECT contract_id AS id, contract_code AS "contractCode", user_id AS "userId",
+                paid_amount::float AS "paidAmount", total_amount::float AS "totalAmount",
+                payment_status AS "paymentStatus"
+         FROM contracts
+         WHERE contract_id = $1`,
+        [id],
       );
       const savedPayment = payment.rows[0];
       const updatedContract = contract.rows[0];

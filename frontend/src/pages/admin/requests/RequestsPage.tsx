@@ -218,6 +218,7 @@ export default function RequestsPage() {
   );
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [appointmentLoading, setAppointmentLoading] = useState(false);
+  const [contractLoading, setContractLoading] = useState(false);
   const [appointmentForm, setAppointmentForm] = useState({
     scheduledAt: "",
     location: "Văn phòng nghĩa trang Vĩnh Phúc Viên",
@@ -386,6 +387,23 @@ export default function RequestsPage() {
       setError(getErrorMessage(err));
     } finally {
       setAppointmentLoading(false);
+    }
+  }
+
+  async function createContract() {
+    if (!current || current.status !== "approved") return;
+    setContractLoading(true);
+    setError("");
+    setSuccessMessage("");
+    try {
+      await api.post(`/admin/contracts/from-reservation/${current.id}`);
+      setSuccessMessage(
+        `Đã tạo hợp đồng nháp cho yêu cầu #${current.id}. Vào mục Hợp đồng để ghi nhận thanh toán và cấp quyền sở hữu.`,
+      );
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setContractLoading(false);
     }
   }
 
@@ -858,6 +876,32 @@ export default function RequestsPage() {
                       </Button>
                     </div>
                   )}
+                  {current.type === "reserve" ? (
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 12,
+                        paddingTop: 2,
+                      }}
+                    >
+                      <span
+                        style={{
+                          color: "var(--color-text-secondary)",
+                          fontSize: 13,
+                        }}
+                      >
+                        Sau khi khách đồng ý mua, tạo hợp đồng nháp để ghi nhận thanh toán offline.
+                      </span>
+                      <Button
+                        onClick={() => void createContract()}
+                        loading={contractLoading}
+                      >
+                        Tạo hợp đồng mua
+                      </Button>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
 
