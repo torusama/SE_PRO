@@ -35,6 +35,32 @@ const TYPE_OPTIONS: (EventType | "Tất cả")[] = [
 ];
 const RANGE_OPTIONS = ["Hôm nay", "7 ngày", "30 ngày", "Tất cả"] as const;
 
+const ACTION_LABELS: Record<string, string> = {
+  "appointment.create": "Tạo lịch hẹn",
+  "appointment.update": "Cập nhật lịch hẹn",
+  "appointment.status.update": "Cập nhật trạng thái lịch hẹn",
+  "contract.payment.record": "Ghi nhận thanh toán hợp đồng",
+  "notification.broadcast": "Gửi thông báo hàng loạt",
+  "plot.create": "Tạo lô đất",
+  "plot.update": "Cập nhật lô đất",
+  "plot.status.update": "Cập nhật trạng thái lô đất",
+  "plot.price.update": "Cập nhật giá lô đất",
+  "plot.lock": "Khóa lô đất",
+  "plot.unlock": "Mở khóa lô đất",
+  "plot.delete": "Xóa lô đất",
+  "plot.restore": "Khôi phục lô đất",
+  "reservation.approve": "Duyệt yêu cầu đặt chỗ",
+  "reservation.reject": "Từ chối yêu cầu đặt chỗ",
+  "user.locked": "Khóa tài khoản",
+  "user.unlocked": "Mở khóa tài khoản",
+  "admin_plot_transfer_completed": "Hoàn tất chuyển nhượng lô đất",
+  "ai_knowledge_correction_activated": "Áp dụng hiệu chỉnh tri thức AI",
+};
+
+function actionLabel(action: string) {
+  return ACTION_LABELS[action] ?? action.replace(/[._]/g, " ");
+}
+
 function eventType(row: AuditRow): EventType {
   const value = `${row.action} ${row.entityType}`.toLowerCase();
   if (value.includes("payment")) return "Thanh toán";
@@ -192,7 +218,7 @@ export default function ActivityPage() {
                   {new Date(row.createdAt).toLocaleString("vi-VN")}
                   <span>{eventType(row)}</span>
                 </p>
-                <h2>{row.action}</h2>
+                <h2>{actionLabel(row.action)}</h2>
                 <small>
                   {row.actorName ?? "Admin"} · {row.entityType} #
                   {row.entityKey ?? row.entityId ?? "-"}
