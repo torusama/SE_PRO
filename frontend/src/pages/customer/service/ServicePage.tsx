@@ -8,6 +8,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/store/authStore'
 import { ROUTES } from '@/constants/routes'
+import DemoPaymentPanel from '@/components/payment/DemoPaymentPanel'
 import './ServicePage.css'
 
 type Tab = 'catalogue' | 'book' | 'track'
@@ -769,6 +770,10 @@ function TrackTab(props: {
                               <p>{detail.note || 'Không có ghi chú thêm.'}</p>
                             </div>
                           </div>
+
+                          {detail.status === 'confirmed' && (
+                            <DemoPaymentPanel orderId={detail.id} amount={detail.amount} variant="customer" />
+                          )}
 
                           <div className="detail-block">
                             <h4>Lịch sử tiến độ</h4>
