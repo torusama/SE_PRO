@@ -21,3 +21,63 @@
   color: #d4453a;
   line-height: 1.6;
 }
+
+/* ===== Register step indicator ===== */
+.register-steps {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  margin-bottom: 24px;
+}
+
+.register-steps span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border2);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink2);
+  background: transparent;
+  transition: all 0.25s ease;
+}
+
+.register-steps span.active {
+  border-color: var(--vermil);
+  background: var(--vermil);
+  color: var(--paper);
+}
+
+.register-steps span.done {
+  border-color: var(--moss);
+  background: var(--moss);
+  color: var(--paper);
+}
+
+.register-steps i {
+  display: block;
+  width: 32px;
+  height: 1.5px;
+  background: var(--border2);
+  font-style: normal;
+  transition: background 0.25s ease;
+}
+
+.register-steps span.done + i,
+.register-steps span.active + i {
+  background: var(--vermil);
+}
+
+/* Register error message */
+.register-error {
+  color: #d4453a;
+  font-size: 12px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  background: rgba(212, 69, 58, 0.08);
+  border: 1px solid rgba(212, 69, 58, 0.2);
+}
