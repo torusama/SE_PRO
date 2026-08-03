@@ -153,4 +153,61 @@ describe('ContractsService admin operations', () => {
       expect.objectContaining({ action: 'contract.payment.record' }),
     );
   });
+
+  it('grants ownership only after the contract is fully paid', async () => {
+    const { client, notifications, audit, service } = setup((sql) => {
+      if (sql.includes('FOR UPDATE')) {
+        return {
+          rows: [
+            {
+              id: 1,
+              contractCode: 'HD-1',
+              userId: 2,
+              plotId: 3,
+              status: 'draft',
+              paymentStatus: 'paid',
+            },
+          ],
+        };
+      }
+      if (sql.includes("SET status = 'active'")) {
+        return { rows: [{ id: 1, contractCode: 'HD-1', plotId: 3 }] };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+
+    await expect(service.completeSale(1, 9)).resolves.toMatchObject({
+      id: 1,
+      plotId: 3,
+    });
+    expect(notifications.createInAppWithClient).toHaveBeenCalled();
+    expect(audit.record).toHaveBeenCalledWith(
+      client,
+      expect.objectContaining({ action: 'contract.sale.complete' }),
+    );
+  });
+
+  it('rejects ownership when the contract has not been fully paid', async () => {
+    const { service } = setup((sql) => {
+      if (sql.includes('FOR UPDATE')) {
+        return {
+          rows: [
+            {
+              id: 1,
+              contractCode: 'HD-1',
+              userId: 2,
+              plotId: 3,
+              status: 'draft',
+              paymentStatus: 'partial',
+            },
+          ],
+        };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+
+    await expect(service.completeSale(1, 9)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
 });

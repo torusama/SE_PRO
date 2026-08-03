@@ -123,9 +123,9 @@ export class ContractsService {
 
   async createFromReservation(reservationId: number, adminId: number) {
     const rows = await this.database.query(
-      `INSERT INTO contracts (contract_code, request_id, user_id, plot_id, total_amount, created_by, group_contract_code)
+      `INSERT INTO contracts (contract_code, request_id, user_id, plot_id, total_amount, created_by, group_contract_code, status)
        SELECT CONCAT('HD-', rr.request_id, '-', rp.plot_id), rr.request_id, rr.user_id, rp.plot_id,
-              rp.plot_price, $2, CONCAT('GRP-', rr.request_id, '-', TO_CHAR(NOW(), 'YYYYMMDD'))
+              rp.plot_price, $2, CONCAT('GRP-', rr.request_id, '-', TO_CHAR(NOW(), 'YYYYMMDD')), 'draft'
        FROM reservation_requests rr JOIN request_plots rp ON rp.request_id = rr.request_id
        WHERE rr.request_id = $1
        ON CONFLICT (contract_code) DO NOTHING
@@ -393,6 +393,75 @@ export class ContractsService {
     });
 
     return result.payment;
+  }
+
+  async completeSale(
+    id: number,
+    adminId: number,
+    context?: AdminRequestContext,
+  ) {
+    return this.database.transaction(async (client) => {
+      const locked = await client.query<{
+        id: number;
+        contractCode: string;
+        userId: number;
+        plotId: number;
+        status: string;
+        paymentStatus: string;
+      }>(
+        `SELECT contract_id AS id, contract_code AS "contractCode",
+                user_id AS "userId", plot_id AS "plotId", status,
+                payment_status AS "paymentStatus"
+         FROM contracts
+         WHERE contract_id = $1 AND is_deleted = FALSE
+         FOR UPDATE`,
+        [id],
+      );
+      const contract = locked.rows[0];
+      if (!contract) throw new NotFoundException('Contract not found');
+      if (contract.status !== 'draft') {
+        throw new BadRequestException('Only draft contracts can be completed');
+      }
+      if (contract.paymentStatus !== 'paid') {
+        throw new BadRequestException(
+          'The contract must be paid in full before ownership can be granted',
+        );
+      }
+
+      const activated = await client.query<{
+        id: number;
+        contractCode: string;
+        plotId: number;
+      }>(
+        `UPDATE contracts
+         SET status = 'active', effective_date = COALESCE(effective_date, CURRENT_DATE),
+             updated_at = NOW()
+         WHERE contract_id = $1
+         RETURNING contract_id AS id, contract_code AS "contractCode", plot_id AS "plotId"`,
+        [id],
+      );
+      const completed = activated.rows[0];
+
+      await this.notificationsService.createInAppWithClient(
+        client,
+        contract.userId,
+        'ownership_granted',
+        'Đã xác nhận quyền sở hữu lô đất',
+        `Lô đất theo hợp đồng ${completed.contractCode} đã được xác nhận thuộc quyền sở hữu của bạn.`,
+        'contract',
+        id,
+      );
+      await this.audit?.record(client, {
+        action: 'contract.sale.complete',
+        entityType: 'contract',
+        entityId: id,
+        before: { status: contract.status, paymentStatus: contract.paymentStatus },
+        after: { status: 'active', plotId: completed.plotId, plotStatus: 'sold' },
+        context: context ?? { adminId, ipAddress: null, userAgent: null },
+      });
+
+      return completed;
+    });
   }
 
   private baseQuery(suffix: string) {

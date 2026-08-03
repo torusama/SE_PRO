@@ -40,6 +40,7 @@ const ACTION_LABELS: Record<string, string> = {
   "appointment.update": "Cập nhật lịch hẹn",
   "appointment.status.update": "Cập nhật trạng thái lịch hẹn",
   "contract.payment.record": "Ghi nhận thanh toán hợp đồng",
+  "contract.sale.complete": "Xác nhận quyền sở hữu lô đất",
   "notification.broadcast": "Gửi thông báo hàng loạt",
   "plot.create": "Tạo lô đất",
   "plot.update": "Cập nhật lô đất",

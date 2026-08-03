@@ -125,6 +125,24 @@ export class ContractsController {
     };
   }
 
+  @Post('admin/contracts/:id/complete-sale')
+  @Roles('admin')
+  async completeSale(
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+    @CurrentAdminContext() context: AdminRequestContext,
+  ) {
+    return {
+      success: true,
+      message: 'Ownership granted',
+      data: await this.contractsService.completeSale(
+        Number(id),
+        user.id,
+        context,
+      ),
+    };
+  }
+
   @Patch('admin/contracts/:id/inheritance')
   @Roles('admin')
   async updateInheritance(

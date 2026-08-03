@@ -6,7 +6,7 @@ import '../AdminCorePages.css'
 interface Contract {
   id: number
   contractCode: string
-  status: 'active' | 'expired' | 'transferred' | 'cancelled'
+  status: 'draft' | 'active' | 'expired' | 'transferred' | 'cancelled'
   totalAmount: number
   paidAmount: number
   paymentStatus: string
@@ -42,6 +42,9 @@ export default function ContractsPage() {
   const [message, setMessage] = useState('')
   const [signatureName, setSignatureName] = useState('')
   const [accepted, setAccepted] = useState(false)
+  const [paymentAmount, setPaymentAmount] = useState('')
+  const [paymentMethod, setPaymentMethod] = useState('cash')
+  const [paymentNote, setPaymentNote] = useState('')
 
   const load = async () => {
     setLoading(true)
@@ -70,6 +73,9 @@ export default function ContractsPage() {
 
   useEffect(() => {
     setInheritance(selected?.inheritanceContent ?? '')
+    setPaymentAmount('')
+    setPaymentMethod('cash')
+    setPaymentNote('')
     setMessage('')
   }, [selected])
 
@@ -122,6 +128,46 @@ export default function ContractsPage() {
       setMessage('Đã ký điện tử với tư cách Bên A.')
     } catch {
       setMessage('Không thể ký hợp đồng.')
+    } finally { setSaving(false) }
+  }
+
+  const recordPayment = async () => {
+    if (!selected) return
+    const amount = Number(paymentAmount.replace(/[^\d]/g, ''))
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setMessage('Nhập số tiền thanh toán hợp lệ.')
+      return
+    }
+    if (amount > selected.totalAmount - selected.paidAmount) {
+      setMessage('Số tiền vượt quá giá trị còn phải thanh toán.')
+      return
+    }
+    setSaving(true)
+    setMessage('')
+    try {
+      await api.post(`/admin/contracts/${selected.id}/payments`, {
+        amount,
+        paymentMethod,
+        note: paymentNote.trim() || undefined,
+      })
+      await load()
+      setMessage('Đã ghi nhận thanh toán offline.')
+    } catch {
+      setMessage('Không thể ghi nhận thanh toán.')
+    } finally { setSaving(false) }
+  }
+
+  const completeSale = async () => {
+    if (!selected) return
+    if (!window.confirm(`Xác nhận cấp quyền sở hữu lô ${selected.plotCode} cho ${selected.customerName}?`)) return
+    setSaving(true)
+    setMessage('')
+    try {
+      await api.post(`/admin/contracts/${selected.id}/complete-sale`)
+      await load()
+      setMessage('Đã xác nhận quyền sở hữu và chuyển lô sang đã bán.')
+    } catch {
+      setMessage('Không thể xác nhận quyền sở hữu. Kiểm tra lại trạng thái thanh toán.')
     } finally { setSaving(false) }
   }
 
@@ -191,6 +237,24 @@ export default function ContractsPage() {
             </div>
             <p><b>Bên B:</b> {selected.customerName} — CCCD: {selected.customerIdCard || 'chưa cập nhật'}</p>
             <p><b>Vị trí:</b> {selected.plotCode}, {selected.zoneName}</p>
+            <div style={{ marginTop: 18, borderTop: '1px solid var(--color-border)', paddingTop: 18 }}>
+              <b>Thanh toán &amp; quyền sở hữu</b>
+              <p style={{ fontSize: 13 }}>
+                Đã thanh toán: {selected.paidAmount.toLocaleString('vi-VN')} đ / {selected.totalAmount.toLocaleString('vi-VN')} đ · {selected.paymentStatus}
+              </p>
+              {selected.status === 'draft' && selected.paymentStatus !== 'paid' && <div style={{ display: 'grid', gridTemplateColumns: 'minmax(160px, 1fr) minmax(140px, .7fr)', gap: 8 }}>
+                <input value={paymentAmount} inputMode="numeric" onChange={(event) => setPaymentAmount(event.target.value)} placeholder="Số tiền đã nhận" style={{ padding: 9, background: '#ffffff', color: '#000000', border: '1px solid #d1d5db', borderRadius: 6 }} />
+                <select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)} style={{ padding: 9, background: '#ffffff', color: '#000000', border: '1px solid #d1d5db', borderRadius: 6 }}>
+                  <option value="cash">Tiền mặt</option>
+                  <option value="bank_transfer">Chuyển khoản</option>
+                  <option value="card">Thẻ</option>
+                  <option value="other">Khác</option>
+                </select>
+                <input value={paymentNote} onChange={(event) => setPaymentNote(event.target.value)} placeholder="Ghi chú thanh toán (không bắt buộc)" style={{ gridColumn: '1 / -1', padding: 9, background: '#ffffff', color: '#000000', border: '1px solid #d1d5db', borderRadius: 6 }} />
+                <button disabled={saving} onClick={recordPayment} style={{ justifySelf: 'start', padding: '9px 18px' }}>Ghi nhận thanh toán</button>
+              </div>}
+              {selected.status === 'draft' && selected.paymentStatus === 'paid' && <button disabled={saving} onClick={completeSale} style={{ padding: '9px 18px', background: 'var(--color-accent-teal)', border: 0, borderRadius: 7, cursor: 'pointer' }}>Xác nhận cấp quyền sở hữu</button>}
+            </div>
             <details open style={{ marginTop: 18 }}>
               <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Nội dung hợp đồng đã sinh</summary>
               <pre style={{ whiteSpace: 'pre-wrap', fontFamily: '"Times New Roman", serif', fontSize: 15, lineHeight: 1.65, padding: 18, background: '#ffffff', color: '#000000', border: '1px solid #d1d5db', borderRadius: 8, maxHeight: 430, overflow: 'auto' }}>{selected.contractContent || 'Hợp đồng cũ chưa có nội dung snapshot.'}</pre>
