@@ -7,9 +7,9 @@ import "@/styles/admin-page-unification.css";
 export default function AdminLayout() {
   return (
     <div className="admin-theme admin-shell">
-      <Sidebar />
-      <div className="admin-shell__body">
-        <AdminHeader />
+      <AdminHeader />
+      <div className="admin-shell__lower">
+        <Sidebar />
         <main className="admin-workspace">
           <Outlet />
         </main>

@@ -40,16 +40,16 @@
 
 .admin-shell {
   display: flex;
+  flex-direction: column;
   height: 100vh;
   overflow: hidden;
   background: var(--admin-canvas);
 }
 
-.admin-shell__body {
+.admin-shell__lower {
   display: flex;
   flex: 1;
-  min-width: 0;
-  flex-direction: column;
+  min-height: 0;
   overflow: hidden;
 }
 
