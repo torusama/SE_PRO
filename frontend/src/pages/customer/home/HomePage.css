@@ -193,6 +193,7 @@ body {
   background: linear-gradient(135deg, var(--teal), #06b8a0);
   color: var(--night);
   padding: 14px 32px;
+  font-family: "Be Vietnam Pro", "Inter", sans-serif;
   font-size: 12px;
   letter-spacing: 0.15em;
   text-transform: uppercase;
@@ -212,9 +213,11 @@ body {
   border: 1px solid var(--gold);
   color: var(--gold);
   padding: 14px 32px;
+  font-family: "Be Vietnam Pro", "Inter", sans-serif;
   font-size: 12px;
   letter-spacing: 0.15em;
   text-transform: uppercase;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.3s;
   clip-path: polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%);
@@ -922,13 +925,15 @@ body {
   text-align: center;
 }
 .stat-num {
-  font-family: "Cinzel Decorative", serif;
+  font-family: "Be Vietnam Pro", "Inter", sans-serif;
+  font-weight: 650;
   font-size: 36px;
   color: var(--teal);
   text-shadow: 0 0 30px var(--teal-glow);
   margin-bottom: 8px;
 }
 .stat-label {
+  font-family: "Be Vietnam Pro", "Inter", sans-serif;
   font-size: 11px;
   letter-spacing: 0.2em;
   color: var(--muted);
@@ -982,7 +987,7 @@ body {
   margin-bottom: 28px;
 }
 .footer-contact-owner {
-  max-width: 540px;
+  max-width: none;
   margin: 0 auto 10px;
   font-family: "Be Vietnam Pro", "Inter", sans-serif;
   font-size: 12.5px;
@@ -990,6 +995,7 @@ body {
   letter-spacing: 0.01em;
   line-height: 1.7;
   color: var(--muted);
+  white-space: nowrap;
 }
 .footer-contact-email {
   display: inline-block;
@@ -1309,6 +1315,10 @@ body {
   }
   .stats-row {
     grid-template-columns: 1fr 1fr;
+  }
+  .footer-contact-owner {
+    max-width: 540px;
+    white-space: normal;
   }
 }
 
