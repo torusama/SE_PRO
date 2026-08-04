@@ -2029,11 +2029,24 @@ export default function HomePage() {
 
       {/* FOOTER */}
       <footer className="home-footer">
-        <div className="footer-logo">VĨNH PHÚC VIÊN</div>
-        <div className="footer-sub">
-          永 福 苑 · Hệ thống Quản lý Nghĩa trang
+        <p className="footer-eyebrow">Hệ thống quản lý nghĩa trang</p>
+        <div className="footer-logo">Vĩnh Phúc Viên</div>
+        <div className="footer-sub">永 福 苑</div>
+
+        <div className="footer-contact">
+          <p className="footer-contact-owner">
+            Sinh viên Trường Đại học Khoa học tự nhiên, ĐHQG-TPHCM · Khoa CNTT ·
+            Lớp 24C08 · Nhóm 08
+          </p>
+          <a
+            className="footer-contact-email"
+            href="mailto:vinhphucvien@gmail.com"
+          >
+            vinhphucvien@gmail.com
+          </a>
         </div>
-        <div className="footer-copy">Nhóm 8 · 2026 · Dự án môn học</div>
+
+        <p className="footer-thanks">Cảm ơn bạn đã sử dụng web của chúng tôi</p>
       </footer>
     </div>
   );

@@ -941,24 +941,103 @@ body {
   padding: 48px;
   text-align: center;
 }
+/* Đồng bộ với hero: eyebrow (gold, Be Vietnam Pro) -> title (gradient
+   Playfair Display) -> chữ Hán (gold, Noto Serif SC letter-spaced) */
+.footer-eyebrow {
+  font-family: "Be Vietnam Pro", "Inter", sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 14px;
+}
 .footer-logo {
-  font-family: "Cinzel Decorative", serif;
-  font-size: 16px;
-  color: var(--teal);
-  margin-bottom: 12px;
-  text-shadow: 0 0 20px var(--teal-glow);
+  font-family: "Playfair Display", Georgia, serif;
+  font-weight: 600;
+  font-size: clamp(24px, 3.4vw, 36px);
+  line-height: 1.1;
+  margin-bottom: 10px;
+  background: linear-gradient(
+    135deg,
+    var(--white) 0%,
+    var(--teal) 50%,
+    var(--lime) 100%
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 0 20px rgba(10, 255, 212, 0.25));
 }
 .footer-sub {
   font-family: "Noto Serif SC", serif;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--gold);
   letter-spacing: 0.3em;
-  margin-bottom: 24px;
+  margin-bottom: 32px;
 }
-.footer-copy {
-  font-size: 11px;
+
+/* Thông tin liên hệ — cùng font với "Đầy đủ chức năng, một nền tảng" */
+.footer-contact {
+  margin-bottom: 28px;
+}
+.footer-contact-owner {
+  max-width: 540px;
+  margin: 0 auto 10px;
+  font-family: "Be Vietnam Pro", "Inter", sans-serif;
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  line-height: 1.7;
   color: var(--muted);
-  letter-spacing: 0.1em;
+}
+.footer-contact-email {
+  display: inline-block;
+  font-family: "Be Vietnam Pro", "Inter", sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--teal);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(10, 255, 212, 0.3);
+  padding-bottom: 2px;
+  transition:
+    color 200ms ease,
+    border-color 200ms ease;
+}
+.footer-contact-email:hover {
+  color: var(--lime);
+  border-color: var(--lime);
+}
+
+/* "Cảm ơn bạn đã sử dụng web của chúng tôi" — gradient 2 màu dao động + loop */
+.footer-thanks {
+  font-family: "Be Vietnam Pro", "Inter", sans-serif;
+  font-size: clamp(15px, 1.7vw, 20px);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  background: linear-gradient(
+    90deg,
+    var(--teal) 0%,
+    var(--lime) 50%,
+    var(--teal) 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: footerThanksPulse 4s ease-in-out infinite;
+}
+@keyframes footerThanksPulse {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
 }
 
 /* ===== FULL WIDTH DIVIDER BG ===== */
@@ -1041,9 +1120,7 @@ body {
 .home-motion-ready .map-canvas[data-reveal] {
   transition-delay: 140ms;
 }
-.home-motion-ready
-  .home-section--services
-  .home-section-title[data-reveal] {
+.home-motion-ready .home-section--services .home-section-title[data-reveal] {
   transition-delay: 80ms;
 }
 .home-motion-ready .home-section--services .home-section-lead[data-reveal] {
