@@ -1,7 +1,17 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Pool, PoolClient, QueryResultRow } from 'pg';
+import { Pool, PoolClient, QueryResultRow, types } from 'pg';
 import { MigrationRunnerService } from './migration-runner.service';
+
+// FIX BUG: mặc định pg parse cột kiểu DATE (OID 1082) thành JS Date object
+// theo GIỜ LOCAL của server (`new Date(year, month-1, day)`), không phải UTC.
+// Khi Express serialize response bằng JSON.stringify -> Date.toISOString(),
+// giờ local nửa đêm sẽ bị quy đổi sang UTC và LÙI 1 NGÀY nếu server chạy ở
+// timezone lệch dương so với UTC (VD: Asia/Ho_Chi_Minh, UTC+7).
+// => Mỗi lần load lại rồi lưu, ngày sinh (và các cột DATE khác) bị trừ dần 1
+// ngày. Khắc phục bằng cách giữ nguyên giá trị dạng chuỗi "YYYY-MM-DD" trả về
+// từ Postgres, không cho pg parse thành Date object.
+types.setTypeParser(1082, (value: string) => value);
 
 @Injectable()
 export class DatabaseService implements OnModuleInit, OnModuleDestroy {

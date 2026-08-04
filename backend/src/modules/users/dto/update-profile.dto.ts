@@ -7,6 +7,38 @@ import {
   IsString,
   MaxLength,
 } from 'class-validator';
+import {
+  registerDecorator,
+  ValidationArguments,
+  ValidationOptions,
+} from 'class-validator';
+
+// FIX BUG: chặn ngày sinh "lố" (vượt ngày hiện tại) hoặc quá xa trong quá khứ
+// (chỉ kiểm tra format ISO8601 là chưa đủ, VD "900000-09-02" một số trường hợp
+// vẫn có thể lách qua nếu chỉ check format).
+function IsValidDateOfBirth(validationOptions?: ValidationOptions) {
+  return function (object: object, propertyName: string) {
+    registerDecorator({
+      name: 'isValidDateOfBirth',
+      target: object.constructor,
+      propertyName,
+      options: validationOptions,
+      validator: {
+        validate(value: unknown) {
+          if (typeof value !== 'string') return false;
+          const parsed = new Date(value);
+          if (Number.isNaN(parsed.getTime())) return false;
+          const now = new Date();
+          const minDate = new Date('1900-01-01');
+          return parsed <= now && parsed >= minDate;
+        },
+        defaultMessage(args: ValidationArguments) {
+          return `${args.property} không được vượt quá ngày hiện tại hoặc trước năm 1900.`;
+        },
+      },
+    });
+  };
+}
 
 export class UpdateProfileDto {
   @IsOptional()
@@ -16,6 +48,9 @@ export class UpdateProfileDto {
 
   @IsOptional()
   @IsISO8601({}, { message: 'Ngày sinh không hợp lệ.' })
+  @IsValidDateOfBirth({
+    message: 'Ngày sinh không được vượt quá ngày hiện tại.',
+  })
   dateOfBirth?: string;
 
   @IsOptional()

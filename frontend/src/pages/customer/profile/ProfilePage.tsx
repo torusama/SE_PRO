@@ -123,6 +123,18 @@ function formatCurrency(v: number) {
   return v.toLocaleString("vi-VN") + " ₫";
 }
 
+// FIX BUG: input ngày sinh trước đây không giới hạn "max" nên cho phép nhập
+// năm vượt lố (VD: 900000) hoặc ngày trong tương lai. `todayISODate` dùng để
+// chặn ở HTML lẫn khi validate trước khi lưu.
+const todayISODate = new Date().toISOString().slice(0, 10);
+
+function isDobValid(value: string): boolean {
+  if (!value.trim()) return false;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return false;
+  return value >= "1900-01-01" && value <= todayISODate;
+}
+
 function formatDate(d: string | null | undefined) {
   if (!d) return "—";
   return new Date(d).toLocaleDateString("vi-VN");
@@ -565,7 +577,7 @@ export default function ProfilePage() {
     const missing: string[] = [];
     if (!fullName.trim()) missing.push("fullName");
     if (!phone.trim()) missing.push("phone");
-    if (!dob.trim()) missing.push("dob");
+    if (!dob.trim() || !isDobValid(dob)) missing.push("dob");
     if (!address.trim()) missing.push("address");
     if (!emergencyContact.name.trim()) missing.push("emergencyName");
     if (!emergencyContact.phone.trim()) missing.push("emergencyPhone");
@@ -574,6 +586,10 @@ export default function ProfilePage() {
 
   async function handleSaveInfo() {
     setAttemptedSaveInfo(true);
+    if (dob.trim() && !isDobValid(dob)) {
+      showToast("Ngày sinh không hợp lệ (không được vượt quá ngày hiện tại).");
+      return;
+    }
     if (getMissingInfoFields().length > 0) {
       showToast("Vui lòng điền đầy đủ các trường có dấu *.");
       return;
@@ -604,7 +620,6 @@ export default function ProfilePage() {
       const profileIsComplete = Boolean(res.data.data.isProfileComplete);
       if (user) setUser({ ...user, name: res.data.data.fullName });
       setProfileComplete(role === "admin" || profileIsComplete);
-      applyProfile(res.data.data);
       showToast("✓ Đã lưu thông tin");
       if (profileIsComplete && routeState?.requireProfile) {
         setShowRequireProfileAlert(false);
@@ -940,8 +955,10 @@ export default function ProfilePage() {
                       type="date"
                       value={dob}
                       onChange={(e) => setDob(e.target.value)}
+                      min="1900-01-01"
+                      max={todayISODate}
                       className={
-                        attemptedSaveInfo && !dob.trim()
+                        attemptedSaveInfo && (!dob.trim() || !isDobValid(dob))
                           ? "field-invalid"
                           : undefined
                       }
