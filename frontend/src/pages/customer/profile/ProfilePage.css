@@ -22,242 +22,1196 @@
   position: relative;
   background: var(--ink-void);
   color: var(--text-main);
-  font-family: 'Be Vietnam Pro', sans-serif;
+  font-family: "Be Vietnam Pro", sans-serif;
   min-height: 100vh;
   overflow-x: hidden;
 }
 
 /* BG */
-.profile-page .bg-canvas { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
-.profile-page .glow-orb { position: absolute; border-radius: 50%; filter: blur(110px); animation: pf-pulse-orb 9s ease-in-out infinite; }
-@keyframes pf-pulse-orb { 0%, 100% { opacity: 0.08; } 50% { opacity: 0.14; } }
-.profile-page .stars { position: absolute; inset: 0; }
-.profile-page .star { position: absolute; background: #fff; border-radius: 50%; animation: pf-twinkle var(--d, 3s) ease-in-out infinite var(--delay, 0s); }
-@keyframes pf-twinkle { 0%, 100% { opacity: 0.05; } 50% { opacity: 0.55; } }
-.profile-page .mountain-layer { position: absolute; bottom: 0; left: 0; right: 0; height: 40vh; opacity: 0.07; }
+.profile-page .bg-canvas {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+.profile-page .glow-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(110px);
+  animation: pf-pulse-orb 9s ease-in-out infinite;
+}
+@keyframes pf-pulse-orb {
+  0%,
+  100% {
+    opacity: 0.08;
+  }
+  50% {
+    opacity: 0.14;
+  }
+}
+.profile-page .stars {
+  position: absolute;
+  inset: 0;
+}
+.profile-page .star {
+  position: absolute;
+  background: #fff;
+  border-radius: 50%;
+  animation: pf-twinkle var(--d, 3s) ease-in-out infinite var(--delay, 0s);
+}
+@keyframes pf-twinkle {
+  0%,
+  100% {
+    opacity: 0.05;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+.profile-page .mountain-layer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  height: 40vh;
+  opacity: 0.07;
+}
 
 /* BREADCRUMB */
-.profile-page .breadcrumb { position: relative; z-index: 10; padding: 16px 48px; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted); }
-.profile-page .breadcrumb a { color: var(--text-muted); text-decoration: none; }
-.profile-page .breadcrumb a:hover { color: var(--teal-glow); }
-.profile-page .breadcrumb .sep { opacity: 0.4; }
-.profile-page .breadcrumb .current { color: var(--teal-soft); }
+.profile-page .breadcrumb {
+  position: relative;
+  z-index: 10;
+  padding: 16px 48px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.profile-page .breadcrumb a {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+.profile-page .breadcrumb a:hover {
+  color: var(--teal-glow);
+}
+.profile-page .breadcrumb .sep {
+  opacity: 0.4;
+}
+.profile-page .breadcrumb .current {
+  color: var(--teal-soft);
+}
 
 /* LAYOUT */
-.profile-page .page-wrap { position: relative; z-index: 10; max-width: 1060px; margin: 0 auto; padding: 0 48px 80px; display: grid; grid-template-columns: 260px 1fr; gap: 28px; align-items: start; }
+.profile-page .page-wrap {
+  position: relative;
+  z-index: 10;
+  max-width: 1060px;
+  margin: 0 auto;
+  padding: 0 48px 80px;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 28px;
+  align-items: start;
+}
 
 @media (max-width: 860px) {
-  .profile-page .page-wrap { grid-template-columns: 1fr; padding: 0 20px 60px; }
+  .profile-page .page-wrap {
+    grid-template-columns: 1fr;
+    padding: 0 20px 60px;
+  }
 }
 
 /* LEFT CARD */
-.profile-page .profile-card { background: rgba(8, 13, 26, 0.7); border: 1px solid var(--border-dim); border-radius: 12px; padding: 32px 24px; text-align: center; position: sticky; top: 24px; }
-.profile-page .avatar-wrap { position: relative; display: inline-block; margin-bottom: 20px; }
-.profile-page .avatar-ring { width: 90px; height: 90px; border-radius: 50%; border: 2px solid var(--teal-soft); display: flex; align-items: center; justify-content: center; font-family: 'Playfair Display', serif; font-size: 32px; color: var(--teal-glow); background: rgba(0, 229, 196, 0.06); box-shadow: 0 0 28px rgba(0, 229, 196, 0.15); margin: 0 auto; }
-.profile-page .avatar-crop-viewport { position: relative; overflow: hidden; border-radius: 50%; border: 2px solid var(--teal-soft); box-shadow: 0 0 28px rgba(0, 229, 196, 0.15); cursor: grab; background: rgba(0,0,0,0.3); touch-action: none; }
-.profile-page .avatar-crop-viewport:active { cursor: grabbing; }
+.profile-page .profile-card {
+  background: rgba(8, 13, 26, 0.7);
+  border: 1px solid var(--border-dim);
+  border-radius: 12px;
+  padding: 32px 24px;
+  text-align: center;
+  position: sticky;
+  top: 24px;
+}
+.profile-page .avatar-wrap {
+  position: relative;
+  display: inline-block;
+  margin-bottom: 20px;
+}
+.profile-page .avatar-ring {
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  border: 2px solid var(--teal-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Playfair Display", serif;
+  font-size: 32px;
+  color: var(--teal-glow);
+  background: rgba(0, 229, 196, 0.06);
+  box-shadow: 0 0 28px rgba(0, 229, 196, 0.15);
+  margin: 0 auto;
+}
+.profile-page .avatar-crop-viewport {
+  position: relative;
+  overflow: hidden;
+  border-radius: 50%;
+  border: 2px solid var(--teal-soft);
+  box-shadow: 0 0 28px rgba(0, 229, 196, 0.15);
+  cursor: grab;
+  background: rgba(0, 0, 0, 0.3);
+  touch-action: none;
+}
+.profile-page .avatar-crop-viewport:active {
+  cursor: grabbing;
+}
 /* Tailwind Preflight áp `img { max-width: 100%; height: auto }` toàn cục — nếu
    không ghi đè, width bị kẹp theo khung 260px trong khi height vẫn tính đúng
    theo scale zoom, làm ảnh bị méo tỉ lệ + tính sai vùng cắt khi Lưu. */
-.profile-page .avatar-crop-img { position: absolute; max-width: none; max-height: none; }
-.profile-page .avatar-zoom-row { display: flex; align-items: center; gap: 10px; width: 100%; max-width: 260px; font-size: 14px; }
-.profile-page .avatar-zoom-row input[type="range"] { flex: 1; accent-color: var(--teal-soft); }
-.profile-page .avatar-edit-btn { position: absolute; bottom: 2px; right: 2px; width: 26px; height: 26px; border-radius: 50%; background: var(--ink-deep); border: 1px solid var(--border-soft); cursor: pointer; font-size: 12px; color: var(--text-muted); display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
-.profile-page .avatar-edit-btn:hover { border-color: var(--teal-glow); color: var(--teal-glow); }
-.profile-page .profile-name { font-family: 'Playfair Display', serif; font-size: 20px; color: var(--text-main); margin-bottom: 4px; }
-.profile-page .profile-id { font-size: 11px; color: var(--text-muted); letter-spacing: 0.1em; margin-bottom: 4px; }
-.profile-page .profile-since { font-size: 11px; color: var(--text-muted); opacity: 0.7; }
+.profile-page .avatar-crop-img {
+  position: absolute;
+  max-width: none;
+  max-height: none;
+}
+.profile-page .avatar-zoom-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 260px;
+  font-size: 14px;
+}
+.profile-page .avatar-zoom-row input[type="range"] {
+  flex: 1;
+  accent-color: var(--teal-soft);
+}
+.profile-page .avatar-edit-btn {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--ink-deep);
+  border: 1px solid var(--border-soft);
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+.profile-page .avatar-edit-btn:hover {
+  border-color: var(--teal-glow);
+  color: var(--teal-glow);
+}
+.profile-page .profile-name {
+  font-family: "Playfair Display", serif;
+  font-size: 20px;
+  color: var(--text-main);
+  margin-bottom: 4px;
+}
+.profile-page .profile-id {
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.1em;
+  margin-bottom: 4px;
+}
+.profile-page .profile-since {
+  font-size: 11px;
+  color: var(--text-muted);
+  opacity: 0.7;
+}
 
-.profile-page .divider { border: none; border-top: 1px solid var(--border-dim); margin: 20px 0; }
+.profile-page .divider {
+  border: none;
+  border-top: 1px solid var(--border-dim);
+  margin: 20px 0;
+}
 
 /* STAT ROW */
-.profile-page .stat-row { display: flex; justify-content: space-around; gap: 8px; margin-bottom: 4px; }
-.profile-page .stat-item { text-align: center; }
-.profile-page .stat-num { font-size: 20px; font-weight: 600; color: var(--teal-glow); }
-.profile-page .stat-label { font-size: 10px; color: var(--text-muted); letter-spacing: 0.06em; margin-top: 2px; }
+.profile-page .stat-row {
+  display: flex;
+  justify-content: space-around;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.profile-page .stat-item {
+  text-align: center;
+}
+.profile-page .stat-num {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--teal-glow);
+}
+.profile-page .stat-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+  margin-top: 2px;
+}
 
 /* SIDE NAV */
-.profile-page .side-nav { margin-top: 20px; display: flex; flex-direction: column; gap: 2px; }
-.profile-page .side-nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 8px; cursor: pointer; font-size: 13px; color: var(--text-muted); transition: all 0.2s; border: 1px solid transparent; text-align: left; background: none; font-family: 'Be Vietnam Pro', sans-serif; width: 100%; }
-.profile-page .side-nav-item:hover { background: rgba(0, 229, 196, 0.04); color: var(--text-main); }
-.profile-page .side-nav-item.active { background: rgba(0, 229, 196, 0.06); color: var(--teal-soft); border-color: var(--border-dim); }
-.profile-page .side-nav-item .icon { font-size: 16px; width: 20px; text-align: center; flex-shrink: 0; }
-.profile-page .badge-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--red); margin-left: auto; flex-shrink: 0; }
+.profile-page .side-nav {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.profile-page .side-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-muted);
+  transition: all 0.2s;
+  border: 1px solid transparent;
+  text-align: left;
+  background: none;
+  font-family: "Be Vietnam Pro", sans-serif;
+  width: 100%;
+}
+.profile-page .side-nav-item:hover {
+  background: rgba(0, 229, 196, 0.04);
+  color: var(--text-main);
+}
+.profile-page .side-nav-item.active {
+  background: rgba(0, 229, 196, 0.06);
+  color: var(--teal-soft);
+  border-color: var(--border-dim);
+}
+.profile-page .side-nav-item .icon {
+  font-size: 16px;
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.profile-page .badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--red);
+  margin-left: auto;
+  flex-shrink: 0;
+}
 
-.profile-page .logout-btn { margin-top: 16px; width: 100%; background: none; border: 1px solid rgba(224, 92, 92, 0.2); color: rgba(224, 92, 92, 0.7); font-family: 'Be Vietnam Pro', sans-serif; font-size: 12px; padding: 9px; border-radius: 8px; cursor: pointer; letter-spacing: 0.06em; transition: all 0.2s; }
-.profile-page .logout-btn:hover { border-color: var(--red); color: var(--red); background: rgba(224, 92, 92, 0.05); }
+.profile-page .logout-btn {
+  margin-top: 16px;
+  width: 100%;
+  background: none;
+  border: 1px solid rgba(224, 92, 92, 0.2);
+  color: rgba(224, 92, 92, 0.7);
+  font-family: "Be Vietnam Pro", sans-serif;
+  font-size: 12px;
+  padding: 9px;
+  border-radius: 8px;
+  cursor: pointer;
+  letter-spacing: 0.06em;
+  transition: all 0.2s;
+}
+.profile-page .logout-btn:hover {
+  border-color: var(--red);
+  color: var(--red);
+  background: rgba(224, 92, 92, 0.05);
+}
 
 /* RIGHT PANELS */
-.profile-page .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding-top: 4px; gap: 12px; flex-wrap: wrap; }
-.profile-page .section-title { font-family: 'Playfair Display', serif; font-size: 22px; color: var(--text-main); }
-.profile-page .section-title small { display: block; font-family: 'Be Vietnam Pro', sans-serif; font-size: 11px; font-weight: 400; color: var(--text-muted); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 4px; }
-.profile-page .btn-save { background: linear-gradient(135deg, var(--teal-glow), var(--teal-soft)); color: var(--ink-void); border: none; font-family: 'Be Vietnam Pro', sans-serif; font-size: 12px; font-weight: 600; padding: 9px 22px; border-radius: 6px; cursor: pointer; letter-spacing: 0.08em; transition: all 0.2s; }
-.profile-page .btn-save:hover { box-shadow: 0 0 20px rgba(0, 229, 196, 0.35); transform: translateY(-1px); }
-.profile-page .btn-outline { background: none; border: 1px solid var(--border-soft); color: var(--teal-soft); font-family: 'Be Vietnam Pro', sans-serif; font-size: 12px; padding: 9px 18px; border-radius: 6px; cursor: pointer; letter-spacing: 0.06em; transition: all 0.2s; }
-.profile-page .btn-outline:hover { background: rgba(0, 229, 196, 0.06); border-color: var(--teal-glow); }
+.profile-page .section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  padding-top: 4px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.profile-page .section-title {
+  font-family: "Playfair Display", serif;
+  font-size: 22px;
+  color: var(--text-main);
+}
+.profile-page .section-title small {
+  display: block;
+  font-family: "Be Vietnam Pro", sans-serif;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-muted);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.profile-page .btn-save {
+  background: linear-gradient(135deg, var(--teal-glow), var(--teal-soft));
+  color: var(--ink-void);
+  border: none;
+  font-family: "Be Vietnam Pro", sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 9px 22px;
+  border-radius: 6px;
+  cursor: pointer;
+  letter-spacing: 0.08em;
+  transition: all 0.2s;
+}
+.profile-page .btn-save:hover {
+  box-shadow: 0 0 20px rgba(0, 229, 196, 0.35);
+  transform: translateY(-1px);
+}
+.profile-page .btn-outline {
+  background: none;
+  border: 1px solid var(--border-soft);
+  color: var(--teal-soft);
+  font-family: "Be Vietnam Pro", sans-serif;
+  font-size: 12px;
+  padding: 9px 18px;
+  border-radius: 6px;
+  cursor: pointer;
+  letter-spacing: 0.06em;
+  transition: all 0.2s;
+}
+.profile-page .btn-outline:hover {
+  background: rgba(0, 229, 196, 0.06);
+  border-color: var(--teal-glow);
+}
 
 /* PANEL */
-.profile-page .panel { background: rgba(8, 13, 26, 0.6); border: 1px solid var(--border-dim); border-radius: 10px; padding: 24px; margin-bottom: 20px; }
-.profile-page .panel-title { font-size: 12px; font-weight: 500; color: var(--text-muted); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 18px; display: flex; align-items: center; gap: 8px; }
-.profile-page .panel-title::after { content: ''; flex: 1; height: 1px; background: var(--border-dim); }
+.profile-page .panel {
+  background: rgba(8, 13, 26, 0.6);
+  border: 1px solid var(--border-dim);
+  border-radius: 10px;
+  padding: 24px;
+  margin-bottom: 20px;
+}
+.profile-page .panel-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.profile-page .panel-title::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border-dim);
+}
 
 /* FORM GRID */
-.profile-page .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.profile-page .form-full { grid-column: 1 / -1; }
-.profile-page .field { display: flex; flex-direction: column; gap: 6px; }
-.profile-page .field label { font-size: 11px; color: var(--text-muted); letter-spacing: 0.08em; text-transform: uppercase; }
+.profile-page .form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.profile-page .form-full {
+  grid-column: 1 / -1;
+}
+.profile-page .field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.profile-page .field label {
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
 .profile-page .field input,
 .profile-page .field select,
-.profile-page .field textarea { background: rgba(4, 6, 14, 0.8); border: 1px solid var(--border-dim); border-radius: 6px; color: var(--text-main); font-family: 'Be Vietnam Pro', sans-serif; font-size: 13px; padding: 10px 14px; transition: border-color 0.2s; outline: none; width: 100%; }
+.profile-page .field textarea {
+  background: rgba(4, 6, 14, 0.8);
+  border: 1px solid var(--border-dim);
+  border-radius: 6px;
+  color: var(--text-main);
+  font-family: "Be Vietnam Pro", sans-serif;
+  font-size: 13px;
+  padding: 10px 14px;
+  transition: border-color 0.2s;
+  outline: none;
+  width: 100%;
+}
 .profile-page .field input:focus,
 .profile-page .field select:focus,
-.profile-page .field textarea:focus { border-color: var(--teal-soft); box-shadow: 0 0 0 3px rgba(0, 229, 196, 0.06); }
+.profile-page .field textarea:focus {
+  border-color: var(--teal-soft);
+  box-shadow: 0 0 0 3px rgba(0, 229, 196, 0.06);
+}
 .profile-page .field input::placeholder,
-.profile-page .field textarea::placeholder { color: var(--text-muted); opacity: 0.6; }
-.profile-page .field select option { background: var(--ink-deep); }
-.profile-page .field textarea { resize: none; line-height: 1.6; }
-.profile-page .field-note { font-size: 11px; color: var(--text-muted); opacity: 0.7; margin-top: 2px; }
-.profile-page .field-verified { position: relative; }
-.profile-page .required-mark { color: #e05c5c; margin-left: 3px; }
+.profile-page .field textarea::placeholder {
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+.profile-page .field select option {
+  background: var(--ink-deep);
+}
+.profile-page .field textarea {
+  resize: none;
+  line-height: 1.6;
+}
+.profile-page .field-note {
+  font-size: 11px;
+  color: var(--text-muted);
+  opacity: 0.7;
+  margin-top: 2px;
+}
+.profile-page .field-verified {
+  position: relative;
+}
+.profile-page .required-mark {
+  color: #e05c5c;
+  margin-left: 3px;
+}
 .profile-page .field input.field-invalid,
 .profile-page .field select.field-invalid,
-.profile-page .field textarea.field-invalid { border-color: #e05c5c; box-shadow: 0 0 0 3px rgba(224, 92, 92, 0.1); }
-.profile-page .field-error-text { font-size: 11px; color: #e05c5c; margin-top: 2px; }
+.profile-page .field textarea.field-invalid {
+  border-color: #e05c5c;
+  box-shadow: 0 0 0 3px rgba(224, 92, 92, 0.1);
+}
+.profile-page .field-error-text {
+  font-size: 11px;
+  color: #e05c5c;
+  margin-top: 2px;
+}
 
-.profile-page .id-card-row { display: flex; gap: 8px; align-items: center; }
-.profile-page .id-card-row input { flex: 1; }
-.profile-page .id-card-btn { white-space: nowrap; background: linear-gradient(135deg, var(--teal-soft), var(--teal-dim)); color: var(--ink-void); border: none; border-radius: 6px; padding: 10px 14px; font-size: 12px; font-weight: 600; cursor: pointer; }
-.profile-page .id-card-btn.ghost { background: transparent; color: var(--text-muted); border: 1px solid var(--border-dim); }
-.profile-page .id-card-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-.profile-page .otp-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border-dim); flex-wrap: wrap; }
-.profile-page .otp-row:last-child { border-bottom: none; }
-.profile-page .otp-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
-.profile-page .otp-email { font-size: 14px; color: var(--text-main); margin-top: 2px; }
-.profile-page .otp-badge.verified { font-size: 12px; color: var(--teal-soft); background: rgba(45, 212, 191, 0.1); border: 1px solid rgba(45, 212, 191, 0.3); border-radius: 999px; padding: 4px 12px; white-space: nowrap; }
-.profile-page .otp-btn { white-space: nowrap; background: linear-gradient(135deg, var(--teal-soft), var(--teal-dim)); color: var(--ink-void); border: none; border-radius: 6px; padding: 9px 14px; font-size: 12px; font-weight: 600; cursor: pointer; }
-.profile-page .otp-btn.ghost { background: transparent; color: var(--text-muted); border: 1px solid var(--border-dim); }
-.profile-page .otp-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-.profile-page .otp-verify-box { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.profile-page .otp-verify-box input { width: 190px; min-width: 190px; letter-spacing: 3px; text-align: center; padding: 9px 10px; border-radius: 6px; border: 1px solid var(--border-dim); background: var(--panel-bg, transparent); color: inherit; font-size: 14px; }
-.profile-page .field-verified .verify-badge { position: absolute; right: 12px; top: 22px; font-size: 11px; color: var(--teal-soft); background: rgba(0, 229, 196, 0.08); border: 1px solid var(--border-dim); border-radius: 20px; padding: 2px 10px; pointer-events: none; }
+.profile-page .id-card-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.profile-page .id-card-row input {
+  flex: 1;
+}
+.profile-page .id-card-btn {
+  white-space: nowrap;
+  background: linear-gradient(135deg, var(--teal-soft), var(--teal-dim));
+  color: var(--ink-void);
+  border: none;
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.profile-page .id-card-btn.ghost {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border-dim);
+}
+.profile-page .id-card-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.profile-page .otp-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-dim);
+  flex-wrap: wrap;
+}
+.profile-page .otp-row:last-child {
+  border-bottom: none;
+}
+.profile-page .otp-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+.profile-page .otp-email {
+  font-size: 14px;
+  color: var(--text-main);
+  margin-top: 2px;
+}
+.profile-page .otp-badge.verified {
+  font-size: 12px;
+  color: var(--teal-soft);
+  background: rgba(45, 212, 191, 0.1);
+  border: 1px solid rgba(45, 212, 191, 0.3);
+  border-radius: 999px;
+  padding: 4px 12px;
+  white-space: nowrap;
+}
+.profile-page .otp-btn {
+  white-space: nowrap;
+  background: linear-gradient(135deg, var(--teal-soft), var(--teal-dim));
+  color: var(--ink-void);
+  border: none;
+  border-radius: 6px;
+  padding: 9px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.profile-page .otp-btn.ghost {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border-dim);
+}
+.profile-page .otp-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.profile-page .otp-verify-box {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.profile-page .otp-verify-box input {
+  width: 190px;
+  min-width: 190px;
+  letter-spacing: 3px;
+  text-align: center;
+  padding: 9px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-dim);
+  background: var(--panel-bg, transparent);
+  color: inherit;
+  font-size: 14px;
+}
+.profile-page .field-verified .verify-badge {
+  position: absolute;
+  right: 12px;
+  top: 22px;
+  font-size: 11px;
+  color: var(--teal-soft);
+  background: rgba(0, 229, 196, 0.08);
+  border: 1px solid var(--border-dim);
+  border-radius: 20px;
+  padding: 2px 10px;
+  pointer-events: none;
+}
 
 /* CONTACT METHODS */
-.profile-page .contact-methods { display: flex; flex-direction: column; gap: 10px; }
-.profile-page .contact-method { display: flex; align-items: center; gap: 14px; padding: 12px 16px; border: 1px solid var(--border-dim); border-radius: 8px; background: rgba(4, 6, 14, 0.5); flex-wrap: wrap; }
-.profile-page .contact-icon { font-size: 18px; width: 32px; text-align: center; flex-shrink: 0; }
-.profile-page .contact-info { flex: 1; min-width: 140px; }
-.profile-page .contact-info .c-label { font-size: 11px; color: var(--text-muted); letter-spacing: 0.06em; margin-bottom: 2px; }
-.profile-page .contact-info .c-value { font-size: 13px; color: var(--text-main); }
-.profile-page .contact-status { font-size: 11px; padding: 3px 10px; border-radius: 20px; flex-shrink: 0; }
-.profile-page .contact-status.verified { background: rgba(0, 229, 196, 0.08); color: var(--teal-soft); border: 1px solid var(--border-dim); }
-.profile-page .contact-status.unverified { background: rgba(201, 168, 76, 0.08); color: var(--gold); border: 1px solid var(--border-gold); }
-.profile-page .toggle { position: relative; width: 36px; height: 20px; flex-shrink: 0; }
-.profile-page .toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
-.profile-page .toggle-slider { position: absolute; inset: 0; background: rgba(0, 229, 196, 0.08); border: 1px solid var(--border-dim); border-radius: 20px; cursor: pointer; transition: 0.2s; }
-.profile-page .toggle-slider::before { content: ''; position: absolute; width: 14px; height: 14px; background: var(--text-muted); border-radius: 50%; top: 2px; left: 2px; transition: 0.2s; }
-.profile-page .toggle input:checked + .toggle-slider { background: rgba(0, 229, 196, 0.18); border-color: var(--teal-soft); }
-.profile-page .toggle input:checked + .toggle-slider::before { background: var(--teal-glow); transform: translateX(16px); box-shadow: 0 0 8px rgba(0, 229, 196, 0.4); }
+.profile-page .contact-methods {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.profile-page .contact-method {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  border: 1px solid var(--border-dim);
+  border-radius: 8px;
+  background: rgba(4, 6, 14, 0.5);
+  flex-wrap: wrap;
+}
+.profile-page .contact-icon {
+  font-size: 18px;
+  width: 32px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.profile-page .contact-info {
+  flex: 1;
+  min-width: 140px;
+}
+.profile-page .contact-info .c-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+  margin-bottom: 2px;
+}
+.profile-page .contact-info .c-value {
+  font-size: 13px;
+  color: var(--text-main);
+}
+.profile-page .contact-status {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  flex-shrink: 0;
+}
+.profile-page .contact-status.verified {
+  background: rgba(0, 229, 196, 0.08);
+  color: var(--teal-soft);
+  border: 1px solid var(--border-dim);
+}
+.profile-page .contact-status.unverified {
+  background: rgba(201, 168, 76, 0.08);
+  color: var(--gold);
+  border: 1px solid var(--border-gold);
+}
+.profile-page .toggle {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  flex-shrink: 0;
+}
+.profile-page .toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+.profile-page .toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 229, 196, 0.08);
+  border: 1px solid var(--border-dim);
+  border-radius: 20px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+.profile-page .toggle-slider::before {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  background: var(--text-muted);
+  border-radius: 50%;
+  top: 2px;
+  left: 2px;
+  transition: 0.2s;
+}
+.profile-page .toggle input:checked + .toggle-slider {
+  background: rgba(0, 229, 196, 0.18);
+  border-color: var(--teal-soft);
+}
+.profile-page .toggle input:checked + .toggle-slider::before {
+  background: var(--teal-glow);
+  transform: translateX(16px);
+  box-shadow: 0 0 8px rgba(0, 229, 196, 0.4);
+}
 
 /* LÔ ĐẤT CARDS */
-.profile-page .lot-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-@media (max-width: 640px) { .profile-page .lot-cards { grid-template-columns: 1fr; } }
-.profile-page .lot-card { padding: 16px; border: 1px solid var(--border-dim); border-radius: 8px; background: rgba(4, 6, 14, 0.5); transition: border-color 0.2s; cursor: pointer; }
-.profile-page .lot-card:hover { border-color: var(--border-soft); }
-.profile-page .lot-card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
-.profile-page .lot-name { font-size: 14px; font-weight: 500; color: var(--text-main); }
-.profile-page .lot-zone { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
-.profile-page .lot-status { font-size: 11px; padding: 3px 10px; border-radius: 20px; white-space: nowrap; }
-.profile-page .lot-status.active { background: rgba(0, 229, 196, 0.08); color: var(--teal-soft); border: 1px solid var(--border-dim); }
-.profile-page .lot-status.reserved { background: rgba(201, 168, 76, 0.08); color: var(--gold); border: 1px solid var(--border-gold); }
-.profile-page .lot-meta { display: flex; flex-direction: column; gap: 4px; }
-.profile-page .lot-row { display: flex; justify-content: space-between; font-size: 12px; }
-.profile-page .lot-row .lk { color: var(--text-muted); }
-.profile-page .lot-row .lv { color: var(--text-main); }
-.profile-page .lot-row .lv.warn { color: var(--gold); }
-.profile-page .lot-row .lv.ok { color: var(--teal-soft); }
-.profile-page .lot-action { margin-top: 10px; font-size: 11px; color: var(--teal-soft); letter-spacing: 0.06em; cursor: pointer; opacity: 0.8; transition: opacity 0.2s; }
-.profile-page .lot-action:hover { opacity: 1; }
+.profile-page .lot-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+@media (max-width: 640px) {
+  .profile-page .lot-cards {
+    grid-template-columns: 1fr;
+  }
+}
+.profile-page .lot-card {
+  padding: 16px;
+  border: 1px solid var(--border-dim);
+  border-radius: 8px;
+  background: rgba(4, 6, 14, 0.5);
+  transition: border-color 0.2s;
+  cursor: pointer;
+}
+.profile-page .lot-card:hover {
+  border-color: var(--border-soft);
+}
+.profile-page .lot-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+.profile-page .lot-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-main);
+}
+.profile-page .lot-zone {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.profile-page .lot-status {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+.profile-page .lot-status.active {
+  background: rgba(0, 229, 196, 0.08);
+  color: var(--teal-soft);
+  border: 1px solid var(--border-dim);
+}
+.profile-page .lot-status.reserved {
+  background: rgba(201, 168, 76, 0.08);
+  color: var(--gold);
+  border: 1px solid var(--border-gold);
+}
+.profile-page .lot-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.profile-page .lot-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.profile-page .lot-row .lk {
+  color: var(--text-muted);
+}
+.profile-page .lot-row .lv {
+  color: var(--text-main);
+}
+.profile-page .lot-row .lv.warn {
+  color: var(--gold);
+}
+.profile-page .lot-row .lv.ok {
+  color: var(--teal-soft);
+}
+.profile-page .lot-action {
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--teal-soft);
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+}
+.profile-page .lot-action:hover {
+  opacity: 1;
+}
 
 /* SECURITY */
-.profile-page .security-list { display: flex; flex-direction: column; gap: 10px; }
-.profile-page .security-item { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border: 1px solid var(--border-dim); border-radius: 8px; background: rgba(4, 6, 14, 0.5); flex-wrap: wrap; gap: 10px; }
-.profile-page .sec-left { display: flex; align-items: center; gap: 12px; }
-.profile-page .sec-icon { font-size: 18px; width: 28px; text-align: center; }
-.profile-page .sec-info h4 { font-size: 13px; color: var(--text-main); margin-bottom: 2px; font-weight: 500; }
-.profile-page .sec-info p { font-size: 11px; color: var(--text-muted); }
-.profile-page .sec-status { font-size: 11px; padding: 3px 10px; border-radius: 20px; }
-.profile-page .sec-status.on { background: rgba(0, 229, 196, 0.08); color: var(--teal-soft); border: 1px solid var(--border-dim); }
-.profile-page .sec-status.off { background: rgba(201, 168, 76, 0.06); color: var(--gold); border: 1px solid var(--border-gold); }
-.profile-page .btn-mini { background: none; border: 1px solid var(--border-dim); color: var(--text-muted); font-family: 'Be Vietnam Pro', sans-serif; font-size: 11px; padding: 6px 14px; border-radius: 6px; cursor: pointer; transition: all 0.2s; letter-spacing: 0.04em; }
-.profile-page .btn-mini:hover { border-color: var(--border-soft); color: var(--text-main); }
+.profile-page .security-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.profile-page .security-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border: 1px solid var(--border-dim);
+  border-radius: 8px;
+  background: rgba(4, 6, 14, 0.5);
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.profile-page .sec-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.profile-page .sec-icon {
+  font-size: 18px;
+  width: 28px;
+  text-align: center;
+}
+.profile-page .sec-info h4 {
+  font-size: 13px;
+  color: var(--text-main);
+  margin-bottom: 2px;
+  font-weight: 500;
+}
+.profile-page .sec-info p {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.profile-page .sec-status {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 20px;
+}
+.profile-page .sec-status.on {
+  background: rgba(0, 229, 196, 0.08);
+  color: var(--teal-soft);
+  border: 1px solid var(--border-dim);
+}
+.profile-page .sec-status.off {
+  background: rgba(201, 168, 76, 0.06);
+  color: var(--gold);
+  border: 1px solid var(--border-gold);
+}
+.profile-page .btn-mini {
+  background: none;
+  border: 1px solid var(--border-dim);
+  color: var(--text-muted);
+  font-family: "Be Vietnam Pro", sans-serif;
+  font-size: 11px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  letter-spacing: 0.04em;
+}
+.profile-page .btn-mini:hover {
+  border-color: var(--border-soft);
+  color: var(--text-main);
+}
 
 /* HIDDEN PANELS */
-.profile-page .panel-section { display: none; }
-.profile-page .panel-section.active { display: block; }
+.profile-page .panel-section {
+  display: none;
+}
+.profile-page .panel-section.active {
+  display: block;
+}
 
 /* LOT DETAIL VIEW */
-.profile-page .lot-detail-view { display: none; }
-.profile-page .lot-detail-view.active { display: block; }
-.profile-page .back-to-lots { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border: 0.5px solid var(--border-dim); border-radius: 6px; color: var(--text-muted); font-size: 12px; background: none; cursor: pointer; transition: all 0.2s; margin-bottom: 20px; font-family: 'Be Vietnam Pro', sans-serif; }
-.profile-page .back-to-lots:hover { border-color: var(--border-soft); color: var(--teal-glow); }
-.profile-page .lot-detail-hero { background: rgba(8, 13, 26, 0.7); border: 1px solid var(--border-soft); border-radius: 12px; padding: 24px; margin-bottom: 16px; }
-.profile-page .lot-detail-id { font-family: 'Playfair Display', serif; font-size: 32px; color: #e8f4f0; margin-bottom: 4px; }
-.profile-page .lot-detail-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
-@media (max-width: 640px) { .profile-page .lot-detail-stats { grid-template-columns: 1fr 1fr; } }
-.profile-page .ld-stat { background: rgba(4, 6, 14, 0.5); border: 1px solid var(--border-dim); border-radius: 8px; padding: 14px; }
-.profile-page .ld-stat .ls-label { font-size: 11px; color: var(--text-muted); margin-bottom: 6px; letter-spacing: 0.06em; }
-.profile-page .ld-stat .ls-val { font-size: 16px; font-weight: 500; color: var(--text-main); }
-.profile-page .ld-stat .ls-val.warn { color: var(--gold); }
-.profile-page .ld-stat .ls-val.ok { color: var(--teal-soft); }
-.profile-page .lot-actions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-@media (max-width: 640px) { .profile-page .lot-actions-grid { grid-template-columns: 1fr; } }
-.profile-page .lot-action-btn { padding: 12px 16px; border-radius: 8px; border: 1px solid var(--border-dim); background: rgba(4, 6, 14, 0.5); color: var(--text-main); font-family: 'Be Vietnam Pro', sans-serif; font-size: 13px; cursor: pointer; transition: all 0.2s; text-align: left; display: flex; align-items: center; gap: 10px; }
-.profile-page .lot-action-btn:hover { border-color: var(--border-soft); background: rgba(0, 229, 196, 0.04); }
-.profile-page .lot-action-btn .lab-icon { font-size: 20px; flex-shrink: 0; }
-.profile-page .lot-action-btn .lab-text .lab-title { font-weight: 500; margin-bottom: 2px; }
-.profile-page .lot-action-btn .lab-text .lab-sub { font-size: 11px; color: var(--text-muted); }
-.profile-page .lot-action-btn.gold-btn { border-color: var(--border-gold); background: rgba(201, 168, 76, 0.04); }
-.profile-page .lot-action-btn.gold-btn:hover { background: rgba(201, 168, 76, 0.1); }
+.profile-page .lot-detail-view {
+  display: none;
+}
+.profile-page .lot-detail-view.active {
+  display: block;
+}
+.profile-page .back-to-lots {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 0.5px solid var(--border-dim);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+  background: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-bottom: 20px;
+  font-family: "Be Vietnam Pro", sans-serif;
+}
+.profile-page .back-to-lots:hover {
+  border-color: var(--border-soft);
+  color: var(--teal-glow);
+}
+.profile-page .lot-detail-hero {
+  background: rgba(8, 13, 26, 0.7);
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 16px;
+}
+.profile-page .lot-detail-id {
+  font-family: "Playfair Display", serif;
+  font-size: 32px;
+  color: #e8f4f0;
+  margin-bottom: 4px;
+}
+.profile-page .lot-detail-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+@media (max-width: 640px) {
+  .profile-page .lot-detail-stats {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.profile-page .ld-stat {
+  background: rgba(4, 6, 14, 0.5);
+  border: 1px solid var(--border-dim);
+  border-radius: 8px;
+  padding: 14px;
+}
+.profile-page .ld-stat .ls-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  letter-spacing: 0.06em;
+}
+.profile-page .ld-stat .ls-val {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-main);
+}
+.profile-page .ld-stat .ls-val.warn {
+  color: var(--gold);
+}
+.profile-page .ld-stat .ls-val.ok {
+  color: var(--teal-soft);
+}
+.profile-page .lot-actions-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+@media (max-width: 640px) {
+  .profile-page .lot-actions-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.profile-page .lot-action-btn {
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border-dim);
+  background: rgba(4, 6, 14, 0.5);
+  color: var(--text-main);
+  font-family: "Be Vietnam Pro", sans-serif;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.profile-page .lot-action-btn:hover {
+  border-color: var(--border-soft);
+  background: rgba(0, 229, 196, 0.04);
+}
+.profile-page .lot-action-btn .lab-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+.profile-page .lot-action-btn .lab-text .lab-title {
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+.profile-page .lot-action-btn .lab-text .lab-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.profile-page .lot-action-btn.gold-btn {
+  border-color: var(--border-gold);
+  background: rgba(201, 168, 76, 0.04);
+}
+.profile-page .lot-action-btn.gold-btn:hover {
+  background: rgba(201, 168, 76, 0.1);
+}
 
 /* STATUS TIMELINE */
-.profile-page .status-timeline { display: flex; flex-direction: column; gap: 0; }
-.profile-page .st-item { display: flex; gap: 14px; padding-bottom: 20px; position: relative; }
-.profile-page .st-item:last-child { padding-bottom: 0; }
-.profile-page .st-item:not(:last-child)::before { content: ''; position: absolute; left: 11px; top: 26px; bottom: 0; width: 1px; background: var(--border-dim); }
-.profile-page .st-dot { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--border-dim); display: flex; align-items: center; justify-content: center; font-size: 11px; flex-shrink: 0; z-index: 1; }
-.profile-page .st-dot.done { border-color: var(--teal-soft); background: rgba(0, 229, 196, 0.1); color: var(--teal-glow); }
-.profile-page .st-dot.current { border-color: var(--gold); background: rgba(201, 168, 76, 0.1); color: var(--gold); animation: pf-pulse-dot 2s ease-in-out infinite; }
-@keyframes pf-pulse-dot { 0%, 100% { box-shadow: 0 0 0 0 rgba(201, 168, 76, 0.3); } 50% { box-shadow: 0 0 0 6px rgba(201, 168, 76, 0); } }
-.profile-page .st-dot.pending { background: rgba(4, 6, 14, 0.5); color: var(--text-muted); }
-.profile-page .st-info { padding-top: 2px; }
-.profile-page .st-title { font-size: 13px; font-weight: 500; color: var(--text-main); margin-bottom: 2px; }
-.profile-page .st-sub { font-size: 11px; color: var(--text-muted); }
+.profile-page .status-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.profile-page .st-item {
+  display: flex;
+  gap: 14px;
+  padding-bottom: 20px;
+  position: relative;
+}
+.profile-page .st-item:last-child {
+  padding-bottom: 0;
+}
+.profile-page .st-item:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 11px;
+  top: 26px;
+  bottom: 0;
+  width: 1px;
+  background: var(--border-dim);
+}
+.profile-page .st-dot {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid var(--border-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  flex-shrink: 0;
+  z-index: 1;
+}
+.profile-page .st-dot.done {
+  border-color: var(--teal-soft);
+  background: rgba(0, 229, 196, 0.1);
+  color: var(--teal-glow);
+}
+.profile-page .st-dot.current {
+  border-color: var(--gold);
+  background: rgba(201, 168, 76, 0.1);
+  color: var(--gold);
+  animation: pf-pulse-dot 2s ease-in-out infinite;
+}
+@keyframes pf-pulse-dot {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(201, 168, 76, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(201, 168, 76, 0);
+  }
+}
+.profile-page .st-dot.pending {
+  background: rgba(4, 6, 14, 0.5);
+  color: var(--text-muted);
+}
+.profile-page .st-info {
+  padding-top: 2px;
+}
+.profile-page .st-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-main);
+  margin-bottom: 2px;
+}
+.profile-page .st-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+}
 
 /* MODAL */
-.profile-page .modal-overlay { position: fixed; inset: 0; background: rgba(4, 6,14, 0.85); backdrop-filter: blur(6px); z-index: 200; display: none; align-items: center; justify-content: center; padding: 20px; }
-.profile-page .modal-overlay.open { display: flex; }
-.profile-page .modal-box { background: var(--ink-deep); border: 1px solid var(--border-soft); border-radius: 14px; padding: 32px; width: 100%; max-width: 500px; position: relative; max-height: 90vh; overflow-y: auto; }
-.profile-page .modal-close { position: absolute; top: 16px; right: 16px; background: none; border: none; color: var(--text-muted); font-size: 18px; cursor: pointer; padding: 4px 8px; border-radius: 4px; transition: color 0.2s; }
-.profile-page .modal-close:hover { color: var(--text-main); }
-.profile-page .modal-title { font-family: 'Playfair Display', serif; font-size: 22px; color: var(--text-main); margin-bottom: 4px; }
-.profile-page .modal-sub { font-size: 12px; color: var(--text-muted); margin-bottom: 24px; }
-.profile-page .modal-section { margin-bottom: 20px; }
-.profile-page .modal-section-title { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--teal-soft); margin-bottom: 12px; }
-.profile-page .modal-field { margin-bottom: 14px; }
-.profile-page .modal-field label { display: block; font-size: 11px; color: var(--text-muted); margin-bottom: 6px; letter-spacing: 0.06em; text-transform: uppercase; }
+.profile-page .modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 6, 14, 0.85);
+  backdrop-filter: blur(6px);
+  z-index: 200;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.profile-page .modal-overlay.open {
+  display: flex;
+}
+.profile-page .modal-box {
+  background: var(--ink-deep);
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  padding: 32px;
+  width: 100%;
+  max-width: 500px;
+  position: relative;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.profile-page .modal-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: color 0.2s;
+}
+.profile-page .modal-close:hover {
+  color: var(--text-main);
+}
+.profile-page .modal-title {
+  font-family: "Playfair Display", serif;
+  font-size: 22px;
+  color: var(--text-main);
+  margin-bottom: 4px;
+}
+.profile-page .modal-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 24px;
+}
+.profile-page .modal-section {
+  margin-bottom: 20px;
+}
+.profile-page .modal-section-title {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--teal-soft);
+  margin-bottom: 12px;
+}
+.profile-page .modal-field {
+  margin-bottom: 14px;
+}
+.profile-page .modal-field label {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
 .profile-page .modal-field input,
-.profile-page .modal-field select { width: 100%; background: rgba(4, 6, 14, 0.8); border: 1px solid var(--border-dim); border-radius: 6px; color: var(--text-main); font-family: 'Be Vietnam Pro', sans-serif; font-size: 13px; padding: 10px 14px; outline: none; transition: border-color 0.2s; }
+.profile-page .modal-field select {
+  width: 100%;
+  background: rgba(4, 6, 14, 0.8);
+  border: 1px solid var(--border-dim);
+  border-radius: 6px;
+  color: var(--text-main);
+  font-family: "Be Vietnam Pro", sans-serif;
+  font-size: 13px;
+  padding: 10px 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
 .profile-page .modal-field input:focus,
-.profile-page .modal-field select:focus { border-color: var(--teal-soft); }
-.profile-page .modal-field select option { background: var(--ink-deep); }
-.profile-page .modal-warn { background: rgba(201, 168, 76, 0.07); border: 1px solid var(--border-gold); border-radius: 8px; padding: 12px 16px; font-size: 12px; color: var(--gold); margin-bottom: 20px; line-height: 1.6; }
-.profile-page .modal-btn-row { display: flex; gap: 10px; }
-.profile-page .modal-btn-primary { flex: 1; padding: 12px; border-radius: 8px; border: none; background: linear-gradient(135deg, var(--teal-glow), var(--teal-soft)); color: var(--ink-void); font-family: 'Be Vietnam Pro', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; letter-spacing: 0.05em; transition: all 0.2s; }
-.profile-page .modal-btn-primary:hover { box-shadow: 0 0 20px rgba(0, 229, 196, 0.3); }
-.profile-page .modal-btn-primary.gold { background: linear-gradient(135deg, var(--gold), var(--gold-dim)); color: var(--ink-void); }
-.profile-page .modal-btn-ghost { padding: 12px 20px; border-radius: 8px; border: 1px solid var(--border-dim); background: none; color: var(--text-muted); font-family: 'Be Vietnam Pro', sans-serif; font-size: 13px; cursor: pointer; transition: all 0.2s; }
-.profile-page .modal-btn-ghost:hover { border-color: var(--border-soft); color: var(--text-main); }
+.profile-page .modal-field select:focus {
+  border-color: var(--teal-soft);
+}
+.profile-page .modal-field select option {
+  background: var(--ink-deep);
+}
+.profile-page .modal-warn {
+  background: rgba(201, 168, 76, 0.07);
+  border: 1px solid var(--border-gold);
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-size: 12px;
+  color: var(--gold);
+  margin-bottom: 20px;
+  line-height: 1.6;
+}
+.profile-page .modal-btn-row {
+  display: flex;
+  gap: 10px;
+}
+.profile-page .modal-btn-primary {
+  flex: 1;
+  padding: 12px;
+  border-radius: 8px;
+  border: none;
+  background: linear-gradient(135deg, var(--teal-glow), var(--teal-soft));
+  color: var(--ink-void);
+  font-family: "Be Vietnam Pro", sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  letter-spacing: 0.05em;
+  transition: all 0.2s;
+}
+.profile-page .modal-btn-primary:hover {
+  box-shadow: 0 0 20px rgba(0, 229, 196, 0.3);
+}
+.profile-page .modal-btn-primary.gold {
+  background: linear-gradient(135deg, var(--gold), var(--gold-dim));
+  color: var(--ink-void);
+}
+.profile-page .modal-btn-ghost {
+  padding: 12px 20px;
+  border-radius: 8px;
+  border: 1px solid var(--border-dim);
+  background: none;
+  color: var(--text-muted);
+  font-family: "Be Vietnam Pro", sans-serif;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.profile-page .modal-btn-ghost:hover {
+  border-color: var(--border-soft);
+  color: var(--text-main);
+}
 
 /* TOAST */
-.profile-page .toast { position: fixed; bottom: 32px; right: 32px; background: rgba(0, 229, 196, 0.12); border: 1px solid var(--teal-soft); color: var(--teal-glow); font-size: 13px; padding: 12px 20px; border-radius: 8px; z-index: 300; opacity: 0; transform: translateY(12px); transition: all 0.3s; pointer-events: none; }
-.profile-page .toast.show { opacity: 1; transform: translateY(0); }
+.profile-page .toast {
+  position: fixed;
+  bottom: 32px;
+  right: 32px;
+  background: rgba(0, 229, 196, 0.12);
+  border: 1px solid var(--teal-soft);
+  color: var(--teal-glow);
+  font-size: 13px;
+  padding: 12px 20px;
+  border-radius: 8px;
+  z-index: 300;
+  opacity: 0;
+  transform: translateY(12px);
+  transition: all 0.3s;
+  pointer-events: none;
+}
+.profile-page .toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
