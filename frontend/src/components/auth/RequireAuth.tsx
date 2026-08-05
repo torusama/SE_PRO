@@ -10,11 +10,16 @@ import { ROUTES } from '@/constants/routes'
  */
 export default function RequireAuth() {
   const token = useAuthStore((s) => s.token)
+  const role = useAuthStore((s) => s.role)
   const location = useLocation()
 
   if (!token) {
     // Lưu lại trang đang muốn vào, để sau khi đăng nhập có thể quay lại
     return <Navigate to={ROUTES.LOGIN} state={{ from: location }} replace />
+  }
+
+  if (role === 'admin') {
+    return <Navigate to={ROUTES.ADMIN_DASHBOARD} replace />
   }
 
   return <Outlet />

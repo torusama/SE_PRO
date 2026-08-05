@@ -15,17 +15,26 @@ import {
   getGroupIndex,
 } from "@/lib/cemeteryMapLayout";
 import {
+  BOTTOM_ROAD,
+  CENTRAL_ROAD_NORTH,
+  CENTRAL_ROAD_SOUTH,
   CLUSTER_GROUP_BACKDROPS,
   CONNECTOR_ROAD,
   CROSS_ROADS,
+  FAMILY_AISLE_ROAD,
+  FAMILY_CROSS_ROADS,
+  FAMILY_ROAD,
   LEFT_DIAGONAL_ROAD_POINTS,
+  LEFT_ROAD,
   MAIN_ROAD,
   MAP_BG_RECT,
   MAP_BOUNDARY_POINTS,
   MAP_GATE,
   MAP_VIEWBOX,
+  ROAD_CORNER_CHAMFERS,
   SECONDARY_GATE,
   SPIRIT_PARK,
+  TOP_ROAD,
   ZONE_BACKDROPS,
   gateMarkerPoints,
   getHeadingLabel,
@@ -209,8 +218,13 @@ export default function MapManagementPage() {
   const [zones, setZones] = useState<Zone[]>([]);
   const [search, setSearch] = useState("");
   const [zoneFilter, setZoneFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState<"all" | PlotStatus>("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | PlotStatus | "noData">("all");
   const [mapMode, setMapMode] = useState<MapMode>("single");
+
+  function toggleStatusFilter(targetStatus: "all" | PlotStatus | "noData") {
+    setStatusFilter((prev) => (prev === targetStatus ? "all" : targetStatus));
+    setSelectedCode(null);
+  }
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
   const [form, setForm] = useState<PlotForm>(EMPTY_FORM);
   const [editing, setEditing] = useState<BackendPlot | null | undefined>(
@@ -219,8 +233,6 @@ export default function MapManagementPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [includeDeleted, setIncludeDeleted] = useState(false);
-  const [zoom, setZoom] = useState(1);
-  const [rotation, setRotation] = useState(0);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const mapCanvasRef = useRef<HTMLDivElement>(null);
@@ -253,22 +265,16 @@ export default function MapManagementPage() {
     };
   }, [loadData]);
 
-  const panStateRef = useRef<{
-    pointerId: number;
-    startX: number;
-    startY: number;
-    scrollLeft: number;
-    scrollTop: number;
-  } | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const [rotation, setRotation] = useState(0);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const isDraggingRef = useRef(false);
+  const dragStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
 
   useEffect(() => {
     const el = mapCanvasRef.current;
     if (!el) return;
     function onWheel(event: WheelEvent) {
-      // Lướt/kéo NGANG -> để trình duyệt tự cuộn ngang, dùng để di chuyển
-      // qua lại giữa khối mộ đơn (trái) và khối lô gia tộc (phải). Chỉ cuộn
-      // DỌC (deltaY trội hơn) mới dùng để zoom.
-      if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
       event.preventDefault();
       const factor = event.deltaY > 0 ? 0.9 : 1.1;
       setZoom((current) =>
@@ -279,44 +285,50 @@ export default function MapManagementPage() {
     return () => el.removeEventListener("wheel", onWheel);
   }, []);
 
-  // Tự đổi chế độ (Một lô <-> Lô gia tộc) khi kéo/lướt ngang qua lại giữa 2
-  // khối trên cùng bản đồ.
-  useEffect(() => {
-    const el = mapCanvasRef.current;
-    if (!el) return;
-    function onScroll() {
-      if (!el) return;
-      const midpoint = (el.scrollWidth - el.clientWidth) / 2;
-      setMapMode(el.scrollLeft > midpoint ? "cluster" : "single");
-    }
-    el.addEventListener("scroll", onScroll, { passive: true });
-    return () => el.removeEventListener("scroll", onScroll);
-  }, []);
-
   function handleCanvasPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     const target = event.target as HTMLElement;
     if (target.closest(".admin-map-plot")) return;
-    const el = mapCanvasRef.current;
-    if (!el) return;
-    panStateRef.current = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      scrollLeft: el.scrollLeft,
-      scrollTop: el.scrollTop,
+    isDraggingRef.current = true;
+    dragStartRef.current = {
+      x: event.clientX,
+      y: event.clientY,
+      panX: pan.x,
+      panY: pan.y,
     };
-    el.setPointerCapture(event.pointerId);
+    try {
+      (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    } catch {
+      // ignore
+    }
   }
+
   function handleCanvasPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
-    const pan = panStateRef.current;
-    const el = mapCanvasRef.current;
-    if (!pan || !el || pan.pointerId !== event.pointerId) return;
-    el.scrollLeft = pan.scrollLeft - (event.clientX - pan.startX);
-    el.scrollTop = pan.scrollTop - (event.clientY - pan.startY);
+    if (!isDraggingRef.current) return;
+    const dx = event.clientX - dragStartRef.current.x;
+    const dy = event.clientY - dragStartRef.current.y;
+    setPan({
+      x: dragStartRef.current.panX + dx,
+      y: dragStartRef.current.panY + dy,
+    });
   }
+
   function handleCanvasPointerUp(event: ReactPointerEvent<HTMLDivElement>) {
-    panStateRef.current = null;
-    mapCanvasRef.current?.releasePointerCapture(event.pointerId);
+    if (isDraggingRef.current) {
+      isDraggingRef.current = false;
+      try {
+        (event.currentTarget as HTMLElement).releasePointerCapture(
+          event.pointerId,
+        );
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  function resetMapTransform() {
+    setZoom(1);
+    setRotation(0);
+    setPan({ x: 0, y: 0 });
   }
 
   const slots = useMemo(() => {
@@ -408,13 +420,7 @@ export default function MapManagementPage() {
     setMapMode(mode);
     setZoneFilter("all");
     setSelectedCode(null);
-    setZoom(1);
-    setRotation(0);
-    const el = mapCanvasRef.current;
-    if (el) {
-      const target = mode === "cluster" ? el.scrollWidth - el.clientWidth : 0;
-      el.scrollTo({ left: target, behavior: "smooth" });
-    }
+    resetMapTransform();
   }
 
   function openCreate(slot?: MapSlot) {
@@ -586,11 +592,24 @@ export default function MapManagementPage() {
           <div className="admin-map-section">
             <div className="admin-map-section-title">Tìm kiếm lô</div>
             <label className="admin-map-search">
-              <span>Mã lô</span>
+              <svg
+                className="admin-search-icon"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.3-4.3" />
+              </svg>
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="A-01-001 hoặc tên khu"
+                placeholder="Nhập mã lô hoặc tên khu..."
               />
             </label>
             <div className="admin-map-chips">
@@ -617,7 +636,10 @@ export default function MapManagementPage() {
             <div className="admin-map-zone-list">
               <button
                 className={zoneFilter === "all" ? "active" : ""}
-                onClick={() => setZoneFilter("all")}
+                onClick={() => {
+                  setZoneFilter("all");
+                  setSelectedCode(null);
+                }}
               >
                 <i className="all-zones" />
                 <strong>Tất cả khu</strong>
@@ -627,7 +649,10 @@ export default function MapManagementPage() {
                 <button
                   key={zone.key}
                   className={zoneFilter === zone.key ? "active" : ""}
-                  onClick={() => setZoneFilter(zone.key)}
+                  onClick={() => {
+                    setZoneFilter(zone.key);
+                    setSelectedCode(null);
+                  }}
                 >
                   <i style={{ background: zone.dot }} />
                   <strong>{zone.name}</strong>
@@ -665,27 +690,47 @@ export default function MapManagementPage() {
           </div>
 
           <div className="admin-map-stats">
-            <div>
-              <strong>{modeSlots.length}</strong>
-              <span>Ô đất quy hoạch</span>
+            <div
+              className={`stat-card ${statusFilter === "all" ? "active" : ""}`}
+              onClick={() => toggleStatusFilter("all")}
+            >
+              <span className="stat-num teal">{modeSlots.length}</span>
+              <span className="stat-lbl">Tổng lô đất</span>
             </div>
-            <div>
-              <strong>{stats.available}</strong>
-              <span>Còn trống</span>
+            <div
+              className={`stat-card ${statusFilter === "available" ? "active" : ""}`}
+              onClick={() => toggleStatusFilter("available")}
+            >
+              <span className="stat-num green">{stats.available}</span>
+              <span className="stat-lbl">Còn trống</span>
             </div>
-            <div>
-              <strong className="amber">
-                {stats.pending + stats.reserved}
-              </strong>
-              <span>Đang chờ / Đã giữ</span>
+            <div
+              className={`stat-card ${statusFilter === "pending" ? "active" : ""}`}
+              onClick={() => toggleStatusFilter("pending")}
+            >
+              <span className="stat-num amber">{stats.pending}</span>
+              <span className="stat-lbl">Đang chờ</span>
             </div>
-            <div>
-              <strong className="red">{stats.sold}</strong>
-              <span>Đã bán</span>
+            <div
+              className={`stat-card ${statusFilter === "reserved" ? "active" : ""}`}
+              onClick={() => toggleStatusFilter("reserved")}
+            >
+              <span className="stat-num yellow">{stats.reserved}</span>
+              <span className="stat-lbl">Đã giữ chỗ</span>
             </div>
-            <div>
-              <strong className="gray">{stats.noData}</strong>
-              <span>Chưa có dữ liệu</span>
+            <div
+              className={`stat-card ${statusFilter === "sold" ? "active" : ""}`}
+              onClick={() => toggleStatusFilter("sold")}
+            >
+              <span className="stat-num red">{stats.sold}</span>
+              <span className="stat-lbl">Đã bán</span>
+            </div>
+            <div
+              className={`stat-card ${statusFilter === "noData" ? "active" : ""}`}
+              onClick={() => toggleStatusFilter("noData")}
+            >
+              <span className="stat-num gray">{stats.noData}</span>
+              <span className="stat-lbl single-line">Chưa có dữ liệu</span>
             </div>
           </div>
         </aside>
@@ -697,7 +742,7 @@ export default function MapManagementPage() {
                 className={mapMode === "single" ? "active" : ""}
                 onClick={() => changeMode("single")}
               >
-                Một lô
+                Lô đơn
               </button>
               <button
                 className={mapMode === "cluster" ? "active" : ""}
@@ -717,269 +762,300 @@ export default function MapManagementPage() {
               onPointerUp={handleCanvasPointerUp}
               onPointerLeave={handleCanvasPointerUp}
             >
-              <svg
-                className="admin-cemetery-map"
-                viewBox={MAP_VIEWBOX}
+              <div
+                className="admin-map-stage"
                 style={{
-                  transform: `scale(${zoom}) rotate(${rotation}deg)`,
+                  transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom}) rotate(${rotation}deg)`,
                   transformOrigin: "center center",
+                  transition: isDraggingRef.current ? "none" : "transform 0.1s ease-out",
                 }}
               >
-                <defs>
-                  <pattern
-                    id="admin-grid"
-                    width="20"
-                    height="20"
-                    patternUnits="userSpaceOnUse"
-                  >
-                    <path d="M 20 0 L 0 0 0 20" />
-                  </pattern>
-                </defs>
-                <rect
-                  x={MAP_BG_RECT.x}
-                  y={MAP_BG_RECT.y}
-                  width={MAP_BG_RECT.width}
-                  height={MAP_BG_RECT.height}
-                  fill="url(#admin-grid)"
-                />
-                {/* Ranh giới tổng thể khu đất: đa giác bất cân đối, viền nét đứt đỏ */}
-                <polygon
-                  className="admin-map-land"
-                  points={MAP_BOUNDARY_POINTS}
-                />
-                <polygon
-                  className="admin-map-boundary"
-                  points={MAP_BOUNDARY_POINTS}
-                />
-
-                {/* Đường bao/đường chéo bên trái */}
-                <polygon
-                  className="admin-map-road admin-map-road-diagonal"
-                  points={LEFT_DIAGONAL_ROAD_POINTS}
-                />
-                {/* Đường chính chạy dọc - sát rìa phải khối mộ đơn */}
-                <rect
-                  x={MAIN_ROAD.x}
-                  y={MAIN_ROAD.y}
-                  width={MAIN_ROAD.width}
-                  height={MAIN_ROAD.height}
-                  className="admin-map-road"
-                />
-                <text
-                  x={MAIN_ROAD.x + MAIN_ROAD.width / 2}
-                  y={MAIN_ROAD.y - 10}
-                  textAnchor="middle"
-                  className="admin-map-road-label"
+                <svg
+                  className="admin-cemetery-map"
+                  viewBox={MAP_VIEWBOX}
                 >
-                  Trục đường chính
-                </text>
-                {CROSS_ROADS.map((road, index) => (
+                  <defs>
+                    <pattern
+                      id="admin-grid"
+                      width="20"
+                      height="20"
+                      patternUnits="userSpaceOnUse"
+                    >
+                      <path d="M 20 0 L 0 0 0 20" />
+                    </pattern>
+                    <clipPath id="admin-cemetery-boundary-clip">
+                      <polygon points={MAP_BOUNDARY_POINTS} />
+                    </clipPath>
+                  </defs>
                   <rect
-                    key={`cross-${index}`}
-                    x={road.x}
-                    y={road.y}
-                    width={road.width}
-                    height={road.height}
-                    className="admin-map-road"
+                    x={MAP_BG_RECT.x}
+                    y={MAP_BG_RECT.y}
+                    width={MAP_BG_RECT.width}
+                    height={MAP_BG_RECT.height}
+                    fill="url(#admin-grid)"
                   />
-                ))}
-                {/* Đường dẫn nối sang khối lô gia tộc */}
-                <rect
-                  x={CONNECTOR_ROAD.x}
-                  y={CONNECTOR_ROAD.y}
-                  width={CONNECTOR_ROAD.width}
-                  height={CONNECTOR_ROAD.height}
-                  className="admin-map-road admin-map-connector-road"
-                />
+                  {/* Ranh giới tổng thể khu đất */}
+                  <polygon
+                    className="admin-map-land"
+                    points={MAP_BOUNDARY_POINTS}
+                  />
+                  <polygon
+                    className="admin-map-boundary"
+                    points={MAP_BOUNDARY_POINTS}
+                  />
 
-                {/* Khu Tâm Linh - công viên trung tâm (khối mộ đơn) */}
-                <g>
-                  <rect
-                    x={SPIRIT_PARK.x}
-                    y={SPIRIT_PARK.y}
-                    width={SPIRIT_PARK.width}
-                    height={SPIRIT_PARK.height}
-                    rx="18"
-                    className="admin-spirit-park-rect"
-                  />
-                  <circle
-                    cx={SPIRIT_PARK.cx}
-                    cy={SPIRIT_PARK.cy}
-                    r={SPIRIT_PARK.r}
-                    className="admin-spirit-park-circle"
+                  {/* Mạng lưới đường giao thông liên kết 100% (cắt gọn theo ranh giới đỏ) */}
+                  <g className="admin-map-road-network" clipPath="url(#admin-cemetery-boundary-clip)">
+                    <rect
+                      x={LEFT_ROAD.x}
+                      y={LEFT_ROAD.y}
+                      width={LEFT_ROAD.width}
+                      height={LEFT_ROAD.height}
+                      className="admin-map-road"
+                    />
+                    <rect
+                      x={MAIN_ROAD.x}
+                      y={MAIN_ROAD.y}
+                      width={MAIN_ROAD.width}
+                      height={MAIN_ROAD.height}
+                      className="admin-map-road"
+                    />
+                    <rect
+                      x={CENTRAL_ROAD_SOUTH.x}
+                      y={CENTRAL_ROAD_SOUTH.y}
+                      width={CENTRAL_ROAD_SOUTH.width}
+                      height={CENTRAL_ROAD_SOUTH.height}
+                      className="admin-map-road"
+                    />
+                    <rect
+                      x={CENTRAL_ROAD_NORTH.x}
+                      y={CENTRAL_ROAD_NORTH.y}
+                      width={CENTRAL_ROAD_NORTH.width}
+                      height={CENTRAL_ROAD_NORTH.height}
+                      className="admin-map-road"
+                    />
+                    <rect
+                      x={FAMILY_ROAD.x}
+                      y={FAMILY_ROAD.y}
+                      width={FAMILY_ROAD.width}
+                      height={FAMILY_ROAD.height}
+                      className="admin-map-road"
+                    />
+                    <rect
+                      x={TOP_ROAD.x}
+                      y={TOP_ROAD.y}
+                      width={TOP_ROAD.width}
+                      height={TOP_ROAD.height}
+                      className="admin-map-road"
+                    />
+                    <rect
+                      x={BOTTOM_ROAD.x}
+                      y={BOTTOM_ROAD.y}
+                      width={BOTTOM_ROAD.width}
+                      height={BOTTOM_ROAD.height}
+                      className="admin-map-road"
+                    />
+                    {CROSS_ROADS.map((road, index) => (
+                      <rect
+                        key={`cross-${index}`}
+                        x={road.x}
+                        y={road.y}
+                        width={road.width}
+                        height={road.height}
+                        className="admin-map-road"
+                      />
+                    ))}
+                    {/* 3 đường ngang nối giữa các cụm mộ Gia tộc (C1-C4) sang Trục chính */}
+                    {FAMILY_CROSS_ROADS.map((road, index) => (
+                      <rect
+                        key={`fam-cross-${index}`}
+                        x={road.x}
+                        y={road.y}
+                        width={road.width}
+                        height={road.height}
+                        className="admin-map-road"
+                      />
+                    ))}
+                    {/* Lối đi dọc nội bộ CỔNG PHỤ xuyên khối Gia Tộc */}
+                    <rect
+                      x={FAMILY_AISLE_ROAD.x}
+                      y={FAMILY_AISLE_ROAD.y}
+                      width={FAMILY_AISLE_ROAD.width}
+                      height={FAMILY_AISLE_ROAD.height}
+                      className="admin-map-road"
+                    />
+                    {ROAD_CORNER_CHAMFERS.map((pts, i) => (
+                      <polygon key={i} points={pts} className="admin-map-road" />
+                    ))}
+                  </g>
+
+                  {/* Khu Tâm Linh - công viên trung tâm (khối mộ đơn) */}
+                  <g>
+                    <rect
+                      x={SPIRIT_PARK.x}
+                      y={SPIRIT_PARK.y}
+                      width={SPIRIT_PARK.width}
+                      height={SPIRIT_PARK.height}
+                      rx="18"
+                      className="admin-spirit-park-rect"
+                    />
+                    <circle
+                      cx={SPIRIT_PARK.cx}
+                      cy={SPIRIT_PARK.cy}
+                      r={SPIRIT_PARK.r}
+                      className="admin-spirit-park-circle"
+                    />
+                    <text
+                      x={SPIRIT_PARK.cx}
+                      y={SPIRIT_PARK.cy + 4}
+                      textAnchor="middle"
+                      className="admin-spirit-park-label"
+                    >
+                      KHU TÂM LINH
+                    </text>
+                  </g>
+
+                  {/* Cổng CHÍNH - chỉ ở khối mộ đơn (trái) */}
+                  <polygon
+                    className="admin-map-gate-marker"
+                    points={gateMarkerPoints(MAP_GATE)}
                   />
                   <text
-                    x={SPIRIT_PARK.cx}
-                    y={SPIRIT_PARK.cy + 4}
+                    x={MAP_GATE.x}
+                    y={MAP_GATE.y - 36}
                     textAnchor="middle"
-                    className="admin-spirit-park-label"
+                    className="admin-map-gate-label"
                   >
-                    KHU TÂM LINH
+                    Cổng chính
                   </text>
-                </g>
+                  {/* Cổng PHỤ - khối lô gia tộc (phải) */}
+                  <polygon
+                    className="admin-map-gate-marker admin-map-gate-secondary"
+                    points={gateMarkerPoints(SECONDARY_GATE)}
+                  />
+                  <text
+                    x={SECONDARY_GATE.x}
+                    y={SECONDARY_GATE.y - 36}
+                    textAnchor="middle"
+                    className="admin-map-gate-label admin-map-gate-label-secondary"
+                  >
+                    Cổng phụ
+                  </text>
 
-                {/* Cổng CHÍNH - chỉ ở khối mộ đơn (trái) */}
-                <polygon
-                  className="admin-map-gate-marker"
-                  points={gateMarkerPoints(MAP_GATE)}
-                />
-                <text
-                  x={MAP_GATE.x}
-                  y={MAP_GATE.y - 36}
-                  textAnchor="middle"
-                  className="admin-map-gate-label"
-                >
-                  Cổng chính
-                </text>
-                {/* Cổng PHỤ - khối lô gia tộc (phải) */}
-                <polygon
-                  className="admin-map-gate-marker admin-map-gate-secondary"
-                  points={gateMarkerPoints(SECONDARY_GATE)}
-                />
-                <text
-                  x={SECONDARY_GATE.x}
-                  y={SECONDARY_GATE.y - 36}
-                  textAnchor="middle"
-                  className="admin-map-gate-label admin-map-gate-label-secondary"
-                >
-                  Cổng phụ
-                </text>
+                  {/* Khối nền 7 khu mộ đơn */}
+                  {SINGLE_ZONES.map((zone) => {
+                    const backdrop = ZONE_BACKDROPS[zone.key];
+                    if (!backdrop) return null;
+                    return (
+                      <g key={`backdrop-${zone.key}`}>
+                        <polygon
+                          points={backdrop.points}
+                          fill={zone.dot}
+                          fillOpacity={0.08}
+                          stroke={zone.dot}
+                          strokeOpacity={0.5}
+                          strokeWidth={1}
+                          strokeDasharray="5 3"
+                        />
+                      </g>
+                    );
+                  })}
+                  {SINGLE_ZONES.map((zone) => (
+                    <text
+                      key={zone.key}
+                      x={zone.labelX}
+                      y={zone.labelY}
+                      textAnchor="middle"
+                      className="admin-map-zone-label"
+                    >
+                      {`KHU ${zone.key}`}
+                    </text>
+                  ))}
 
-                {/* Khối nền 7 khu mộ đơn: đa giác vát góc kiểu bản vẽ kiến trúc phân lô */}
-                {SINGLE_ZONES.map((zone) => {
-                  const backdrop = ZONE_BACKDROPS[zone.key];
-                  if (!backdrop) return null;
-                  return (
-                    <g key={`backdrop-${zone.key}`}>
+                  {/* Khu C: 4 cụm C1-C4 */}
+                  {CLUSTER_GROUP_BACKDROPS.map((backdrop, index) => (
+                    <g key={`cluster-backdrop-${index}`}>
                       <polygon
                         points={backdrop.points}
-                        fill={zone.dot}
-                        fillOpacity={0.08}
-                        stroke={zone.dot}
-                        strokeOpacity={0.5}
+                        fill={clusterZone?.dot}
+                        fillOpacity={0.09}
+                        stroke={clusterZone?.dot}
+                        strokeOpacity={0.55}
                         strokeWidth={1}
                         strokeDasharray="5 3"
                       />
-                      <circle
-                        cx={backdrop.cx}
-                        cy={backdrop.cy}
-                        r="11"
-                        className="admin-map-zone-badge"
-                        stroke={zone.dot}
-                      />
-                      <text
-                        x={backdrop.cx}
-                        y={backdrop.cy + 4}
-                        textAnchor="middle"
-                        className="admin-map-zone-badge-text"
-                        fill={zone.dot}
-                      >
-                        {zone.key}
-                      </text>
                     </g>
-                  );
-                })}
-                {SINGLE_ZONES.map((zone) => (
-                  <text
-                    key={zone.key}
-                    x={zone.labelX}
-                    y={zone.labelY}
-                    textAnchor="middle"
-                    className="admin-map-zone-label"
-                  >
-                    {`KHU ${zone.key}`}
-                  </text>
-                ))}
-
-                {/* Khu C: 4 cụm RIÊNG BIỆT (C1-C4), mỗi cụm dành cho 1 gia tộc */}
-                {CLUSTER_GROUP_BACKDROPS.map((backdrop, index) => (
-                  <g key={`cluster-backdrop-${index}`}>
-                    <polygon
-                      points={backdrop.points}
-                      fill={clusterZone?.dot}
-                      fillOpacity={0.09}
-                      stroke={clusterZone?.dot}
-                      strokeOpacity={0.55}
-                      strokeWidth={1}
-                      strokeDasharray="5 3"
-                    />
-                    <circle
-                      cx={backdrop.cx}
-                      cy={backdrop.cy - 60}
-                      r="13"
-                      className="admin-map-zone-badge"
-                      stroke={clusterZone?.dot}
-                    />
+                  ))}
+                  {/* Nhãn tên từng cụm KHU C1, C2, C3, C4 ở chính giữa trên đầu mỗi lô gia tộc */}
+                  {CLUSTER_GROUP_BACKDROPS.map((backdrop, index) => (
                     <text
+                      key={`cluster-header-${index}`}
                       x={backdrop.cx}
-                      y={backdrop.cy - 56}
+                      y={backdrop.y - 10}
                       textAnchor="middle"
-                      className="admin-map-zone-badge-text"
-                      fill={clusterZone?.dot}
-                    >{`C${index + 1}`}</text>
-                  </g>
-                ))}
-                {clusterZone && (
-                  <text
-                    x={clusterZone.labelX}
-                    y={clusterZone.labelY}
-                    textAnchor="middle"
-                    className="admin-map-zone-label"
-                  >
-                    {`KHU ${clusterZone.key} - LÔ GIA TỘC`}
-                  </text>
-                )}
-
-                {visibleSlots.map((slot) => {
-                  const plot = slot.plot;
-                  const meta = plot ? STATUS_META[plot.status] : null;
-                  const selected = selectedCode === slot.code;
-                  return (
-                    <g
-                      key={slot.code}
-                      className={`admin-map-plot ${plot ? "" : "placeholder"} ${selected ? "selected" : ""}`}
-                      onClick={() => setSelectedCode(slot.code)}
+                      className="admin-map-zone-label"
                     >
-                      <rect
-                        x={slot.x}
-                        y={slot.y}
-                        width={slot.width}
-                        height={slot.height}
-                        rx="2"
-                        fill={meta?.fill}
-                        stroke={meta?.stroke}
-                      />
-                      <title>
-                        {plot
-                          ? `${plot.plotCode} - ${plot.zoneName} - ${STATUS_META[plot.status].label} - ${formatPrice(plot.price)}`
-                          : `${slot.code} - Chưa có dữ liệu`}
-                      </title>
-                      <text
-                        x={slot.x + slot.width / 2}
-                        y={slot.y + Math.min(16, slot.height / 2 + 3)}
-                        textAnchor="middle"
-                        fill={meta?.text}
-                      >
-                        {slot.col}
-                      </text>
-                    </g>
-                  );
-                })}
+                      {`KHU C${index + 1}`}
+                    </text>
+                  ))}
 
-                {selectedSlot &&
-                  visibleSlots.some(
-                    (slot) => slot.code === selectedSlot.code,
-                  ) && (
-                    <rect
-                      x={selectedSlot.x + 1}
-                      y={selectedSlot.y + 1}
-                      width={selectedSlot.width - 2}
-                      height={selectedSlot.height - 2}
-                      rx="3"
-                      className="admin-map-selection"
-                    />
-                  )}
-              </svg>
+                  {visibleSlots.map((slot) => {
+                    const plot = slot.plot;
+                    const meta = plot ? STATUS_META[plot.status] : null;
+                    const selected = selectedCode === slot.code;
+                    const isFiltered =
+                      statusFilter !== "all" &&
+                      (statusFilter === "noData"
+                        ? Boolean(plot)
+                        : !plot || plot.status !== statusFilter);
+
+                    return (
+                      <g
+                        key={slot.code}
+                        className={`admin-map-plot ${plot ? "" : "placeholder"} ${selected ? "selected" : ""} ${isFiltered ? "dimmed" : ""}`}
+                        onClick={() => setSelectedCode(slot.code)}
+                      >
+                        <rect
+                          x={slot.x}
+                          y={slot.y}
+                          width={slot.width}
+                          height={slot.height}
+                          rx="2"
+                          fill={meta?.fill}
+                          stroke={meta?.stroke}
+                        />
+                        <title>
+                          {plot
+                            ? `${plot.plotCode} - ${plot.zoneName} - ${STATUS_META[plot.status].label} - ${formatPrice(plot.price)}`
+                            : `${slot.code} - Chưa có dữ liệu`}
+                        </title>
+                        <text
+                          x={slot.x + slot.width / 2}
+                          y={slot.y + Math.min(16, slot.height / 2 + 3)}
+                          textAnchor="middle"
+                          fill={meta?.text}
+                        >
+                          {slot.col}
+                        </text>
+                      </g>
+                    );
+                  })}
+
+                  {selectedSlot &&
+                    visibleSlots.some(
+                      (slot) => slot.code === selectedSlot.code,
+                    ) && (
+                      <rect
+                        x={selectedSlot.x + 1}
+                        y={selectedSlot.y + 1}
+                        width={selectedSlot.width - 2}
+                        height={selectedSlot.height - 2}
+                        rx="3"
+                        className="admin-map-selection"
+                      />
+                    )}
+                </svg>
+              </div>
 
               {loading && (
                 <div className="admin-map-empty">
@@ -993,14 +1069,13 @@ export default function MapManagementPage() {
               )}
             </div>
 
-            {/* Lớp phủ cố định trong vùng bản đồ, nằm ngoài admin-map-canvas
-                nên không bị cuốn theo khi kéo/zoom bản đồ */}
+            {/* Lớp phủ cố định trong vùng bản đồ, nằm ngoài admin-map-canvas */}
             <svg
               className="admin-map-compass"
               viewBox="0 0 40 40"
               aria-label="Đặt lại hướng Bắc"
               role="button"
-              onClick={() => setRotation(0)}
+              onClick={resetMapTransform}
               style={{ transform: `rotate(${-rotation}deg)` }}
             >
               <circle cx="20" cy="20" r="18" />
@@ -1020,8 +1095,8 @@ export default function MapManagementPage() {
               </button>
               <button
                 className="heading-btn"
-                title="Hướng hiện tại - bấm để đặt lại hướng Bắc"
-                onClick={() => setRotation(0)}
+                title="Hướng hiện tại - bấm để đặt lại góc nhìn ban đầu"
+                onClick={resetMapTransform}
               >
                 {getHeadingLabel(rotation)}
               </button>
@@ -1035,7 +1110,7 @@ export default function MapManagementPage() {
 
             <div className="admin-map-zoom">
               <button
-                title="Phóng to (hoặc cuộn touchpad)"
+                title="Phóng to"
                 onClick={() => setZoom((value) => Math.min(value * 1.3, 4))}
               >
                 +
@@ -1062,9 +1137,18 @@ export default function MapManagementPage() {
 
           {selectedSlot && !selectedSlot.plot && (
             <div className="admin-map-detail">
-              <span className="admin-map-detail-tag">
-                Bản đồ nghĩa trang 2D
-              </span>
+              <div className="admin-map-detail-header">
+                <span className="admin-map-detail-tag">
+                  Bản đồ nghĩa trang 2D
+                </span>
+                <button
+                  className="admin-map-detail-close"
+                  title="Đóng thông tin lô"
+                  onClick={() => setSelectedCode(null)}
+                >
+                  ✕
+                </button>
+              </div>
               <h2>{selectedSlot.code}</h2>
               <p className="admin-map-detail-zone">
                 {CEMETERY_ZONE_LAYOUT[selectedSlot.zoneCode]?.name} · Hàng{" "}
@@ -1106,9 +1190,18 @@ export default function MapManagementPage() {
               const status = STATUS_META[plot.status];
               return (
                 <div className="admin-map-detail">
-                  <span className="admin-map-detail-tag">
-                    Bản đồ nghĩa trang 2D
-                  </span>
+                  <div className="admin-map-detail-header">
+                    <span className="admin-map-detail-tag">
+                      Bản đồ nghĩa trang 2D
+                    </span>
+                    <button
+                      className="admin-map-detail-close"
+                      title="Đóng thông tin lô"
+                      onClick={() => setSelectedCode(null)}
+                    >
+                      ✕
+                    </button>
+                  </div>
                   <h2>{plot.plotCode}</h2>
                   <p className="admin-map-detail-zone">
                     {CEMETERY_ZONE_LAYOUT[selectedSlot.zoneCode]?.name} · Hàng{" "}

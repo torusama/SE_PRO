@@ -31,35 +31,65 @@ export const MAP_BOUNDARY_POINTS = BOUNDARY_RAW.map((p) => p.join(",")).join(
   " ",
 );
 
-// Đường chính chạy dọc — sát rìa PHẢI của khối mộ đơn (bên trái bản đồ).
-export const MAIN_ROAD = { x: 880, y: 40, width: 20, height: 1480 };
+// ------------------------------------------------------------------
+// MẠNG LƯỚI ĐƯỜNG GIAO THÔNG VUÔNG VẮN VÀNH ĐAI DỌC SÁT KHỐI Ô ĐẤT
+// ------------------------------------------------------------------
+// 1. Trục đường chính phía Đông (sát rìa phải khối mộ đơn)
+export const MAIN_ROAD = { x: 880, y: 15, width: 30, height: 1535 };
 
-// Đường bao/đường chéo bên trái khối mộ đơn.
-export const LEFT_DIAGONAL_ROAD_POINTS =
-  "-40,20 0,20 -24,500 6,510 -30,720 -2,730 -40,1460";
+// 2. Trục đường vành đai phía Tây (nằm sát bên trái các khối A/D/F/H)
+export const LEFT_ROAD = { x: 50, y: 15, width: 26, height: 1535 };
 
-// Đường ngang nối giữa các hàng khu (khối mộ đơn, bên trái).
+// 3. Đại lộ trung tâm CỔNG CHÍNH (nối từ Cổng chính qua N3 & N2)
+export const CENTRAL_ROAD_NORTH = { x: 445, y: 15, width: 30, height: 663 };
+export const CENTRAL_ROAD_SOUTH = { x: 445, y: 874, width: 30, height: 650 };
+
+// 4. Đường vành đai Đông Khu Gia Tộc (nằm sát bên phải khối Khu C)
+export const FAMILY_ROAD = { x: 1634, y: 15, width: 26, height: 1535 };
+
+// 5. Đường vành đai Nam (nối liền các đường dọc sát bên dưới các khối mộ)
+export const BOTTOM_ROAD = { x: 50, y: 1524, width: 1610, height: 26 };
+
+// 6. Đường vành đai Bắc (nối liền các đường dọc sát bên trên các khối mộ)
+export const TOP_ROAD = { x: 50, y: 15, width: 1610, height: 26 };
+
+// 7. Các đường ngang nội bộ khối mộ đơn (N1, N2, N3, N4)
 export const CROSS_ROADS = [
-  { x: -40, y: 322, width: 960, height: 26 }, // giữa hàng 1 (A/B) và hàng 2 (D/E)
-  { x: -40, y: 640, width: 960, height: 20 }, // giữa hàng 2 và Khu Tâm Linh
-  { x: -40, y: 862, width: 960, height: 20 }, // giữa Khu Tâm Linh và hàng 3 (F/G)
-  { x: -40, y: 1192, width: 960, height: 26 }, // giữa hàng 3 và hàng 4 (H)
+  { x: 50, y: 332, width: 860, height: 26 }, // N1 (giữa A/B và D/E)
+  { x: 50, y: 652, width: 860, height: 26 }, // N2 (giữa D/E và Khu Tâm Linh)
+  { x: 50, y: 874, width: 860, height: 26 }, // N3 (giữa Khu Tâm Linh và F/G)
+  { x: 50, y: 1202, width: 860, height: 26 }, // N4 (giữa F/G và H)
 ];
+
+// 8. Các đường ngang nối giữa các cụm mộ Gia tộc (C1, C2, C3, C4) nối sang Trục đường chính
+export const CONNECTOR_ROAD = { x: 880, y: 767, width: 780, height: 26 };
+export const FAMILY_CROSS_ROADS = [
+  { x: 880, y: 387, width: 780, height: 26 }, // Nối giữa C1 và C2 sang Trục chính
+  { x: 880, y: 767, width: 780, height: 26 }, // Nối giữa C2 và C3 sang Trục chính
+  { x: 880, y: 1147, width: 780, height: 26 }, // Nối giữa C3 và C4 sang Trục chính
+];
+
+// 9. Lối đi dọc nội bộ CỔNG PHỤ (nối từ Cổng Phụ xuyên dọc khối Lô Gia Tộc)
+export const FAMILY_AISLE_ROAD = { x: 1297, y: 15, width: 26, height: 1535 };
+
+// 10. Không dùng bo vát góc
+export const ROAD_CORNER_CHAMFERS: string[] = [];
+
+// Tương thích ngược
+export const LEFT_DIAGONAL_ROAD_POINTS =
+  "-50,40 -20,40 -20,1520 -50,1520";
 
 // Khu Tâm Linh (công viên trung tâm) — nằm giữa hàng 2 và hàng 3 của khối
 // mộ đơn.
 export const SPIRIT_PARK = {
-  x: 300,
+  x: 240,
   y: 700,
-  width: 400,
+  width: 440,
   height: 152,
-  cx: 500,
+  cx: 460,
   cy: 776,
   r: 58,
 };
-
-// Đường dẫn nối khối mộ đơn (trái) sang khối lô gia tộc (phải).
-export const CONNECTOR_ROAD = { x: 900, y: 744, width: 100, height: 24 };
 
 // Cổng CHÍNH — chỉ ở dưới cùng khối mộ đơn (bên trái).
 export const MAP_GATE = { x: 460, y: 1560 };
@@ -142,6 +172,10 @@ export function chamferedRect(
 
 export interface ZoneBackdrop {
   points: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
   cx: number;
   cy: number;
 }
@@ -161,6 +195,10 @@ function makeBackdrop(
   const cut = Math.min(30, Math.min(w, h) * 0.14);
   return {
     points: chamferedRect(x, y, w, h, cut, corners),
+    x,
+    y,
+    w,
+    h,
     cx: x + w / 2,
     cy: y + h / 2,
   };

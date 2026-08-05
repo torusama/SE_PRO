@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/store/authStore";
 import { loginRequest } from "@/lib/authService";
 import { ROUTES } from "@/constants/routes";
@@ -13,6 +13,12 @@ export default function LoginPage() {
 
   const navigate = useNavigate();
   const setAuth = useAuthStore.getState().setAuth;
+  const token = useAuthStore((s) => s.token);
+  const role = useAuthStore((s) => s.role);
+
+  if (token && role === "admin") {
+    return <Navigate to={ROUTES.ADMIN_DASHBOARD} replace />;
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

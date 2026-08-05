@@ -165,21 +165,48 @@
   flex-direction: column;
   overflow-y: auto;
   overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 229, 196, 0.3) transparent;
+}
+
+.map-page .sidebar-left::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.map-page .sidebar-left::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.map-page .sidebar-left::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+}
+
+.map-page .sidebar-left::-webkit-scrollbar-thumb:hover {
+  background: var(--teal-soft);
+}
+
+.map-page .sidebar-left::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .map-page .sidebar-section {
-  padding: 20px 20px 0;
+  padding: 16px 16px 0;
 }
 .map-page .sidebar-section.compact-section {
-  padding-top: 4px;
+  padding-top: 6px;
 }
 
 .map-page .sidebar-title {
   font-size: 11px;
-  letter-spacing: 0.12em;
+  font-weight: 650;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--teal-soft);
-  margin-bottom: 14px;
+  margin-bottom: 12px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -187,30 +214,32 @@
 .map-page .sidebar-title::after {
   content: "";
   flex: 1;
-  height: 0.5px;
+  height: 1px;
   background: var(--border-dim);
+  opacity: 0.7;
 }
 
 /* search */
 .map-page .search-box {
   display: flex;
   align-items: center;
-  gap: 10px;
-  background: rgba(4, 6, 14, 0.8);
-  border: 0.5px solid var(--border-dim);
+  gap: 9px;
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(4, 6, 14, 0.7);
+  border: 1px solid var(--border-dim);
   border-radius: 8px;
-  padding: 9px 13px;
-  margin-bottom: 16px;
-  transition: border-color 0.2s;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 .map-page .search-box:focus-within {
   border-color: var(--teal-soft);
+  box-shadow: 0 0 0 3px rgba(0, 229, 196, 0.1);
+  background: rgba(4, 6, 14, 0.9);
 }
-.map-page .search-label {
-  font-size: 11px;
-  color: var(--gold);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.map-page .search-icon {
+  color: var(--text-muted);
   flex-shrink: 0;
 }
 .map-page .search-box input {
@@ -218,7 +247,7 @@
   border: none;
   outline: none;
   color: var(--text-main);
-  font-size: 13px;
+  font-size: 12px;
   font-family: "Be Vietnam Pro", sans-serif;
   width: 100%;
   min-width: 0;
@@ -227,76 +256,86 @@
   color: var(--text-muted);
 }
 
-/* filter chips */
+/* filter chips (3-column grid matching admin layout) */
 .map-page .filter-chips {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
   gap: 6px;
+  width: 100%;
+  box-sizing: border-box;
   margin-bottom: 16px;
 }
 .map-page .chip {
-  padding: 6px 11px;
-  border-radius: 20px;
-  border: 0.5px solid var(--border-dim);
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 4px;
+  border-radius: 6px;
+  border: 1px solid var(--border-dim);
   font-size: 11px;
+  font-weight: 500;
   color: var(--text-muted);
-  background: transparent;
+  background: rgba(255, 255, 255, 0.02);
   cursor: pointer;
-  transition: all 0.2s;
-  letter-spacing: 0.03em;
+  text-align: center;
+  transition: all 0.15s ease;
+  white-space: nowrap;
   font-family: "Be Vietnam Pro", sans-serif;
 }
 .map-page .chip:hover {
   border-color: var(--border-soft);
   color: var(--text-main);
+  background: rgba(0, 229, 196, 0.04);
 }
 .map-page .chip.on {
   border-color: var(--teal-soft);
   color: var(--teal-glow);
-  background: rgba(0, 229, 196, 0.06);
+  background: rgba(0, 229, 196, 0.12);
+  font-weight: 600;
 }
 
-/* zone list */
+/* zone list (matching admin zone item structure) */
 .map-page .zone-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  display: grid;
+  gap: 4px;
   margin-bottom: 16px;
 }
 .map-page .zone-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
-  padding: 9px 12px;
-  border-radius: 8px;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border-radius: 6px;
   cursor: pointer;
-  transition: all 0.2s;
-  border: 0.5px solid transparent;
+  transition: all 0.15s ease;
+  border: 1px solid transparent;
   background: transparent;
   text-align: left;
   font-family: "Be Vietnam Pro", sans-serif;
 }
 .map-page .zone-item:hover {
-  background: rgba(0, 229, 196, 0.03);
+  background: rgba(0, 229, 196, 0.04);
   border-color: var(--border-dim);
 }
 .map-page .zone-item.active-zone {
-  background: rgba(0, 229, 196, 0.05);
-  border-color: var(--border-soft);
+  background: rgba(0, 229, 196, 0.1);
+  border-color: var(--teal-soft);
 }
 .map-page .zone-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
   flex-shrink: 0;
-  border: 0.5px solid rgba(255, 255, 255, 0.22);
+  box-shadow: 0 0 6px currentColor;
 }
 .map-page .zone-dot-all {
   background: linear-gradient(135deg, var(--teal-soft), var(--gold));
+  box-shadow: 0 0 6px var(--teal-soft);
 }
 .map-page .zone-name {
-  font-size: 13px;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--text-main);
   flex: 1;
 }
@@ -305,72 +344,114 @@
   color: var(--text-muted);
 }
 
-/* legend */
+/* legend (matching admin grid 2-col layout) */
 .map-page .status-legend {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
   margin-bottom: 16px;
 }
-.map-page .status-row {
+.map-page .status-legend span {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
   color: var(--text-muted);
+  font-size: 11px;
 }
-.map-page .status-dot {
+.map-page .status-legend i {
   width: 10px;
   height: 10px;
-  border-radius: 2px;
+  border: 1px solid;
+  border-radius: 3px;
   flex-shrink: 0;
-  border: 1px solid transparent;
+}
+.map-page .status-legend i.no-data {
+  border-color: rgba(170, 179, 189, 0.5);
+  border-style: dashed;
+  background: rgba(116, 124, 137, 0.08);
 }
 
 .map-page .sidebar-empty {
-  margin: 0 20px 16px;
-  padding: 12px;
-  border: 0.5px solid rgba(245, 166, 35, 0.3);
-  border-radius: 8px;
+  margin: 0 16px 16px;
+  padding: 10px 12px;
+  border: 1px solid rgba(245, 166, 35, 0.3);
+  border-radius: 6px;
   background: rgba(245, 166, 35, 0.06);
   color: #ffdca0;
   font-size: 12px;
   line-height: 1.5;
 }
 
-/* stats grid */
+/* stats grid (matching admin stats layout) */
 .map-page .stats-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, 1fr);
   gap: 8px;
-  padding: 0 20px 20px;
+  padding: 0 16px 18px;
 }
 .map-page .stat-card {
-  background: rgba(4, 6, 14, 0.6);
-  border: 0.5px solid var(--border-dim);
-  border-radius: 8px;
-  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background: rgba(4, 6, 14, 0.5);
+  border: 1px solid var(--border-dim);
+  border-radius: 10px;
+  padding: 10px 6px;
+  box-sizing: border-box;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+.map-page .stat-card:hover {
+  border-color: var(--teal-soft);
+  background: rgba(0, 229, 196, 0.04);
+  transform: translateY(-1px);
+}
+.map-page .stat-card.active {
+  border-color: var(--teal-glow);
+  background: rgba(0, 229, 196, 0.08);
+  box-shadow: 0 0 0 2px rgba(0, 229, 196, 0.2);
 }
 .map-page .stat-num {
-  font-family: "Playfair Display", serif;
+  display: block;
+  font-family: "Be Vietnam Pro", -apple-system, sans-serif;
   font-size: 22px;
+  font-weight: 800;
   color: var(--teal-glow);
-  line-height: 1;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
   margin-bottom: 3px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.map-page .stat-num.teal {
+  color: var(--teal-glow);
+}
+.map-page .stat-num.green {
+  color: #00e5c4;
 }
 .map-page .stat-num.amber {
-  color: var(--amber);
+  color: #f5a623;
+}
+.map-page .stat-num.yellow {
+  color: #c9a84c;
 }
 .map-page .stat-num.red {
-  color: var(--red);
+  color: #e84a4a;
 }
 .map-page .stat-num.gray {
-  color: #aab1bc;
+  color: #8892a0;
 }
 .map-page .stat-label {
+  display: block;
   font-size: 11px;
+  font-weight: 500;
   color: var(--text-muted);
-  line-height: 1.4;
+  line-height: 1.35;
+  text-transform: none;
+  text-align: center;
 }
 
 /* ---------- map area ---------- */
@@ -412,13 +493,24 @@
   position: relative;
   flex: 1;
   width: 100%;
-  overflow: auto;
+  height: 100%;
+  overflow: hidden;
   min-height: 0;
   cursor: grab;
-  scroll-behavior: smooth;
+  user-select: none;
+  touch-action: none;
 }
 .map-page .map-canvas-wrap:active {
   cursor: grabbing;
+}
+
+.map-page .map-stage {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  will-change: transform;
 }
 
 /* mode switch */
@@ -706,9 +798,8 @@
 
 /* road / labels */
 .map-page .map-road {
-  fill: rgba(0, 229, 196, 0.05);
-  stroke: rgba(0, 229, 196, 0.15);
-  stroke-width: 0.5;
+  fill: rgba(0, 229, 196, 0.06);
+  stroke: none;
 }
 .map-page .map-road-label,
 .map-page .gate-label {
@@ -721,10 +812,12 @@
   fill: rgba(190, 175, 240, 0.85);
 }
 .map-page .zone-label {
-  font-family: "Playfair Display", serif;
-  font-size: 10px;
-  fill: rgba(255, 255, 255, 0.26);
-  letter-spacing: 0.08em;
+  font-family: "Be Vietnam Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: lining-nums;
+  fill: rgba(255, 255, 255, 0.72);
+  letter-spacing: 0.05em;
 }
 .map-page .row-label {
   fill: rgba(240, 192, 96, 0.46);

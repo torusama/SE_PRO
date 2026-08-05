@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/store/authStore";
 import { ROUTES } from "@/constants/routes";
 import BrandWordmark from "@/components/layout/shared/BrandWordmark";
@@ -11,8 +11,13 @@ import "./HomePage.css";
 export default function HomePage() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
+  const token = useAuthStore((s) => s.token);
   const role = useAuthStore((s) => s.role);
   const rootRef = useRef<HTMLDivElement>(null);
+
+  if (token && role === "admin") {
+    return <Navigate to={ROUTES.ADMIN_DASHBOARD} replace />;
+  }
 
   useEffect(() => {
     // ===== FIREFLY ANIMATION =====
