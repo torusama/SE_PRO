@@ -695,7 +695,9 @@ function BookTab(props: {
               ))}
             </div>
           </div>
+        </div>
 
+        <div className="form-col">
           <div className="form-section">
             <div className="section-label">Thời gian & ghi chú</div>
             <div className="field">
@@ -707,9 +709,7 @@ function BookTab(props: {
               <textarea placeholder="Ví dụ: sắp xếp hoa trắng, thêm lá cành xanh..." value={note} onChange={(e) => setNote(e.target.value)} />
             </div>
           </div>
-        </div>
 
-        <div>
           <div className="summary-card">
             <div className="summary-title">Xác nhận đặt dịch vụ</div>
             <div className="summary-item">

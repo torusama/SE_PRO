@@ -2,10 +2,12 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { basename } from 'path';
 import { DatabaseService } from '../../database/database.service';
+import { EmailService } from '../email/email.service';
 import { AdminServiceOrderQueryDto } from './dto/admin-service-order-query.dto';
 import { paginate } from '../../common/interfaces/paginated-response.interface';
 import { CreateServiceOrderDto } from './dto/create-service-order.dto';
@@ -46,7 +48,12 @@ interface ServiceOrderRow {
 
 @Injectable()
 export class CemeteryServicesService {
-  constructor(private readonly database: DatabaseService) {}
+  private readonly logger = new Logger(CemeteryServicesService.name);
+
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly emailService: EmailService,
+  ) {}
 
   serviceTypes() {
     return this.database.query(
@@ -88,7 +95,7 @@ export class CemeteryServicesService {
       }
     }
 
-    return this.database.transaction(async (client) => {
+    const order = await this.database.transaction(async (client) => {
       const idempotencyKey = [
         userId,
         dto.plotId ?? 'none',
@@ -134,13 +141,13 @@ export class CemeteryServicesService {
           dto.note ?? null,
         ],
       );
-      const order = result.rows[0];
+      const newOrder = result.rows[0];
 
       await client.query(
         `INSERT INTO service_order_history
            (order_id, changed_by, action, new_status, note)
          VALUES ($1, $2, 'submitted', 'submitted', $3)`,
-        [order.id, userId, dto.note ?? null],
+        [newOrder.id, userId, dto.note ?? null],
       );
       await client.query(
         `INSERT INTO notifications
@@ -151,10 +158,60 @@ export class CemeteryServicesService {
                 'service_order', $1
          FROM users
          WHERE LOWER(role) = 'admin' AND is_active = TRUE AND is_deleted = FALSE`,
-        [order.id, type.name],
+        [newOrder.id, type.name],
       );
-      return order;
+      return { ...newOrder, reused: false };
     });
+
+    // Chỉ gửi email xác nhận cho đơn thực sự mới vừa tạo (không gửi lại khi
+    // là đơn trùng được tái sử dụng). Gửi sau khi transaction đã commit và
+    // không để lỗi gửi mail làm hỏng luồng đặt dịch vụ của khách.
+    if (!order.reused) {
+      void this.sendOrderConfirmationEmail(userId, {
+        serviceName: type.name,
+        plotCode: dto.plotId ? await this.plotCodeOf(dto.plotId) : null,
+        requestedDate: dto.requestedDate ?? null,
+        amount: Number(type.base_price),
+        orderId: order.id,
+      });
+    }
+
+    return order;
+  }
+
+  private async plotCodeOf(plotId: number) {
+    const row = await this.database.queryOne<{ plot_code: string }>(
+      `SELECT plot_code FROM plots WHERE plot_id = $1`,
+      [plotId],
+    );
+    return row?.plot_code ?? null;
+  }
+
+  private async sendOrderConfirmationEmail(
+    userId: number,
+    params: {
+      serviceName: string;
+      plotCode?: string | null;
+      requestedDate?: string | null;
+      amount: number;
+      orderId: number;
+    },
+  ) {
+    try {
+      const user = await this.database.queryOne<{ email: string | null }>(
+        `SELECT email FROM users WHERE user_id = $1`,
+        [userId],
+      );
+      if (!user?.email) return;
+      await this.emailService.sendServiceOrderConfirmationEmail(
+        user.email,
+        params,
+      );
+    } catch (err) {
+      this.logger.error(
+        `Gửi email xác nhận đặt dịch vụ thất bại (order #${params.orderId}): ${(err as Error).message}`,
+      );
+    }
   }
 
   myOrders(userId: number) {

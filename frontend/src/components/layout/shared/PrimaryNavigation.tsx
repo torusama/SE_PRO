@@ -9,6 +9,7 @@ type PrimaryNavigationProps = {
 };
 
 const PUBLIC_ITEMS = [
+  { label: "Trang chủ", to: ROUTES.HOME },
   { label: "Bản đồ", to: ROUTES.MAP },
   { label: "Dịch vụ", to: ROUTES.SERVICES },
   { label: "AI tư vấn", to: ROUTES.AI_AGENT },
@@ -36,7 +37,7 @@ export default function PrimaryNavigation({
           <li key={item.to}>
             <NavLink
               to={item.to}
-              end={item.to === ROUTES.AI_AGENT}
+              end={item.to === ROUTES.HOME || item.to === ROUTES.AI_AGENT}
               className={({ isActive }) =>
                 `primary-navigation__link${isActive ? " is-active" : ""}`
               }

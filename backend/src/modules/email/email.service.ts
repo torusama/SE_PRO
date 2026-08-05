@@ -94,6 +94,65 @@ export class EmailService {
     });
   }
 
+  /** Gửi email xác nhận cho khách hàng ngay sau khi đặt một dịch vụ mới
+   * (chăm sóc mộ, thay hoa, thắp hương...). Không throw khi SMTP chưa cấu
+   * hình — chỉ log cảnh báo, để không làm luồng đặt dịch vụ bị lỗi. */
+  async sendServiceOrderConfirmationEmail(
+    to: string,
+    params: {
+      serviceName: string;
+      plotCode?: string | null;
+      requestedDate?: string | null;
+      amount: number;
+      orderId: number;
+    },
+  ) {
+    if (!this.transporter) {
+      this.logger.warn(
+        `Bỏ qua gửi email xác nhận đặt dịch vụ tới ${to} vì SMTP chưa được cấu hình.`,
+      );
+      return;
+    }
+    const smtp = this.config.get<{ from?: string }>('smtp');
+    const amountText = new Intl.NumberFormat('vi-VN', {
+      style: 'currency',
+      currency: 'VND',
+      maximumFractionDigits: 0,
+    }).format(params.amount);
+    const dateText = params.requestedDate
+      ? new Intl.DateTimeFormat('vi-VN', { dateStyle: 'medium' }).format(
+          new Date(params.requestedDate),
+        )
+      : 'Chưa chọn';
+    const orderCode = `#DV-${String(params.orderId).padStart(4, '0')}`;
+
+    await this.transporter.sendMail({
+      from: smtp?.from ? `"Vĩnh Phúc Viên" <${smtp.from}>` : undefined,
+      to,
+      subject: `[Vĩnh Phúc Viên] Đã ghi nhận đặt dịch vụ: ${params.serviceName}`,
+      text: `Bạn đã đặt dịch vụ "${params.serviceName}" (mã đơn ${orderCode}) vào ngày ${dateText}${
+        params.plotCode ? ` cho lô ${params.plotCode}` : ''
+      }. Đơn giá: ${amountText}.\n\nĐơn của bạn đang ở trạng thái chờ xác nhận từ ban quản lý. Chúng tôi sẽ gửi email/thông báo khi có cập nhật mới.`,
+      html: `
+        <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
+          <h2 style="color:#0f766e;">🌸 Đã ghi nhận đặt dịch vụ</h2>
+          <p>Bạn đã đặt dịch vụ <b>${params.serviceName}</b> (mã đơn ${orderCode}).</p>
+          <table style="width:100%; border-collapse: collapse; margin: 16px 0;">
+            ${
+              params.plotCode
+                ? `<tr><td style="padding:4px 0; color:#666;">Lô phần mộ</td><td style="padding:4px 0; text-align:right; font-weight:600;">${params.plotCode}</td></tr>`
+                : ''
+            }
+            <tr><td style="padding:4px 0; color:#666;">Ngày mong muốn thực hiện</td><td style="padding:4px 0; text-align:right; font-weight:600;">${dateText}</td></tr>
+            <tr><td style="padding:4px 0; color:#666;">Đơn giá</td><td style="padding:4px 0; text-align:right; font-weight:600;">${amountText}</td></tr>
+          </table>
+          <p>Đơn của bạn đang ở trạng thái <b>chờ xác nhận</b> từ ban quản lý. Chúng tôi sẽ thông báo ngay khi có cập nhật mới.</p>
+          <p style="color:#888; font-size:12px;">Bạn nhận được email này vì đã đặt dịch vụ trên hệ thống Vĩnh Phúc Viên.</p>
+        </div>
+      `,
+    });
+  }
+
   /** Gửi email chứa liên kết đặt lại mật khẩu (luồng "Quên mật khẩu"). */
   async sendPasswordResetEmail(to: string, resetLink: string) {
     if (!this.transporter) {
