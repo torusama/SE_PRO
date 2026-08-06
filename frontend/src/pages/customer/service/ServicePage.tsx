@@ -1,10 +1,17 @@
-// Chuyển thể 1:1 từ mockup fr05_dich_vu_chinh.html (hub + danh mục dịch vụ),
-// fr06_dat_dich_vu.html (đặt dịch vụ) và fr07_theo_doi_dich_vu.html (theo dõi đơn).
-// Gộp 3 mockup thành 3 tab trong cùng 1 trang /dich-vu vì đây là 1 luồng liên tục.
-// Đã bỏ thanh nav riêng của mockup (CustomerLayout đã có Navbar dùng chung) và
-// nhãn "FR-xx" (chỉ dùng để đánh dấu lúc thiết kế).
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import {
+  Search,
+  RotateCcw,
+  Bell,
+  ChevronRight,
+  ChevronLeft,
+  ShieldCheck,
+  Info,
+  ArrowRight,
+  Check,
+  AlertCircle,
+} from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/store/authStore'
 import { ROUTES } from '@/constants/routes'
@@ -75,14 +82,14 @@ const CATEGORY_LABEL: Record<Category, string> = {
   burial: 'An táng',
   maintenance: 'Chăm sóc & vệ sinh',
   memorial: 'Tưởng niệm & lễ nghi',
-  other: 'Khác',
+  other: 'Dịch vụ mở rộng',
 }
-const CATEGORY_ICON: Record<Category, string> = { burial: '⚱️', maintenance: '🧹', memorial: '🙏', other: '🌸' }
-const CATEGORY_RIBBON: Record<Category, string> = {
-  burial: 'linear-gradient(90deg, #7b6bcc, #4da6ff)',
-  maintenance: 'linear-gradient(90deg, #00e5c4, #00b89e)',
-  memorial: 'linear-gradient(90deg, #c9a84c, #d4850a)',
-  other: 'linear-gradient(90deg, #4da6ff, #00e5c4)',
+
+const CATEGORY_CLASS: Record<Category, string> = {
+  burial: 'burial',
+  maintenance: 'maintenance',
+  memorial: 'memorial',
+  other: 'other',
 }
 
 const STEP_KEYS: OrderStatus[] = ['submitted', 'pending_confirm', 'confirmed', 'in_progress', 'completed']
@@ -174,6 +181,54 @@ export default function ServicePage() {
   const [detailLoadingId, setDetailLoadingId] = useState<number | null>(null)
   const [detailError, setDetailError] = useState('')
   const [page, setPage] = useState(1)
+
+  useEffect(() => {
+    const pageRoot = document.querySelector('.service-page')
+    if (!pageRoot) return undefined
+
+    const revealImmediately = !('IntersectionObserver' in window)
+    const observer = revealImmediately
+      ? null
+      : new IntersectionObserver(
+          (entries) => {
+            entries.forEach((entry) => {
+              if (entry.isIntersecting) {
+                entry.target.classList.add('is-visible')
+                observer?.unobserve(entry.target)
+              }
+            })
+          },
+          { threshold: 0.12, rootMargin: '0px 0px -36px' },
+        )
+
+    const registerRevealElements = (root: ParentNode) => {
+      root.querySelectorAll<HTMLElement>('[data-reveal]:not(.is-visible)').forEach((item) => {
+        if (revealImmediately) item.classList.add('is-visible')
+        else observer?.observe(item)
+      })
+    }
+
+    registerRevealElements(pageRoot)
+
+    const mutationObserver = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        mutation.addedNodes.forEach((node) => {
+          if (!(node instanceof HTMLElement)) return
+          if (node.matches('[data-reveal]:not(.is-visible)')) {
+            if (revealImmediately) node.classList.add('is-visible')
+            else observer?.observe(node)
+          }
+          registerRevealElements(node)
+        })
+      })
+    })
+
+    mutationObserver.observe(pageRoot, { childList: true, subtree: true })
+    return () => {
+      observer?.disconnect()
+      mutationObserver.disconnect()
+    }
+  }, [])
 
   async function loadOrderDetail(orderId: number) {
     setDetailLoadingId(orderId)
@@ -375,72 +430,80 @@ export default function ServicePage() {
 
   return (
     <div className="service-page">
-      <BackgroundDecor />
-
-      <div className="breadcrumb">
-        <a onClick={() => navigate(ROUTES.HOME)}>Trang chủ</a>
-        <span className="sep">›</span>
+      <div className="breadcrumb" data-reveal>
+        <button type="button" onClick={() => navigate(ROUTES.HOME)}>Trang chủ</button>
+        <span className="sep">/</span>
         <span className="current">Dịch vụ</span>
       </div>
 
       <main>
-        <header className="page-header">
-          <div>
-            <div className="page-tag">Customer Portal · Dịch vụ</div>
-            <h1 className="page-title">Dịch Vụ Tưởng Niệm</h1>
+        <header className="page-header" data-reveal>
+          <div className="hero-copy">
+            <div className="page-tag">Dịch vụ chăm sóc và tưởng niệm</div>
+            <h1 className="page-title">Chu đáo trong từng dịch vụ, minh bạch trong từng cập nhật</h1>
             <p className="page-desc">
-              Đặt và theo dõi các dịch vụ chăm sóc phần mộ, lễ tưởng niệm, hoa tươi và các dịch vụ tâm linh khác
-              dành cho người thân đã khuất.
+              Chọn dịch vụ phù hợp, hẹn ngày thực hiện và theo dõi toàn bộ tiến độ ngay trên một trang.
+              Mỗi yêu cầu đều được ban quản lý xác nhận trước khi triển khai.
             </p>
+            <div className="header-cta">
+              <button className="btn-primary-inline" onClick={() => openBooking()}>
+                Đặt dịch vụ mới <ArrowRight className="inline-icon" />
+              </button>
+              <button className="btn-text" onClick={openTrack}>Theo dõi đơn đã đặt</button>
+            </div>
           </div>
-          <div className="header-cta">
-            <button className="btn-outline" onClick={openTrack}>Theo dõi đơn →</button>
-            <button className="btn-gold" onClick={() => openBooking()}>+ Đặt dịch vụ mới</button>
-          </div>
+
+          <aside className="service-assurance" aria-label="Cam kết dịch vụ">
+            <div className="assurance-heading">Quy trình rõ ràng</div>
+            <div className="assurance-row">
+              <span>01</span>
+              <div><strong>Xác nhận yêu cầu</strong><small>Kiểm tra dịch vụ, lô phần mộ và lịch mong muốn.</small></div>
+            </div>
+            <div className="assurance-row">
+              <span>02</span>
+              <div><strong>Cập nhật tiến độ</strong><small>Theo dõi trạng thái từ tiếp nhận đến thực hiện.</small></div>
+            </div>
+            <div className="assurance-row">
+              <span>03</span>
+              <div><strong>Nghiệm thu minh bạch</strong><small>Nhận ghi chú và hình ảnh sau khi hoàn thành.</small></div>
+            </div>
+          </aside>
         </header>
 
         {!isAuthenticated && (
-          <div className="notice-banner">Đăng nhập để đặt dịch vụ mới và theo dõi các đơn dịch vụ đã đặt của bạn.</div>
+          <div className="notice-banner" data-reveal>
+            <Info className="inline-icon" />
+            <span>Đăng nhập để đặt dịch vụ và theo dõi các yêu cầu của gia đình.</span>
+            <button type="button" onClick={goToLogin}>Đăng nhập</button>
+          </div>
         )}
-        {error && <div className="error-banner">{error}</div>}
+        {error && <div className="error-banner" data-reveal><AlertCircle className="inline-icon" /> {error}</div>}
 
-        <section className="quick-stats">
-          <StatCard icon="🌸" iconClass="teal" value={stats.inProgress} valClass="c-teal" label="Đơn đang xử lý" sub={stats.pending ? `${stats.pending} chờ xác nhận` : undefined} />
-          <StatCard icon="✅" iconClass="gold" value={stats.completed} valClass="c-gold" label="Đã hoàn thành" />
-          <StatCard icon="💰" iconClass="amber" value={money.format(stats.spendThisMonth)} valClass="c-amber" label="Chi tiêu tháng này" />
-          <StatCard icon="📋" iconClass="blue" value={stats.total} valClass="c-blue" label="Tổng số đơn đã đặt" />
-        </section>
+        {isAuthenticated ? (
+          <section className="quick-stats" aria-label="Tổng quan đơn dịch vụ">
+            <StatCard value={stats.inProgress} label="Đơn đang xử lý" sub={stats.pending ? `${stats.pending} đơn chờ xác nhận` : 'Không có đơn chờ'} delay="0ms" />
+            <StatCard value={stats.completed} label="Đã hoàn thành" delay="70ms" />
+            <StatCard value={money.format(stats.spendThisMonth)} label="Chi tiêu tháng này" delay="140ms" />
+            <StatCard value={stats.total} label="Tổng số đơn" delay="210ms" />
+          </section>
+        ) : (
+          <section className="public-process" aria-label="Cách đặt dịch vụ" data-reveal>
+            <div><span>01</span><strong>Chọn dịch vụ</strong><small>Xem mô tả, đơn giá và phạm vi thực hiện.</small></div>
+            <div><span>02</span><strong>Chọn lịch phù hợp</strong><small>Gửi ngày mong muốn và ghi chú riêng của gia đình.</small></div>
+            <div><span>03</span><strong>Theo dõi trực tuyến</strong><small>Nhận thông báo khi đơn được xác nhận và hoàn thành.</small></div>
+          </section>
+        )}
 
-        <div className="entry-cards">
-          <button type="button" className="entry-card teal" onClick={() => openBooking()}>
-            <span className="ec-tag teal">Bắt đầu</span>
-            <span className="ec-icon">🌸</span>
-            <div className="ec-title">Đặt dịch vụ mới</div>
-            <p className="ec-desc">Chọn loại dịch vụ, lô phần mộ và thời gian thực hiện phù hợp với gia đình.</p>
-            <div className="ec-features">
-              <div className="ec-feature teal">Chăm sóc mộ, thay hoa định kỳ</div>
-              <div className="ec-feature teal">Lễ cúng giỗ, tưởng niệm</div>
-            </div>
-            <span className="ec-btn teal">Đặt ngay →</span>
+        <nav className="tab-bar" data-reveal aria-label="Điều hướng dịch vụ">
+          <button className={`tab ${tab === 'catalogue' ? 'active' : ''}`} onClick={() => setTab('catalogue')}>
+            Danh mục dịch vụ
           </button>
-          <button type="button" className="entry-card gold" onClick={openTrack}>
-            {stats.inProgress > 0 && <span className="ec-badge active">{stats.inProgress} đang chạy</span>}
-            <span className="ec-tag gold">Theo dõi</span>
-            <span className="ec-icon">📋</span>
-            <div className="ec-title">Theo dõi dịch vụ</div>
-            <p className="ec-desc">Xem trạng thái, tiến độ và lịch sử các dịch vụ bạn đã đặt.</p>
-            <div className="ec-features">
-              <div className="ec-feature gold">Cập nhật trạng thái theo thời gian thực</div>
-              <div className="ec-feature gold">Nhận thông báo khi hoàn tất</div>
-            </div>
-            <span className="ec-btn gold">Xem chi tiết →</span>
+          <button className={`tab ${tab === 'book' ? 'active' : ''}`} onClick={() => openBooking()}>
+            Đặt dịch vụ
           </button>
-        </div>
-
-        <nav className="tab-bar">
-          <button className={`tab ${tab === 'catalogue' ? 'active' : ''}`} onClick={() => setTab('catalogue')}>Danh mục dịch vụ</button>
-          <button className={`tab ${tab === 'book' ? 'active' : ''}`} onClick={() => openBooking()}>Đặt dịch vụ mới</button>
-          <button className={`tab ${tab === 'track' ? 'active' : ''}`} onClick={openTrack}>Theo dõi đơn</button>
+          <button className={`tab ${tab === 'track' ? 'active' : ''}`} onClick={openTrack}>
+            Theo dõi đơn {stats.inProgress > 0 && <span className="tab-badge">{stats.inProgress}</span>}
+          </button>
         </nav>
 
         {tab === 'catalogue' && (
@@ -504,116 +567,147 @@ export default function ServicePage() {
   )
 }
 
-const STARS = Array.from({ length: 40 }, (_, i) => ({
-  id: i,
-  top: Math.random() * 100,
-  left: Math.random() * 100,
-  size: Math.random() * 2 + 1,
-  duration: 2 + Math.random() * 4,
-  delay: Math.random() * 4,
-}))
-
-function BackgroundDecor() {
+function StatCard({
+  value,
+  label,
+  sub,
+  delay,
+}: {
+  value: number | string
+  label: string
+  sub?: string
+  delay?: string
+}) {
   return (
-    <div className="bg-canvas">
-      <div className="glow-orb" style={{ width: 500, height: 500, top: '-10%', left: '-10%', background: 'radial-gradient(circle, #00e5c4, transparent 70%)' }} />
-      <div className="glow-orb" style={{ width: 420, height: 420, bottom: '-10%', right: '-5%', background: 'radial-gradient(circle, #c9a84c, transparent 70%)', animationDelay: '3s' }} />
-      <div className="lotus-float" style={{ top: '15%', right: '10%' }}>🪷</div>
-      <div className="lotus-float" style={{ bottom: '20%', left: '8%', animationDelay: '4s' }}>🪷</div>
-      <div className="stars">
-        {STARS.map((s) => (
-          <div
-            key={s.id}
-            className="star"
-            style={{
-              top: `${s.top}%`,
-              left: `${s.left}%`,
-              width: s.size,
-              height: s.size,
-              // @ts-expect-error custom css vars
-              '--d': `${s.duration}s`,
-              '--delay': `${s.delay}s`,
-            }}
-          />
-        ))}
-      </div>
+    <div className="stat-card" data-reveal style={{ '--reveal-delay': delay } as CSSProperties}>
+      <div className="stat-val">{value}</div>
+      <div className="stat-lbl">{label}</div>
+      {sub && <div className="stat-sub">{sub}</div>}
     </div>
   )
 }
 
-function StatCard({ icon, iconClass, value, valClass, label, sub }: { icon: string; iconClass: string; value: number | string; valClass: string; label: string; sub?: string }) {
-  return (
-    <div className="stat-card">
-      <div className={`stat-icon ${iconClass}`}>{icon}</div>
-      <div>
-        <div className={`stat-val ${valClass}`}>{value}</div>
-        <div className="stat-lbl">{label}</div>
-        {sub && <div className="stat-sub pending">{sub}</div>}
-      </div>
-    </div>
-  )
-}
+function CatalogueTab({
+  serviceTypes,
+  loading,
+  onPick,
+}: {
+  serviceTypes: ServiceType[]
+  loading: boolean
+  onPick: (id: number) => void
+}) {
+  const [catFilter, setCatFilter] = useState<'all' | Category>('all')
+  const [catSearch, setCatSearch] = useState('')
 
-function CatalogueTab({ serviceTypes, loading, onPick }: { serviceTypes: ServiceType[]; loading: boolean; onPick: (id: number) => void }) {
+  const filteredServices = useMemo(() => {
+    let list = serviceTypes
+    if (catFilter !== 'all') list = list.filter((s) => s.category === catFilter)
+    if (catSearch.trim()) {
+      const q = catSearch.trim().toLowerCase()
+      list = list.filter((s) => s.name.toLowerCase().includes(q) || (s.description && s.description.toLowerCase().includes(q)))
+    }
+    return list
+  }, [serviceTypes, catFilter, catSearch])
+
   return (
-    <section>
-      <div className="section-label">Danh mục dịch vụ</div>
+    <section className="tab-section">
+      <div className="section-heading" data-reveal>
+        <div>
+          <span className="section-kicker">Danh mục dịch vụ</span>
+          <h2>Chọn theo nhu cầu của gia đình</h2>
+          <p>Mỗi dịch vụ đều có thông tin rõ ràng về nội dung, đơn vị tính và mức phí dự kiến.</p>
+        </div>
+        <span className="section-count">{filteredServices.length} dịch vụ</span>
+      </div>
+
+      <div className="filter-bar" data-reveal>
+        <div className="filter-group" aria-label="Lọc theo nhóm dịch vụ">
+          <button className={`filter-chip ${catFilter === 'all' ? 'active' : ''}`} onClick={() => setCatFilter('all')}>Tất cả</button>
+          <button className={`filter-chip ${catFilter === 'maintenance' ? 'active' : ''}`} onClick={() => setCatFilter('maintenance')}>Chăm sóc</button>
+          <button className={`filter-chip ${catFilter === 'memorial' ? 'active' : ''}`} onClick={() => setCatFilter('memorial')}>Tưởng niệm</button>
+          <button className={`filter-chip ${catFilter === 'burial' ? 'active' : ''}`} onClick={() => setCatFilter('burial')}>An táng</button>
+          <button className={`filter-chip ${catFilter === 'other' ? 'active' : ''}`} onClick={() => setCatFilter('other')}>Mở rộng</button>
+        </div>
+        <label className="search-box">
+          <Search className="search-icon" aria-hidden="true" />
+          <input aria-label="Tìm dịch vụ" placeholder="Tìm theo tên hoặc mô tả" value={catSearch} onChange={(e) => setCatSearch(e.target.value)} />
+        </label>
+      </div>
+
       {loading ? (
-        <div className="empty-state"><div className="empty-icon">🌸</div><p>Đang tải danh mục dịch vụ...</p></div>
-      ) : serviceTypes.length === 0 ? (
-        <div className="empty-state"><div className="empty-icon">🌸</div><p>Hiện chưa có dịch vụ nào khả dụng.</p></div>
+        <div className="empty-state" data-reveal>
+          <RotateCcw className="loading-icon" />
+          <strong>Đang tải danh mục dịch vụ</strong>
+          <p>Thông tin sẽ xuất hiện ngay khi hệ thống hoàn tất đồng bộ.</p>
+        </div>
+      ) : filteredServices.length === 0 ? (
+        <div className="empty-state" data-reveal>
+          <strong>Không tìm thấy dịch vụ phù hợp</strong>
+          <p>Thử đổi nhóm dịch vụ hoặc nhập một từ khóa khác.</p>
+        </div>
       ) : (
         <div className="catalogue-grid">
-          {serviceTypes.map((service) => (
-            <article key={service.id} className="cat-card" onClick={() => onPick(service.id)}>
-              <div className="cat-ribbon" style={{ background: CATEGORY_RIBBON[service.category] }} />
-              <div className="cat-card-top">
-                <div className="cat-icon-wrap">{CATEGORY_ICON[service.category]}</div>
-                <div className="cat-price-badge">từ {money.format(service.basePrice)}</div>
+          {filteredServices.map((service, index) => (
+            <article
+              key={service.id}
+              className={`cat-card category-${CATEGORY_CLASS[service.category]}`}
+              data-reveal
+              style={{ '--reveal-delay': `${Math.min(index, 8) * 55}ms` } as CSSProperties}
+              onClick={() => onPick(service.id)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') onPick(service.id)
+              }}
+              role="button"
+              tabIndex={0}
+            >
+              <div className="cat-card-head">
+                <span className="category-label">{CATEGORY_LABEL[service.category]}</span>
+                <span className="unit-label">Theo {service.unit}</span>
               </div>
-              <div className="cat-name">{service.name}</div>
-              <p className="cat-desc">{service.description || 'Dịch vụ chăm sóc, tưởng niệm dành cho phần mộ của gia đình bạn.'}</p>
-              <div className="cat-tags"><span className="cat-tag">{CATEGORY_LABEL[service.category]}</span></div>
+              <div className="cat-content">
+                <h3 className="cat-name">{service.name}</h3>
+                <p className="cat-desc">{service.description || 'Dịch vụ chăm sóc và tưởng niệm được thực hiện theo quy trình của ban quản lý.'}</p>
+              </div>
               <div className="cat-footer">
-                <span className="cat-orders">{service.unit}</span>
-                <button className="cat-action" onClick={(e) => { e.stopPropagation(); onPick(service.id) }}>Đặt ngay →</button>
+                <div className="cat-price">
+                  <span>Từ</span>
+                  <strong>{money.format(service.basePrice)}</strong>
+                </div>
+                <button
+                  className="cat-action"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onPick(service.id)
+                  }}
+                >
+                  Chọn dịch vụ <ArrowRight className="inline-icon" />
+                </button>
               </div>
             </article>
           ))}
         </div>
       )}
 
-      <div className="section-label" style={{ marginTop: 48 }}>Ưu đãi & gói dịch vụ</div>
-      <div className="promo-grid">
-        <div className="promo-card">
-          <div className="promo-label gold">Gói chăm sóc định kỳ</div>
-          <div className="promo-title">Đăng ký chăm sóc mộ hằng tháng</div>
-          <p className="promo-desc">Đặt dịch vụ chăm sóc, thay hoa định kỳ để phần mộ người thân luôn được tươm tất.</p>
-          <div className="promo-decor">🪷</div>
+      <div className="service-process" data-reveal>
+        <div className="process-intro">
+          <span className="section-kicker">Quy trình đặt dịch vụ</span>
+          <h3>Ba bước, một đầu mối theo dõi</h3>
+          <p>Gia đình không cần liên hệ nhiều bộ phận. Mọi cập nhật đều được tập trung trong trang theo dõi đơn.</p>
         </div>
-        <div className="promo-card blue">
-          <div className="promo-label blue">Lễ tưởng niệm</div>
-          <div className="promo-title">Đặt lịch cúng giỗ trước ngày quan trọng</div>
-          <p className="promo-desc">Đặt sớm để ban quản lý sắp xếp nhân sự và chuẩn bị chu đáo cho ngày lễ.</p>
-          <div className="promo-decor">🕯️</div>
-        </div>
-        <div className="promo-card teal">
-          <div className="promo-label teal">Nhắc lịch tự động</div>
-          <div className="promo-title">Không bỏ lỡ ngày giỗ quan trọng</div>
-          <p className="promo-desc">Thiết lập nhắc lịch ngày giỗ để hệ thống tự thông báo trước cho bạn.</p>
-          <div className="promo-decor">🔔</div>
-        </div>
+        <ol>
+          <li><span>01</span><div><strong>Gửi yêu cầu</strong><small>Chọn dịch vụ, lô phần mộ và ngày mong muốn.</small></div></li>
+          <li><span>02</span><div><strong>Ban quản lý xác nhận</strong><small>Kiểm tra lịch, chi phí và người phụ trách.</small></div></li>
+          <li><span>03</span><div><strong>Hoàn thành và nghiệm thu</strong><small>Nhận kết quả, ghi chú và hình ảnh thực hiện.</small></div></li>
+        </ol>
       </div>
 
-      <div className="support-banner">
-        <div className="support-icon">☎️</div>
+      <div className="support-banner" data-reveal>
         <div className="support-info">
-          <div className="support-title">Cần hỗ trợ thêm về dịch vụ?</div>
-          <div className="support-desc">Đội ngũ chăm sóc khách hàng luôn sẵn sàng tư vấn loại dịch vụ phù hợp với gia đình bạn.</div>
+          <span className="section-kicker">Cần hỗ trợ thêm?</span>
+          <div className="support-title">Trao đổi trực tiếp với ban quản lý</div>
+          <div className="support-desc">Đội ngũ tư vấn sẽ hỗ trợ chọn gói phù hợp và sắp xếp các yêu cầu riêng của gia đình.</div>
         </div>
-        <div className="support-actions">
-          <button className="btn-outline">Nhắn tin hỗ trợ</button>
-        </div>
+        <button className="btn-outline" onClick={() => window.open('tel:19001000')}>Gọi ban quản lý</button>
       </div>
     </section>
   )
@@ -652,137 +746,151 @@ function BookTab(props: {
   const hasPlots = ownedPlots.length > 0
   const todayStr = new Date().toISOString().slice(0, 10)
 
-  // Khách chưa sở hữu lô phần mộ nào: chặn đặt dịch vụ, hướng khách sang mua/đăng ký lô trước.
   if (!hasPlots) {
     return (
-      <section>
-        <div className="empty-state no-plot-block">
-          <div className="empty-icon">⚱️</div>
-          <p>
-            Bạn cần sở hữu ít nhất một lô phần mộ để đặt dịch vụ.<br />
-            Vui lòng chọn và đăng ký lô phần mộ trước khi đặt dịch vụ chăm sóc, tưởng niệm.
-          </p>
-          <button className="btn-gold" style={{ marginTop: 16 }} onClick={onGoToMap}>Xem lô phần mộ →</button>
+      <section className="tab-section">
+        <div className="empty-state no-plot-block" data-reveal>
+          <ShieldCheck className="empty-state-icon" aria-hidden="true" />
+          <strong>Chưa có lô phần mộ để áp dụng dịch vụ</strong>
+          <p>Bạn cần đăng ký ít nhất một lô phần mộ trước khi gửi yêu cầu chăm sóc hoặc tưởng niệm.</p>
+          <button className="btn-primary-inline" onClick={onGoToMap}>Xem lô phần mộ <ArrowRight className="inline-icon" /></button>
         </div>
       </section>
     )
   }
 
   return (
-    <section>
-      <div className="lot-banner">
-        <div className="lot-icon">⚱️</div>
+    <section className="tab-section">
+      <div className="section-heading" data-reveal>
+        <div>
+          <span className="section-kicker">Đặt dịch vụ</span>
+          <h2>Gửi yêu cầu trong một lần</h2>
+          <p>Chọn phạm vi, dịch vụ và thời gian mong muốn. Chi phí dự kiến được cập nhật ngay bên cạnh.</p>
+        </div>
+      </div>
+
+      <div className="lot-banner" data-reveal>
         <div className="lot-info">
-          <h3>Lô phần mộ áp dụng</h3>
+          <span className="form-step-label">Bước 1</span>
+          <h3>Chọn lô phần mộ áp dụng</h3>
           <p>
             {ownedPlots.length === 1
               ? `${selectedPlot ? selectedPlot.plotCode : ownedPlots[0].plotCode}${ownedPlots[0].zoneName ? ` · ${ownedPlots[0].zoneName}` : ''}`
               : applyToAllPlots
-                ? `Tất cả ${ownedPlots.length} lô phần mộ của bạn`
+                ? `Áp dụng cho toàn bộ ${ownedPlots.length} lô phần mộ`
                 : selectedPlot ? `${selectedPlot.plotCode}${selectedPlot.zoneName ? ` · ${selectedPlot.zoneName}` : ''}` : 'Chưa chọn lô'}
           </p>
         </div>
         {ownedPlots.length > 1 && (
-          <div className="scope-toggle">
-            <button
-              type="button"
-              className={`filter-chip ${applyScope === 'single' ? 'active' : ''}`}
-              onClick={() => setApplyScope('single')}
-            >
-              Một lô cụ thể
-            </button>
-            <button
-              type="button"
-              className={`filter-chip ${applyScope === 'all' ? 'active' : ''}`}
-              onClick={() => setApplyScope('all')}
-            >
-              Tất cả các mộ ({ownedPlots.length})
-            </button>
-          </div>
-        )}
-        {ownedPlots.length > 1 && applyScope === 'single' && (
-          <div className="lot-select">
-            <select value={selectedPlotId ?? ''} onChange={(e) => setSelectedPlotId(e.target.value ? Number(e.target.value) : null)}>
-              <option value="">— Chọn lô phần mộ —</option>
-              {ownedPlots.map((p) => (
-                <option key={p.plotId} value={p.plotId}>{p.plotCode}{p.zoneName ? ` · ${p.zoneName}` : ''}</option>
-              ))}
-            </select>
+          <div className="scope-controls">
+            <div className="scope-toggle">
+              <button type="button" className={`filter-chip ${applyScope === 'single' ? 'active' : ''}`} onClick={() => setApplyScope('single')}>
+                Một lô
+              </button>
+              <button type="button" className={`filter-chip ${applyScope === 'all' ? 'active' : ''}`} onClick={() => setApplyScope('all')}>
+                Tất cả ({ownedPlots.length})
+              </button>
+            </div>
+            {applyScope === 'single' && (
+              <div className="lot-select">
+                <select aria-label="Chọn lô phần mộ" value={selectedPlotId ?? ''} onChange={(e) => setSelectedPlotId(e.target.value ? Number(e.target.value) : null)}>
+                  <option value="">Chọn lô phần mộ</option>
+                  {ownedPlots.map((plot) => (
+                    <option key={plot.plotId} value={plot.plotId}>{plot.plotCode}{plot.zoneName ? ` · ${plot.zoneName}` : ''}</option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
         )}
       </div>
+
       {applyToAllPlots && (
-        <p className="field-hint" style={{ marginTop: -14, marginBottom: 24 }}>
-          Dịch vụ sẽ được đặt riêng cho từng lô trong tổng số {ownedPlots.length} lô phần mộ bạn đang sở hữu.
-        </p>
+        <p className="scope-note" data-reveal>Dịch vụ sẽ được tạo thành {ownedPlots.length} đơn riêng để mỗi lô có tiến độ và kết quả nghiệm thu độc lập.</p>
       )}
 
-      <div className="form-grid">
-        <div className="form-col">
-          <div className="form-section">
-            <div className="section-label">Loại dịch vụ</div>
+      <div className="booking-layout">
+        <div className="booking-main">
+          <div className="form-section" data-reveal>
+            <div className="form-section-head">
+              <span className="form-step-label">Bước 2</span>
+              <div>
+                <h3>Chọn loại dịch vụ</h3>
+                <p>Chọn một dịch vụ để xem chi phí dự kiến.</p>
+              </div>
+            </div>
             <div className="service-grid">
-              {serviceTypes.map((s) => (
-                <div key={s.id} className={`service-card ${selectedServiceId === s.id ? 'selected' : ''}`} onClick={() => setSelectedServiceId(s.id)}>
-                  <div className="service-icon">{CATEGORY_ICON[s.category]}</div>
-                  <div className="service-name">{s.name}</div>
-                  <div className="service-price">{money.format(s.basePrice)}</div>
-                </div>
+              {serviceTypes.map((service, index) => (
+                <button
+                  type="button"
+                  key={service.id}
+                  className={`service-card ${selectedServiceId === service.id ? 'selected' : ''}`}
+                  data-reveal
+                  onClick={() => setSelectedServiceId(service.id)}
+                  style={{ '--reveal-delay': `${Math.min(index, 8) * 35}ms` } as CSSProperties}
+                >
+                  <span className="selection-indicator" aria-hidden="true" />
+                  <span className={`service-category category-${CATEGORY_CLASS[service.category]}`}>{CATEGORY_LABEL[service.category]}</span>
+                  <strong className="service-name">{service.name}</strong>
+                  <span className="service-price">{money.format(service.basePrice)} / {service.unit}</span>
+                </button>
               ))}
             </div>
           </div>
-        </div>
 
-        <div className="form-col">
-          <div className="form-section">
-            <div className="section-label">Thời gian & ghi chú</div>
-            <div className="field">
-              <label>Ngày mong muốn thực hiện *</label>
-              <input type="date" min={todayStr} value={requestedDate} onChange={(e) => setRequestedDate(e.target.value)} required />
+          <div className="form-section" data-reveal>
+            <div className="form-section-head">
+              <span className="form-step-label">Bước 3</span>
+              <div>
+                <h3>Thời gian và yêu cầu riêng</h3>
+                <p>Ban quản lý sẽ xác nhận lại lịch trước khi thực hiện.</p>
+              </div>
             </div>
-            <div className="field">
-              <label>Yêu cầu đặc biệt (không bắt buộc)</label>
-              <textarea placeholder="Ví dụ: sắp xếp hoa trắng, thêm lá cành xanh..." value={note} onChange={(e) => setNote(e.target.value)} />
-            </div>
-          </div>
-
-          <div className="summary-card">
-            <div className="summary-title">Xác nhận đặt dịch vụ</div>
-            <div className="summary-item">
-              <span className="summary-item-name">Dịch vụ</span>
-              <span className="summary-item-val">{selectedServiceType?.name ?? 'Chưa chọn'}</span>
-            </div>
-            <div className="summary-item">
-              <span className="summary-item-name">Lô phần mộ</span>
-              <span className="summary-item-val">
-                {applyToAllPlots ? `Tất cả (${ownedPlots.length} lô)` : selectedPlot ? selectedPlot.plotCode : 'Chưa chọn'}
-              </span>
-            </div>
-            <div className="summary-item">
-              <span className="summary-item-name">Ngày thực hiện</span>
-              <span className="summary-item-val">{requestedDate ? formatDate(requestedDate) : 'Chưa chọn'}</span>
-            </div>
-            <div className="summary-total">
-              <span className="summary-total-label">{applyToAllPlots ? 'Tổng cộng' : 'Đơn giá'}</span>
-              <span className="summary-total-price">{selectedServiceType ? money.format(totalPrice) : '—'}</span>
-            </div>
-            {applyToAllPlots && selectedServiceType && (
-              <p className="field-hint" style={{ marginTop: -8, textAlign: 'right' }}>
-                {money.format(selectedServiceType.basePrice)} × {ownedPlots.length} lô
-              </p>
-            )}
-            <p className="summary-note">Đơn sẽ ở trạng thái chờ xác nhận cho đến khi ban quản lý duyệt. Bạn sẽ nhận thông báo ngay khi có cập nhật.</p>
-
-            {submitError && <div className="form-error">{submitError}</div>}
-            {submitOk && <div className="form-success">{submitOk}</div>}
-
-            <div className="action-bar">
-              <button className="btn-primary" onClick={onSubmit} disabled={submitting || !selectedServiceId}>
-                {submitting ? 'Đang gửi...' : 'Xác nhận đặt dịch vụ'}
-              </button>
+            <div className="form-fields-grid">
+              <div className="field">
+                <label htmlFor="service-requested-date">Ngày mong muốn thực hiện *</label>
+                <input id="service-requested-date" type="date" min={todayStr} value={requestedDate} onChange={(e) => setRequestedDate(e.target.value)} required />
+                <span className="field-hint">Lịch chính thức sẽ được cập nhật sau khi đơn được duyệt.</span>
+              </div>
+              <div className="field field-note">
+                <label htmlFor="service-note">Yêu cầu đặc biệt</label>
+                <textarea id="service-note" placeholder="Mô tả cách sắp xếp, loại hoa hoặc lưu ý cần thiết" value={note} onChange={(e) => setNote(e.target.value)} />
+              </div>
             </div>
           </div>
         </div>
+
+        <aside className="summary-card" data-reveal>
+          <span className="section-kicker">Tóm tắt yêu cầu</span>
+          <h3 className="summary-title">Xác nhận thông tin</h3>
+          <div className="summary-item">
+            <span className="summary-item-name">Dịch vụ</span>
+            <span className="summary-item-val">{selectedServiceType?.name ?? 'Chưa chọn'}</span>
+          </div>
+          <div className="summary-item">
+            <span className="summary-item-name">Phạm vi</span>
+            <span className="summary-item-val">{applyToAllPlots ? `${ownedPlots.length} lô phần mộ` : selectedPlot ? `Lô ${selectedPlot.plotCode}` : 'Chưa chọn'}</span>
+          </div>
+          <div className="summary-item">
+            <span className="summary-item-name">Ngày mong muốn</span>
+            <span className="summary-item-val">{requestedDate ? formatDate(requestedDate) : 'Chưa chọn'}</span>
+          </div>
+          <div className="summary-total">
+            <span className="summary-total-label">Chi phí dự kiến</span>
+            <span className="summary-total-price">{selectedServiceType ? money.format(totalPrice) : '—'}</span>
+          </div>
+          {applyToAllPlots && selectedServiceType && (
+            <p className="summary-breakdown">{money.format(selectedServiceType.basePrice)} × {ownedPlots.length} lô</p>
+          )}
+          <p className="summary-note">Đơn chỉ được triển khai sau khi ban quản lý xác nhận lịch và thông tin thanh toán.</p>
+
+          {submitError && <div className="form-error"><AlertCircle className="inline-icon" /> {submitError}</div>}
+          {submitOk && <div className="form-success"><Check className="inline-icon" /> {submitOk}</div>}
+
+          <button className="btn-primary submit-service" onClick={onSubmit} disabled={submitting || !selectedServiceId}>
+            {submitting ? 'Đang gửi yêu cầu...' : 'Gửi yêu cầu dịch vụ'}
+          </button>
+        </aside>
       </div>
     </section>
   )
@@ -830,85 +938,111 @@ function TrackTab(props: {
   } = props
 
   return (
-    <section>
-      <div className="tracking-notice">
+    <section className="tab-section">
+      <div className="section-heading tracking-heading" data-reveal>
         <div>
-          <strong>Tiến độ được cập nhật trực tiếp từ bộ phận vận hành</strong>
-          <span>Khi trạng thái thay đổi, hệ thống sẽ gửi thông báo vào tài khoản của bạn.</span>
+          <span className="section-kicker">Theo dõi đơn</span>
+          <h2>Mọi cập nhật ở cùng một nơi</h2>
+          <p>Kiểm tra lịch thực hiện, người phụ trách, thanh toán và kết quả nghiệm thu của từng yêu cầu.</p>
         </div>
-        <div className="tracking-notice-actions">
-          <button onClick={onRefresh}>↻ Cập nhật mới nhất</button>
-          <button onClick={onOpenNotifications}>Xem thông báo</button>
+        <div className="tracking-heading-actions">
+          <button className="btn-outline compact" onClick={onRefresh}><RotateCcw className="inline-icon" /> Cập nhật</button>
+          <button className="btn-text bordered" onClick={onOpenNotifications}><Bell className="inline-icon" /> Thông báo</button>
         </div>
       </div>
 
-      <div className="filter-bar">
-        <button className={`filter-chip ${statusFilter === 'all' ? 'active' : ''}`} onClick={() => setStatusFilter('all')}>Tất cả</button>
-        <button className={`filter-chip ${statusFilter === 'submitted' ? 'active' : ''}`} onClick={() => setStatusFilter('submitted')}>Đã gửi</button>
-        <button className={`filter-chip ${statusFilter === 'pending_confirm' ? 'active' : ''}`} onClick={() => setStatusFilter('pending_confirm')}>Chờ xác nhận</button>
-        <button className={`filter-chip ${statusFilter === 'confirmed' ? 'active' : ''}`} onClick={() => setStatusFilter('confirmed')}>Đã xác nhận</button>
-        <button className={`filter-chip ${statusFilter === 'in_progress' ? 'active' : ''}`} onClick={() => setStatusFilter('in_progress')}>Đang thực hiện</button>
-        <button className={`filter-chip ${statusFilter === 'completed' ? 'active' : ''}`} onClick={() => setStatusFilter('completed')}>Hoàn thành</button>
-        <button className={`filter-chip ${statusFilter === 'cancelled' ? 'active' : ''}`} onClick={() => setStatusFilter('cancelled')}>Đã huỷ</button>
-        <div className="search-box">
-          <span>🔍</span>
-          <input placeholder="Tìm theo tên dịch vụ, mã đơn..." value={search} onChange={(e) => setSearch(e.target.value)} />
+      <div className="tracking-notice" data-reveal>
+        <strong>Tiến độ được cập nhật trực tiếp từ bộ phận vận hành.</strong>
+        <span>Khi có thay đổi về lịch, trạng thái hoặc kết quả, hệ thống sẽ gửi thông báo đến tài khoản của bạn.</span>
+      </div>
+
+      <div className="filter-bar tracking-filters" data-reveal>
+        <div className="filter-group" aria-label="Lọc trạng thái đơn">
+          <button className={`filter-chip ${statusFilter === 'all' ? 'active' : ''}`} onClick={() => setStatusFilter('all')}>Tất cả</button>
+          <button className={`filter-chip ${statusFilter === 'submitted' ? 'active' : ''}`} onClick={() => setStatusFilter('submitted')}>Đã gửi</button>
+          <button className={`filter-chip ${statusFilter === 'pending_confirm' ? 'active' : ''}`} onClick={() => setStatusFilter('pending_confirm')}>Chờ xác nhận</button>
+          <button className={`filter-chip ${statusFilter === 'confirmed' ? 'active' : ''}`} onClick={() => setStatusFilter('confirmed')}>Đã xác nhận</button>
+          <button className={`filter-chip ${statusFilter === 'in_progress' ? 'active' : ''}`} onClick={() => setStatusFilter('in_progress')}>Đang thực hiện</button>
+          <button className={`filter-chip ${statusFilter === 'completed' ? 'active' : ''}`} onClick={() => setStatusFilter('completed')}>Hoàn thành</button>
+          <button className={`filter-chip ${statusFilter === 'cancelled' ? 'active' : ''}`} onClick={() => setStatusFilter('cancelled')}>Đã huỷ</button>
         </div>
+        <label className="search-box">
+          <Search className="search-icon" aria-hidden="true" />
+          <input aria-label="Tìm đơn dịch vụ" placeholder="Tên dịch vụ hoặc mã đơn" value={search} onChange={(e) => setSearch(e.target.value)} />
+        </label>
       </div>
 
       {loading ? (
-        <div className="empty-state"><div className="empty-icon">📋</div><p>Đang tải đơn dịch vụ...</p></div>
+        <div className="empty-state" data-reveal>
+          <RotateCcw className="loading-icon" />
+          <strong>Đang tải đơn dịch vụ</strong>
+          <p>Hệ thống đang đồng bộ trạng thái mới nhất.</p>
+        </div>
       ) : totalCount === 0 ? (
-        <div className="empty-state"><div className="empty-icon">📋</div><p>Không có đơn dịch vụ nào phù hợp.</p></div>
+        <div className="empty-state" data-reveal>
+          <strong>Không có đơn dịch vụ phù hợp</strong>
+          <p>Thử đổi bộ lọc hoặc tìm bằng mã đơn khác.</p>
+        </div>
       ) : (
         <>
           <div className="services-list">
-            {orders.map((order) => {
+            {orders.map((order, index) => {
               const group = statusGroup(order.status)
               const idx = stepIndex(order.status)
               const isExpanded = expandedId === order.id
               const detail = orderDetails[order.id] ?? order
+
               return (
-                <article key={order.id} className={`service-item status-${group}`} onClick={() => toggleOrder(order.id)}>
-                  <div className={`s-icon ${group}`}>🌸</div>
-                  <div>
-                    <div className="s-name">{order.serviceName}</div>
-                    <div className="s-meta">
-                      <span>Mã: #DV-{String(order.id).padStart(4, '0')}</span>
-                      {order.plotCode && <span>Lô {order.plotCode}</span>}
-                      {order.requestedDate && <span>{formatDate(order.requestedDate)}</span>}
-                    </div>
-                    {group !== 'cancelled' && (
-                      <div className="progress-track">
-                        {STEP_KEYS.map((key, i) => (
-                          <FragmentStep key={key} label={STEP_LABEL[key]} state={i < idx ? 'done' : i === idx ? 'active' : 'pending'} isLast={i === STEP_KEYS.length - 1} />
-                        ))}
+                <article
+                  key={order.id}
+                  className={`service-item status-${group}`}
+                  data-reveal
+                  style={{ '--reveal-delay': `${Math.min(index, 6) * 65}ms` } as CSSProperties}
+                >
+                  <button className="service-item-summary" type="button" onClick={() => toggleOrder(order.id)} aria-expanded={isExpanded}>
+                    <div className="service-item-main">
+                      <div className="service-item-title-row">
+                        <div>
+                          <span className="order-code">#DV-{String(order.id).padStart(4, '0')}</span>
+                          <h3 className="s-name">{order.serviceName}</h3>
+                        </div>
+                        <span className={`status-badge ${group}`}>{displayStatusLabel(order.status, order.paymentStatus)}</span>
                       </div>
-                    )}
-                  </div>
-                  <div className="s-right">
-                    <span className={`status-badge ${group}`}>{displayStatusLabel(order.status, order.paymentStatus)}</span>
-                    <span className="s-price">{money.format(order.amount)}</span>
-                    <button className="s-action" onClick={(e) => { e.stopPropagation(); toggleOrder(order.id) }}>
-                      {isExpanded ? 'Thu gọn' : 'Chi tiết'}
-                    </button>
-                  </div>
+                      <div className="s-meta">
+                        {order.plotCode && <span>Lô {order.plotCode}</span>}
+                        {order.requestedDate && <span>Ngày mong muốn: {formatDate(order.requestedDate)}</span>}
+                        <span>Chi phí: {money.format(order.amount)}</span>
+                      </div>
+                      {group !== 'cancelled' && (
+                        <div className="progress-track" aria-label="Tiến độ đơn dịch vụ">
+                          {STEP_KEYS.map((key, step) => (
+                            <FragmentStep key={key} label={STEP_LABEL[key]} state={step < idx ? 'done' : step === idx ? 'active' : 'pending'} isLast={step === STEP_KEYS.length - 1} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <span className="s-action">{isExpanded ? 'Thu gọn' : 'Xem chi tiết'}</span>
+                  </button>
 
                   {isExpanded && (
-                    <div className="detail-panel" onClick={(event) => event.stopPropagation()}>
+                    <div className="detail-panel" data-reveal>
                       {detailLoadingId === order.id && !orderDetails[order.id] ? (
                         <div className="detail-loading">Đang tải lịch sử cập nhật...</div>
                       ) : (
                         <>
                           <div className="detail-block">
-                            <h4>Thông tin đơn</h4>
-                            <div className="detail-row"><span className="k">Ngày gửi yêu cầu</span><span className="v">{formatDate(detail.createdAt)}</span></div>
-                            <div className="detail-row"><span className="k">Ngày mong muốn</span><span className="v">{formatDate(detail.requestedDate)}</span></div>
-                            <div className="detail-row"><span className="k">Lịch thực hiện</span><span className="v">{formatDate(detail.scheduledDate)}</span></div>
-                            <div className="detail-row"><span className="k">Người phụ trách</span><span className="v">{detail.assignedToName || 'Đang phân công'}</span></div>
-                            <div className="detail-row"><span className="k">Trạng thái hiện tại</span><span className="v status-value">{displayStatusLabel(detail.status, detail.paymentStatus)}</span></div>
+                            <div className="detail-block-head">
+                              <h4>Thông tin đơn</h4>
+                              <span className="detail-updated">Cập nhật {formatDate(detail.updatedAt || detail.createdAt)}</span>
+                            </div>
+                            <div className="detail-info-grid">
+                              <div><span>Ngày gửi yêu cầu</span><strong>{formatDate(detail.createdAt)}</strong></div>
+                              <div><span>Ngày mong muốn</span><strong>{formatDate(detail.requestedDate)}</strong></div>
+                              <div><span>Lịch thực hiện</span><strong>{formatDate(detail.scheduledDate)}</strong></div>
+                              <div><span>Người phụ trách</span><strong>{detail.assignedToName || 'Đang phân công'}</strong></div>
+                            </div>
                             <div className="customer-note">
-                              <strong>Ghi chú khi đặt dịch vụ</strong>
+                              <strong>Ghi chú của gia đình</strong>
                               <p>{detail.note || 'Không có ghi chú thêm.'}</p>
                             </div>
                           </div>
@@ -926,15 +1060,15 @@ function TrackTab(props: {
                             />
                           )}
 
-                          <div className="detail-block">
+                          <div className="detail-block history-block">
                             <h4>Lịch sử tiến độ</h4>
                             <div className="customer-history">
                               {(detail.history ?? []).length === 0 ? (
                                 <p className="history-empty">Chưa có cập nhật mới.</p>
                               ) : (
-                                (detail.history ?? []).map((history, index) => (
-                                  <div className="customer-history-item" key={history.id}>
-                                    <div className="history-marker">{index === (detail.history?.length ?? 0) - 1 ? '●' : '✓'}</div>
+                                (detail.history ?? []).map((history, historyIndex) => (
+                                  <div className={`customer-history-item ${historyIndex === (detail.history?.length ?? 0) - 1 ? 'latest' : ''}`} key={history.id}>
+                                    <div className="history-marker" aria-hidden="true" />
                                     <div>
                                       <strong>{history.newStatus ? STATUS_LABEL[history.newStatus] : 'Đã gửi yêu cầu'}</strong>
                                       <span>{formatDate(history.createdAt)}</span>
@@ -949,7 +1083,7 @@ function TrackTab(props: {
                             <div className="completion-proof">
                               <div className="completion-proof-header">
                                 <div>
-                                  <span>✓ Dịch vụ đã hoàn thành</span>
+                                  <span>Dịch vụ đã hoàn thành</span>
                                   <strong>Kết quả từ bộ phận thực hiện</strong>
                                 </div>
                                 <small>{formatDate(detail.completedAt)}</small>
@@ -975,12 +1109,16 @@ function TrackTab(props: {
           </div>
 
           {pageCount > 1 && (
-            <div className="pagination">
-              <button className="page-btn" disabled={page <= 1} onClick={() => setPage(page - 1)}>‹</button>
-              {Array.from({ length: pageCount }, (_, i) => i + 1).map((p) => (
-                <button key={p} className={`page-btn ${p === page ? 'active' : ''}`} onClick={() => setPage(p)}>{p}</button>
+            <div className="pagination" data-reveal>
+              <button className="page-btn" disabled={page <= 1} onClick={() => setPage(page - 1)} aria-label="Trang trước">
+                <ChevronLeft className="page-icon" />
+              </button>
+              {Array.from({ length: pageCount }, (_, i) => i + 1).map((pageNumber) => (
+                <button key={pageNumber} className={`page-btn ${pageNumber === page ? 'active' : ''}`} onClick={() => setPage(pageNumber)}>{pageNumber}</button>
               ))}
-              <button className="page-btn" disabled={page >= pageCount} onClick={() => setPage(page + 1)}>›</button>
+              <button className="page-btn" disabled={page >= pageCount} onClick={() => setPage(page + 1)} aria-label="Trang sau">
+                <ChevronRight className="page-icon" />
+              </button>
             </div>
           )}
         </>
@@ -1024,7 +1162,7 @@ function FragmentStep({ label, state, isLast }: { label: string; state: 'done' |
   return (
     <>
       <div className="p-step">
-        <div className={`p-step-dot ${state}-dot`}>{state === 'done' ? '✓' : state === 'active' ? '●' : ''}</div>
+        <div className={`p-step-dot ${state}-dot`} aria-hidden="true" />
         <div className="p-step-label">{label}</div>
       </div>
       {!isLast && <div className={`p-line ${state === 'done' ? 'filled' : ''}`} />}

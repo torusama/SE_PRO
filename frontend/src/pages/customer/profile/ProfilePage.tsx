@@ -222,6 +222,230 @@ const COUNTRIES = [
 
 const RELATIONS = ["Vợ / Chồng", "Con", "Cha / Mẹ", "Anh / Em", "Khác"];
 
+type ProfileIconName =
+  | "alert"
+  | "arrow-left"
+  | "bell"
+  | "calendar"
+  | "card"
+  | "check"
+  | "close"
+  | "document"
+  | "edit"
+  | "folder"
+  | "history"
+  | "key"
+  | "lock"
+  | "mail"
+  | "message"
+  | "monitor"
+  | "paperclip"
+  | "phone"
+  | "pin"
+  | "save"
+  | "service"
+  | "transfer"
+  | "upload"
+  | "user"
+  | "x-circle";
+
+function ProfileIcon({
+  name,
+  size = 18,
+  className,
+}: {
+  name: ProfileIconName;
+  size?: number;
+  className?: string;
+}) {
+  const common = {
+    width: size,
+    height: size,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.8,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    className,
+    "aria-hidden": true,
+  };
+
+  switch (name) {
+    case "user":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="8" r="3.5" />
+          <path d="M5 20c.7-4 3.1-6 7-6s6.3 2 7 6" />
+        </svg>
+      );
+    case "edit":
+      return (
+        <svg {...common}>
+          <path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-4-4L4 16v4Z" />
+          <path d="m13.5 6.5 4 4" />
+        </svg>
+      );
+    case "phone":
+      return (
+        <svg {...common}>
+          <rect x="7" y="2.5" width="10" height="19" rx="2" />
+          <path d="M10 18.5h4" />
+        </svg>
+      );
+    case "mail":
+      return (
+        <svg {...common}>
+          <rect x="3" y="5" width="18" height="14" rx="2" />
+          <path d="m4 7 8 6 8-6" />
+        </svg>
+      );
+    case "message":
+      return (
+        <svg {...common}>
+          <path d="M5 18.5 3.5 21l4.2-1.1A9 9 0 1 0 4 16.5" />
+          <path d="M8 10h8M8 14h5" />
+        </svg>
+      );
+    case "pin":
+      return (
+        <svg {...common}>
+          <path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z" />
+          <circle cx="12" cy="10" r="2.5" />
+        </svg>
+      );
+    case "lock":
+      return (
+        <svg {...common}>
+          <rect x="4" y="10" width="16" height="11" rx="2" />
+          <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+        </svg>
+      );
+    case "key":
+      return (
+        <svg {...common}>
+          <circle cx="8" cy="15" r="4" />
+          <path d="m11 12 8-8M16 7l2 2M14 9l2 2" />
+        </svg>
+      );
+    case "card":
+      return (
+        <svg {...common}>
+          <rect x="3" y="5" width="18" height="14" rx="2" />
+          <path d="M3 9h18M7 15h3" />
+        </svg>
+      );
+    case "calendar":
+      return (
+        <svg {...common}>
+          <rect x="3" y="5" width="18" height="16" rx="2" />
+          <path d="M8 3v4M16 3v4M3 10h18" />
+        </svg>
+      );
+    case "bell":
+      return (
+        <svg {...common}>
+          <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9Z" />
+          <path d="M10 21h4" />
+        </svg>
+      );
+    case "service":
+      return (
+        <svg {...common}>
+          <path d="M14.7 6.3a4 4 0 0 0-5 5L4 17l3 3 5.7-5.7a4 4 0 0 0 5-5l-2.4 2.4-3-3 2.4-2.4Z" />
+        </svg>
+      );
+    case "transfer":
+      return (
+        <svg {...common}>
+          <path d="M7 7h12l-3-3M17 17H5l3 3" />
+          <path d="m19 7-3 3M5 17l3-3" />
+        </svg>
+      );
+    case "document":
+      return (
+        <svg {...common}>
+          <path d="M6 2.5h8l4 4V21H6Z" />
+          <path d="M14 2.5V7h4M9 12h6M9 16h6" />
+        </svg>
+      );
+    case "history":
+      return (
+        <svg {...common}>
+          <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+          <path d="M3 3v5h5M12 7v5l3 2" />
+        </svg>
+      );
+    case "monitor":
+      return (
+        <svg {...common}>
+          <rect x="3" y="4" width="18" height="13" rx="2" />
+          <path d="M8 21h8M12 17v4" />
+        </svg>
+      );
+    case "save":
+      return (
+        <svg {...common}>
+          <path d="M5 3h12l2 2v16H5Z" />
+          <path d="M8 3v6h8V3M8 21v-7h8v7" />
+        </svg>
+      );
+    case "upload":
+      return (
+        <svg {...common}>
+          <path d="M12 16V4M7 9l5-5 5 5" />
+          <path d="M4 15v5h16v-5" />
+        </svg>
+      );
+    case "folder":
+      return (
+        <svg {...common}>
+          <path d="M3 6h7l2 2h9v11H3Z" />
+        </svg>
+      );
+    case "paperclip":
+      return (
+        <svg {...common}>
+          <path d="m20 11-8.5 8.5a5 5 0 0 1-7-7L14 3a3.5 3.5 0 0 1 5 5l-9.5 9.5a2 2 0 0 1-3-3L15 6" />
+        </svg>
+      );
+    case "check":
+      return (
+        <svg {...common}>
+          <path d="m5 12 4 4L19 6" />
+        </svg>
+      );
+    case "alert":
+      return (
+        <svg {...common}>
+          <path d="M12 3 2.8 20h18.4Z" />
+          <path d="M12 9v4M12 17h.01" />
+        </svg>
+      );
+    case "x-circle":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="9" />
+          <path d="m9 9 6 6M15 9l-6 6" />
+        </svg>
+      );
+    case "arrow-left":
+      return (
+        <svg {...common}>
+          <path d="M19 12H5M11 18l-6-6 6-6" />
+        </svg>
+      );
+    case "close":
+      return (
+        <svg {...common}>
+          <path d="m6 6 12 12M18 6 6 18" />
+        </svg>
+      );
+    default:
+      return null;
+  }
+}
+
 export default function ProfilePage() {
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
@@ -230,7 +454,6 @@ export default function ProfilePage() {
   const storeLogout = useAuthStore((s) => s.logout);
   const navigate = useNavigate();
   const location = useLocation();
-  const starsRef = useRef<HTMLDivElement>(null);
 
   const routeState = location.state as ProfileLocationState | null;
   const completionReturnPath = routeState?.from?.pathname
@@ -463,7 +686,7 @@ export default function ProfilePage() {
       setAuthorizedPersons((prev) =>
         prev ? prev.filter((p) => p.id !== id) : prev,
       );
-      showToast("✓ Đã xoá người ủy quyền");
+      showToast("Đã xoá người ủy quyền");
     } catch (error: unknown) {
       showToast(getErrorMessage(error, "Xoá thất bại."));
     }
@@ -509,7 +732,7 @@ export default function ProfilePage() {
     try {
       await api.delete(`/users/me/sessions/${id}`);
       setSessions((prev) => (prev ? prev.filter((s) => s.id !== id) : prev));
-      showToast("✓ Đã đăng xuất thiết bị đó");
+      showToast("Đã đăng xuất thiết bị đó");
     } catch (error: unknown) {
       showToast(getErrorMessage(error, "Đăng xuất thiết bị thất bại."));
     } finally {
@@ -522,7 +745,7 @@ export default function ProfilePage() {
     try {
       await api.post("/users/me/sessions/revoke-others");
       setSessions((prev) => (prev ? prev.filter((s) => s.isCurrent) : prev));
-      showToast("✓ Đã đăng xuất tất cả thiết bị khác");
+      showToast("Đã đăng xuất tất cả thiết bị khác");
     } catch (error: unknown) {
       showToast(getErrorMessage(error, "Thao tác thất bại."));
     } finally {
@@ -546,19 +769,6 @@ export default function ProfilePage() {
       cancelled = true;
     };
   }, [activeLot]);
-
-  useEffect(() => {
-    const el = starsRef.current;
-    if (!el) return;
-    el.innerHTML = "";
-    for (let i = 0; i < 55; i += 1) {
-      const s = document.createElement("div");
-      s.className = "star";
-      const size = Math.random() * 1.4 + 0.4;
-      s.style.cssText = `width:${size}px;height:${size}px;top:${Math.random() * 100}%;left:${Math.random() * 100}%;--d:${Math.random() * 5 + 2}s;--delay:${Math.random() * -5}s`;
-      el.appendChild(s);
-    }
-  }, []);
 
   function showToast(msg: string, durationMs = 2800) {
     setToast(msg);
@@ -620,7 +830,7 @@ export default function ProfilePage() {
       const profileIsComplete = Boolean(res.data.data.isProfileComplete);
       if (user) setUser({ ...user, name: res.data.data.fullName });
       setProfileComplete(role === "admin" || profileIsComplete);
-      showToast("✓ Đã lưu thông tin");
+      showToast("Đã lưu thông tin");
       if (profileIsComplete && routeState?.requireProfile) {
         setShowRequireProfileAlert(false);
         navigate(completionReturnPath, { replace: true, state: null });
@@ -639,7 +849,7 @@ export default function ProfilePage() {
       setIdCardValue(res.data.data.idCardNumber ?? "");
       setIdCardUnlocked(true);
       setOpenModal(null);
-      showToast("✓ Đã mở khoá số CCCD/Hộ chiếu");
+      showToast("Đã mở khoá số CCCD/Hộ chiếu");
     } catch (error: unknown) {
       throw new Error(getErrorMessage(error, "Mật khẩu không đúng."), {
         cause: error,
@@ -667,7 +877,7 @@ export default function ProfilePage() {
       const saved = res.data.data.idCardNumber ?? "";
       setIdCardValue(saved);
       setProfile((prev) => (prev ? { ...prev, idCardNumber: saved } : prev));
-      showToast("✓ Đã lưu số CCCD/Hộ chiếu");
+      showToast("Đã lưu số CCCD/Hộ chiếu");
     } catch (error: unknown) {
       // Nếu mật khẩu đã cache không còn đúng (vd. vừa đổi mật khẩu ở tab khác),
       // khoá lại và yêu cầu xác thực lại thay vì báo lỗi mơ hồ.
@@ -690,7 +900,7 @@ export default function ProfilePage() {
         setPhoneOtpDevCode(res.data.data.devOtpCode);
       }
       showToast(
-        `✓ Đã gửi mã OTP đến ${profile?.phone ?? "số điện thoại của bạn"}`,
+        `Đã gửi mã OTP đến ${profile?.phone ?? "số điện thoại của bạn"}`,
       );
     } catch (error: unknown) {
       showToast(getErrorMessage(error, "Gửi mã OTP thất bại."));
@@ -714,7 +924,7 @@ export default function ProfilePage() {
       setPhoneOtpDevCode(null);
       const res = await api.get("/users/me");
       applyProfile(res.data.data);
-      showToast("✓ Đã xác thực số điện thoại");
+      showToast("Đã xác thực số điện thoại");
     } catch (error: unknown) {
       showToast(getErrorMessage(error, "Mã OTP không đúng."));
     } finally {
@@ -732,7 +942,7 @@ export default function ProfilePage() {
         notifyAnnouncement,
       });
       applyProfile(res.data.data);
-      showToast("✓ Đã lưu cài đặt");
+      showToast("Đã lưu cài đặt");
     } catch (error: unknown) {
       showToast(getErrorMessage(error, "Lưu cài đặt thất bại."));
     } finally {
@@ -742,41 +952,6 @@ export default function ProfilePage() {
 
   return (
     <div className="profile-page">
-      <div className="bg-canvas">
-        <div
-          className="glow-orb"
-          style={{
-            width: 500,
-            height: 500,
-            background: "rgba(0,229,196,0.07)",
-            top: -100,
-            right: -80,
-          }}
-        />
-        <div
-          className="glow-orb"
-          style={{
-            width: 350,
-            height: 350,
-            background: "rgba(201,168,76,0.05)",
-            bottom: 0,
-            left: -60,
-            animationDelay: "4s",
-          }}
-        />
-        <div className="stars" ref={starsRef} />
-        <svg
-          className="mountain-layer"
-          viewBox="0 0 1440 400"
-          preserveAspectRatio="none"
-        >
-          <path
-            d="M0,400 L0,280 Q200,200 400,240 Q600,280 800,200 Q1000,120 1200,180 Q1380,230 1440,160 L1440,400 Z"
-            fill="rgba(0,229,196,0.4)"
-          />
-        </svg>
-      </div>
-
       <div className="breadcrumb">
         <Link to={ROUTES.HOME}>{T.home}</Link>
         <span className="sep">›</span>
@@ -806,7 +981,7 @@ export default function ProfilePage() {
                 title="Đổi ảnh"
                 onClick={() => setOpenModal("avatar")}
               >
-                ✏
+                <ProfileIcon name="edit" size={14} />
               </button>
             </div>
             <div className="profile-name">{displayName}</div>
@@ -823,7 +998,8 @@ export default function ProfilePage() {
                 className="modal-warn"
                 style={{ marginTop: 12, fontSize: 12 }}
               >
-                ⚠ {profileError}
+                <ProfileIcon name="alert" size={15} />
+                <span>{profileError}</span>
               </div>
             )}
 
@@ -851,28 +1027,28 @@ export default function ProfilePage() {
                 className={`side-nav-item ${activeTab === "info" ? "active" : ""}`}
                 onClick={() => switchTab("info")}
               >
-                <span className="icon">👤</span>
+                <span className="icon"><ProfileIcon name="user" /></span>
                 {T.navInfo}
               </button>
               <button
                 className={`side-nav-item ${activeTab === "contact" ? "active" : ""}`}
                 onClick={() => switchTab("contact")}
               >
-                <span className="icon">📱</span>
+                <span className="icon"><ProfileIcon name="phone" /></span>
                 {T.navContact}
               </button>
               <button
                 className={`side-nav-item ${activeTab === "lots" ? "active" : ""}`}
                 onClick={() => switchTab("lots")}
               >
-                <span className="icon">📍</span>
+                <span className="icon"><ProfileIcon name="pin" /></span>
                 {T.navLots}
               </button>
               <button
                 className={`side-nav-item ${activeTab === "security" ? "active" : ""}`}
                 onClick={() => switchTab("security")}
               >
-                <span className="icon">🔒</span>
+                <span className="icon"><ProfileIcon name="lock" /></span>
                 {T.navSecurity}
                 <span className="badge-dot" />
               </button>
@@ -900,7 +1076,7 @@ export default function ProfilePage() {
             className={`panel-section ${activeTab === "info" ? "active" : ""}`}
           >
             <div className="section-header">
-              <div className="section-title">Thông Tin Cá Nhân</div>
+              <div className="section-title">Thông tin cá nhân</div>
               <button
                 className="btn-save"
                 onClick={handleSaveInfo}
@@ -1018,14 +1194,22 @@ export default function ProfilePage() {
                             onClick={handleSaveIdCard}
                             disabled={idCardSaving}
                           >
-                            {idCardSaving ? "Đang lưu…" : "💾 Lưu"}
+                            {idCardSaving ? (
+                              "Đang lưu…"
+                            ) : (
+                              <>
+                                <ProfileIcon name="save" size={15} />
+                                Lưu
+                              </>
+                            )}
                           </button>
                           <button
                             type="button"
                             className="id-card-btn ghost"
                             onClick={handleLockIdCard}
                           >
-                            🔒 Khoá lại
+                            <ProfileIcon name="lock" size={15} />
+                            Khoá lại
                           </button>
                         </>
                       ) : (
@@ -1034,7 +1218,8 @@ export default function ProfilePage() {
                           className="id-card-btn"
                           onClick={() => setOpenModal("idcard-password")}
                         >
-                          🔒 Xác thực để xem/sửa
+                          <ProfileIcon name="lock" size={15} />
+                          Xác thực để xem/sửa
                         </button>
                       )}
                     </div>
@@ -1203,7 +1388,7 @@ export default function ProfilePage() {
             className={`panel-section ${activeTab === "contact" ? "active" : ""}`}
           >
             <div className="section-header">
-              <div className="section-title">Liên Hệ & Thông Báo</div>
+              <div className="section-title">Liên hệ và thông báo</div>
               <button className="btn-save" onClick={handleSaveContact}>
                 {T.save}
               </button>
@@ -1213,21 +1398,22 @@ export default function ProfilePage() {
               <div className="panel-title">Kênh liên lạc</div>
               <div className="contact-methods">
                 <div className="contact-method">
-                  <div className="contact-icon">📧</div>
+                  <div className="contact-icon"><ProfileIcon name="mail" /></div>
                   <div className="contact-info">
                     <div className="c-label">Email</div>
                     <div className="c-value">{profile?.email ?? "—"}</div>
                   </div>
                 </div>
                 <div className="contact-method" style={{ flexWrap: "wrap" }}>
-                  <div className="contact-icon">📱</div>
+                  <div className="contact-icon"><ProfileIcon name="phone" /></div>
                   <div className="contact-info">
                     <div className="c-label">Số điện thoại</div>
                     <div className="c-value">{profile?.phone ?? "—"}</div>
                   </div>
                   {profile?.isPhoneVerified ? (
                     <span className="contact-status verified">
-                      ✓ Đã xác thực
+                      <ProfileIcon name="check" size={13} />
+                      Đã xác thực
                     </span>
                   ) : !phoneOtpRequested ? (
                     <span className="contact-status unverified">
@@ -1272,17 +1458,11 @@ export default function ProfilePage() {
                     </button>
                   )}
                   {phoneOtpDevCode && (
-                    <div
-                      style={{
-                        width: "100%",
-                        fontSize: 11,
-                        color: "var(--gold)",
-                        marginTop: 4,
-                      }}
-                    >
-                      ⚠ [DEV] Backend chưa cấu hình SMS gateway thật — mã OTP
+                    <div className="inline-dev-note">
+                      <ProfileIcon name="alert" size={14} />
+                      <span>[DEV] Backend chưa cấu hình SMS gateway thật — mã OTP
                       test: <b>{phoneOtpDevCode}</b> (xem hướng dẫn cấu hình
-                      SMS_API_URL/SMS_API_KEY trong .env.example)
+                      SMS_API_URL/SMS_API_KEY trong .env.example)</span>
                     </div>
                   )}
                   <button
@@ -1293,7 +1473,7 @@ export default function ProfilePage() {
                   </button>
                 </div>
                 <div className="contact-method">
-                  <div className="contact-icon">💬</div>
+                  <div className="contact-icon"><ProfileIcon name="message" /></div>
                   <div className="contact-info">
                     <div className="c-label">Zalo</div>
                     <div className="c-value">Chưa liên kết</div>
@@ -1319,7 +1499,7 @@ export default function ProfilePage() {
               <div className="panel-title">Tùy chỉnh nhận thông báo</div>
               <div className="contact-methods">
                 <div className="contact-method">
-                  <div className="contact-icon">💳</div>
+                  <div className="contact-icon"><ProfileIcon name="card" /></div>
                   <div className="contact-info">
                     <div className="c-label">Thông báo thanh toán</div>
                     <div
@@ -1339,7 +1519,7 @@ export default function ProfilePage() {
                   </label>
                 </div>
                 <div className="contact-method">
-                  <div className="contact-icon">🕯️</div>
+                  <div className="contact-icon"><ProfileIcon name="calendar" /></div>
                   <div className="contact-info">
                     <div className="c-label">Cập nhật dịch vụ</div>
                     <div
@@ -1359,7 +1539,7 @@ export default function ProfilePage() {
                   </label>
                 </div>
                 <div className="contact-method">
-                  <div className="contact-icon">🌸</div>
+                  <div className="contact-icon"><ProfileIcon name="service" /></div>
                   <div className="contact-info">
                     <div className="c-label">Nhắc ngày giỗ</div>
                     <div
@@ -1379,7 +1559,7 @@ export default function ProfilePage() {
                   </label>
                 </div>
                 <div className="contact-method">
-                  <div className="contact-icon">📢</div>
+                  <div className="contact-icon"><ProfileIcon name="bell" /></div>
                   <div className="contact-info">
                     <div className="c-label">Thông báo từ ban quản lý</div>
                     <div
@@ -1429,12 +1609,12 @@ export default function ProfilePage() {
             {activeLot === null ? (
               <div>
                 <div className="section-header">
-                  <div className="section-title">Lô Đất Của Tôi</div>
+                  <div className="section-title">Lô đất của tôi</div>
                   <button
                     className="btn-outline"
                     onClick={() => showToast("Đang mở bản đồ 2D…")}
                   >
-                    Xem bản đồ →
+                    Xem bản đồ
                   </button>
                 </div>
 
@@ -1445,7 +1625,8 @@ export default function ProfilePage() {
                   {lotsLoading && <div>Đang tải danh sách lô đất…</div>}
                   {lots === null && lotsError && (
                     <div className="modal-warn" style={{ fontSize: 12 }}>
-                      ⚠ {lotsError}
+                      <ProfileIcon name="alert" size={15} />
+                      <span>{lotsError}</span>
                     </div>
                   )}
                   {lots !== null && lots.length === 0 && (
@@ -1533,7 +1714,7 @@ export default function ProfilePage() {
                             ))}
                           </div>
                           <div className="lot-action">
-                            {isPaid ? "Xem chi tiết →" : "Thanh toán tiếp →"}
+                            {isPaid ? "Xem chi tiết" : "Thanh toán tiếp"}
                           </div>
                         </div>
                       );
@@ -1563,7 +1744,7 @@ export default function ProfilePage() {
                   <div className="contact-methods">
                     {authorizedPersons?.map((p) => (
                       <div className="contact-method" key={p.id}>
-                        <div className="contact-icon">👤</div>
+                        <div className="contact-icon"><ProfileIcon name="user" /></div>
                         <div className="contact-info">
                           <div className="c-label">
                             {p.fullName}
@@ -1631,7 +1812,7 @@ export default function ProfilePage() {
             className={`panel-section ${activeTab === "security" ? "active" : ""}`}
           >
             <div className="section-header">
-              <div className="section-title">Bảo Mật Tài Khoản</div>
+              <div className="section-title">Bảo mật tài khoản</div>
             </div>
 
             <div className="panel">
@@ -1639,7 +1820,7 @@ export default function ProfilePage() {
               <div className="security-list">
                 <div className="security-item">
                   <div className="sec-left">
-                    <div className="sec-icon">🔑</div>
+                    <div className="sec-icon"><ProfileIcon name="key" /></div>
                     <div className="sec-info">
                       <h4>Mật khẩu</h4>
                       <p>
@@ -1658,7 +1839,7 @@ export default function ProfilePage() {
                 </div>
                 <div className="security-item">
                   <div className="sec-left">
-                    <div className="sec-icon">📱</div>
+                    <div className="sec-icon"><ProfileIcon name="phone" /></div>
                     <div className="sec-info">
                       <h4>Xác thực bằng số điện thoại (OTP SMS)</h4>
                       <p>
@@ -1699,10 +1880,14 @@ export default function ProfilePage() {
                   <div className="security-item" key={s.id}>
                     <div className="sec-left">
                       <div className="sec-icon">
-                        {s.os?.toLowerCase().includes("ios") ||
-                        s.os?.toLowerCase().includes("android")
-                          ? "📱"
-                          : "💻"}
+                        <ProfileIcon
+                          name={
+                            s.os?.toLowerCase().includes("ios") ||
+                            s.os?.toLowerCase().includes("android")
+                              ? "phone"
+                              : "monitor"
+                          }
+                        />
                       </div>
                       <div className="sec-info">
                         <h4>
@@ -1835,7 +2020,7 @@ export default function ProfilePage() {
                 prev ? { ...prev, avatarUrl: res.data.data.avatarUrl } : prev,
               );
               setOpenModal(null);
-              showToast("✓ Đã cập nhật ảnh đại diện");
+              showToast("Đã cập nhật ảnh đại diện");
             } catch (error: unknown) {
               showToast(
                 getErrorMessage(error, "Cập nhật ảnh đại diện thất bại."),
@@ -1868,7 +2053,7 @@ export default function ProfilePage() {
               setOpenModal(null);
               const res = await api.get("/users/me");
               applyProfile(res.data.data);
-              showToast("✓ Đã đổi mật khẩu");
+              showToast("Đã đổi mật khẩu");
             } catch (error: unknown) {
               throw new Error(
                 getErrorMessage(error, "Đổi mật khẩu thất bại."),
@@ -1888,7 +2073,7 @@ export default function ProfilePage() {
               const res = await api.patch("/users/me", { phone: newPhone });
               applyProfile(res.data.data);
               setOpenModal(null);
-              showToast("✓ Đã cập nhật số điện thoại");
+              showToast("Đã cập nhật số điện thoại");
             } catch (error: unknown) {
               showToast(
                 getErrorMessage(error, "Cập nhật số điện thoại thất bại."),
@@ -1923,7 +2108,7 @@ export default function ProfilePage() {
                     )
                   : prev,
               );
-              showToast("✓ Đã cập nhật người ủy quyền");
+              showToast("Đã cập nhật người ủy quyền");
             } else {
               const res = await api.post(
                 "/users/me/authorized-persons",
@@ -1932,7 +2117,7 @@ export default function ProfilePage() {
               setAuthorizedPersons((prev) =>
                 prev ? [...prev, res.data.data] : [res.data.data],
               );
-              showToast("✓ Đã thêm người ủy quyền");
+              showToast("Đã thêm người ủy quyền");
             }
             setShowPersonModal(false);
           }}
@@ -1945,7 +2130,7 @@ export default function ProfilePage() {
           onClose={() => setOpenModal(null)}
           onSubmit={() => {
             setOpenModal(null);
-            showToast("✓ Đã nộp hồ sơ chuyển nhượng — Đang chờ xét duyệt");
+            showToast("Đã nộp hồ sơ chuyển nhượng — Đang chờ xét duyệt");
           }}
         />
       )}
@@ -1997,7 +2182,8 @@ function LotDetail({
   return (
     <div>
       <button className="back-to-lots" onClick={onBack}>
-        ← Quay lại danh sách
+        <ProfileIcon name="arrow-left" size={15} />
+        Quay lại danh sách
       </button>
 
       {loading && (
@@ -2111,19 +2297,19 @@ function LotDetail({
                 {isPaid ? (
                   <>
                     <ActionBtn
-                      icon="🔄"
+                      icon="transfer"
                       title="Chuyển nhượng / Thừa kế"
                       sub="Sang tên chủ sở hữu mới"
                       onClick={() => onOpenModal("transfer")}
                     />
                     <ActionBtn
-                      icon="📋"
+                      icon="document"
                       title="Xem trạng thái lô"
                       sub="Lịch sử & tiến độ xử lý"
                       onClick={() => onOpenModal("status-lot")}
                     />
                     <ActionBtn
-                      icon="🕯️"
+                      icon="service"
                       title="Đặt dịch vụ"
                       sub="Vệ sinh, hương hoa, lễ giỗ"
                       onClick={() =>
@@ -2132,7 +2318,7 @@ function LotDetail({
                     />
                     {lot.remainingAmount > 0 && (
                       <ActionBtn
-                        icon="💳"
+                        icon="card"
                         title="Thanh toán phần còn lại"
                         sub={formatCurrency(lot.remainingAmount)}
                         gold
@@ -2140,7 +2326,7 @@ function LotDetail({
                       />
                     )}
                     <ActionBtn
-                      icon="📜"
+                      icon="history"
                       title="Lịch sử yêu cầu"
                       sub="Tất cả giao dịch & dịch vụ"
                       onClick={() => showToast("Đang mở lịch sử yêu cầu…")}
@@ -2149,20 +2335,20 @@ function LotDetail({
                 ) : (
                   <>
                     <ActionBtn
-                      icon="💳"
+                      icon="card"
                       title="Thanh toán đầy đủ"
                       sub={`Còn lại ${formatCurrency(lot.remainingAmount)}`}
                       gold
                       onClick={() => showToast("Đang mở trang thanh toán…")}
                     />
                     <ActionBtn
-                      icon="📋"
+                      icon="document"
                       title="Xem trạng thái lô"
                       sub="Tiến độ xử lý đặt cọc"
                       onClick={() => onOpenModal("status-lot")}
                     />
                     <ActionBtn
-                      icon="❌"
+                      icon="x-circle"
                       title="Hủy đặt cọc"
                       sub="Liên hệ ban quản lý"
                       danger
@@ -2212,7 +2398,7 @@ function ActionBtn({
   danger,
   onClick,
 }: {
-  icon: string;
+  icon: ProfileIconName;
   title: string;
   sub: string;
   gold?: boolean;
@@ -2225,7 +2411,7 @@ function ActionBtn({
       style={danger ? { borderColor: "rgba(224,92,92,0.2)" } : undefined}
       onClick={onClick}
     >
-      <span className="lab-icon">{icon}</span>
+      <span className="lab-icon"><ProfileIcon name={icon} /></span>
       <div className="lab-text">
         <div
           className="lab-title"
@@ -2269,8 +2455,8 @@ function ModalShell({
       }}
     >
       <div className="modal-box">
-        <button className="modal-close" onClick={onClose}>
-          ✕
+        <button className="modal-close" onClick={onClose} aria-label="Đóng">
+          <ProfileIcon name="close" size={18} />
         </button>
         <div className="modal-title">{title}</div>
         <div className="modal-sub">{sub}</div>
@@ -2469,7 +2655,8 @@ function AvatarModal({
             background: "rgba(224,92,92,0.07)",
           }}
         >
-          ⚠ {error}
+          <ProfileIcon name="alert" size={15} />
+          <span>{error}</span>
         </div>
       )}
       <div
@@ -2547,7 +2734,7 @@ function AvatarModal({
 
         {preview && imgLoaded && (
           <div className="avatar-zoom-row">
-            <span>🔍</span>
+            <ProfileIcon name="upload" size={18} />
             <input
               type="range"
               min={1}
@@ -2574,7 +2761,8 @@ function AvatarModal({
             type="button"
             onClick={() => fileInputRef.current?.click()}
           >
-            📁 Chọn ảnh khác
+            <ProfileIcon name="folder" size={16} />
+            Chọn ảnh khác
           </button>
           {preview && (
             <button
@@ -2612,7 +2800,7 @@ function AvatarModal({
               : undefined
           }
         >
-          {uploading ? "Đang tải lên…" : "Lưu ảnh đại diện →"}
+          {uploading ? "Đang tải lên…" : "Lưu ảnh đại diện"}
         </button>
       </div>
     </ModalShell>
@@ -2710,7 +2898,8 @@ function PasswordModal({
             background: "rgba(224,92,92,0.07)",
           }}
         >
-          ⚠ {error}
+          <ProfileIcon name="alert" size={15} />
+          <span>{error}</span>
         </div>
       )}
 
@@ -2779,7 +2968,7 @@ function PasswordModal({
           onClick={handleSubmit}
           disabled={submitting}
         >
-          {submitting ? "Đang xử lý…" : "Đổi mật khẩu →"}
+          {submitting ? "Đang xử lý…" : "Đổi mật khẩu"}
         </button>
       </div>
     </ModalShell>
@@ -2828,7 +3017,8 @@ function IdCardPasswordModal({
             background: "rgba(224,92,92,0.07)",
           }}
         >
-          ⚠ {error}
+          <ProfileIcon name="alert" size={15} />
+          <span>{error}</span>
         </div>
       )}
 
@@ -2854,7 +3044,7 @@ function IdCardPasswordModal({
           onClick={handleSubmit}
           disabled={submitting}
         >
-          {submitting ? "Đang xác thực…" : "Xác nhận →"}
+          {submitting ? "Đang xác thực…" : "Xác nhận"}
         </button>
       </div>
     </ModalShell>
@@ -2922,7 +3112,7 @@ function AuthorizedPersonModal({
 
   return (
     <ModalShell
-      title={person ? "Sửa Người Ủy Quyền" : "Thêm Người Ủy Quyền"}
+      title={person ? "Sửa người ủy quyền" : "Thêm người ủy quyền"}
       sub="Người này có thể xem hồ sơ lô đất và (tuỳ quyền) đặt dịch vụ thay bạn"
       onClose={onClose}
     >
@@ -2935,7 +3125,8 @@ function AuthorizedPersonModal({
             background: "rgba(224,92,92,0.07)",
           }}
         >
-          ⚠ {error}
+          <ProfileIcon name="alert" size={15} />
+          <span>{error}</span>
         </div>
       )}
 
@@ -2946,7 +3137,7 @@ function AuthorizedPersonModal({
           style={{ fontSize: 12, marginBottom: 14 }}
           onClick={fillFromProfile}
         >
-          ⤵ Điền từ liên hệ khẩn cấp trong hồ sơ
+          Điền từ liên hệ khẩn cấp trong hồ sơ
         </button>
       )}
 
@@ -3010,7 +3201,7 @@ function AuthorizedPersonModal({
           onClick={handleSubmit}
           disabled={submitting}
         >
-          {submitting ? "Đang lưu…" : "Lưu →"}
+          {submitting ? "Đang lưu…" : "Lưu"}
         </button>
       </div>
     </ModalShell>
@@ -3051,7 +3242,7 @@ function PhoneModal({
 
   return (
     <ModalShell
-      title="Đổi Số Điện Thoại"
+      title="Đổi số điện thoại"
       sub={`Số hiện tại: ${currentPhone}`}
       onClose={onClose}
     >
@@ -3064,7 +3255,8 @@ function PhoneModal({
             background: "rgba(224,92,92,0.07)",
           }}
         >
-          ⚠ {error}
+          <ProfileIcon name="alert" size={15} />
+          <span>{error}</span>
         </div>
       )}
 
@@ -3101,11 +3293,11 @@ function PhoneModal({
         </button>
         {!otpSent ? (
           <button className="modal-btn-primary" onClick={handleSendOtp}>
-            Gửi mã OTP →
+            Gửi mã OTP
           </button>
         ) : (
           <button className="modal-btn-primary" onClick={handleConfirm}>
-            Xác nhận →
+            Xác nhận
           </button>
         )}
       </div>
@@ -3124,13 +3316,16 @@ function TransferModal({
 }) {
   return (
     <ModalShell
-      title="Chuyển Nhượng / Thừa Kế"
+      title="Chuyển nhượng / Thừa kế"
       sub={lot ? `Lô ${lot.plotCode} · ${lot.zoneName}` : ""}
       onClose={onClose}
     >
       <div className="modal-warn">
-        ⚠ Yêu cầu chuyển nhượng sẽ được ban quản lý xét duyệt trong 5–7 ngày làm
-        việc. Hai bên cần có mặt hoặc ký số điện tử để hoàn tất.
+        <ProfileIcon name="alert" size={16} />
+        <span>
+          Yêu cầu chuyển nhượng sẽ được ban quản lý xét duyệt trong 5–7 ngày làm
+          việc. Hai bên cần có mặt hoặc ký số điện tử để hoàn tất.
+        </span>
       </div>
 
       <div className="modal-section">
@@ -3180,9 +3375,9 @@ function TransferModal({
             color: "var(--text-muted)",
           }}
         >
-          <div>📎 CCCD hai bên (bản scan)</div>
-          <div>📎 Hợp đồng gốc lô đất</div>
-          <div>📎 Giấy tờ chứng minh quan hệ (nếu thừa kế)</div>
+          <div className="document-requirement"><ProfileIcon name="paperclip" size={15} /><span>CCCD hai bên (bản scan)</span></div>
+          <div className="document-requirement"><ProfileIcon name="paperclip" size={15} /><span>Hợp đồng gốc lô đất</span></div>
+          <div className="document-requirement"><ProfileIcon name="paperclip" size={15} /><span>Giấy tờ chứng minh quan hệ (nếu thừa kế)</span></div>
           <div style={{ marginTop: 8 }}>
             <button
               className="btn-outline"
@@ -3200,7 +3395,7 @@ function TransferModal({
           Hủy
         </button>
         <button className="modal-btn-primary gold" onClick={onSubmit}>
-          Nộp hồ sơ →
+          Nộp hồ sơ
         </button>
       </div>
     </ModalShell>
@@ -3221,7 +3416,7 @@ function StatusModal({
 
   return (
     <ModalShell
-      title={`Trạng Thái Lô ${lot.plotCode}`}
+      title={`Trạng thái lô ${lot.plotCode}`}
       sub={`${lot.zoneName} · Cập nhật lần cuối: ${formatDate(lot.contractDate)}`}
       onClose={onClose}
     >
@@ -3286,7 +3481,7 @@ function StatusModal({
         </button>
         {!isPaid && (
           <button className="modal-btn-primary gold" onClick={onPay}>
-            Thanh toán ngay →
+            Thanh toán ngay
           </button>
         )}
       </div>
@@ -3305,10 +3500,12 @@ function TimelineItem({
   sub: string;
   goldSub?: boolean;
 }) {
-  const dot = status === "done" ? "✓" : status === "current" ? "!" : "○";
   return (
     <div className="st-item">
-      <div className={`st-dot ${status}`}>{dot}</div>
+      <div className={`st-dot ${status}`}>
+        {status === "done" ? <ProfileIcon name="check" size={13} /> : null}
+        {status === "current" ? <span className="st-current-mark" /> : null}
+      </div>
       <div className="st-info">
         <div className="st-title">{title}</div>
         <div

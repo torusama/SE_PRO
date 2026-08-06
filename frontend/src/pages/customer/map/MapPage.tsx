@@ -26,12 +26,10 @@ import {
   CENTRAL_ROAD_NORTH,
   CENTRAL_ROAD_SOUTH,
   CLUSTER_GROUP_BACKDROPS,
-  CONNECTOR_ROAD,
   CROSS_ROADS,
   FAMILY_AISLE_ROAD,
   FAMILY_CROSS_ROADS,
   FAMILY_ROAD,
-  LEFT_DIAGONAL_ROAD_POINTS,
   LEFT_ROAD,
   MAIN_ROAD,
   MAP_BG_RECT,
@@ -652,9 +650,7 @@ export default function MapPage() {
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
   const [selectionMode, setSelectionMode] = useState<SelectionMode>("single");
-  const [selectedPlot, setSelectedPlot] = useState<MapPlot | null>(
-    INITIAL_PLANNED_PLOTS[0] || null,
-  );
+  const [selectedPlot, setSelectedPlot] = useState<MapPlot | null>(null);
   const [routePlotId, setRoutePlotId] = useState<string | null>(null);
   const [clusterPlots, setClusterPlots] = useState<MapPlot[]>([]);
 
@@ -820,12 +816,6 @@ export default function MapPage() {
     }
   }
 
-  function resetCustomerMapTransform() {
-    setZoom(1);
-    setRotation(0);
-    setPan({ x: 0, y: 0 });
-  }
-
   useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
@@ -847,18 +837,14 @@ export default function MapPage() {
           setPlots(fullMap);
           setSelectedPlot(
             (current) =>
-              fullMap.find((plot) => plot.id === current?.id) ||
-              current ||
-              fullMap[0] ||
+              (current && fullMap.find((plot) => plot.id === current.id)) ||
               null,
           );
         })
         .catch((error: Error) => {
           if (cancelled || error.name === "AbortError") return;
           setPlots(INITIAL_PLANNED_PLOTS);
-          setSelectedPlot(
-            (current) => current || INITIAL_PLANNED_PLOTS[0] || null,
-          );
+          setSelectedPlot((current) => current || null);
           setLoadError("");
         })
         .finally(() => {
@@ -965,9 +951,6 @@ export default function MapPage() {
       setSelectedPlot(null);
       setRoutePlotId(null);
     }
-    if (!selectedPlot && filteredPlots.length > 0) {
-      setSelectedPlot(filteredPlots[0]);
-    }
     setClusterPlots((current) =>
       current.filter((plot) => filteredPlots.some((fp) => fp.id === plot.id)),
     );
@@ -1021,6 +1004,7 @@ export default function MapPage() {
     event: ReactPointerEvent<SVGGElement>,
     plot: MapPlot,
   ) {
+    if (plot.isPlaceholder) return;
     event.preventDefault();
     setAdjacencyWarning("");
     setRoutePlotId(null);
@@ -1037,7 +1021,7 @@ export default function MapPage() {
   }
 
   function handlePlotPointerEnter(plot: MapPlot) {
-    if (selectionMode !== "cluster" || !dragModeRef.current) return;
+    if (plot.isPlaceholder || selectionMode !== "cluster" || !dragModeRef.current) return;
     applyClusterDrag(plot, dragModeRef.current);
   }
 
@@ -1077,6 +1061,7 @@ export default function MapPage() {
   }
 
   function handleMouseEnter(event: MouseEvent<SVGGElement>, plot: MapPlot) {
+    if (plot.isPlaceholder) return;
     const tooltip = tooltipRef.current;
     if (!tooltip) return;
     tooltip.style.display = "block";
@@ -1658,6 +1643,29 @@ export default function MapPage() {
                   )}
 
                   {filteredPlots.map((plot) => {
+                    if (plot.isPlaceholder) {
+                      return (
+                        <g
+                          key={plot.id}
+                          className="plot-cell placeholder-plot"
+                          style={{ opacity: 0.08, pointerEvents: "none" }}
+                        >
+                          <rect
+                            className="lot-rect"
+                            x={plot.x}
+                            y={plot.y}
+                            width={plot.width}
+                            height={plot.height}
+                            rx="2"
+                            fill="rgba(255,255,255,0.02)"
+                            stroke="rgba(255,255,255,0.08)"
+                            strokeWidth={0.5}
+                            strokeDasharray="2 2"
+                          />
+                        </g>
+                      );
+                    }
+
                     const color = STATUS_COLOR[plot.status];
                     const myReservation = myPlotByCode.get(plot.plotCode);
                     const displayLabel = myReservation
@@ -1849,7 +1857,21 @@ export default function MapPage() {
 
           {selectedPlot && (
             <div className="detail-panel visible">
-              <div className="detail-tag">{T.pageTitle}</div>
+              <div className="detail-panel-header">
+                <div className="detail-tag">{T.pageTitle}</div>
+                <button
+                  type="button"
+                  className="detail-close-btn"
+                  onClick={() => {
+                    setSelectedPlot(null);
+                    setRoutePlotId(null);
+                  }}
+                  title="Tắt bảng thông tin"
+                  aria-label="Tắt bảng thông tin"
+                >
+                  ✕
+                </button>
+              </div>
               <div className="detail-lot-id">{selectedPlot.plotCode}</div>
               <div className="detail-zone">
                 {selectedPlot.zoneName} - {selectedPlot.rowCode} -{" "}
