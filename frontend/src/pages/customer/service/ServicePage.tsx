@@ -815,6 +815,28 @@ function BookTab(props: {
             <div className="form-section-head">
               <span className="form-step-label">Bước 2</span>
               <div>
+                <h3>Thời gian và yêu cầu riêng</h3>
+                <p>Ban quản lý sẽ xác nhận lại lịch trước khi thực hiện.</p>
+              </div>
+            </div>
+            <div className="form-fields-grid">
+              <div className="field">
+                <label htmlFor="service-requested-date">Ngày mong muốn thực hiện *</label>
+                <input id="service-requested-date" type="date" min={todayStr} value={requestedDate} onChange={(e) => setRequestedDate(e.target.value)} required />
+                <span className="field-hint">Lịch chính thức sẽ được cập nhật sau khi đơn được duyệt.</span>
+              </div>
+              <div className="field field-note">
+                <label htmlFor="service-note">Yêu cầu đặc biệt</label>
+                <textarea id="service-note" placeholder="Mô tả cách sắp xếp, loại hoa hoặc lưu ý cần thiết" value={note} onChange={(e) => setNote(e.target.value)} />
+              </div>
+            </div>
+          </div>
+
+
+          <div className="form-section" data-reveal>
+            <div className="form-section-head">
+              <span className="form-step-label">Bước 3</span>
+              <div>
                 <h3>Chọn loại dịch vụ</h3>
                 <p>Chọn một dịch vụ để xem chi phí dự kiến.</p>
               </div>
@@ -835,27 +857,6 @@ function BookTab(props: {
                   <span className="service-price">{money.format(service.basePrice)} / {service.unit}</span>
                 </button>
               ))}
-            </div>
-          </div>
-
-          <div className="form-section" data-reveal>
-            <div className="form-section-head">
-              <span className="form-step-label">Bước 3</span>
-              <div>
-                <h3>Thời gian và yêu cầu riêng</h3>
-                <p>Ban quản lý sẽ xác nhận lại lịch trước khi thực hiện.</p>
-              </div>
-            </div>
-            <div className="form-fields-grid">
-              <div className="field">
-                <label htmlFor="service-requested-date">Ngày mong muốn thực hiện *</label>
-                <input id="service-requested-date" type="date" min={todayStr} value={requestedDate} onChange={(e) => setRequestedDate(e.target.value)} required />
-                <span className="field-hint">Lịch chính thức sẽ được cập nhật sau khi đơn được duyệt.</span>
-              </div>
-              <div className="field field-note">
-                <label htmlFor="service-note">Yêu cầu đặc biệt</label>
-                <textarea id="service-note" placeholder="Mô tả cách sắp xếp, loại hoa hoặc lưu ý cần thiết" value={note} onChange={(e) => setNote(e.target.value)} />
-              </div>
             </div>
           </div>
         </div>
