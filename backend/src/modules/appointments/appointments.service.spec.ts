@@ -36,11 +36,15 @@ const appointmentRow = {
   id: 21,
   reservationRequestId: 10,
   customerId: 7,
-  scheduledAt: new Date('2026-07-15T02:00:00.000Z'),
+  scheduledAt: new Date('2099-07-14T17:00:00.000Z'),
+  scheduledEndAt: new Date('2099-07-15T16:59:59.000Z'),
   location: 'Office',
   assignedStaffId: 3,
   assignedStaffName: 'Staff',
   status: 'scheduled',
+  customerStatus: 'pending',
+  customerRespondedAt: null,
+  customerSelectedAt: null,
   note: 'Bring docs',
   statusNote: null,
   completedAt: null,
@@ -72,7 +76,8 @@ describe('AppointmentsService', () => {
     await expect(
       service.create(1, {
         reservationRequestId: 10,
-        scheduledAt: '2026-07-15T09:00:00+07:00',
+        scheduledAt: '2099-07-15T00:00:00+07:00',
+        scheduledEndAt: '2099-07-15T23:59:59+07:00',
         location: 'Office',
         assignedStaffId: 3,
         note: 'Bring docs',
@@ -110,7 +115,8 @@ describe('AppointmentsService', () => {
     await expect(
       service.create(1, {
         reservationRequestId: 10,
-        scheduledAt: '2026-07-15T09:00:00+07:00',
+        scheduledAt: '2099-07-15T00:00:00+07:00',
+        scheduledEndAt: '2099-07-15T23:59:59+07:00',
         location: 'Office',
         assignedStaffName: 'Staff',
       }),
@@ -118,6 +124,20 @@ describe('AppointmentsService', () => {
       id: 21,
       notificationCreated: true,
     });
+  });
+
+  it('rejects appointment dates earlier than the current date', async () => {
+    const { service } = createService();
+
+    await expect(
+      service.create(1, {
+        reservationRequestId: 10,
+        scheduledAt: '2000-01-01T00:00:00+07:00',
+        scheduledEndAt: '2000-01-01T23:59:59+07:00',
+        location: 'Office',
+        assignedStaffName: 'Staff',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('rejects appointment creation for non-approved requests', async () => {
@@ -133,7 +153,8 @@ describe('AppointmentsService', () => {
     await expect(
       service.create(1, {
         reservationRequestId: 10,
-        scheduledAt: '2026-07-15T09:00:00+07:00',
+        scheduledAt: '2099-07-15T00:00:00+07:00',
+        scheduledEndAt: '2099-07-15T23:59:59+07:00',
         location: 'Office',
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
@@ -159,7 +180,8 @@ describe('AppointmentsService', () => {
     await expect(
       service.create(1, {
         reservationRequestId: 10,
-        scheduledAt: '2026-07-15T09:00:00+07:00',
+        scheduledAt: '2099-07-15T00:00:00+07:00',
+        scheduledEndAt: '2099-07-15T23:59:59+07:00',
         location: 'Office',
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
@@ -282,6 +304,47 @@ describe('AppointmentsService', () => {
         String(sql).includes("SET status = 'active'"),
       ),
     ).toBe(false);
+  });
+
+  it('records a customer confirmation for their pending appointment', async () => {
+    const { service } = createService((sql) => {
+      if (sql.includes('FOR UPDATE OF oa')) return result([appointmentRow]);
+      if (sql.includes('UPDATE offline_appointments')) {
+        return result([
+          {
+            ...appointmentRow,
+            customerStatus: 'confirmed',
+            customerSelectedAt: new Date('2099-07-15T02:00:00.000Z'),
+          },
+        ]);
+      }
+      return result();
+    });
+
+    await expect(
+      service.respond(7, 21, {
+        status: 'confirmed',
+        selectedAt: '2099-07-15T09:00:00+07:00',
+      }),
+    ).resolves.toMatchObject({
+      id: 21,
+      customerStatus: 'confirmed',
+      customerSelectedAt: expect.any(Date),
+    });
+  });
+
+  it('rejects a customer time outside the proposed range', async () => {
+    const { service } = createService((sql) => {
+      if (sql.includes('FOR UPDATE OF oa')) return result([appointmentRow]);
+      return result();
+    });
+
+    await expect(
+      service.respond(7, 21, {
+        status: 'confirmed',
+        selectedAt: '2099-07-16T09:00:00+07:00',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('throws not found for missing appointment', async () => {

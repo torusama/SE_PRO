@@ -17,6 +17,7 @@ import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { UpdateAppointmentStatusDto } from './dto/update-appointment-status.dto';
 import { UpdateAppointmentDto } from './dto/update-appointment.dto';
 import { AdminAppointmentQueryDto } from './dto/admin-appointment-query.dto';
+import { RespondAppointmentDto } from './dto/respond-appointment.dto';
 import {
   CurrentAdminContext,
   type AdminRequestContext,
@@ -55,6 +56,20 @@ export class AppointmentsController {
       success: true,
       message: 'Appointments retrieved',
       data: await this.appointmentsService.my(user.id, status),
+    };
+  }
+
+  @Patch('my/appointments/:id/response')
+  @Roles('customer')
+  async respond(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: RespondAppointmentDto,
+  ) {
+    return {
+      success: true,
+      message: 'Appointment response recorded',
+      data: await this.appointmentsService.respond(user.id, Number(id), dto),
     };
   }
 

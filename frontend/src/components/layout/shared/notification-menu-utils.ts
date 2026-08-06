@@ -1,3 +1,5 @@
+import { ROUTES } from "@/constants/routes";
+
 export type NotificationItem = {
   id: number;
   type: string;
@@ -14,6 +16,10 @@ const TYPE_LABELS: Record<string, string> = {
   request_approved: "Yêu cầu đã duyệt",
   request_rejected: "Yêu cầu bị từ chối",
   request_cancelled: "Yêu cầu đã hủy",
+  appointment_created: "Lịch hẹn cần xác nhận",
+  appointment_updated: "Lịch hẹn đã cập nhật",
+  appointment_response: "Phản hồi lịch hẹn",
+  appointment_status_updated: "Trạng thái lịch hẹn",
   contract_created: "Hợp đồng mới",
   contract_updated: "Cập nhật hợp đồng",
   service_submitted: "Dịch vụ mới",
@@ -40,6 +46,27 @@ export function notificationTypeLabel(type: string) {
       .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
       .join(" ") || "Thông báo"
   );
+}
+
+export function notificationTargetRoute(item: NotificationItem) {
+  if (item.type === "appointment_response") {
+    return `${ROUTES.ADMIN_REQUESTS}?appointment=${item.relatedEntityId ?? ""}`;
+  }
+
+  switch (item.relatedEntityType) {
+    case "offline_appointment":
+      return `${ROUTES.MY_LOTS}?appointment=${item.relatedEntityId ?? ""}#requests`;
+    case "reservation_request":
+      return `${ROUTES.MY_LOTS}#requests`;
+    case "contract":
+      return `${ROUTES.MY_LOTS}#contracts`;
+    case "service_order":
+      return `${ROUTES.SERVICES}?tab=track${item.relatedEntityId ? `&order=${item.relatedEntityId}` : ""}`;
+    case "reminder":
+      return ROUTES.REMINDERS;
+    default:
+      return null;
+  }
 }
 
 export function formatNotificationTime(value: string) {

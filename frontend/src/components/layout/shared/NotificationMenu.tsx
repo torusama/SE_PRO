@@ -5,6 +5,7 @@ import { ROUTES } from "@/constants/routes";
 import { api } from "@/lib/api";
 import {
   formatNotificationTime,
+  notificationTargetRoute,
   notificationTypeLabel,
   type NotificationItem,
 } from "./notification-menu-utils";
@@ -153,6 +154,11 @@ export default function NotificationMenu({
 
   function selectNotification(item: NotificationItem) {
     if (!item.isRead) void toggleRead(item);
+    const route = notificationTargetRoute(item);
+    if (item.relatedEntityType === "offline_appointment" && route) {
+      setOpen(false);
+      navigate(route);
+    }
   }
 
   function openAllNotifications() {

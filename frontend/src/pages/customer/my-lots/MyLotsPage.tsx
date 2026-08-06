@@ -4,6 +4,7 @@ import {
   useState,
   type CSSProperties,
 } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
 
 type ReservationType = "reserve" | "purchase";
@@ -39,9 +40,12 @@ interface Appointment {
   id: number;
   reservationRequestId: number;
   scheduledAt: string;
+  scheduledEndAt: string;
   location: string;
   assignedStaffName?: string | null;
   status: AppointmentStatus;
+  customerStatus: "pending" | "confirmed" | "declined";
+  customerSelectedAt?: string | null;
   note?: string | null;
   statusNote?: string | null;
 }
@@ -143,6 +147,46 @@ function formatDate(value?: string | null) {
   }).format(date);
 }
 
+function formatAppointmentDate(value?: string | null) {
+  if (!value) return "Chưa cập nhật";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Chưa cập nhật";
+  return new Intl.DateTimeFormat("vi-VN", { dateStyle: "short" }).format(date);
+}
+
+function toVietnamDateTimeInput(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const getPart = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+
+  return `${getPart("year")}-${getPart("month")}-${getPart("day")}T${getPart("hour")}:${getPart("minute")}`;
+}
+
+function appointmentTimeBounds(appointment: Appointment) {
+  const rangeStart = toVietnamDateTimeInput(appointment.scheduledAt);
+  const rangeEnd = toVietnamDateTimeInput(appointment.scheduledEndAt);
+  const nextMinute = new Date();
+  nextMinute.setSeconds(0, 0);
+  nextMinute.setMinutes(nextMinute.getMinutes() + 1);
+  const current = toVietnamDateTimeInput(nextMinute.toISOString());
+
+  return {
+    min: rangeStart > current ? rangeStart : current,
+    max: rangeEnd,
+  };
+}
+
 function getErrorMessage(error: unknown) {
   if (typeof error === "object" && error !== null && "response" in error) {
     const response = (error as { response?: { data?: { message?: string } } })
@@ -189,6 +233,8 @@ function StatusPill({ status }: { status: string }) {
 }
 
 export default function MyLotsPage() {
+  const [searchParams] = useSearchParams();
+  const targetAppointmentId = Number(searchParams.get("appointment")) || null;
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
@@ -196,15 +242,20 @@ export default function MyLotsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
+  const [respondingAppointmentId, setRespondingAppointmentId] = useState<number | null>(null);
+  const [selectedAppointmentTimes, setSelectedAppointmentTimes] = useState<
+    Record<number, string>
+  >({});
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const appointmentByRequest = useMemo(() => {
-    return new Map(
-      appointments.map((appointment) => [
-        appointment.reservationRequestId,
-        appointment,
-      ]),
-    );
+    const latest = new Map<number, Appointment>();
+    appointments.forEach((appointment) => {
+      if (!latest.has(appointment.reservationRequestId)) {
+        latest.set(appointment.reservationRequestId, appointment);
+      }
+    });
+    return latest;
   }, [appointments]);
 
   const overview = useMemo(() => {
@@ -245,7 +296,7 @@ export default function MyLotsPage() {
   }, [contracts, reservations, serviceOrders]);
 
   const nextAppointment = useMemo(() => {
-    const now = Date.now();
+    const now = lastUpdated?.getTime() ?? 0;
     return [...appointments]
       .filter(
         (appointment) =>
@@ -257,13 +308,13 @@ export default function MyLotsPage() {
           new Date(first.scheduledAt).getTime() -
           new Date(second.scheduledAt).getTime(),
       )[0];
-  }, [appointments]);
+  }, [appointments, lastUpdated]);
 
   const attentionItem = useMemo(() => {
     if (nextAppointment) {
       return {
         eyebrow: "Lịch hẹn sắp tới",
-        title: formatDate(nextAppointment.scheduledAt),
+        title: `${formatAppointmentDate(nextAppointment.scheduledAt)} – ${formatAppointmentDate(nextAppointment.scheduledEndAt)}`,
         description: nextAppointment.location,
         meta: `Phụ trách: ${nextAppointment.assignedStaffName || "Chưa phân công"}`,
       };
@@ -334,8 +385,20 @@ export default function MyLotsPage() {
   }
 
   useEffect(() => {
-    void loadData();
+    queueMicrotask(() => void loadData());
   }, []);
+
+  useEffect(() => {
+    if (loading || !targetAppointmentId) return;
+    const scrollId = window.setTimeout(() => {
+      const target = document.getElementById(
+        `appointment-${targetAppointmentId}`,
+      );
+      target?.scrollIntoView({ behavior: "smooth", block: "center" });
+      target?.focus({ preventScroll: true });
+    }, 80);
+    return () => window.clearTimeout(scrollId);
+  }, [appointments.length, loading, targetAppointmentId]);
 
   useEffect(() => {
     const nodes = document.querySelectorAll<HTMLElement>(
@@ -387,6 +450,47 @@ export default function MyLotsPage() {
       setError(getErrorMessage(err));
     } finally {
       setDownloadingId(null);
+    }
+  }
+
+  async function respondAppointment(
+    appointment: Appointment,
+    status: "confirmed" | "declined",
+  ) {
+    if (
+      status === "declined" &&
+      !window.confirm("Bạn muốn từ chối khoảng ngày lịch hẹn này?")
+    ) return;
+    let selectedAt: string | undefined;
+    if (status === "confirmed") {
+      const selectedValue = selectedAppointmentTimes[appointment.id];
+      const bounds = appointmentTimeBounds(appointment);
+      if (
+        !selectedValue ||
+        !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(selectedValue) ||
+        selectedValue < bounds.min ||
+        selectedValue > bounds.max
+      ) {
+        setError(
+          "Vui lòng chọn ngày và giờ gặp mặt hợp lệ trong khoảng admin đã gửi.",
+        );
+        return;
+      }
+      selectedAt = `${selectedValue}:00+07:00`;
+    }
+
+    setRespondingAppointmentId(appointment.id);
+    setError("");
+    try {
+      await api.patch(`/my/appointments/${appointment.id}/response`, {
+        status,
+        selectedAt,
+      });
+      await loadData();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setRespondingAppointmentId(null);
     }
   }
 
@@ -509,7 +613,9 @@ export default function MyLotsPage() {
                 return (
                   <article
                     key={request.id}
-                    className="lots-request-card"
+                    id={appointment ? `appointment-${appointment.id}` : undefined}
+                    className={`lots-request-card${appointment?.id === targetAppointmentId ? " is-target-appointment" : ""}`}
+                    tabIndex={appointment?.id === targetAppointmentId ? -1 : undefined}
                     data-lots-reveal
                     style={
                       {
@@ -555,14 +661,70 @@ export default function MyLotsPage() {
                         <div className="lots-step-marker" aria-hidden="true" />
                         <div className="lots-step-copy">
                           <span>Lịch hẹn ký hợp đồng</span>
-                          <strong>{formatDate(appointment.scheduledAt)}</strong>
+                          <strong>
+                            {formatAppointmentDate(appointment.scheduledAt)} – {formatAppointmentDate(appointment.scheduledEndAt)}
+                          </strong>
                           <p>{appointment.location}</p>
                         </div>
                         <div className="lots-step-meta">
-                          <span>Người phụ trách</span>
+                          <span>
+                            {appointment.customerStatus === "pending"
+                              ? "Cần bạn xác nhận"
+                              : appointment.customerStatus === "confirmed"
+                                ? "Bạn đã xác nhận"
+                                : "Bạn đã từ chối"}
+                          </span>
                           <strong>
                             {appointment.assignedStaffName || "Chưa phân công"}
                           </strong>
+                          {appointment.customerSelectedAt ? (
+                            <p className="lots-selected-time">
+                              Gặp lúc: {formatDate(appointment.customerSelectedAt)}
+                            </p>
+                          ) : null}
+                          {appointment.customerStatus === "pending" ? (
+                            <>
+                              <label className="lots-appointment-picker">
+                                <span>Chọn ngày và giờ gặp mặt</span>
+                                <input
+                                  type="datetime-local"
+                                  step="60"
+                                  min={appointmentTimeBounds(appointment).min}
+                                  max={appointmentTimeBounds(appointment).max}
+                                  value={selectedAppointmentTimes[appointment.id] ?? ""}
+                                  onChange={(event) =>
+                                    setSelectedAppointmentTimes((current) => ({
+                                      ...current,
+                                      [appointment.id]: event.target.value,
+                                    }))
+                                  }
+                                />
+                                <small>
+                                  Trong khoảng {formatAppointmentDate(appointment.scheduledAt)} – {formatAppointmentDate(appointment.scheduledEndAt)}
+                                </small>
+                              </label>
+                              <div className="lots-appointment-actions">
+                                <button
+                                  type="button"
+                                  onClick={() => void respondAppointment(appointment, "declined")}
+                                  disabled={respondingAppointmentId === appointment.id}
+                                >
+                                  Từ chối
+                                </button>
+                                <button
+                                  type="button"
+                                  className="confirm"
+                                  onClick={() => void respondAppointment(appointment, "confirmed")}
+                                  disabled={
+                                    respondingAppointmentId === appointment.id ||
+                                    !selectedAppointmentTimes[appointment.id]
+                                  }
+                                >
+                                  Xác nhận
+                                </button>
+                              </div>
+                            </>
+                          ) : null}
                         </div>
                       </div>
                     ) : request.status === "approved" ? (
@@ -572,7 +734,7 @@ export default function MyLotsPage() {
                           <span>Bước tiếp theo</span>
                           <strong>Đang chờ tạo lịch hẹn</strong>
                           <p>
-                            Nhân viên sẽ cập nhật thời gian ký hợp đồng cho yêu
+                            Nhân viên sẽ cập nhật ngày ký hợp đồng cho yêu
                             cầu này.
                           </p>
                         </div>
@@ -863,6 +1025,64 @@ function LoadingList({ columns = 1 }: { columns?: 1 | 2 }) {
 }
 
 const pageStyles = `
+  .lots-appointment-picker {
+    display: grid;
+    gap: 7px;
+    margin-top: 14px;
+  }
+
+  .lots-appointment-picker > span {
+    color: #dce9e5;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .lots-appointment-picker input {
+    width: 100%;
+    min-width: 225px;
+    border: 1px solid rgba(105, 199, 173, 0.35);
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.06);
+    color: #f0f7f5;
+    padding: 9px 10px;
+    font: inherit;
+    color-scheme: dark;
+  }
+
+  .lots-appointment-picker small {
+    color: #9aacb4;
+    line-height: 1.5;
+  }
+
+  .lots-selected-time {
+    margin: 9px 0 0;
+    color: #69c7ad;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .lots-appointment-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .lots-appointment-actions button {
+    border: 1px solid #c9d2d0;
+    border-radius: 7px;
+    background: #fff;
+    color: #4a4a4a;
+    padding: 7px 11px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .lots-appointment-actions button.confirm {
+    border-color: #008573;
+    background: #008573;
+    color: #fff;
+  }
+
   .lots-page {
     min-height: calc(100vh - 80px);
     padding: 44px 20px 88px;
@@ -1234,6 +1454,11 @@ const pageStyles = `
       transform 200ms ease,
       border-color 200ms ease,
       background-color 200ms ease;
+  }
+
+  .lots-request-card.is-target-appointment {
+    border-color: rgba(0, 229, 196, 0.72);
+    box-shadow: 0 0 0 2px rgba(0, 229, 196, 0.16), 0 16px 42px rgba(0, 229, 196, 0.12);
   }
 
   .lots-request-card:hover,

@@ -86,6 +86,8 @@
 .notification-page .notif-tag.tag-service { background: rgba(0, 229, 196, 0.06); color: var(--teal-soft); border: 1px solid var(--border-dim); }
 .notification-page .notif-tag.tag-urgent { background: rgba(224, 92, 92, 0.1); color: var(--red); border: 1px solid rgba(224, 92, 92, 0.2); }
 .notification-page .notif-tag.tag-done { background: rgba(0, 229, 196, 0.06); color: var(--teal-soft); border: 1px solid var(--border-dim); }
+.notification-page .notif-action { margin-top: 12px; padding: 8px 13px; border: 1px solid var(--teal-glow); border-radius: 7px; background: rgba(0, 229, 196, 0.1); color: var(--teal-soft); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.notification-page .notif-action:hover { background: rgba(0, 229, 196, 0.18); box-shadow: 0 0 18px rgba(0, 229, 196, 0.12); }
 
 .notification-page .notif-meta { text-align: right; flex-shrink: 0; min-width: 90px; }
 .notification-page .notif-time { font-size: 11px; color: var(--text-muted); letter-spacing: 0.04em; }

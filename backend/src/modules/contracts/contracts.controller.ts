@@ -15,7 +15,7 @@ import {
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { randomUUID } from 'crypto';
-import { unlink } from 'fs/promises';
+import { readFile, unlink } from 'fs/promises';
 import { basename, extname, join } from 'path';
 import type { Response } from 'express';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -31,35 +31,84 @@ import {
   type AdminRequestContext,
 } from '../../common/decorators/admin-request-context.decorator';
 
-const signedEvidenceTypes = new Map([
-  ['application/pdf', '.pdf'],
-  ['application/msword', '.doc'],
+const signedEvidenceTypes = new Map<string, string[]>([
+  ['.pdf', ['application/pdf']],
+  ['.doc', ['application/msword']],
   [
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     '.docx',
+    [
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ],
   ],
 ]);
+const genericDocumentMimeTypes = new Set(['application/octet-stream']);
+
+export function decodeMultipartFilename(filename: string) {
+  if ([...filename].some((character) => character.codePointAt(0)! > 255)) {
+    return filename;
+  }
+
+  const decoded = Buffer.from(filename, 'latin1').toString('utf8');
+  return decoded.includes('\uFFFD') || decoded.includes('\0')
+    ? filename
+    : decoded;
+}
 
 export function isSignedEvidenceDocument(
   mimetype: string,
   originalname: string,
 ) {
-  return signedEvidenceTypes.get(mimetype) === extname(originalname).toLowerCase();
+  const extension = extname(originalname).toLowerCase();
+  const expectedMimeTypes = signedEvidenceTypes.get(extension);
+  return Boolean(
+    expectedMimeTypes &&
+      (expectedMimeTypes.includes(mimetype) ||
+        genericDocumentMimeTypes.has(mimetype)),
+  );
+}
+
+export function hasSignedEvidenceSignature(
+  content: Buffer,
+  originalname: string,
+) {
+  const extension = extname(originalname).toLowerCase();
+  if (extension === '.pdf') {
+    return content.subarray(0, 1024).includes(Buffer.from('%PDF-'));
+  }
+  if (extension === '.doc') {
+    return content
+      .subarray(0, 8)
+      .equals(Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]));
+  }
+  if (extension === '.docx') {
+    return (
+      content.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04])) &&
+      content.includes(Buffer.from('word/')) &&
+      content.includes(Buffer.from('[Content_Types].xml'))
+    );
+  }
+  return false;
 }
 
 const signedEvidenceUpload = FilesInterceptor('evidence', 10, {
   storage: diskStorage({
     destination: './uploads/contract-evidence',
     filename: (_request, file, callback) =>
-      callback(null, `${randomUUID()}${signedEvidenceTypes.get(file.mimetype)}`),
+      callback(
+        null,
+        `${randomUUID()}${extname(file.originalname).toLowerCase()}`,
+      ),
   }),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_request, file, callback) => {
+    file.originalname = decodeMultipartFilename(file.originalname);
     const valid = isSignedEvidenceDocument(file.mimetype, file.originalname);
     callback(
       valid
         ? null
-        : new BadRequestException('Chỉ chấp nhận tệp PDF, DOC hoặc DOCX'),
+        : new BadRequestException(
+            'Chỉ chấp nhận tệp PDF, DOC hoặc DOCX',
+          ),
       valid,
     );
   },
@@ -152,6 +201,24 @@ export class ContractsController {
     };
   }
 
+  @Post('admin/contracts/:id/generated-pdf')
+  @Roles('admin')
+  async markPdfGenerated(
+    @CurrentUser() user: { id: number },
+    @Param('id') id: string,
+    @CurrentAdminContext() context: AdminRequestContext,
+  ) {
+    return {
+      success: true,
+      message: 'Đã ghi nhận bản PDF hợp đồng',
+      data: await this.contractsService.markPdfGenerated(
+        Number(id),
+        user.id,
+        context,
+      ),
+    };
+  }
+
   @Post('admin/contracts/:id/signed-evidence')
   @Roles('admin')
   @UseInterceptors(signedEvidenceUpload)
@@ -161,6 +228,18 @@ export class ContractsController {
     @UploadedFiles() files: Express.Multer.File[],
   ) {
     try {
+      for (const file of files ?? []) {
+        if (
+          !hasSignedEvidenceSignature(
+            await readFile(file.path),
+            file.originalname,
+          )
+        ) {
+          throw new BadRequestException(
+            `Tệp ${file.originalname} không có nội dung đúng định dạng PDF, DOC hoặc DOCX`,
+          );
+        }
+      }
       return {
         success: true,
         message: 'Đã lưu tài liệu hợp đồng ký offline',

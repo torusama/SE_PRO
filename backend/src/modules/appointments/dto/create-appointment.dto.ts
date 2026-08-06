@@ -17,6 +17,9 @@ export class CreateAppointmentDto {
   @IsDateString()
   scheduledAt: string;
 
+  @IsDateString()
+  scheduledEndAt: string;
+
   @IsString()
   @MaxLength(1000)
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))

@@ -262,16 +262,21 @@ Only `pending` requests are valid for new decisions. Existing `submitted` record
 | PATCH  | `/admin/contracts/:id/status`                      | Yes  | admin          |
 | POST   | `/admin/contracts/:id/payments`                    | Yes  | admin          |
 | PATCH  | `/admin/contracts/:id/inheritance`                 | Yes  | admin          |
+| POST   | `/admin/contracts/:id/generated-pdf`               | Yes  | admin          |
 | POST   | `/admin/contracts/:id/signed-evidence`             | Yes  | admin          |
 | GET    | `/admin/contracts/:id/signed-evidence/:filename`   | Yes  | admin          |
 | POST   | `/admin/contracts/:id/activate-ownership`          | Yes  | admin          |
 | GET    | `/my/contracts`                                    | Yes  | customer/admin |
 | GET    | `/my/contracts/:id`                                | Yes  | customer/admin |
 
-Payment body: `{ "amount": 1000000, "paymentMethod": "cash", "referenceCode": "ABC", "note": "Deposit" }`
+Payment body: `{ "amount": 1000000, "paymentMethod": "cash", "referenceCode": "ABC", "note": "Deposit" }`.
+`paymentMethod` accepts `cash`, `bank_transfer`, `card`, or `other`. Payment can only be
+recorded after the customer confirms the offline appointment and the PDF generation step is
+recorded through `POST /admin/contracts/:id/generated-pdf`.
 
-`signed-evidence` is multipart with up to 10 `evidence` image fields (JPG, PNG or WEBP,
-10 MB each). `activate-ownership` requires a draft contract with at least one evidence image;
+`signed-evidence` is multipart with up to 10 `evidence` document fields (PDF, DOC or DOCX;
+10 MB each) and requires a fully paid draft contract. `activate-ownership` requires a draft
+contract with a generated PDF marker, full payment and at least one signed evidence document;
 it activates the contract, creates current ownership records for every `contract_plots` row and
 marks all included plots as sold in one transaction.
 
@@ -288,6 +293,7 @@ payment transaction (`id, amount, paymentMethod, paymentDate, referenceCode, not
 | ------ | -------------------------------- | ---- | -------- |
 | POST   | `/admin/appointments`            | Yes  | admin    |
 | GET    | `/my/appointments`               | Yes  | customer |
+| PATCH  | `/my/appointments/:id/response`  | Yes  | customer |
 | GET    | `/admin/appointments`            | Yes  | admin    |
 | PATCH  | `/admin/appointments/:id`        | Yes  | admin    |
 | PATCH  | `/admin/appointments/:id/status` | Yes  | admin    |
@@ -302,6 +308,7 @@ Body:
 {
   "reservationRequestId": 10,
   "scheduledAt": "2026-07-15T09:00:00+07:00",
+  "scheduledEndAt": "2026-07-15T11:00:00+07:00",
   "location": "Van phong nghia trang",
   "assignedStaffId": 3,
   "assignedStaffName": "Nguyen Van B",
@@ -309,7 +316,22 @@ Body:
 }
 ```
 
-The reservation request must be an approved purchase request. Creation is transactional and creates an `appointment_created` notification for the customer.
+The reservation request must be an approved hold or purchase request. The start date cannot be
+earlier than the current date in `Asia/Ho_Chi_Minh`, and the end must be after the start.
+The admin UI accepts date-only values with a four-digit year. Creation is transactional, sets `customerStatus` to `pending` and creates
+an `appointment_created` notification for the customer.
+
+The customer responds with `PATCH /my/appointments/:id/response`. Confirming requires an exact
+future meeting time inside the admin's proposed range:
+
+```json
+{ "status": "confirmed", "selectedAt": "2026-07-15T09:30:00+07:00" }
+```
+
+A decline uses `{ "status": "declined", "note": "..." }`. A declined proposal is cancelled so
+the admin can send a new range. A confirmed proposal stores `customerSelectedAt`, unlocks the next
+purchase workflow step, and notifies every active admin with the exact date and time selected by
+the customer.
 
 ### Appointment lists
 
@@ -326,6 +348,7 @@ Body:
 ```json
 {
   "scheduledAt": "2026-07-16T10:00:00+07:00",
+  "scheduledEndAt": "2026-07-16T12:00:00+07:00",
   "location": "Phong hop 2",
   "assignedStaffId": 4,
   "assignedStaffName": "Tran Thi C",
@@ -333,7 +356,8 @@ Body:
 }
 ```
 
-Updates create an `appointment_updated` notification.
+Updates reset `customerStatus` to `pending` and create an `appointment_updated` notification,
+so the customer must confirm the revised range again.
 
 ### Update appointment status
 
@@ -349,7 +373,7 @@ Body:
 
 Common errors:
 
-- Invalid request: `Appointments can only be created for approved purchase requests`
+- Invalid request: `Appointments can only be created for approved reservation requests`
 - Duplicate active appointment: `A scheduled appointment already exists for this reservation`
 - Invalid status: `Invalid appointment status`
 - Missing reason: `A status note is required for cancelled or no-show appointments`
