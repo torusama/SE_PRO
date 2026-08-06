@@ -41,6 +41,26 @@ import "./MapManagementPage.css";
 
 type PlotStatus = "available" | "pending" | "reserved" | "sold" | "locked";
 type MapMode = "single" | "cluster";
+type Direction =
+  | "Đông"
+  | "Tây"
+  | "Nam"
+  | "Bắc"
+  | "Đông Bắc"
+  | "Đông Nam"
+  | "Tây Bắc"
+  | "Tây Nam";
+
+const DIRECTIONS: Direction[] = [
+  "Đông",
+  "Tây",
+  "Nam",
+  "Bắc",
+  "Đông Bắc",
+  "Đông Nam",
+  "Tây Bắc",
+  "Tây Nam",
+];
 
 const SINGLE_ZONES = CEMETERY_ZONES.filter((zone) => zone.mode === "single");
 const clusterZone = CEMETERY_ZONES.find((zone) => zone.mode === "cluster");
@@ -59,7 +79,6 @@ interface BackendPlot {
   direction?: string;
   plotType?: "single" | "double" | "family";
   description?: string;
-  isDeleted?: boolean;
 }
 
 interface Zone {
@@ -88,9 +107,13 @@ interface PlotForm {
   columnNumber: string;
   price: string;
   area: string;
-  direction: string;
-  plotType: "single" | "double" | "family";
+  direction: Direction;
   description: string;
+}
+
+interface PaginatedPlots {
+  items: BackendPlot[];
+  total: number;
 }
 
 const STATUS_META: Record<
@@ -137,7 +160,6 @@ const EMPTY_FORM: PlotForm = {
   price: "",
   area: "",
   direction: "Nam",
-  plotType: "single",
   description: "",
 };
 
@@ -230,7 +252,6 @@ export default function MapManagementPage() {
   );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [includeDeleted, setIncludeDeleted] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const mapCanvasRef = useRef<HTMLDivElement>(null);
@@ -238,13 +259,30 @@ export default function MapManagementPage() {
   const loadData = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const [plotResponse, zoneResponse] = await Promise.all([
-        api.get<{ data: { items: BackendPlot[] } }>("/admin/plots", {
-          params: { page: 1, pageSize: 100, includeDeleted },
+      const [firstPlotResponse, zoneResponse] = await Promise.all([
+        api.get<{ data: PaginatedPlots }>("/admin/plots", {
+          params: { page: 1, pageSize: 100 },
         }),
         api.get<{ data: Zone[] }>("/admin/plot-zones"),
       ]);
-      setPlots(plotResponse.data.data?.items || []);
+      const firstPage = firstPlotResponse.data.data;
+      const pageCount = Math.ceil((firstPage?.total || 0) / 100);
+      const remainingResponses =
+        pageCount > 1
+          ? await Promise.all(
+              Array.from({ length: pageCount - 1 }, (_, index) =>
+                api.get<{ data: PaginatedPlots }>("/admin/plots", {
+                  params: { page: index + 2, pageSize: 100 },
+                }),
+              ),
+            )
+          : [];
+      setPlots([
+        ...(firstPage?.items || []),
+        ...remainingResponses.flatMap(
+          (response) => response.data.data?.items || [],
+        ),
+      ]);
       setZones(zoneResponse.data.data || []);
       setError("");
     } catch (loadError) {
@@ -252,7 +290,7 @@ export default function MapManagementPage() {
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [includeDeleted]);
+  }, []);
 
   useEffect(() => {
     const initialLoad = window.setTimeout(() => void loadData(), 0);
@@ -266,6 +304,7 @@ export default function MapManagementPage() {
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
   const isDraggingRef = useRef(false);
   const dragStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
 
@@ -287,6 +326,7 @@ export default function MapManagementPage() {
     const target = event.target as HTMLElement;
     if (target.closest(".admin-map-plot")) return;
     isDraggingRef.current = true;
+    setIsDragging(true);
     dragStartRef.current = {
       x: event.clientX,
       y: event.clientY,
@@ -313,6 +353,7 @@ export default function MapManagementPage() {
   function handleCanvasPointerUp(event: ReactPointerEvent<HTMLDivElement>) {
     if (isDraggingRef.current) {
       isDraggingRef.current = false;
+      setIsDragging(false);
       try {
         (event.currentTarget as HTMLElement).releasePointerCapture(
           event.pointerId,
@@ -421,21 +462,17 @@ export default function MapManagementPage() {
     resetMapTransform();
   }
 
-  function openCreate(slot?: MapSlot) {
-    const target =
-      slot ||
-      modeSlots.find((item) => !item.plot) ||
-      slots.find((item) => !item.plot);
+  function openCreate(target: MapSlot) {
+    if (target.plot) return;
     const zone =
-      zones.find((item) => item.code === target?.zoneCode) || zones[0];
+      zones.find((item) => item.code === target.zoneCode) || zones[0];
     setForm({
       ...EMPTY_FORM,
-      plotCode: target?.code || "",
+      plotCode: target.code,
       zoneId: zone ? String(zone.id) : "",
-      rowNumber: target ? String(target.row).padStart(2, "0") : "01",
-      columnNumber: target ? String(target.col).padStart(3, "0") : "001",
-      area: target?.zoneCode === "C" ? "12" : "",
-      plotType: target?.zoneCode === "C" ? "family" : "single",
+      rowNumber: String(target.row).padStart(2, "0"),
+      columnNumber: String(target.col).padStart(3, "0"),
+      area: target.zoneCode === "C" ? "12" : "",
     });
     setEditing(null);
     setError("");
@@ -447,10 +484,11 @@ export default function MapManagementPage() {
       zoneId: String(plot.zoneId),
       rowNumber: String(plot.rowCode || ""),
       columnNumber: String(plot.plotNumber || ""),
-      price: String(plot.price || ""),
+      price: Number.isFinite(plot.price) ? String(plot.price / 1_000_000) : "",
       area: String(plot.area || ""),
-      direction: plot.direction || "",
-      plotType: plot.plotType || "single",
+      direction: DIRECTIONS.includes(plot.direction as Direction)
+        ? (plot.direction as Direction)
+        : "Nam",
       description: plot.description || "",
     });
     setEditing(plot);
@@ -464,7 +502,14 @@ export default function MapManagementPage() {
   async function savePlot(event: React.FormEvent) {
     event.preventDefault();
     const zone = zones.find((item) => item.id === Number(form.zoneId));
-    if (!zone || !form.plotCode.trim() || Number(form.price) < 0) {
+    const priceInMillions = Number(form.price);
+    if (
+      !zone ||
+      !form.plotCode.trim() ||
+      !form.price.trim() ||
+      !Number.isFinite(priceInMillions) ||
+      priceInMillions < 0
+    ) {
       setError("Vui lòng nhập đầy đủ mã lô, khu vực và giá hợp lệ.");
       return;
     }
@@ -473,16 +518,19 @@ export default function MapManagementPage() {
       form.plotCode.trim().toUpperCase(),
       zone.code,
     );
-    const payload = {
+    const editablePayload = {
+      price: Math.round(priceInMillions * 1_000_000),
+      area: form.area ? Number(form.area) : undefined,
+      direction: form.direction,
+      description: form.description,
+    };
+    const createPayload = {
+      ...editablePayload,
       plotCode: form.plotCode.trim().toUpperCase(),
       zoneId: Number(form.zoneId),
       rowNumber: form.rowNumber.padStart(2, "0"),
       columnNumber: form.columnNumber.padStart(3, "0"),
-      price: Number(form.price),
-      area: form.area ? Number(form.area) : undefined,
-      direction: form.direction || undefined,
-      plotType: form.plotType,
-      description: form.description,
+      plotType: zone.code === "C" ? "family" : "single",
       mapX: coordinate.x,
       mapY: coordinate.y,
       mapWidth: coordinate.width,
@@ -491,14 +539,14 @@ export default function MapManagementPage() {
     setSaving(true);
     try {
       if (editing) {
-        await api.patch(`/admin/plots/${editing.id}`, payload);
-        notify(`Đã cập nhật lô ${payload.plotCode}.`);
+        await api.patch(`/admin/plots/${editing.id}`, editablePayload);
+        notify(`Đã cập nhật lô ${form.plotCode}.`);
       } else {
-        await api.post("/admin/plots", payload);
-        notify(`Đã thêm lô ${payload.plotCode} vào bản đồ.`);
+        await api.post("/admin/plots", createPayload);
+        notify(`Đã thêm lô ${createPayload.plotCode} vào bản đồ.`);
       }
       setEditing(undefined);
-      setSelectedCode(payload.plotCode);
+      setSelectedCode(form.plotCode);
       await loadData(true);
     } catch (saveError) {
       setError(errorMessage(saveError));
@@ -541,41 +589,15 @@ export default function MapManagementPage() {
     }
   }
 
-  async function restorePlot(plot: BackendPlot) {
-    setSaving(true);
-    setError("");
-    try {
-      await api.post(`/admin/plots/${plot.id}/restore`);
-      setMessage("Đã khôi phục lô.");
-      await loadData(true);
-    } catch (restoreError) {
-      setError(errorMessage(restoreError));
-    } finally {
-      setSaving(false);
-    }
-  }
-
   return (
     <div className="admin-map-page">
       <header className="admin-map-page-header">
         <div>
           <h1>Bản đồ 2D quản trị</h1>
-          <p>Cùng cấu trúc và dữ liệu với bản đồ công khai /ban-do</p>
         </div>
         <div className="admin-map-header-actions">
-          <label>
-            <input
-              type="checkbox"
-              checked={includeDeleted}
-              onChange={(event) => setIncludeDeleted(event.target.checked)}
-            />
-            Hiện lô đã xóa
-          </label>
           <button onClick={() => void loadData()} disabled={loading}>
             ↻ Làm mới
-          </button>
-          <button className="admin-primary-button" onClick={() => openCreate()}>
-            + Thêm lô
           </button>
         </div>
       </header>
@@ -765,7 +787,7 @@ export default function MapManagementPage() {
                 style={{
                   transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom}) rotate(${rotation}deg)`,
                   transformOrigin: "center center",
-                  transition: isDraggingRef.current ? "none" : "transform 0.1s ease-out",
+                  transition: isDragging ? "none" : "transform 0.1s ease-out",
                 }}
               >
                 <svg
@@ -1267,18 +1289,8 @@ export default function MapManagementPage() {
                     </ul>
                   </div>
 
-                  {plot.isDeleted && (
-                    <button
-                      className="admin-primary-button admin-map-main-action"
-                      disabled={saving}
-                      onClick={() => void restorePlot(plot)}
-                    >
-                      Khôi phục lô
-                    </button>
-                  )}
                   <button
                     className="admin-primary-button admin-map-main-action"
-                    disabled={plot.isDeleted}
                     onClick={() => openEdit(plot)}
                   >
                     Sửa thông tin
@@ -1289,7 +1301,7 @@ export default function MapManagementPage() {
                         Cập nhật trạng thái
                         <select
                           value={plot.status}
-                          disabled={saving || plot.isDeleted}
+                          disabled={saving}
                           onChange={(event) =>
                             void changeStatus(
                               plot,
@@ -1314,7 +1326,7 @@ export default function MapManagementPage() {
                     )}
                     <button
                       className={plot.status === "locked" ? "unlock" : "lock"}
-                      disabled={saving || plot.isDeleted}
+                      disabled={saving}
                       onClick={() => void toggleLock(plot)}
                     >
                       {plot.status === "locked" ? "Mở khóa lô" : "Khóa lô"}
@@ -1351,58 +1363,46 @@ export default function MapManagementPage() {
             <div className="plot-form-grid">
               <label>
                 Mã lô
-                <input
-                  required
-                  value={form.plotCode}
-                  onChange={(event) =>
-                    updateForm("plotCode", event.target.value.toUpperCase())
-                  }
-                  placeholder="A-01-001"
-                />
+                <input required readOnly value={form.plotCode} />
               </label>
               <label>
                 Khu vực
-                <select
+                <input
                   required
-                  value={form.zoneId}
-                  onChange={(event) => updateForm("zoneId", event.target.value)}
-                >
-                  {zones.map((zone) => (
-                    <option key={zone.id} value={zone.id}>
-                      {CEMETERY_ZONE_LAYOUT[zone.code]?.name || zone.name}
-                    </option>
-                  ))}
-                </select>
+                  readOnly
+                  value={(() => {
+                    const zone = zones.find(
+                      (item) => item.id === Number(form.zoneId),
+                    );
+                    return zone
+                      ? CEMETERY_ZONE_LAYOUT[zone.code]?.name || zone.name
+                      : "";
+                  })()}
+                />
               </label>
               <label>
                 Hàng
-                <input
-                  required
-                  value={form.rowNumber}
-                  onChange={(event) =>
-                    updateForm("rowNumber", event.target.value)
-                  }
-                />
+                <input required readOnly value={form.rowNumber} />
               </label>
               <label>
                 Số ô
-                <input
-                  required
-                  value={form.columnNumber}
-                  onChange={(event) =>
-                    updateForm("columnNumber", event.target.value)
-                  }
-                />
+                <input required readOnly value={form.columnNumber} />
               </label>
               <label>
-                Giá niêm yết (đ)
-                <input
-                  required
-                  min="0"
-                  type="number"
-                  value={form.price}
-                  onChange={(event) => updateForm("price", event.target.value)}
-                />
+                Giá niêm yết
+                <span className="plot-price-input">
+                  <input
+                    required
+                    min="0"
+                    step="0.1"
+                    type="number"
+                    value={form.price}
+                    onChange={(event) =>
+                      updateForm("price", event.target.value)
+                    }
+                  />
+                  <span>triệu</span>
+                </span>
               </label>
               <label>
                 Diện tích (m²)
@@ -1416,27 +1416,18 @@ export default function MapManagementPage() {
               </label>
               <label>
                 Hướng
-                <input
+                <select
+                  required
                   value={form.direction}
                   onChange={(event) =>
-                    updateForm("direction", event.target.value)
-                  }
-                />
-              </label>
-              <label>
-                Loại lô
-                <select
-                  value={form.plotType}
-                  onChange={(event) =>
-                    updateForm(
-                      "plotType",
-                      event.target.value as PlotForm["plotType"],
-                    )
+                    updateForm("direction", event.target.value as Direction)
                   }
                 >
-                  <option value="single">Lô đơn</option>
-                  <option value="double">Lô đôi</option>
-                  <option value="family">Lô gia tộc</option>
+                  {DIRECTIONS.map((direction) => (
+                    <option key={direction} value={direction}>
+                      {direction}
+                    </option>
+                  ))}
                 </select>
               </label>
               <label className="full-width">

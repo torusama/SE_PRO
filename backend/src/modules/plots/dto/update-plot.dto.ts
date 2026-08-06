@@ -1,4 +1,5 @@
 import { IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
+import { PLOT_DIRECTIONS } from './create-plot.dto';
 
 export class UpdatePlotDto {
   @IsOptional()
@@ -26,7 +27,7 @@ export class UpdatePlotDto {
   area?: number;
 
   @IsOptional()
-  @IsString()
+  @IsIn(PLOT_DIRECTIONS)
   direction?: string;
 
   @IsOptional()

@@ -927,6 +927,29 @@
 .plot-modal textarea {
   resize: vertical;
 }
+.plot-modal input[readonly] {
+  cursor: not-allowed;
+  background: #f3f4f6;
+  color: #667085;
+}
+.plot-price-input {
+  position: relative;
+  display: block;
+}
+.plot-price-input input {
+  width: 100%;
+  box-sizing: border-box;
+  padding-right: 52px;
+}
+.plot-price-input > span {
+  position: absolute;
+  top: 50%;
+  right: 11px;
+  color: #98a2b3;
+  font-size: 11px;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
 .plot-modal footer {
   justify-content: flex-end;
   gap: 9px;

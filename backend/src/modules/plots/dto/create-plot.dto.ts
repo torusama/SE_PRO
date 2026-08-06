@@ -1,5 +1,16 @@
 import { IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
 
+export const PLOT_DIRECTIONS = [
+  'Đông',
+  'Tây',
+  'Nam',
+  'Bắc',
+  'Đông Bắc',
+  'Đông Nam',
+  'Tây Bắc',
+  'Tây Nam',
+];
+
 export class CreatePlotDto {
   @IsString()
   plotCode: string;
@@ -23,7 +34,7 @@ export class CreatePlotDto {
   area?: number;
 
   @IsOptional()
-  @IsString()
+  @IsIn(PLOT_DIRECTIONS)
   direction?: string;
 
   @IsOptional()
