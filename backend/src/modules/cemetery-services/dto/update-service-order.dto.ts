@@ -19,6 +19,15 @@ export const SERVICE_ORDER_STATUSES = [
 
 export type ServiceOrderStatus = (typeof SERVICE_ORDER_STATUSES)[number];
 
+export const SERVICE_ORDER_PAYMENT_STATUSES = [
+  'unpaid',
+  'awaiting_confirmation',
+  'paid',
+] as const;
+
+export type ServiceOrderPaymentStatus =
+  (typeof SERVICE_ORDER_PAYMENT_STATUSES)[number];
+
 export class UpdateServiceOrderDto {
   @IsOptional()
   @IsIn(SERVICE_ORDER_STATUSES)

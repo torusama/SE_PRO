@@ -55,6 +55,10 @@ interface ServiceOrder {
   completionNote?: string | null
   completionImages?: string[] | null
   completedAt?: string | null
+  paymentStatus?: 'unpaid' | 'awaiting_confirmation' | 'paid'
+  paymentCode?: string | null
+  paidAt?: string | null
+  paymentConfirmedAt?: string | null
   history?: OrderHistory[]
 }
 
@@ -275,7 +279,7 @@ export default function ServiceManagementPage() {
                     <td>
                       <span>{order.assignedToName || 'Chưa phân công'}</span>
                     </td>
-                    <td><StatusBadge status={order.status} /></td>
+                    <td><StatusBadge status={order.status} paymentStatus={order.paymentStatus} /></td>
                     <td>
                       <button
                         className="service-row-action"
@@ -321,8 +325,14 @@ function Stat({ label, value, tone }: { label: string; value: number; tone: stri
   )
 }
 
-function StatusBadge({ status }: { status: OrderStatus }) {
+function StatusBadge({ status, paymentStatus }: { status: OrderStatus; paymentStatus?: 'unpaid' | 'awaiting_confirmation' | 'paid' }) {
   const meta = STATUS_META[status]
+  if (status === 'confirmed' && paymentStatus === 'awaiting_confirmation') {
+    return <span className="service-status service-status--amber">Đã thanh toán - chờ duyệt</span>
+  }
+  if (status === 'in_progress' && paymentStatus === 'paid') {
+    return <span className="service-status service-status--blue">Đã thanh toán - đang thực hiện</span>
+  }
   return <span className={`service-status service-status--${meta.tone}`}>{meta.label}</span>
 }
 
@@ -414,7 +424,7 @@ function OrderDetail({
         <div>
           <span>{orderCode(order.id)}</span>
           <h2>{order.serviceName}</h2>
-          <StatusBadge status={order.status} />
+          <StatusBadge status={order.status} paymentStatus={order.paymentStatus} />
         </div>
         <button onClick={onClose} aria-label="Đóng chi tiết">Đóng</button>
       </div>
@@ -446,18 +456,13 @@ function OrderDetail({
           <DemoPaymentPanel
             orderId={order.id}
             amount={order.amount}
+            paymentStatus={order.paymentStatus ?? 'unpaid'}
+            paymentCode={order.paymentCode}
+            paidAt={order.paidAt}
+            paymentConfirmedAt={order.paymentConfirmedAt}
             variant="admin"
-            onConfirmed={async () => {
-              setSaving(true)
-              setError('')
-              try {
-                await api.patch(`/admin/service-orders/${order.id}`, { status: 'in_progress' })
-                onSaved('Đã xác nhận thanh toán và chuyển đơn sang trạng thái Thực hiện.')
-              } catch (requestError) {
-                setError(getErrorMessage(requestError))
-              } finally {
-                setSaving(false)
-              }
+            onChanged={() => {
+              onSaved('Đã xác nhận thanh toán và chuyển đơn sang trạng thái Thực hiện.')
             }}
           />
         )}

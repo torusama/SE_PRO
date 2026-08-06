@@ -153,6 +153,66 @@ export class EmailService {
     });
   }
 
+  /** Gửi email cho khách hàng khi admin xác nhận HOÀN THÀNH dịch vụ, kèm
+   * ảnh bằng chứng (đính kèm trực tiếp trong email) và nội dung hoàn thành.
+   * Không throw khi SMTP chưa cấu hình — chỉ log cảnh báo, để không làm
+   * gián đoạn thao tác hoàn thành đơn của admin. */
+  async sendServiceOrderCompletionEmail(
+    to: string,
+    params: {
+      orderId: number;
+      serviceName: string;
+      completionNote?: string | null;
+      completedAt?: string | null;
+      attachments: { filename: string; path: string }[];
+    },
+  ) {
+    if (!this.transporter) {
+      this.logger.warn(
+        `Bỏ qua gửi email hoàn thành dịch vụ tới ${to} vì SMTP chưa được cấu hình.`,
+      );
+      return;
+    }
+    const smtp = this.config.get<{ from?: string }>('smtp');
+    const orderCode = `#DV-${String(params.orderId).padStart(4, '0')}`;
+    const dateText = params.completedAt
+      ? new Intl.DateTimeFormat('vi-VN', { dateStyle: 'medium', timeStyle: 'short' }).format(
+          new Date(params.completedAt),
+        )
+      : new Intl.DateTimeFormat('vi-VN', { dateStyle: 'medium', timeStyle: 'short' }).format(
+          new Date(),
+        );
+    const noteText = params.completionNote?.trim() || 'Dịch vụ đã được thực hiện đầy đủ theo yêu cầu.';
+
+    await this.transporter.sendMail({
+      from: smtp?.from ? `"Vĩnh Phúc Viên" <${smtp.from}>` : undefined,
+      to,
+      subject: `[Vĩnh Phúc Viên] Đã hoàn thành dịch vụ: ${params.serviceName}`,
+      text: `Dịch vụ "${params.serviceName}" (mã đơn ${orderCode}) của bạn đã được hoàn thành lúc ${dateText}.\n\nNội dung thực hiện: ${noteText}\n\n${
+        params.attachments.length
+          ? `Chúng tôi đính kèm ${params.attachments.length} ảnh bằng chứng hoàn thành trong email này.`
+          : ''
+      }\n\nCảm ơn bạn đã sử dụng dịch vụ tại Vĩnh Phúc Viên.`,
+      html: `
+        <div style="font-family: sans-serif; max-width: 520px; margin: 0 auto;">
+          <h2 style="color:#0f766e;">✅ Đã hoàn thành dịch vụ</h2>
+          <p>Dịch vụ <b>${params.serviceName}</b> (mã đơn ${orderCode}) của bạn đã được hoàn thành lúc <b>${dateText}</b>.</p>
+          <div style="background:#f0fdfa; border-left:4px solid #0f766e; padding:12px 16px; margin:16px 0; border-radius:4px;">
+            <strong>Nội dung thực hiện:</strong>
+            <p style="margin:8px 0 0;">${noteText}</p>
+          </div>
+          ${
+            params.attachments.length
+              ? `<p>Ảnh bằng chứng hoàn thành được đính kèm trong email này (${params.attachments.length} ảnh).</p>`
+              : ''
+          }
+          <p style="color:#888; font-size:12px; margin-top:24px;">Bạn nhận được email này vì đã đặt dịch vụ trên hệ thống Vĩnh Phúc Viên. Cảm ơn bạn đã tin tưởng sử dụng dịch vụ.</p>
+        </div>
+      `,
+      attachments: params.attachments,
+    });
+  }
+
   /** Gửi email chứa liên kết đặt lại mật khẩu (luồng "Quên mật khẩu"). */
   async sendPasswordResetEmail(to: string, resetLink: string) {
     if (!this.transporter) {

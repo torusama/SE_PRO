@@ -5,7 +5,8 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { basename } from 'path';
+import { basename, join } from 'path';
+import { randomUUID } from 'crypto';
 import { DatabaseService } from '../../database/database.service';
 import { EmailService } from '../email/email.service';
 import { AdminServiceOrderQueryDto } from './dto/admin-service-order-query.dto';
@@ -14,6 +15,7 @@ import { CreateServiceOrderDto } from './dto/create-service-order.dto';
 import {
   CompleteServiceOrderDto,
   SERVICE_ORDER_STATUSES,
+  ServiceOrderPaymentStatus,
   ServiceOrderStatus,
   UpdateServiceOrderDto,
 } from './dto/update-service-order.dto';
@@ -43,6 +45,16 @@ interface ServiceOrderRow {
   assigned_to: number | null;
   admin_note: string | null;
   scheduled_date: string | null;
+  service_name: string;
+}
+
+interface ServiceOrderPaymentRow {
+  order_id: number;
+  user_id: number;
+  status: ServiceOrderStatus;
+  payment_status: ServiceOrderPaymentStatus;
+  payment_code: string | null;
+  amount: string;
   service_name: string;
 }
 
@@ -284,7 +296,7 @@ export class CemeteryServicesService {
          FROM service_order_history h
          WHERE h.order_id = $1
            AND (
-             h.action IN ('submitted', 'completed')
+             h.action IN ('submitted', 'completed', 'payment_reported', 'payment_confirmed')
              OR h.new_status IS DISTINCT FROM h.previous_status
            )
          ORDER BY h.created_at ASC, h.history_id ASC`,
@@ -481,6 +493,173 @@ export class CemeteryServicesService {
       );
     });
 
+    // Gửi email cho khách hàng kèm ảnh + nội dung hoàn thành, sau khi
+    // transaction đã commit. Không throw khi lỗi gửi mail (SMTP chưa cấu
+    // hình, v.v.) để không làm hỏng thao tác hoàn thành đơn của admin.
+    void this.sendCompletionEmail(id, files);
+
+    return this.one(id);
+  }
+
+  private async sendCompletionEmail(orderId: number, files: Express.Multer.File[]) {
+    try {
+      const order = await this.database.queryOne<{
+        email: string | null;
+        service_name: string;
+        completion_note: string | null;
+        completed_at: string;
+      }>(
+        `SELECT u.email, st.name AS service_name, so.completion_note, so.completed_at
+         FROM service_orders so
+         JOIN users u ON u.user_id = so.user_id
+         JOIN service_types st ON st.service_type_id = so.service_type_id
+         WHERE so.order_id = $1`,
+        [orderId],
+      );
+      if (!order?.email) return;
+
+      const attachments = files.map((file) => ({
+        filename: file.filename,
+        path: join(process.cwd(), 'uploads', 'service-completions', file.filename),
+      }));
+
+      await this.emailService.sendServiceOrderCompletionEmail(order.email, {
+        orderId,
+        serviceName: order.service_name,
+        completionNote: order.completion_note,
+        completedAt: order.completed_at,
+        attachments,
+      });
+    } catch (err) {
+      this.logger.error(
+        `Gửi email hoàn thành dịch vụ thất bại (order #${orderId}): ${(err as Error).message}`,
+      );
+    }
+  }
+
+  /** Khách hàng bấm "Tôi đã thanh toán" trên đơn đang ở trạng thái 'confirmed'.
+   * Chỉ ghi nhận đơn đang chờ admin duyệt xác nhận đã nhận tiền — KHÔNG tự
+   * đổi status của đơn (status vẫn 'confirmed' cho tới khi admin xác nhận). */
+  async markPaid(id: number, userId: number) {
+    const result = await this.database.transaction(async (client) => {
+      const currentResult = await client.query<ServiceOrderPaymentRow>(
+        `SELECT so.order_id, so.user_id, so.status, so.payment_status,
+                so.payment_code, so.amount::text AS amount,
+                st.name AS service_name
+         FROM service_orders so
+         JOIN service_types st ON st.service_type_id = so.service_type_id
+         WHERE so.order_id = $1 AND so.is_deleted = FALSE
+         FOR UPDATE OF so`,
+        [id],
+      );
+      const current = currentResult.rows[0];
+      if (!current) throw new NotFoundException('Không tìm thấy đơn dịch vụ');
+      if (current.user_id !== userId) {
+        throw new ForbiddenException('Bạn không có quyền thao tác đơn này');
+      }
+      if (current.status !== 'confirmed') {
+        throw new BadRequestException(
+          'Chỉ có thể thanh toán khi đơn đã được xác nhận',
+        );
+      }
+      if (current.payment_status === 'paid') {
+        throw new BadRequestException('Đơn này đã được xác nhận thanh toán');
+      }
+      // Đã báo thanh toán trước đó rồi (đang chờ admin duyệt) -> idempotent,
+      // không tạo thêm lịch sử/thông báo trùng lặp.
+      if (current.payment_status === 'awaiting_confirmation') {
+        return current;
+      }
+
+      const paymentCode =
+        current.payment_code ??
+        `VPV${String(id).padStart(5, '0')}${randomUUID().slice(0, 4).toUpperCase()}`;
+
+      await client.query(
+        `UPDATE service_orders
+         SET payment_status = 'awaiting_confirmation', payment_code = $2,
+             paid_at = NOW(), updated_at = NOW()
+         WHERE order_id = $1`,
+        [id, paymentCode],
+      );
+
+      await client.query(
+        `INSERT INTO service_order_history
+           (order_id, changed_by, action, previous_status, new_status, note)
+         VALUES ($1, $2, 'payment_reported', $3, $3, 'Khách hàng báo đã thanh toán')`,
+        [id, userId, current.status],
+      );
+
+      await client.query(
+        `INSERT INTO notifications
+           (user_id, type, title, message, related_entity_type, related_entity_id)
+         SELECT user_id, 'service_payment_reported', 'Khách báo đã thanh toán',
+                CONCAT('Khách hàng báo đã thanh toán đơn dịch vụ "', $2::text,
+                       '", đang chờ xác nhận.'),
+                'service_order', $1
+         FROM users
+         WHERE LOWER(role) = 'admin' AND is_active = TRUE AND is_deleted = FALSE`,
+        [id, current.service_name],
+      );
+
+      return { ...current, payment_status: 'awaiting_confirmation' as const };
+    });
+
+    return this.one(id, userId);
+  }
+
+  /** Admin bấm "Xác nhận đã nhận thanh toán". Đơn sẽ tự động chuyển từ
+   * 'confirmed' sang 'in_progress' luôn (nếu đơn vẫn đang ở 'confirmed'),
+   * để hiển thị "Đã thanh toán - đang thực hiện" như yêu cầu. */
+  async confirmPayment(id: number, adminId: number) {
+    await this.database.transaction(async (client) => {
+      const currentResult = await client.query<ServiceOrderPaymentRow>(
+        `SELECT so.order_id, so.user_id, so.status, so.payment_status,
+                so.payment_code, so.amount::text AS amount,
+                st.name AS service_name
+         FROM service_orders so
+         JOIN service_types st ON st.service_type_id = so.service_type_id
+         WHERE so.order_id = $1 AND so.is_deleted = FALSE
+         FOR UPDATE OF so`,
+        [id],
+      );
+      const current = currentResult.rows[0];
+      if (!current) throw new NotFoundException('Không tìm thấy đơn dịch vụ');
+      if (current.payment_status !== 'awaiting_confirmation') {
+        throw new BadRequestException(
+          'Chỉ có thể xác nhận khi khách hàng đã báo thanh toán',
+        );
+      }
+
+      const nextStatus: ServiceOrderStatus =
+        current.status === 'confirmed' ? 'in_progress' : current.status;
+
+      await client.query(
+        `UPDATE service_orders
+         SET payment_status = 'paid', payment_confirmed_at = NOW(),
+             payment_confirmed_by = $2, status = $3, updated_at = NOW()
+         WHERE order_id = $1`,
+        [id, adminId, nextStatus],
+      );
+
+      await client.query(
+        `INSERT INTO service_order_history
+           (order_id, changed_by, action, previous_status, new_status, note)
+         VALUES ($1, $2, 'payment_confirmed', $3, $4, 'Admin xác nhận đã nhận thanh toán')`,
+        [id, adminId, current.status, nextStatus],
+      );
+
+      await client.query(
+        `INSERT INTO notifications
+           (user_id, type, title, message, related_entity_type, related_entity_id)
+         VALUES ($1, 'service_payment_confirmed', 'Đã xác nhận thanh toán',
+                 CONCAT('Đơn dịch vụ "', $3::text,
+                        '" đã được xác nhận thanh toán và đang được thực hiện.'),
+                 'service_order', $2)`,
+        [current.user_id, id, current.service_name],
+      );
+    });
+
     return this.one(id);
   }
 
@@ -603,6 +782,10 @@ export class CemeteryServicesService {
                    so.note, so.completion_note AS "completionNote",
                    so.completion_image_urls AS "completionImages",
                    so.completed_at AS "completedAt",
+                   so.payment_status AS "paymentStatus",
+                   so.payment_code AS "paymentCode",
+                   so.paid_at AS "paidAt",
+                   so.payment_confirmed_at AS "paymentConfirmedAt",
                    st.name AS "serviceName", st.category,
                    p.plot_code AS "plotCode",
                    u.full_name AS "customerName",

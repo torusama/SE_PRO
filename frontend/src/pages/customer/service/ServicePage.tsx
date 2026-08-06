@@ -47,6 +47,10 @@ interface ServiceOrder {
   completionNote?: string | null
   completionImages?: string[] | null
   completedAt?: string | null
+  paymentStatus?: 'unpaid' | 'awaiting_confirmation' | 'paid'
+  paymentCode?: string | null
+  paidAt?: string | null
+  paymentConfirmedAt?: string | null
   history?: ServiceOrderHistory[]
 }
 
@@ -96,6 +100,18 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
   in_progress: 'Đang thực hiện',
   completed: 'Đã hoàn thành',
   cancelled: 'Đã huỷ',
+}
+type PaymentStatus = 'unpaid' | 'awaiting_confirmation' | 'paid'
+/** Ghép nhãn trạng thái đơn với trạng thái thanh toán để hiển thị đúng như
+ * yêu cầu: "Đã thanh toán - đang chờ duyệt" và "Đã thanh toán - đang thực hiện". */
+function displayStatusLabel(status: OrderStatus, paymentStatus?: PaymentStatus) {
+  if (status === 'confirmed' && paymentStatus === 'awaiting_confirmation') {
+    return 'Đã thanh toán - đang chờ duyệt'
+  }
+  if (status === 'in_progress' && paymentStatus === 'paid') {
+    return 'Đã thanh toán - đang thực hiện'
+  }
+  return STATUS_LABEL[status]
 }
 function statusGroup(status: OrderStatus): 'done' | 'progress' | 'pending' | 'cancelled' {
   if (status === 'completed') return 'done'
@@ -165,6 +181,21 @@ export default function ServicePage() {
     try {
       const response = await api.get<ApiResponse<ServiceOrder>>(`/my/service-orders/${orderId}`)
       setOrderDetails((current) => ({ ...current, [orderId]: response.data.data }))
+      // Đồng bộ lại trạng thái (status/paymentStatus) trong danh sách đơn ở
+      // tab "Theo dõi" để badge hiển thị đúng ngay không cần tải lại trang.
+      setOrders((current) =>
+        current.map((order) =>
+          order.id === orderId
+            ? {
+                ...order,
+                status: response.data.data.status,
+                paymentStatus: response.data.data.paymentStatus,
+                paidAt: response.data.data.paidAt,
+                paymentConfirmedAt: response.data.data.paymentConfirmedAt,
+              }
+            : order,
+        ),
+      )
     } catch (requestError) {
       setDetailError(getErrorMessage(requestError))
     } finally {
@@ -176,7 +207,11 @@ export default function ServicePage() {
     const opening = expandedId !== orderId
     setExpandedId(opening ? orderId : null)
     setDetailError('')
-    if (opening && !orderDetails[orderId]) void loadOrderDetail(orderId)
+    // Luôn tải lại chi tiết mới nhất mỗi khi mở đơn, tránh hiển thị dữ liệu
+    // cũ đã cache từ trước khi trạng thái/thanh toán của đơn thay đổi
+    // (ví dụ: admin vừa xác nhận đơn nhưng chi tiết đã mở trước đó vẫn
+    // đang lưu trạng thái "Đã gửi yêu cầu").
+    if (opening) void loadOrderDetail(orderId)
   }
 
   async function loadAll() {
@@ -461,6 +496,7 @@ export default function ServicePage() {
             page={page}
             pageCount={pageCount}
             setPage={setPage}
+            onLoadOrderDetail={(id) => void loadOrderDetail(id)}
           />
         )}
       </main>
@@ -770,6 +806,7 @@ function TrackTab(props: {
   page: number
   pageCount: number
   setPage: (p: number) => void
+  onLoadOrderDetail: (id: number) => void
 }) {
   const {
     loading,
@@ -789,6 +826,7 @@ function TrackTab(props: {
     page,
     pageCount,
     setPage,
+    onLoadOrderDetail,
   } = props
 
   return (
@@ -849,7 +887,7 @@ function TrackTab(props: {
                     )}
                   </div>
                   <div className="s-right">
-                    <span className={`status-badge ${group}`}>{STATUS_LABEL[order.status]}</span>
+                    <span className={`status-badge ${group}`}>{displayStatusLabel(order.status, order.paymentStatus)}</span>
                     <span className="s-price">{money.format(order.amount)}</span>
                     <button className="s-action" onClick={(e) => { e.stopPropagation(); toggleOrder(order.id) }}>
                       {isExpanded ? 'Thu gọn' : 'Chi tiết'}
@@ -868,7 +906,7 @@ function TrackTab(props: {
                             <div className="detail-row"><span className="k">Ngày mong muốn</span><span className="v">{formatDate(detail.requestedDate)}</span></div>
                             <div className="detail-row"><span className="k">Lịch thực hiện</span><span className="v">{formatDate(detail.scheduledDate)}</span></div>
                             <div className="detail-row"><span className="k">Người phụ trách</span><span className="v">{detail.assignedToName || 'Đang phân công'}</span></div>
-                            <div className="detail-row"><span className="k">Trạng thái hiện tại</span><span className="v status-value">{STATUS_LABEL[detail.status]}</span></div>
+                            <div className="detail-row"><span className="k">Trạng thái hiện tại</span><span className="v status-value">{displayStatusLabel(detail.status, detail.paymentStatus)}</span></div>
                             <div className="customer-note">
                               <strong>Ghi chú khi đặt dịch vụ</strong>
                               <p>{detail.note || 'Không có ghi chú thêm.'}</p>
@@ -876,7 +914,16 @@ function TrackTab(props: {
                           </div>
 
                           {detail.status === 'confirmed' && (
-                            <DemoPaymentPanel orderId={detail.id} amount={detail.amount} variant="customer" />
+                            <DemoPaymentPanel
+                              orderId={detail.id}
+                              amount={detail.amount}
+                              paymentStatus={detail.paymentStatus ?? 'unpaid'}
+                              paymentCode={detail.paymentCode}
+                              paidAt={detail.paidAt}
+                              paymentConfirmedAt={detail.paymentConfirmedAt}
+                              variant="customer"
+                              onChanged={() => onLoadOrderDetail(detail.id)}
+                            />
                           )}
 
                           <div className="detail-block">

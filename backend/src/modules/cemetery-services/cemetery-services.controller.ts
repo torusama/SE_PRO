@@ -177,6 +177,30 @@ export class CemeteryServicesController {
     }
   }
 
+  @Post('service-orders/:id/pay')
+  @UseGuards(JwtAuthGuard)
+  async pay(@CurrentUser() user: { id: number }, @Param('id') id: string) {
+    return {
+      success: true,
+      message: 'Đã ghi nhận thanh toán, đang chờ xác nhận từ ban quản lý',
+      data: await this.service.markPaid(Number(id), user.id),
+    };
+  }
+
+  @Post('admin/service-orders/:id/confirm-payment')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  async confirmPayment(
+    @CurrentUser() user: { id: number },
+    @Param('id') id: string,
+  ) {
+    return {
+      success: true,
+      message: 'Đã xác nhận thanh toán, đơn chuyển sang trạng thái thực hiện',
+      data: await this.service.confirmPayment(Number(id), user.id),
+    };
+  }
+
   @Get('service-orders/:id/evidence/:filename')
   @UseGuards(JwtAuthGuard)
   async evidence(
