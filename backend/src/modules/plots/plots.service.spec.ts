@@ -131,4 +131,48 @@ describe('PlotsService admin operations', () => {
     expect(audit.record).not.toHaveBeenCalled();
     expect(client.query).toHaveBeenCalledTimes(1);
   });
+
+  it('keeps fractional map coordinates when creating a plot', async () => {
+    const client = {
+      query: jest.fn().mockResolvedValue({
+        rows: [
+          {
+            id: 79,
+            plotCode: 'A-02-006',
+            status: 'available',
+            price: 60000000,
+          },
+        ],
+      }),
+    };
+    const database = {
+      transaction: jest.fn(async (callback: any) => callback(client)),
+    };
+    const audit = { record: jest.fn() };
+    const service = new PlotsService(database as never, audit as never);
+
+    await service.adminCreate(
+      {
+        plotCode: 'A-02-006',
+        zoneId: 1,
+        rowNumber: '02',
+        columnNumber: '006',
+        price: 60000000,
+        area: 6,
+        direction: 'Nam',
+        plotType: 'single',
+        mapX: 264.29,
+        mapY: 96.57,
+        mapWidth: 34.29,
+        mapHeight: 34.29,
+      },
+      { adminId: 1, ipAddress: '127.0.0.1', userAgent: 'jest' },
+    );
+
+    expect(client.query).toHaveBeenCalledWith(
+      expect.stringContaining('COALESCE($11::double precision,0)'),
+      expect.arrayContaining([264.29, 96.57, 34.29]),
+    );
+    expect(audit.record).toHaveBeenCalledTimes(1);
+  });
 });

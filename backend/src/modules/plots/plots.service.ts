@@ -262,7 +262,10 @@ export class PlotsService {
        )
        VALUES (
          $1, $2, $3, $4, $5, $6, $7, COALESCE($8, 'single'), $9,
-         COALESCE($10, 0), COALESCE($11, 0), COALESCE($12, 40), COALESCE($13, 40)
+         COALESCE($10::double precision, 0),
+         COALESCE($11::double precision, 0),
+         COALESCE($12::double precision, 40),
+         COALESCE($13::double precision, 40)
        )
        RETURNING plot_id AS id, plot_code AS "plotCode", status`,
       [
@@ -443,7 +446,10 @@ export class PlotsService {
            (plot_code,zone_id,row_number,column_number,price,area_sqm,direction,
             plot_type,description,map_x,map_y,map_width,map_height)
          VALUES ($1,$2,$3,$4,$5,$6,$7,COALESCE($8,'single'),$9,
-                 COALESCE($10,0),COALESCE($11,0),COALESCE($12,40),COALESCE($13,40))
+                 COALESCE($10::double precision,0),
+                 COALESCE($11::double precision,0),
+                 COALESCE($12::double precision,40),
+                 COALESCE($13::double precision,40))
          RETURNING plot_id AS id, plot_code AS "plotCode", status, price::float`,
           [
             dto.plotCode,
