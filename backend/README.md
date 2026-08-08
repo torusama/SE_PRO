@@ -21,6 +21,11 @@ fresh and existing database notes. Do not add migrations under `src`.
 - PostgreSQL
 - npm
 
+Optional Semantic RAG requires the PostgreSQL `vector` extension from
+[pgvector](https://github.com/pgvector/pgvector). For a reproducible Windows
+source build and installation guide, see
+[PGVECTOR_WINDOWS_SETUP.md](PGVECTOR_WINDOWS_SETUP.md).
+
 ## Local Setup
 
 ```bash
@@ -118,6 +123,7 @@ Semantic RAG follows the safe retrieval design from the learning architecture:
 - The current user question is embedded as `input_type=query`; stored memory/knowledge is embedded as `input_type=passage`. This is important for NVIDIA Retriever embedding models and improves semantic retrieval quality. A direct “what do you remember about me?” request skips both the external embedding call and the LLM, and reads active user memory exactly from PostgreSQL. Memory state is authoritative backend data, so the model is not allowed to guess what was saved. This also makes that check return quickly even when NVIDIA is slow or unavailable.
 - The default embedding model is `baai/bge-m3` through NVIDIA NIM. It is multilingual and returns fixed 1024-dimensional dense vectors, which is a better fit for Vietnamese user conversations than the previous OpenAI-only prototype.
 - If the embedding API, pgvector extension, vector dimension, or vector query is unavailable, the same request immediately falls back to the existing structured SQL memory retrieval. RAG failure never blocks the primary Agent workflow.
+- The migration runner treats the two pgvector-only migrations as optional. On a PostgreSQL host that does not expose the `vector` extension, it defers only those migrations, continues independent schema migrations, and retries them automatically on later startups if the extension becomes available. It does not write deferred migrations into `schema_migrations`, so no checksum or feature state is faked.
 - Existing active knowledge can be backfilled at startup in a small low-priority batch. Startup backfill is delayed 15 seconds and defaults to only 5 rows so it does not compete with the first chat requests. New validated user memory and newly activated verified knowledge are embedded after the database transaction commits; embedding is non-blocking for persistence.
 
 Embedding configuration (no extra OpenAI key required):

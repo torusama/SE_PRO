@@ -26,10 +26,19 @@ function config(values: Record<string, unknown>): ConfigService {
 function database(
   applied: Array<{ migrationName: string; checksum: string }> = [],
   usersTable: string | null = 'users',
+  extensionAvailable = true,
 ): TestDatabase {
-  const queries = jest.fn((text: string) => {
+  const queries = jest.fn((text: string, params?: unknown[]) => {
     if (text.includes("to_regclass('users')")) {
       return Promise.resolve({ rows: [{ usersTable }] });
+    }
+    if (
+      text.includes('pg_available_extensions') &&
+      params?.[0] === 'vector'
+    ) {
+      return Promise.resolve({
+        rows: [{ isAvailable: extensionAvailable }],
+      });
     }
     if (text.includes('SELECT migration_name')) {
       return Promise.resolve({ rows: applied });
@@ -115,6 +124,7 @@ describe('MigrationRunnerService', () => {
     expect(result).toEqual({
       applied: ['001_first.sql', '002_second.sql'],
       skipped: [],
+      deferred: [],
     });
     expect(executedSql.indexOf('SELECT 1;\n')).toBeLessThan(
       executedSql.indexOf('SELECT 2;\n'),
@@ -167,7 +177,129 @@ describe('MigrationRunnerService', () => {
     await expect(runner.run(db.pool as Pool)).resolves.toEqual({
       applied: [],
       skipped: [],
+      deferred: [],
     });
     expect(db.pool.connect).not.toHaveBeenCalled();
+  });
+
+  it('defers pgvector migrations and continues independent migrations when the extension is unavailable', async () => {
+    const vectorSql = 'SELECT pgvector_migration;\n';
+    const independentSql = 'SELECT independent_migration;\n';
+    await writeFile(
+      join(directory, '024_ai_knowledge_embeddings.sql'),
+      vectorSql,
+    );
+    await writeFile(
+      join(directory, '026_independent_migration.sql'),
+      independentSql,
+    );
+    const db = database([], 'users', false);
+    const runner = new MigrationRunnerService(
+      config({
+        databaseUrl: 'postgresql://test',
+        'migrations.enabled': true,
+        'migrations.directory': directory,
+      }),
+    );
+
+    await expect(runner.run(db.pool as Pool)).resolves.toEqual({
+      applied: ['026_independent_migration.sql'],
+      skipped: [],
+      deferred: ['024_ai_knowledge_embeddings.sql'],
+    });
+    expect(db.queries).not.toHaveBeenCalledWith(vectorSql);
+    expect(db.queries).toHaveBeenCalledWith(independentSql);
+  });
+
+  it('applies a deferred pgvector migration once the extension becomes available', async () => {
+    const vectorSql = 'SELECT pgvector_migration;\n';
+    await writeFile(
+      join(directory, '024_ai_knowledge_embeddings.sql'),
+      vectorSql,
+    );
+    const db = database([], 'users', true);
+    const runner = new MigrationRunnerService(
+      config({
+        databaseUrl: 'postgresql://test',
+        'migrations.enabled': true,
+        'migrations.directory': directory,
+      }),
+    );
+
+    await expect(runner.run(db.pool as Pool)).resolves.toEqual({
+      applied: ['024_ai_knowledge_embeddings.sql'],
+      skipped: [],
+      deferred: [],
+    });
+    expect(db.queries).toHaveBeenCalledWith(vectorSql);
+  });
+
+  it('defers only a recognized pgvector provisioning error from the migration itself', async () => {
+    const vectorSql = 'SELECT pgvector_migration;\n';
+    const independentSql = 'SELECT independent_migration;\n';
+    await writeFile(
+      join(directory, '024_ai_knowledge_embeddings.sql'),
+      vectorSql,
+    );
+    await writeFile(
+      join(directory, '026_independent_migration.sql'),
+      independentSql,
+    );
+    const db = database([], 'users', true);
+    const defaultQuery = db.queries.getMockImplementation();
+    const pgvectorError = Object.assign(
+      new Error('extension "vector" is not available'),
+      { code: '0A000' },
+    );
+    db.queries.mockImplementation((text: string, params?: unknown[]) => {
+      if (text === vectorSql) return Promise.reject(pgvectorError);
+      return defaultQuery?.(text, params);
+    });
+    const runner = new MigrationRunnerService(
+      config({
+        databaseUrl: 'postgresql://test',
+        'migrations.enabled': true,
+        'migrations.directory': directory,
+      }),
+    );
+
+    await expect(runner.run(db.pool as Pool)).resolves.toEqual({
+      applied: ['026_independent_migration.sql'],
+      skipped: [],
+      deferred: ['024_ai_knowledge_embeddings.sql'],
+    });
+    expect(db.queries).toHaveBeenCalledWith('ROLLBACK');
+    expect(db.queries).toHaveBeenCalledWith(independentSql);
+  });
+
+  it('does not hide unrelated errors in an optional migration', async () => {
+    const vectorSql = 'SELECT broken_migration;\n';
+    await writeFile(
+      join(directory, '024_ai_knowledge_embeddings.sql'),
+      vectorSql,
+    );
+    const db = database([], 'users', true);
+    const defaultQuery = db.queries.getMockImplementation();
+    db.queries.mockImplementation((text: string, params?: unknown[]) => {
+      if (text === vectorSql) {
+        return Promise.reject(
+          Object.assign(new Error('syntax error near broken'), {
+            code: '42601',
+          }),
+        );
+      }
+      return defaultQuery?.(text, params);
+    });
+    const runner = new MigrationRunnerService(
+      config({
+        databaseUrl: 'postgresql://test',
+        'migrations.enabled': true,
+        'migrations.directory': directory,
+      }),
+    );
+
+    await expect(runner.run(db.pool as Pool)).rejects.toThrow(
+      'Failed to apply migration 024_ai_knowledge_embeddings.sql',
+    );
   });
 });

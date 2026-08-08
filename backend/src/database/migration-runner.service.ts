@@ -7,6 +7,11 @@ import { Pool, PoolClient, QueryResultRow } from 'pg';
 
 const MIGRATION_FILE_PATTERN = /^\d{3}_[a-z0-9][a-z0-9_-]*\.sql$/i;
 const MIGRATION_LOCK_NAME = 'se_pro_schema_migrations';
+const OPTIONAL_EXTENSION_MIGRATIONS: Readonly<Record<string, string>> = {
+  '024_ai_knowledge_embeddings.sql': 'vector',
+  '025_switch_rag_to_nvidia_bge_m3.sql': 'vector',
+};
+const OPTIONAL_EXTENSION_ERROR_CODES = new Set(['0A000', '42501', '58P01']);
 
 interface AppliedMigrationRow extends QueryResultRow {
   migrationName: string;
@@ -15,6 +20,10 @@ interface AppliedMigrationRow extends QueryResultRow {
 
 interface CoreSchemaRow extends QueryResultRow {
   usersTable: string | null;
+}
+
+interface ExtensionAvailabilityRow extends QueryResultRow {
+  isAvailable: boolean;
 }
 
 export interface MigrationFile {
@@ -26,6 +35,7 @@ export interface MigrationFile {
 export interface MigrationRunSummary {
   applied: string[];
   skipped: string[];
+  deferred: string[];
 }
 
 export function normalizeMigrationSql(source: string): string {
@@ -85,7 +95,7 @@ export class MigrationRunnerService {
       this.logger.warn(
         'Automatic database migrations are disabled by DB_MIGRATIONS_ENABLED',
       );
-      return { applied: [], skipped: [] };
+      return { applied: [], skipped: [], deferred: [] };
     }
 
     if (!this.config.get<string>('databaseUrl')) {
@@ -114,7 +124,11 @@ export class MigrationRunnerService {
       const appliedByName = new Map(
         appliedRows.rows.map((row) => [row.migrationName, row.checksum]),
       );
-      const summary: MigrationRunSummary = { applied: [], skipped: [] };
+      const summary: MigrationRunSummary = {
+        applied: [],
+        skipped: [],
+        deferred: [],
+      };
 
       for (const migration of migrations) {
         const appliedChecksum = appliedByName.get(migration.name);
@@ -140,13 +154,45 @@ export class MigrationRunnerService {
           continue;
         }
 
-        await this.applyMigration(client, migration);
-        summary.applied.push(migration.name);
+        const optionalExtension =
+          OPTIONAL_EXTENSION_MIGRATIONS[migration.name];
+        if (
+          optionalExtension &&
+          !(await this.isExtensionAvailable(client, optionalExtension))
+        ) {
+          this.logger.warn(
+            `Deferring optional migration ${migration.name}: PostgreSQL extension ` +
+              `"${optionalExtension}" is not available; the application will use its fallback path`,
+          );
+          summary.deferred.push(migration.name);
+          continue;
+        }
+
+        try {
+          await this.applyMigration(client, migration);
+          summary.applied.push(migration.name);
+        } catch (error) {
+          if (
+            optionalExtension &&
+            this.isOptionalExtensionUnavailableError(
+              error,
+              optionalExtension,
+            )
+          ) {
+            this.logger.warn(
+              `Deferring optional migration ${migration.name}: PostgreSQL could not enable ` +
+                `extension "${optionalExtension}"; the application will use its fallback path`,
+            );
+            summary.deferred.push(migration.name);
+            continue;
+          }
+          throw error;
+        }
       }
 
-      if (summary.applied.length === 0) {
+      if (summary.applied.length === 0 && summary.deferred.length === 0) {
         this.logger.log('Database schema is up to date');
-      } else {
+      } else if (summary.applied.length > 0) {
         this.logger.log(
           `Applied ${summary.applied.length} migration(s): ${summary.applied.join(', ')}`,
         );
@@ -252,6 +298,66 @@ export class MigrationRunnerService {
           'before running versioned migrations.',
       );
     }
+  }
+
+  private async isExtensionAvailable(
+    client: PoolClient,
+    extensionName: string,
+  ): Promise<boolean> {
+    const result = await client.query<ExtensionAvailabilityRow>(
+      `SELECT (
+         EXISTS (
+           SELECT 1 FROM pg_extension WHERE extname = $1
+         ) OR EXISTS (
+           SELECT 1 FROM pg_available_extensions WHERE name = $1
+         )
+       ) AS "isAvailable"`,
+      [extensionName],
+    );
+    return result.rows[0]?.isAvailable === true;
+  }
+
+  private isOptionalExtensionUnavailableError(
+    error: unknown,
+    extensionName: string,
+  ): boolean {
+    const normalizedExtension = extensionName.toLowerCase();
+    let current: unknown = error;
+    const visited = new Set<unknown>();
+
+    while (
+      current &&
+      typeof current === 'object' &&
+      !visited.has(current)
+    ) {
+      visited.add(current);
+      const candidate = current as {
+        code?: unknown;
+        message?: unknown;
+        detail?: unknown;
+        hint?: unknown;
+        cause?: unknown;
+      };
+      const code = typeof candidate.code === 'string' ? candidate.code : '';
+      const description = [
+        candidate.message,
+        candidate.detail,
+        candidate.hint,
+      ]
+        .filter((value): value is string => typeof value === 'string')
+        .join(' ')
+        .toLowerCase();
+
+      if (
+        OPTIONAL_EXTENSION_ERROR_CODES.has(code) &&
+        description.includes(normalizedExtension)
+      ) {
+        return true;
+      }
+      current = candidate.cause;
+    }
+
+    return false;
   }
 
   private async applyMigration(
