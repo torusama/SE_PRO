@@ -1,16 +1,16 @@
 .agent-admin {
-  --ai-ink: #2b2926;
-  --ai-text: #494540;
-  --ai-muted: #77716a;
-  --ai-line: #dfdcd5;
-  --ai-line-soft: #ece9e3;
+  --ai-ink: #26282b;
+  --ai-text: #414348;
+  --ai-muted: #6b6e76;
+  --ai-line: #d7d9dd;
+  --ai-line-soft: #e5e7ea;
   --ai-paper: #fffdfa;
-  --ai-canvas: #f6f4ef;
-  --ai-soft: #f0ede7;
-  --ai-teal: #b35f42;
-  --ai-teal-dark: #91472f;
+  --ai-canvas: #f1f2f4;
+  --ai-soft: #e9ebee;
+  --ai-teal: #1c3f8f;
+  --ai-teal-dark: #0e1e4f;
   --ai-gold: #9a6a2f;
-  --ai-blue: #587087;
+  --ai-blue: #586587;
   --ai-rose: #9c5550;
   display: grid;
   gap: 14px;
@@ -71,7 +71,7 @@
 
 .agent-admin__guardrail {
   padding: 15px 17px;
-  background: #eeeae2;
+  background: #e5e7eb;
   border-radius: 12px;
 }
 
@@ -106,7 +106,7 @@
 }
 
 .agent-admin button:hover {
-  border-color: #c7bcb2;
+  border-color: #b7bac2;
   background: var(--ai-soft);
   color: var(--ai-teal-dark);
 }
@@ -177,7 +177,7 @@
 
 .learning-analytics__header,
 .learning-journal__header {
-  background: #f0ece5;
+  background: #e7e9ee;
   border-color: transparent;
 }
 
@@ -230,8 +230,8 @@
 }
 
 .agent-admin__primary:hover {
-  border-color: #11100f !important;
-  background: #11100f !important;
+  border-color: #0f1011 !important;
+  background: #0f1011 !important;
 }
 
 .learning-analytics__period {
@@ -240,7 +240,7 @@
   gap: 4px;
   padding: 4px;
   background: rgba(255, 253, 250, 0.72);
-  border: 1px solid #d8d2c8;
+  border: 1px solid #ccced4;
   border-radius: 10px;
 }
 
@@ -280,8 +280,8 @@
 .learning-analytics__metric:hover,
 .learning-journal__summary article:hover,
 .agent-admin__ranker-state article:hover {
-  background: #fbf8f2;
-  border-color: #cbc5bb;
+  background: #f5f6f8;
+  border-color: #bfc1c7;
 }
 
 .learning-analytics__metric > span,
@@ -413,7 +413,7 @@
   place-items: center;
   min-height: 190px;
   padding: 42px 24px;
-  background: #fbfaf7;
+  background: #f8f9fa;
   text-align: center;
 }
 
@@ -452,7 +452,7 @@
     to bottom,
     transparent 0,
     transparent 43px,
-    #efede8 44px
+    #eaebed 44px
   );
 }
 
@@ -523,7 +523,7 @@
   display: block;
   height: 7px;
   overflow: hidden;
-  background: #eeece6;
+  background: #e8e9ec;
   border-radius: 4px;
 }
 
@@ -550,7 +550,7 @@
 
 .learning-journal__policy {
   padding: 16px 20px;
-  background: #f0ece5;
+  background: #e7e9ee;
   border: 1px solid transparent;
   border-radius: 12px;
 }
@@ -584,7 +584,7 @@
   grid-template-columns: 150px minmax(280px, 1fr) minmax(190px, 0.38fr);
   gap: 22px;
   padding: 18px 20px;
-  border-left: 3px solid #c9c3b9;
+  border-left: 3px solid #bdbfc5;
 }
 
 .learning-journal__event + .learning-journal__event {
@@ -592,15 +592,15 @@
 }
 
 .learning-journal__event.type-global_knowledge {
-  border-left-color: #c9c3b9;
+  border-left-color: #bdbfc5;
 }
 
 .learning-journal__event.type-recommendation_signal {
-  border-left-color: #c9c3b9;
+  border-left-color: #bdbfc5;
 }
 
 .learning-journal__event.type-ranking_run {
-  border-left-color: #c9c3b9;
+  border-left-color: #bdbfc5;
 }
 
 .learning-journal__event-time {
@@ -726,8 +726,8 @@
   gap: 5px;
   margin: 14px 0 0;
   padding: 12px 14px;
-  background: #faf8f2;
-  border: 1px solid #e7dfcc;
+  background: #f4f5f8;
+  border: 1px solid #d3d7e0;
   border-left: 3px solid var(--ai-gold);
   color: var(--ai-text);
   font-size: 12px;
@@ -796,7 +796,7 @@
 }
 
 .agent-admin th {
-  background: #faf9f6;
+  background: #f7f8f9;
   color: var(--ai-muted);
   font-size: 9px;
   font-weight: 800;

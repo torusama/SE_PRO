@@ -2,7 +2,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 describe('deceased family migration contract', () => {
   const sql = readFileSync(
-    join(__dirname, '../database/migrations/023_deceased_family_schema.sql'),
+    join(__dirname, '../database/migrations/027_deceased_family_schema.sql'),
     'utf8',
   );
   it('defines capacity without a default or capacity trigger', () => {

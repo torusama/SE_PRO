@@ -35,6 +35,13 @@ interface ReservationRow extends QueryResultRow {
   customerName?: string;
   customerEmail?: string;
   customerPhone?: string | null;
+  customerIdCard?: string | null;
+  customerDateOfBirth?: Date | string | null;
+  customerGender?: string | null;
+  customerNationality?: string | null;
+  customerAddress?: string | null;
+  customerWard?: string | null;
+  customerCity?: string | null;
   customerNotes?: string | null;
   adminName?: string | null;
   plotCodes?: string[];
@@ -56,6 +63,8 @@ interface PlotRow extends QueryResultRow {
   areaSqm?: number | string | null;
   zoneCode?: string | null;
   zoneName?: string | null;
+  direction?: string | null;
+  plotType?: string | null;
 }
 
 interface LockedReservationRow extends QueryResultRow {
@@ -790,6 +799,11 @@ Thời hạn và thời điểm có hiệu lực được ghi tại phần ký k
                    rr.created_at AS "createdAt",
                    u.full_name AS "customerName", u.email AS "customerEmail",
                    u.phone_number AS "customerPhone", u.notes AS "customerNotes",
+                   u.id_card_number AS "customerIdCard",
+                   u.date_of_birth AS "customerDateOfBirth",
+                   u.gender AS "customerGender", u.nationality AS "customerNationality",
+                   u.address AS "customerAddress", u.ward AS "customerWard",
+                   u.city AS "customerCity",
                    adm.full_name AS "adminName"
             FROM reservation_requests rr
             JOIN users u ON u.user_id = rr.user_id
@@ -804,9 +818,12 @@ Thời hạn và thời điểm có hiệu lực được ghi tại phần ký k
                    p.zone_id AS "zoneId", p.row_number AS "rowNumber",
                    p.column_number AS "columnNumber", p.map_x AS "mapX",
                    p.map_y AS "mapY", p.map_width AS "mapWidth",
-                   p.map_height AS "mapHeight"
+                   p.map_height AS "mapHeight", p.area_sqm::float AS "areaSqm",
+                   p.direction, p.plot_type AS "plotType",
+                   z.zone_code AS "zoneCode", z.zone_name AS "zoneName"
             FROM request_plots rp
             JOIN plots p ON p.plot_id = rp.plot_id
+            JOIN cemetery_zones z ON z.zone_id = p.zone_id
             WHERE rp.request_id = $1
             ORDER BY p.plot_code`;
   }

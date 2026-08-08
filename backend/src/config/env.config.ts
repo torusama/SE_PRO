@@ -9,13 +9,14 @@ export const envConfig = () => ({
   jwtSecret: process.env.JWT_SECRET ?? 'change_this_secret',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? '1d',
   frontendUrl: process.env.FRONTEND_URL ?? 'http://localhost:5173',
-  smtp: {
-    host: process.env.SMTP_HOST ?? 'smtp.gmail.com',
-    port: Number(process.env.SMTP_PORT) || 465,
-    secure: (process.env.SMTP_SECURE ?? 'true') === 'true',
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-    from: process.env.SMTP_FROM ?? process.env.SMTP_USER,
+  email: {
+    gmail: {
+      clientId: process.env.GMAIL_CLIENT_ID,
+      clientSecret: process.env.GMAIL_CLIENT_SECRET,
+      refreshToken: process.env.GMAIL_REFRESH_TOKEN,
+      senderEmail: process.env.GMAIL_SENDER_EMAIL,
+      timeoutMs: Number(process.env.GMAIL_API_TIMEOUT_MS) || 15000,
+    },
   },
   sms: {
     apiUrl: process.env.SMS_API_URL,

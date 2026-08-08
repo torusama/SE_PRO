@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { ROUTES } from "@/constants/routes";
+import { notificationTargetRoute } from "@/components/layout/shared/notification-menu-utils";
 import "./NotificationPage.css";
 
 interface ApiResponse<T> {
@@ -54,6 +55,24 @@ const TYPE_META: Record<
     icon: "🚫",
     iconClass: "type-alert",
     tagClass: "tag-urgent",
+    group: "request",
+  },
+  appointment_created: {
+    icon: "📅",
+    iconClass: "type-info",
+    tagClass: "tag-service",
+    group: "request",
+  },
+  appointment_updated: {
+    icon: "📅",
+    iconClass: "type-info",
+    tagClass: "tag-service",
+    group: "request",
+  },
+  appointment_status_updated: {
+    icon: "📅",
+    iconClass: "type-service",
+    tagClass: "tag-done",
     group: "request",
   },
   contract_updated: {
@@ -188,21 +207,6 @@ function getErrorMessage(error: unknown) {
   return "Không tải được thông báo. Vui lòng thử lại.";
 }
 
-function targetRoute(item: NotificationItem): string | null {
-  switch (item.relatedEntityType) {
-    case "reservation_request":
-      return ROUTES.MY_LOTS;
-    case "contract":
-      return ROUTES.MY_LOTS;
-    case "service_order":
-      return `${ROUTES.SERVICES}?tab=track${item.relatedEntityId ? `&order=${item.relatedEntityId}` : ""}`;
-    case "reminder":
-      return ROUTES.REMINDERS;
-    default:
-      return null;
-  }
-}
-
 const PAGE_SIZE = 8;
 
 export default function NotificationPage() {
@@ -318,7 +322,7 @@ export default function NotificationPage() {
 
   function handleClick(item: NotificationItem) {
     void markOneRead(item);
-    const route = targetRoute(item);
+    const route = notificationTargetRoute(item);
     if (route) navigate(route);
   }
 
@@ -470,6 +474,19 @@ export default function NotificationPage() {
                               {item.relatedEntityType ?? item.type}
                             </span>
                           </div>
+                          {item.relatedEntityType === "offline_appointment" &&
+                            ["appointment_created", "appointment_updated"].includes(item.type) && (
+                              <button
+                                type="button"
+                                className="notif-action"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleClick(item);
+                                }}
+                              >
+                                Xem &amp; xác nhận lịch hẹn
+                              </button>
+                            )}
                         </div>
                         <div className="notif-meta">
                           <div className="notif-time">

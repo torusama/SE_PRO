@@ -15,6 +15,19 @@ import { AdminAppointmentQueryDto } from './dto/admin-appointment-query.dto';
 import { paginate } from '../../common/interfaces/paginated-response.interface';
 import { AdminAuditService } from '../admin-audit/admin-audit.service';
 import type { AdminRequestContext } from '../../common/decorators/admin-request-context.decorator';
+import { RespondAppointmentDto } from './dto/respond-appointment.dto';
+
+const vietnamDateFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'Asia/Ho_Chi_Minh',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+const vietnamDateTimeFormatter = new Intl.DateTimeFormat('vi-VN', {
+  timeZone: 'Asia/Ho_Chi_Minh',
+  dateStyle: 'short',
+  timeStyle: 'short',
+});
 
 export interface AppointmentRow extends QueryResultRow {
   id: number;
@@ -22,10 +35,14 @@ export interface AppointmentRow extends QueryResultRow {
   customerId: number;
   customerName?: string | null;
   scheduledAt: Date | string;
+  scheduledEndAt: Date | string;
   location: string;
   assignedStaffId: number | null;
   assignedStaffName: string | null;
   status: AppointmentStatus;
+  customerStatus: 'pending' | 'confirmed' | 'declined';
+  customerRespondedAt: Date | string | null;
+  customerSelectedAt: Date | string | null;
   note: string | null;
   statusNote: string | null;
   completedAt: Date | string | null;
@@ -60,6 +77,8 @@ export class AppointmentsService {
     dto: CreateAppointmentDto,
     context?: AdminRequestContext,
   ) {
+    this.assertValidTimeRange(dto.scheduledAt, dto.scheduledEndAt);
+    this.assertAppointmentDateNotInPast(dto.scheduledAt);
     return this.database.transaction(async (client) => {
       const request = await this.lockApprovedReservationRequest(
         client,
@@ -70,14 +89,18 @@ export class AppointmentsService {
 
       const appointment = await client.query<AppointmentRow>(
         `INSERT INTO offline_appointments (
-           request_id, user_id, scheduled_at, location, assigned_staff_id,
-           assigned_staff_name, note, created_by, updated_by
+           request_id, user_id, scheduled_at, scheduled_end_at, location,
+           assigned_staff_id, assigned_staff_name, note, created_by, updated_by
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
          RETURNING appointment_id AS id, request_id AS "reservationRequestId",
                    user_id AS "customerId", scheduled_at AS "scheduledAt",
+                   scheduled_end_at AS "scheduledEndAt",
                    location, assigned_staff_id AS "assignedStaffId",
                    assigned_staff_name AS "assignedStaffName", status, note,
+                   customer_status AS "customerStatus",
+                   customer_responded_at AS "customerRespondedAt",
+                   customer_selected_at AS "customerSelectedAt",
                    status_note AS "statusNote", completed_at AS "completedAt",
                    cancelled_at AS "cancelledAt", created_at AS "createdAt",
                    updated_at AS "updatedAt"`,
@@ -85,6 +108,7 @@ export class AppointmentsService {
           request.request_id,
           request.user_id,
           dto.scheduledAt,
+          dto.scheduledEndAt,
           dto.location,
           dto.assignedStaffId ?? null,
           dto.assignedStaffName ?? null,
@@ -97,8 +121,8 @@ export class AppointmentsService {
         client,
         request.user_id,
         'appointment_created',
-        'Lich hen ky hop dong da duoc tao',
-        'Lich hen ky hop dong offline cua ban da duoc tao.',
+        'Lịch hẹn offline cần xác nhận',
+        'Vui lòng xác nhận hoặc từ chối khoảng ngày lịch hẹn do quản trị viên đề xuất.',
         appointment.rows[0].id,
       );
       await this.audit?.record(client, {
@@ -181,25 +205,41 @@ export class AppointmentsService {
           'Only scheduled appointments can be updated',
         );
       }
+      this.assertValidTimeRange(
+        dto.scheduledAt ?? String(current.scheduledAt),
+        dto.scheduledEndAt ?? String(current.scheduledEndAt),
+      );
+      if (dto.scheduledAt) {
+        this.assertAppointmentDateNotInPast(dto.scheduledAt);
+      }
       const updated = await client.query<AppointmentRow>(
         `UPDATE offline_appointments
          SET scheduled_at = COALESCE($2, scheduled_at),
-             location = COALESCE($3, location),
-             assigned_staff_id = COALESCE($4, assigned_staff_id),
-             assigned_staff_name = COALESCE($5, assigned_staff_name),
-             note = COALESCE($6, note),
-             updated_by = $7
+             scheduled_end_at = COALESCE($3, scheduled_end_at),
+             location = COALESCE($4, location),
+             assigned_staff_id = COALESCE($5, assigned_staff_id),
+             assigned_staff_name = COALESCE($6, assigned_staff_name),
+             note = COALESCE($7, note),
+             customer_status = 'pending',
+             customer_responded_at = NULL,
+             customer_selected_at = NULL,
+             updated_by = $8
          WHERE appointment_id = $1 AND is_deleted = FALSE
          RETURNING appointment_id AS id, request_id AS "reservationRequestId",
                    user_id AS "customerId", scheduled_at AS "scheduledAt",
+                   scheduled_end_at AS "scheduledEndAt",
                    location, assigned_staff_id AS "assignedStaffId",
                    assigned_staff_name AS "assignedStaffName", status, note,
+                   customer_status AS "customerStatus",
+                   customer_responded_at AS "customerRespondedAt",
+                   customer_selected_at AS "customerSelectedAt",
                    status_note AS "statusNote", completed_at AS "completedAt",
                    cancelled_at AS "cancelledAt", created_at AS "createdAt",
                    updated_at AS "updatedAt"`,
         [
           id,
           dto.scheduledAt ?? null,
+          dto.scheduledEndAt ?? null,
           dto.location ?? null,
           dto.assignedStaffId ?? null,
           dto.assignedStaffName ?? null,
@@ -212,8 +252,8 @@ export class AppointmentsService {
         client,
         current.customerId,
         'appointment_updated',
-        'Lich hen ky hop dong da duoc cap nhat',
-        'Thong tin lich hen ky hop dong offline cua ban da duoc cap nhat.',
+        'Lịch hẹn offline đã được cập nhật',
+        'Vui lòng xác nhận lại khoảng ngày lịch hẹn mới.',
         id,
       );
       await this.audit?.record(client, {
@@ -229,6 +269,77 @@ export class AppointmentsService {
         ...this.mapAppointment(updated.rows[0]),
         notificationCreated: true,
       };
+    });
+  }
+
+  async respond(userId: number, id: number, dto: RespondAppointmentDto) {
+    return this.database.transaction(async (client) => {
+      const result = await client.query<AppointmentRow>(
+        `${this.baseSelect()}
+         WHERE oa.appointment_id = $1 AND oa.user_id = $2
+           AND oa.is_deleted = FALSE
+         FOR UPDATE OF oa`,
+        [id, userId],
+      );
+      const current = result.rows[0];
+      if (!current) throw new NotFoundException('Appointment not found');
+      if (current.status !== 'scheduled' || current.customerStatus !== 'pending') {
+        throw new BadRequestException('This appointment no longer needs a response');
+      }
+      if (dto.status === 'confirmed') {
+        this.assertCustomerSelectedTime(current, dto.selectedAt);
+      }
+
+      const updated = await client.query<AppointmentRow>(
+        `UPDATE offline_appointments
+         SET customer_status = $3::varchar,
+             customer_responded_at = NOW(),
+             customer_selected_at = CASE
+               WHEN $3::varchar = 'confirmed' THEN $5::timestamptz
+               ELSE NULL
+             END,
+             status = CASE WHEN $3::varchar = 'declined' THEN 'cancelled' ELSE status END,
+             cancelled_at = CASE WHEN $3::varchar = 'declined' THEN NOW() ELSE cancelled_at END,
+             status_note = CASE
+               WHEN $3::varchar = 'declined' THEN COALESCE(NULLIF($4::varchar, ''), 'Khách hàng từ chối lịch hẹn')
+               ELSE status_note
+             END,
+             updated_at = NOW()
+         WHERE appointment_id = $1 AND user_id = $2 AND is_deleted = FALSE
+         RETURNING appointment_id AS id, request_id AS "reservationRequestId",
+                   user_id AS "customerId", scheduled_at AS "scheduledAt",
+                   scheduled_end_at AS "scheduledEndAt", location,
+                   assigned_staff_id AS "assignedStaffId",
+                   assigned_staff_name AS "assignedStaffName", status, note,
+                   customer_status AS "customerStatus",
+                   customer_responded_at AS "customerRespondedAt",
+                   customer_selected_at AS "customerSelectedAt",
+                   status_note AS "statusNote", completed_at AS "completedAt",
+                   cancelled_at AS "cancelledAt", created_at AS "createdAt",
+                   updated_at AS "updatedAt"`,
+        [id, userId, dto.status, dto.note ?? null, dto.selectedAt ?? null],
+      );
+      const selectedTimeMessage = dto.status === 'confirmed' && dto.selectedAt
+        ? ` vào ${vietnamDateTimeFormatter.format(new Date(dto.selectedAt))}`
+        : '';
+      await client.query(
+        `INSERT INTO notifications
+           (user_id, type, title, message, related_entity_type, related_entity_id)
+         SELECT user_id, 'appointment_response', $1, $2,
+                'offline_appointment', $3
+         FROM users
+         WHERE LOWER(role) = 'admin' AND is_active = TRUE AND is_deleted = FALSE`,
+        [
+          dto.status === 'confirmed'
+            ? 'Khách hàng đã xác nhận lịch hẹn'
+            : 'Khách hàng đã từ chối lịch hẹn',
+          `${current.customerName ?? 'Khách hàng'} đã ${
+            dto.status === 'confirmed' ? 'xác nhận' : 'từ chối'
+          } lịch hẹn offline${selectedTimeMessage}.`,
+          id,
+        ],
+      );
+      return this.mapAppointment(updated.rows[0]);
     });
   }
 
@@ -265,8 +376,12 @@ export class AppointmentsService {
          WHERE appointment_id = $1 AND is_deleted = FALSE
          RETURNING appointment_id AS id, request_id AS "reservationRequestId",
                    user_id AS "customerId", scheduled_at AS "scheduledAt",
+                   scheduled_end_at AS "scheduledEndAt",
                    location, assigned_staff_id AS "assignedStaffId",
                    assigned_staff_name AS "assignedStaffName", status, note,
+                   customer_status AS "customerStatus",
+                   customer_responded_at AS "customerRespondedAt",
+                   customer_selected_at AS "customerSelectedAt",
                    status_note AS "statusNote", completed_at AS "completedAt",
                    cancelled_at AS "cancelledAt", created_at AS "createdAt",
                    updated_at AS "updatedAt"`,
@@ -384,10 +499,14 @@ export class AppointmentsService {
                    oa.user_id AS "customerId",
                    u.full_name AS "customerName",
                    oa.scheduled_at AS "scheduledAt",
+                   oa.scheduled_end_at AS "scheduledEndAt",
                    oa.location,
                    oa.assigned_staff_id AS "assignedStaffId",
                    COALESCE(staff.full_name, oa.assigned_staff_name) AS "assignedStaffName",
                    oa.status,
+                   oa.customer_status AS "customerStatus",
+                   oa.customer_responded_at AS "customerRespondedAt",
+                   oa.customer_selected_at AS "customerSelectedAt",
                    oa.note,
                    oa.status_note AS "statusNote",
                    oa.completed_at AS "completedAt",
@@ -401,6 +520,61 @@ export class AppointmentsService {
 
   private mapAppointment(row: AppointmentRow) {
     return row;
+  }
+
+  private assertValidTimeRange(start: string, end: string) {
+    const startAt = new Date(start);
+    const endAt = new Date(end);
+    if (
+      Number.isNaN(startAt.getTime()) ||
+      Number.isNaN(endAt.getTime()) ||
+      endAt.getTime() <= startAt.getTime()
+    ) {
+      throw new BadRequestException('Appointment end time must be after start time');
+    }
+  }
+
+  private assertAppointmentDateNotInPast(value: string) {
+    const appointmentDate = new Date(value);
+    const dateKey = (date: Date) => {
+      const parts = vietnamDateFormatter.formatToParts(date);
+      const part = (type: 'year' | 'month' | 'day') =>
+        Number(parts.find((item) => item.type === type)?.value ?? 0);
+      return part('year') * 10_000 + part('month') * 100 + part('day');
+    };
+    if (dateKey(appointmentDate) < dateKey(new Date())) {
+      throw new BadRequestException(
+        'Appointment date cannot be earlier than the current date',
+      );
+    }
+  }
+
+  private assertCustomerSelectedTime(
+    appointment: AppointmentRow,
+    selectedAt?: string,
+  ) {
+    if (!selectedAt) {
+      throw new BadRequestException(
+        'Select an exact meeting date and time before confirming',
+      );
+    }
+    const selected = new Date(selectedAt);
+    const start = new Date(appointment.scheduledAt);
+    const end = new Date(appointment.scheduledEndAt);
+    if (
+      Number.isNaN(selected.getTime()) ||
+      selected < start ||
+      selected > end
+    ) {
+      throw new BadRequestException(
+        'Selected meeting time must be within the proposed date range',
+      );
+    }
+    if (selected <= new Date()) {
+      throw new BadRequestException(
+        'Selected meeting time must be in the future',
+      );
+    }
   }
 
   private async notify(

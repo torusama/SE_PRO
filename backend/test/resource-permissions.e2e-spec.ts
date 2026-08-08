@@ -2,7 +2,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 describe('resource permission contract', () => {
   const migration = readFileSync(
-    join(__dirname, '../database/migrations/023_deceased_family_schema.sql'),
+    join(__dirname, '../database/migrations/027_deceased_family_schema.sql'),
     'utf8',
   );
   it.each([

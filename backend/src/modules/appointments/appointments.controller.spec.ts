@@ -6,6 +6,7 @@ describe('AppointmentsController', () => {
   const service = {
     create: jest.fn(),
     my: jest.fn(),
+    respond: jest.fn(),
     adminList: jest.fn(),
     update: jest.fn(),
     updateStatus: jest.fn(),
@@ -22,6 +23,7 @@ describe('AppointmentsController', () => {
         {
           reservationRequestId: 10,
           scheduledAt: '2026-07-15T09:00:00+07:00',
+          scheduledEndAt: '2026-07-15T10:00:00+07:00',
           location: 'Office',
         },
         {} as never,
@@ -35,5 +37,9 @@ describe('AppointmentsController', () => {
 
   it('marks admin create endpoint as admin-only', () => {
     expect(reflector.get(ROLES_KEY, controller.create)).toEqual(['admin']);
+  });
+
+  it('marks customer response endpoint as customer-only', () => {
+    expect(reflector.get(ROLES_KEY, controller.respond)).toEqual(['customer']);
   });
 });

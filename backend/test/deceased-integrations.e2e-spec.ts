@@ -3,7 +3,7 @@ import { join } from 'path';
 describe('deceased integrations', () => {
   it('links reminders and service orders without cascade delete', () => {
     const sql = readFileSync(
-      join(__dirname, '../database/migrations/023_deceased_family_schema.sql'),
+      join(__dirname, '../database/migrations/027_deceased_family_schema.sql'),
       'utf8',
     );
     expect(

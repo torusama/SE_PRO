@@ -22,17 +22,24 @@ import {
   getGroupIndex,
 } from "@/lib/cemeteryMapLayout";
 import {
+  BOTTOM_ROAD,
+  CENTRAL_ROAD_NORTH,
+  CENTRAL_ROAD_SOUTH,
   CLUSTER_GROUP_BACKDROPS,
-  CONNECTOR_ROAD,
   CROSS_ROADS,
-  LEFT_DIAGONAL_ROAD_POINTS,
+  FAMILY_AISLE_ROAD,
+  FAMILY_CROSS_ROADS,
+  FAMILY_ROAD,
+  LEFT_ROAD,
   MAIN_ROAD,
   MAP_BG_RECT,
   MAP_BOUNDARY_POINTS,
   MAP_GATE,
   MAP_VIEWBOX,
+  ROAD_CORNER_CHAMFERS,
   SECONDARY_GATE,
   SPIRIT_PARK,
+  TOP_ROAD,
   ZONE_BACKDROPS,
   gateMarkerPoints,
   getHeadingLabel,
@@ -127,7 +134,7 @@ const T = {
   noData: "Ch\u01b0a c\u00f3 d\u1eef li\u1ec7u",
   plannedSlot: "\u00d4 \u0111\u1ea5t quy ho\u1ea1ch",
   realtimeStatus: "Tr\u1ea1ng th\u00e1i th\u1eadt",
-  single: "M\u1ed9t l\u00f4",
+  single: "L\u00f4 \u0111\u01a1n",
   cluster: "L\u00f4 gia t\u1ed9c",
   reset: "\u0110\u1eb7t l\u1ea1i",
   northRoad: "Tr\u1ee5c \u0111\u01b0\u1eddng B\u1eafc",
@@ -643,9 +650,7 @@ export default function MapPage() {
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
   const [selectionMode, setSelectionMode] = useState<SelectionMode>("single");
-  const [selectedPlot, setSelectedPlot] = useState<MapPlot | null>(
-    INITIAL_PLANNED_PLOTS[0] || null,
-  );
+  const [selectedPlot, setSelectedPlot] = useState<MapPlot | null>(null);
   const [routePlotId, setRoutePlotId] = useState<string | null>(null);
   const [clusterPlots, setClusterPlots] = useState<MapPlot[]>([]);
 
@@ -753,22 +758,14 @@ export default function MapPage() {
     };
   }, []);
 
-  const panStateRef = useRef<{
-    pointerId: number;
-    startX: number;
-    startY: number;
-    scrollLeft: number;
-    scrollTop: number;
-  } | null>(null);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const isDraggingRef = useRef(false);
+  const dragStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
 
   useEffect(() => {
     const el = mapWrapRef.current;
     if (!el) return;
     function onWheel(event: WheelEvent) {
-      // Lướt/kéo NGANG (trackpad 2 ngón hoặc Shift+cuộn) -> để trình duyệt tự
-      // cuộn ngang, dùng để di chuyển qua lại giữa khối mộ đơn và khối lô
-      // gia tộc. Chỉ cuộn DỌC (deltaY trội hơn) mới dùng để zoom.
-      if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
       event.preventDefault();
       const factor = event.deltaY > 0 ? 0.9 : 1.1;
       setZoom((current) =>
@@ -779,47 +776,44 @@ export default function MapPage() {
     return () => el.removeEventListener("wheel", onWheel);
   }, []);
 
-  // Tự đổi nhãn/chế độ (Một lô <-> Lô gia tộc) khi người dùng kéo/lướt
-  // ngang qua lại giữa 2 khối trên cùng bản đồ, không cần bấm nút.
-  useEffect(() => {
-    const el = mapWrapRef.current;
-    if (!el) return;
-    function onScroll() {
-      if (!el) return;
-      const midpoint = (el.scrollWidth - el.clientWidth) / 2;
-      setSelectionMode(el.scrollLeft > midpoint ? "cluster" : "single");
-    }
-    el.addEventListener("scroll", onScroll, { passive: true });
-    return () => el.removeEventListener("scroll", onScroll);
-  }, []);
-
-  // Kéo (drag) trên nền trống của bản đồ để pan ngang/dọc — không ảnh hưởng
-  // thao tác kéo-chọn nhiều lô liền kề (chỉ kích hoạt khi KHÔNG bấm vào một
-  // ô mộ).
   function handleCanvasPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     const target = event.target as HTMLElement;
     if (target.closest(".plot-cell")) return;
-    const el = mapWrapRef.current;
-    if (!el) return;
-    panStateRef.current = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      scrollLeft: el.scrollLeft,
-      scrollTop: el.scrollTop,
+    isDraggingRef.current = true;
+    dragStartRef.current = {
+      x: event.clientX,
+      y: event.clientY,
+      panX: pan.x,
+      panY: pan.y,
     };
-    el.setPointerCapture(event.pointerId);
+    try {
+      (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    } catch {
+      // ignore
+    }
   }
+
   function handleCanvasPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
-    const pan = panStateRef.current;
-    const el = mapWrapRef.current;
-    if (!pan || !el || pan.pointerId !== event.pointerId) return;
-    el.scrollLeft = pan.scrollLeft - (event.clientX - pan.startX);
-    el.scrollTop = pan.scrollTop - (event.clientY - pan.startY);
+    if (!isDraggingRef.current) return;
+    const dx = event.clientX - dragStartRef.current.x;
+    const dy = event.clientY - dragStartRef.current.y;
+    setPan({
+      x: dragStartRef.current.panX + dx,
+      y: dragStartRef.current.panY + dy,
+    });
   }
+
   function handleCanvasPointerUp(event: ReactPointerEvent<HTMLDivElement>) {
-    panStateRef.current = null;
-    mapWrapRef.current?.releasePointerCapture(event.pointerId);
+    if (isDraggingRef.current) {
+      isDraggingRef.current = false;
+      try {
+        (event.currentTarget as HTMLElement).releasePointerCapture(
+          event.pointerId,
+        );
+      } catch {
+        // ignore
+      }
+    }
   }
 
   useEffect(() => {
@@ -843,18 +837,14 @@ export default function MapPage() {
           setPlots(fullMap);
           setSelectedPlot(
             (current) =>
-              fullMap.find((plot) => plot.id === current?.id) ||
-              current ||
-              fullMap[0] ||
+              (current && fullMap.find((plot) => plot.id === current.id)) ||
               null,
           );
         })
         .catch((error: Error) => {
           if (cancelled || error.name === "AbortError") return;
           setPlots(INITIAL_PLANNED_PLOTS);
-          setSelectedPlot(
-            (current) => current || INITIAL_PLANNED_PLOTS[0] || null,
-          );
+          setSelectedPlot((current) => current || null);
           setLoadError("");
         })
         .finally(() => {
@@ -961,9 +951,6 @@ export default function MapPage() {
       setSelectedPlot(null);
       setRoutePlotId(null);
     }
-    if (!selectedPlot && filteredPlots.length > 0) {
-      setSelectedPlot(filteredPlots[0]);
-    }
     setClusterPlots((current) =>
       current.filter((plot) => filteredPlots.some((fp) => fp.id === plot.id)),
     );
@@ -1017,6 +1004,7 @@ export default function MapPage() {
     event: ReactPointerEvent<SVGGElement>,
     plot: MapPlot,
   ) {
+    if (plot.isPlaceholder) return;
     event.preventDefault();
     setAdjacencyWarning("");
     setRoutePlotId(null);
@@ -1033,7 +1021,7 @@ export default function MapPage() {
   }
 
   function handlePlotPointerEnter(plot: MapPlot) {
-    if (selectionMode !== "cluster" || !dragModeRef.current) return;
+    if (plot.isPlaceholder || selectionMode !== "cluster" || !dragModeRef.current) return;
     applyClusterDrag(plot, dragModeRef.current);
   }
 
@@ -1073,6 +1061,7 @@ export default function MapPage() {
   }
 
   function handleMouseEnter(event: MouseEvent<SVGGElement>, plot: MapPlot) {
+    if (plot.isPlaceholder) return;
     const tooltip = tooltipRef.current;
     if (!tooltip) return;
     tooltip.style.display = "block";
@@ -1226,7 +1215,20 @@ export default function MapPage() {
           <div className="sidebar-section">
             <div className="sidebar-title">{T.searchTitle}</div>
             <label className="search-box">
-              <span className="search-label">{T.plotCode}</span>
+              <svg
+                className="search-icon"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.3-4.3" />
+              </svg>
               <input
                 type="text"
                 value={searchText}
@@ -1286,29 +1288,22 @@ export default function MapPage() {
                 (option) => {
                   const status = option.value as PlotStatus;
                   return (
-                    <div className="status-row" key={status}>
-                      <span
-                        className="status-dot"
+                    <span key={status}>
+                      <i
                         style={{
                           background: STATUS_COLOR[status].fill,
                           borderColor: STATUS_COLOR[status].stroke,
                         }}
                       />
                       {option.label}
-                    </div>
+                    </span>
                   );
                 },
               )}
-              <div className="status-row">
-                <span
-                  className="status-dot"
-                  style={{
-                    background: "rgba(116, 124, 137, 0.08)",
-                    borderColor: "rgba(122, 154, 144, 0.32)",
-                  }}
-                />
+              <span>
+                <i className="no-data" />
                 {T.noData}
-              </div>
+              </span>
             </div>
           </div>
 
@@ -1319,29 +1314,44 @@ export default function MapPage() {
           )}
 
           <div className="stats-grid">
-            <div className="stat-card">
-              <div className="stat-num">{stats.total}</div>
-              <div className="stat-label">{T.plannedSlot}</div>
+            <div
+              className={`stat-card ${statusFilter === "all" ? "active" : ""}`}
+              onClick={() => setStatusFilter("all")}
+            >
+              <span className="stat-num teal">{stats.total}</span>
+              <span className="stat-label">Tổng lô đất</span>
+            </div>
+            <div
+              className={`stat-card ${statusFilter === "available" ? "active" : ""}`}
+              onClick={() => setStatusFilter("available")}
+            >
+              <span className="stat-num green">{stats.available}</span>
+              <span className="stat-label">Còn trống</span>
+            </div>
+            <div
+              className={`stat-card ${statusFilter === "pending" ? "active" : ""}`}
+              onClick={() => setStatusFilter("pending")}
+            >
+              <span className="stat-num amber">{stats.pending}</span>
+              <span className="stat-label">Đang chờ</span>
+            </div>
+            <div
+              className={`stat-card ${statusFilter === "reserved" ? "active" : ""}`}
+              onClick={() => setStatusFilter("reserved")}
+            >
+              <span className="stat-num yellow">{stats.reserved}</span>
+              <span className="stat-label">Đã giữ chỗ</span>
+            </div>
+            <div
+              className={`stat-card ${statusFilter === "sold" ? "active" : ""}`}
+              onClick={() => setStatusFilter("sold")}
+            >
+              <span className="stat-num red">{stats.sold}</span>
+              <span className="stat-label">Đã bán</span>
             </div>
             <div className="stat-card">
-              <div className="stat-num">{stats.available}</div>
-              <div className="stat-label">{STATUS_LABEL.available}</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-num amber">
-                {stats.pending + stats.reserved}
-              </div>
-              <div className="stat-label">
-                {STATUS_LABEL.pending} / {STATUS_LABEL.reserved}
-              </div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-num red">{stats.sold}</div>
-              <div className="stat-label">{STATUS_LABEL.sold}</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-num gray">{stats.noData}</div>
-              <div className="stat-label">{T.noData}</div>
+              <span className="stat-num gray">{stats.noData}</span>
+              <span className="stat-label">Chưa có dữ liệu</span>
             </div>
           </div>
         </aside>
@@ -1375,309 +1385,355 @@ export default function MapPage() {
               onPointerUp={handleCanvasPointerUp}
               onPointerLeave={handleCanvasPointerUp}
             >
-              <svg
-                id="cemetery-map"
-                viewBox={MAP_VIEWBOX}
-                xmlns="http://www.w3.org/2000/svg"
+              <div
+                className="map-stage"
                 style={{
-                  transform: `scale(${zoom}) rotate(${rotation}deg)`,
+                  transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom}) rotate(${rotation}deg)`,
                   transformOrigin: "center center",
+                  transition: isDraggingRef.current ? "none" : "transform 0.1s ease-out",
                 }}
-                onPointerUp={endClusterDrag}
-                onPointerLeave={endClusterDrag}
               >
-                <defs>
-                  <pattern
-                    id="grid"
-                    width="20"
-                    height="20"
-                    patternUnits="userSpaceOnUse"
-                  >
-                    <path
-                      d="M 20 0 L 0 0 0 20"
-                      fill="none"
-                      stroke="rgba(0,229,196,0.05)"
-                      strokeWidth="0.5"
-                    />
-                  </pattern>
-                </defs>
-
-                <rect
-                  x={MAP_BG_RECT.x}
-                  y={MAP_BG_RECT.y}
-                  width={MAP_BG_RECT.width}
-                  height={MAP_BG_RECT.height}
-                  fill="url(#grid)"
-                />
-                {/* Ranh giới tổng thể khu đất: đa giác bất cân đối, viền nét đứt đỏ,
-                  bao trọn cả khối mộ đơn (trái) và khối lô gia tộc (phải) */}
-                <polygon className="map-land" points={MAP_BOUNDARY_POINTS} />
-                <polygon
-                  className="map-boundary-line"
-                  points={MAP_BOUNDARY_POINTS}
-                />
-
-                {/* Đường bao/đường chéo bên trái - không song song trục, xẻ ngang khối mộ đơn */}
-                <polygon
-                  className="map-road map-road-diagonal"
-                  points={LEFT_DIAGONAL_ROAD_POINTS}
-                />
-                {/* Đường chính chạy dọc - sát rìa phải khối mộ đơn */}
-                <rect
-                  x={MAIN_ROAD.x}
-                  y={MAIN_ROAD.y}
-                  width={MAIN_ROAD.width}
-                  height={MAIN_ROAD.height}
-                  className="map-road"
-                />
-                <text
-                  x={MAIN_ROAD.x + MAIN_ROAD.width / 2}
-                  y={MAIN_ROAD.y - 10}
-                  textAnchor="middle"
-                  className="map-road-label"
+                <svg
+                  id="cemetery-map"
+                  viewBox={MAP_VIEWBOX}
+                  xmlns="http://www.w3.org/2000/svg"
+                  onPointerUp={endClusterDrag}
+                  onPointerLeave={endClusterDrag}
                 >
-                  {T.northRoad}
-                </text>
-                {/* Các đường ngang nối giữa các hàng khu mộ đơn */}
-                {CROSS_ROADS.map((road, index) => (
-                  <rect
-                    key={`cross-${index}`}
-                    x={road.x}
-                    y={road.y}
-                    width={road.width}
-                    height={road.height}
-                    className="map-road"
-                  />
-                ))}
-                {/* Đường dẫn nối sang khối lô gia tộc */}
-                <rect
-                  x={CONNECTOR_ROAD.x}
-                  y={CONNECTOR_ROAD.y}
-                  width={CONNECTOR_ROAD.width}
-                  height={CONNECTOR_ROAD.height}
-                  className="map-road map-connector-road"
-                />
+                  <defs>
+                    <pattern
+                      id="grid"
+                      width="20"
+                      height="20"
+                      patternUnits="userSpaceOnUse"
+                    >
+                      <path
+                        d="M 20 0 L 0 0 0 20"
+                        fill="none"
+                        stroke="rgba(0,229,196,0.05)"
+                        strokeWidth="0.5"
+                      />
+                    </pattern>
+                    <clipPath id="cemetery-boundary-clip">
+                      <polygon points={MAP_BOUNDARY_POINTS} />
+                    </clipPath>
+                  </defs>
 
-                {/* Khu Tâm Linh - công viên trung tâm (nằm trong khối mộ đơn) */}
-                <g className="spirit-park">
                   <rect
-                    x={SPIRIT_PARK.x}
-                    y={SPIRIT_PARK.y}
-                    width={SPIRIT_PARK.width}
-                    height={SPIRIT_PARK.height}
-                    rx="18"
-                    className="spirit-park-rect"
+                    x={MAP_BG_RECT.x}
+                    y={MAP_BG_RECT.y}
+                    width={MAP_BG_RECT.width}
+                    height={MAP_BG_RECT.height}
+                    fill="url(#grid)"
                   />
-                  <circle
-                    cx={SPIRIT_PARK.cx}
-                    cy={SPIRIT_PARK.cy}
-                    r={SPIRIT_PARK.r}
-                    className="spirit-park-circle"
+                  {/* Ranh giới tổng thể khu đất */}
+                  <polygon className="map-land" points={MAP_BOUNDARY_POINTS} />
+                  <polygon
+                    className="map-boundary-line"
+                    points={MAP_BOUNDARY_POINTS}
+                  />
+
+                  {/* Mạng lưới đường giao thông liên kết 100% (cắt gọn tuyệt đối theo ranh giới đỏ) */}
+                  <g className="map-road-network" clipPath="url(#cemetery-boundary-clip)">
+                    {/* Trục đường vành đai Tây */}
+                    <rect
+                      x={LEFT_ROAD.x}
+                      y={LEFT_ROAD.y}
+                      width={LEFT_ROAD.width}
+                      height={LEFT_ROAD.height}
+                      className="map-road"
+                    />
+                    {/* Trục đường chính Đông */}
+                    <rect
+                      x={MAIN_ROAD.x}
+                      y={MAIN_ROAD.y}
+                      width={MAIN_ROAD.width}
+                      height={MAIN_ROAD.height}
+                      className="map-road"
+                    />
+                    {/* Đại lộ trung tâm CỔNG CHÍNH (dẫn từ Cổng chính qua Khu Tâm Linh) */}
+                    <rect
+                      x={CENTRAL_ROAD_SOUTH.x}
+                      y={CENTRAL_ROAD_SOUTH.y}
+                      width={CENTRAL_ROAD_SOUTH.width}
+                      height={CENTRAL_ROAD_SOUTH.height}
+                      className="map-road"
+                    />
+                    <rect
+                      x={CENTRAL_ROAD_NORTH.x}
+                      y={CENTRAL_ROAD_NORTH.y}
+                      width={CENTRAL_ROAD_NORTH.width}
+                      height={CENTRAL_ROAD_NORTH.height}
+                      className="map-road"
+                    />
+                    {/* Đại lộ CỔNG PHỤ (Khu Lô Gia Tộc) */}
+                    <rect
+                      x={FAMILY_ROAD.x}
+                      y={FAMILY_ROAD.y}
+                      width={FAMILY_ROAD.width}
+                      height={FAMILY_ROAD.height}
+                      className="map-road"
+                    />
+                    {/* Vành đai Bắc & Nam (nối Cổng chính, Cổng phụ và toàn bộ các đường) */}
+                    <rect
+                      x={TOP_ROAD.x}
+                      y={TOP_ROAD.y}
+                      width={TOP_ROAD.width}
+                      height={TOP_ROAD.height}
+                      className="map-road"
+                    />
+                    <rect
+                      x={BOTTOM_ROAD.x}
+                      y={BOTTOM_ROAD.y}
+                      width={BOTTOM_ROAD.width}
+                      height={BOTTOM_ROAD.height}
+                      className="map-road"
+                    />
+                    {/* 4 đường ngang nội bộ N1-N4 */}
+                    {CROSS_ROADS.map((road, index) => (
+                      <rect
+                        key={`cross-${index}`}
+                        x={road.x}
+                        y={road.y}
+                        width={road.width}
+                        height={road.height}
+                        className="map-road"
+                      />
+                    ))}
+                    {/* 3 đường ngang nối giữa các cụm mộ Gia tộc (C1-C4) sang Trục chính */}
+                    {FAMILY_CROSS_ROADS.map((road, index) => (
+                      <rect
+                        key={`fam-cross-${index}`}
+                        x={road.x}
+                        y={road.y}
+                        width={road.width}
+                        height={road.height}
+                        className="map-road"
+                      />
+                    ))}
+                    {/* Lối đi dọc nội bộ CỔNG PHỤ xuyên khối Gia Tộc */}
+                    <rect
+                      x={FAMILY_AISLE_ROAD.x}
+                      y={FAMILY_AISLE_ROAD.y}
+                      width={FAMILY_AISLE_ROAD.width}
+                      height={FAMILY_AISLE_ROAD.height}
+                      className="map-road"
+                    />
+                    {/* 4 góc vát nghiêng vành đai bo chuẩn theo khung nét đứt đỏ */}
+                    {ROAD_CORNER_CHAMFERS.map((pts, i) => (
+                      <polygon key={i} points={pts} className="map-road" />
+                    ))}
+                  </g>
+
+                  {/* Khu Tâm Linh - công viên trung tâm (nằm trong khối mộ đơn) */}
+                  <g className="spirit-park">
+                    <rect
+                      x={SPIRIT_PARK.x}
+                      y={SPIRIT_PARK.y}
+                      width={SPIRIT_PARK.width}
+                      height={SPIRIT_PARK.height}
+                      rx="18"
+                      className="spirit-park-rect"
+                    />
+                    <circle
+                      cx={SPIRIT_PARK.cx}
+                      cy={SPIRIT_PARK.cy}
+                      r={SPIRIT_PARK.r}
+                      className="spirit-park-circle"
+                    />
+                    <text
+                      x={SPIRIT_PARK.cx}
+                      y={SPIRIT_PARK.cy + 4}
+                      textAnchor="middle"
+                      className="spirit-park-label"
+                    >
+                      KHU TÂM LINH
+                    </text>
+                  </g>
+
+                  {/* Cổng CHÍNH - chỉ ở khối mộ đơn (trái) */}
+                  <polygon
+                    className="map-gate-marker"
+                    points={gateMarkerPoints(MAP_GATE)}
                   />
                   <text
-                    x={SPIRIT_PARK.cx}
-                    y={SPIRIT_PARK.cy + 4}
+                    x={MAP_GATE.x}
+                    y={MAP_GATE.y - 36}
                     textAnchor="middle"
-                    className="spirit-park-label"
+                    className="gate-label"
                   >
-                    KHU TÂM LINH
+                    {T.gate}
                   </text>
-                </g>
+                  {/* Cổng PHỤ - ở khối lô gia tộc (phải), không phải cổng chính */}
+                  <polygon
+                    className="map-gate-marker map-gate-secondary"
+                    points={gateMarkerPoints(SECONDARY_GATE)}
+                  />
+                  <text
+                    x={SECONDARY_GATE.x}
+                    y={SECONDARY_GATE.y - 36}
+                    textAnchor="middle"
+                    className="gate-label gate-label-secondary"
+                  >
+                    Cổng phụ
+                  </text>
 
-                {/* Cổng CHÍNH - chỉ ở khối mộ đơn (trái) */}
-                <polygon
-                  className="map-gate-marker"
-                  points={gateMarkerPoints(MAP_GATE)}
-                />
-                <text
-                  x={MAP_GATE.x}
-                  y={MAP_GATE.y - 36}
-                  textAnchor="middle"
-                  className="gate-label"
-                >
-                  {T.gate}
-                </text>
-                {/* Cổng PHỤ - ở khối lô gia tộc (phải), không phải cổng chính */}
-                <polygon
-                  className="map-gate-marker map-gate-secondary"
-                  points={gateMarkerPoints(SECONDARY_GATE)}
-                />
-                <text
-                  x={SECONDARY_GATE.x}
-                  y={SECONDARY_GATE.y - 36}
-                  textAnchor="middle"
-                  className="gate-label gate-label-secondary"
-                >
-                  Cổng phụ
-                </text>
+                  {/* Khối nền 7 khu mộ đơn */}
+                  {SINGLE_ZONES.map((zone) => {
+                    const backdrop = ZONE_BACKDROPS[zone.key];
+                    if (!backdrop) return null;
+                    return (
+                      <g key={`backdrop-${zone.key}`}>
+                        <polygon
+                          points={backdrop.points}
+                          fill={zone.dot}
+                          fillOpacity={0.07}
+                          stroke={zone.dot}
+                          strokeOpacity={0.4}
+                          strokeWidth={1}
+                          strokeDasharray="5 3"
+                        />
+                      </g>
+                    );
+                  })}
+                  {SINGLE_ZONES.map((zone) => (
+                    <text
+                      key={zone.key}
+                      x={zone.labelX}
+                      y={zone.labelY}
+                      textAnchor="middle"
+                      className="zone-label"
+                    >
+                      {`KHU ${zone.key}`}
+                    </text>
+                  ))}
 
-                {/* Khối nền 7 khu mộ đơn: đa giác vát góc kiểu bản vẽ kiến trúc phân lô */}
-                {SINGLE_ZONES.map((zone) => {
-                  const backdrop = ZONE_BACKDROPS[zone.key];
-                  if (!backdrop) return null;
-                  return (
-                    <g key={`backdrop-${zone.key}`}>
+                  {/* Khối nền Khu C: 4 cụm C1-C4 */}
+                  {CLUSTER_GROUP_BACKDROPS.map((backdrop, index) => (
+                    <g key={`cluster-backdrop-${index}`}>
                       <polygon
                         points={backdrop.points}
-                        fill={zone.dot}
-                        fillOpacity={0.07}
-                        stroke={zone.dot}
-                        strokeOpacity={0.4}
+                        fill={clusterZone?.dot}
+                        fillOpacity={0.08}
+                        stroke={clusterZone?.dot}
+                        strokeOpacity={0.45}
                         strokeWidth={1}
                         strokeDasharray="5 3"
                       />
-                      <circle
-                        cx={backdrop.cx}
-                        cy={backdrop.cy}
-                        r="11"
-                        className="zone-badge"
-                        stroke={zone.dot}
-                      />
-                      <text
-                        x={backdrop.cx}
-                        y={backdrop.cy + 4}
-                        textAnchor="middle"
-                        className="zone-badge-text"
-                        fill={zone.dot}
-                      >
-                        {zone.key}
-                      </text>
                     </g>
-                  );
-                })}
-                {SINGLE_ZONES.map((zone) => (
-                  <text
-                    key={zone.key}
-                    x={zone.labelX}
-                    y={zone.labelY}
-                    textAnchor="middle"
-                    className="zone-label"
-                  >
-                    {`KHU ${zone.key}`}
-                  </text>
-                ))}
-
-                {/* Khối nền Khu C: 4 cụm RIÊNG BIỆT (C1-C4), mỗi cụm dành cho 1
-                  gia tộc, có khoảng cách rõ ràng, không dính chung 1 khối */}
-                {CLUSTER_GROUP_BACKDROPS.map((backdrop, index) => (
-                  <g key={`cluster-backdrop-${index}`}>
-                    <polygon
-                      points={backdrop.points}
-                      fill={clusterZone?.dot}
-                      fillOpacity={0.08}
-                      stroke={clusterZone?.dot}
-                      strokeOpacity={0.45}
-                      strokeWidth={1}
-                      strokeDasharray="5 3"
-                    />
-                    <circle
-                      cx={backdrop.cx}
-                      cy={backdrop.cy - 60}
-                      r="13"
-                      className="zone-badge"
-                      stroke={clusterZone?.dot}
-                    />
+                  ))}
+                  {/* Nhãn tên từng cụm KHU C1, C2, C3, C4 ở chính giữa trên đầu mỗi lô gia tộc */}
+                  {CLUSTER_GROUP_BACKDROPS.map((backdrop, index) => (
                     <text
+                      key={`cluster-header-${index}`}
                       x={backdrop.cx}
-                      y={backdrop.cy - 56}
+                      y={backdrop.y - 10}
                       textAnchor="middle"
-                      className="zone-badge-text"
-                      fill={clusterZone?.dot}
-                    >{`C${index + 1}`}</text>
-                  </g>
-                ))}
-                {clusterZone && (
-                  <text
-                    x={clusterZone.labelX}
-                    y={clusterZone.labelY}
-                    textAnchor="middle"
-                    className="zone-label"
-                  >
-                    {`KHU ${clusterZone.key} - ${T.cluster.toUpperCase()}`}
-                  </text>
-                )}
-
-                {routePlot && (
-                  <polyline
-                    className="route-line"
-                    points={getCemeteryRoutePoints(routePlot)}
-                  />
-                )}
-
-                {filteredPlots.map((plot) => {
-                  const color = STATUS_COLOR[plot.status];
-                  const myReservation = myPlotByCode.get(plot.plotCode);
-                  const displayLabel = myReservation
-                    ? getMyReservationLabel(myReservation)
-                    : getStatusLabel(plot);
-                  return (
-                    <g
-                      key={plot.id}
-                      className={getPlotClassName(plot, myReservation)}
-                      onPointerDown={(event) =>
-                        handlePlotPointerDown(event, plot)
-                      }
-                      onPointerEnter={() => handlePlotPointerEnter(plot)}
-                      onMouseEnter={(event) => handleMouseEnter(event, plot)}
-                      onMouseMove={handleMouseMove}
-                      onMouseLeave={handleMouseLeave}
+                      className="zone-label"
                     >
-                      <rect
-                        className="lot-rect"
-                        x={plot.x}
-                        y={plot.y}
-                        width={plot.width}
-                        height={plot.height}
-                        rx="2"
-                        fill={
-                          myReservation ? "rgba(0,229,196,0.24)" : color.fill
-                        }
-                        stroke={getPlotStroke(plot, myReservation)}
-                        strokeWidth={
-                          selectedPlot?.id === plot.id ||
-                          clusterIds.has(plot.id) ||
-                          myReservation
-                            ? 2
-                            : 0.8
-                        }
-                        data-id={plot.id}
-                        data-zone={plot.zoneName}
-                        data-status={plot.status}
-                      />
-                      <title>
-                        {plot.plotCode} - {plot.zoneName} - {displayLabel}
-                      </title>
-                      <text
-                        x={plot.x + plot.width / 2}
-                        y={plot.y + Math.min(16, plot.height / 2 + 3)}
-                        textAnchor="middle"
-                        className="plot-code"
-                        fill={color.text}
-                      >
-                        {plot.plotNumber}
-                      </text>
-                      {myReservation && (
-                        <text
-                          x={plot.x + plot.width - 5}
-                          y={plot.y + 8}
-                          textAnchor="middle"
-                          className="plot-mine-mark"
-                        >
-                          ✓
-                        </text>
-                      )}
-                    </g>
-                  );
-                })}
+                      {`KHU C${index + 1}`}
+                    </text>
+                  ))}
 
-                {selectedPlot &&
-                  filteredPlots.some((plot) => plot.id === selectedPlot.id) && (
-                    <rect
-                      x={selectedPlot.x + 1}
-                      y={selectedPlot.y + 1}
-                      width={selectedPlot.width - 2}
-                      height={selectedPlot.height - 2}
-                      rx="3"
+                  {routePlot && (
+                    <polyline
+                      className="route-line"
+                      points={getCemeteryRoutePoints(routePlot)}
+                    />
+                  )}
+
+                  {filteredPlots.map((plot) => {
+                    if (plot.isPlaceholder) {
+                      return (
+                        <g
+                          key={plot.id}
+                          className="plot-cell placeholder-plot"
+                          style={{ opacity: 0.08, pointerEvents: "none" }}
+                        >
+                          <rect
+                            className="lot-rect"
+                            x={plot.x}
+                            y={plot.y}
+                            width={plot.width}
+                            height={plot.height}
+                            rx="2"
+                            fill="rgba(255,255,255,0.02)"
+                            stroke="rgba(255,255,255,0.08)"
+                            strokeWidth={0.5}
+                            strokeDasharray="2 2"
+                          />
+                        </g>
+                      );
+                    }
+
+                    const color = STATUS_COLOR[plot.status];
+                    const myReservation = myPlotByCode.get(plot.plotCode);
+                    const displayLabel = myReservation
+                      ? getMyReservationLabel(myReservation)
+                      : getStatusLabel(plot);
+                    return (
+                      <g
+                        key={plot.id}
+                        className={getPlotClassName(plot, myReservation)}
+                        onPointerDown={(event) =>
+                          handlePlotPointerDown(event, plot)
+                        }
+                        onPointerEnter={() => handlePlotPointerEnter(plot)}
+                        onMouseEnter={(event) => handleMouseEnter(event, plot)}
+                        onMouseMove={handleMouseMove}
+                        onMouseLeave={handleMouseLeave}
+                      >
+                        <rect
+                          className="lot-rect"
+                          x={plot.x}
+                          y={plot.y}
+                          width={plot.width}
+                          height={plot.height}
+                          rx="2"
+                          fill={
+                            myReservation ? "rgba(0,229,196,0.24)" : color.fill
+                          }
+                          stroke={getPlotStroke(plot, myReservation)}
+                          strokeWidth={
+                            selectedPlot?.id === plot.id ||
+                            clusterIds.has(plot.id) ||
+                            myReservation
+                              ? 2
+                              : 0.8
+                          }
+                          data-id={plot.id}
+                          data-zone={plot.zoneName}
+                          data-status={plot.status}
+                        />
+                        <title>
+                          {plot.plotCode} - {plot.zoneName} - {displayLabel}
+                        </title>
+                        <text
+                          x={plot.x + plot.width / 2}
+                          y={plot.y + Math.min(16, plot.height / 2 + 3)}
+                          textAnchor="middle"
+                          className="plot-code"
+                          fill={color.text}
+                        >
+                          {plot.plotNumber}
+                        </text>
+                        {myReservation && (
+                          <text
+                            x={plot.x + plot.width - 5}
+                            y={plot.y + 8}
+                            textAnchor="middle"
+                            className="plot-mine-mark"
+                          >
+                            ✓
+                          </text>
+                        )}
+                      </g>
+                    );
+                  })}
+
+                  {selectedPlot &&
+                    filteredPlots.some((plot) => plot.id === selectedPlot.id) && (
+                      <rect
                       fill="none"
                       stroke="#f0c060"
                       strokeWidth="2"
@@ -1685,7 +1741,8 @@ export default function MapPage() {
                       opacity="0.9"
                     />
                   )}
-              </svg>
+                </svg>
+              </div>
 
               {(isLoading || loadError || filteredPlots.length === 0) && (
                 <div className="map-empty">
@@ -1800,7 +1857,21 @@ export default function MapPage() {
 
           {selectedPlot && (
             <div className="detail-panel visible">
-              <div className="detail-tag">{T.pageTitle}</div>
+              <div className="detail-panel-header">
+                <div className="detail-tag">{T.pageTitle}</div>
+                <button
+                  type="button"
+                  className="detail-close-btn"
+                  onClick={() => {
+                    setSelectedPlot(null);
+                    setRoutePlotId(null);
+                  }}
+                  title="Tắt bảng thông tin"
+                  aria-label="Tắt bảng thông tin"
+                >
+                  ✕
+                </button>
+              </div>
               <div className="detail-lot-id">{selectedPlot.plotCode}</div>
               <div className="detail-zone">
                 {selectedPlot.zoneName} - {selectedPlot.rowCode} -{" "}

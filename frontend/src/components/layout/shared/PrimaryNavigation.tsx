@@ -9,6 +9,7 @@ type PrimaryNavigationProps = {
 };
 
 const PUBLIC_ITEMS = [
+  { label: "Trang chủ", to: ROUTES.HOME },
   { label: "Bản đồ", to: ROUTES.MAP },
   { label: "Dịch vụ", to: ROUTES.SERVICES },
   { label: "AI tư vấn", to: ROUTES.AI_AGENT },
@@ -19,10 +20,13 @@ export default function PrimaryNavigation({
   variant = "dark",
 }: PrimaryNavigationProps) {
   const role = useAuthStore((state) => state.role);
+  const customerItems = role === "customer"
+    ? [...PUBLIC_ITEMS, { label: "Gia đình tưởng niệm", to: ROUTES.DECEASED_FAMILY }]
+    : PUBLIC_ITEMS;
   const items =
     role === "admin"
-      ? [...PUBLIC_ITEMS, { label: "Admin", to: ROUTES.ADMIN_DASHBOARD }]
-      : PUBLIC_ITEMS;
+      ? [...customerItems, { label: "Admin", to: ROUTES.ADMIN_DASHBOARD }]
+      : customerItems;
 
   return (
     <nav
@@ -36,7 +40,7 @@ export default function PrimaryNavigation({
           <li key={item.to}>
             <NavLink
               to={item.to}
-              end={item.to === ROUTES.AI_AGENT}
+              end={item.to === ROUTES.HOME || item.to === ROUTES.AI_AGENT}
               className={({ isActive }) =>
                 `primary-navigation__link${isActive ? " is-active" : ""}`
               }

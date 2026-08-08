@@ -1,8 +1,29 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
+import { ROUTES } from "@/constants/routes";
 import "../AdminCorePages.css";
+import "./NotificationManagementPage.css";
 
-interface NotificationRow {
+interface ApiResponse<T> {
+  success: boolean;
+  data: T;
+}
+
+// Thông báo cá nhân của admin đang đăng nhập (GET /notifications), tức các
+// việc khách hàng vừa làm mà hệ thống đã báo lại cho admin xử lý.
+interface FeedNotification {
+  id: number;
+  type: string;
+  title: string;
+  message: string;
+  isRead: boolean;
+  relatedEntityType?: string | null;
+  relatedEntityId?: number | null;
+  createdAt: string;
+}
+
+interface BroadcastRow {
   id: number;
   title: string;
   message: string;
@@ -12,54 +33,320 @@ interface NotificationRow {
   createdAt: string;
 }
 
-const TABS = [
+const FEED_TABS = [
   { value: "all", label: "Tất cả" },
   { value: "unread", label: "Chưa đọc" },
-  { value: "broadcast", label: "Đã gửi chung" },
 ] as const;
 
-export default function NotificationManagementPage() {
-  const [rows, setRows] = useState<NotificationRow[]>([]);
-  const [tab, setTab] =
-    useState<(typeof TABS)[number]["value"]>("all");
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
-  const [message, setMessage] = useState("");
+const TYPE_LABELS: Record<string, string> = {
+  request_submitted: "Yêu cầu duyệt lô",
+  request_approved: "Yêu cầu đã duyệt",
+  request_rejected: "Yêu cầu bị từ chối",
+  request_cancelled: "Yêu cầu đã hủy",
+  appointment_response: "Phản hồi lịch hẹn",
+  service_submitted: "Đặt dịch vụ mới",
+};
 
-  const load = useCallback(async () => {
-    setLoading(true);
+function typeLabel(type: string) {
+  if (TYPE_LABELS[type]) return TYPE_LABELS[type];
+  return (
+    type
+      .split("_")
+      .filter(Boolean)
+      .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+      .join(" ") || "Thông báo"
+  );
+}
+
+function formatTime(value: string) {
+  const date = new Date(value);
+  const diffMinutes = Math.floor(
+    Math.max(0, Date.now() - date.getTime()) / 60_000,
+  );
+  if (diffMinutes < 1) return "Vừa xong";
+  if (diffMinutes < 60) return `${diffMinutes} phút trước`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours} giờ trước`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 7) return `${diffDays} ngày trước`;
+  return new Intl.DateTimeFormat("vi-VN", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function money(value?: number) {
+  if (value === undefined || value === null) return "—";
+  return new Intl.NumberFormat("vi-VN", {
+    style: "currency",
+    currency: "VND",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+// --- Chi tiết thông báo: tải thêm thông tin thực thể liên quan tuỳ loại ---
+
+interface ReservationDetail {
+  id: number;
+  type: "reserve" | "purchase";
+  status: string;
+  customerName?: string;
+  customerPhone?: string;
+  customerEmail?: string;
+  totalPrice?: number;
+  note?: string;
+  plots?: Array<{
+    code: string;
+    zoneName?: string;
+    areaSqm?: number;
+    price?: number;
+  }>;
+  createdAt?: string;
+}
+
+interface AppointmentDetail {
+  id: number;
+  reservationRequestId: number;
+  scheduledAt: string;
+  scheduledEndAt: string;
+  location: string;
+  status: string;
+  customerStatus: string;
+  statusNote?: string;
+}
+
+interface ServiceOrderDetail {
+  id: number;
+  status: string;
+  amount: number;
+  serviceName: string;
+  customerName: string;
+  customerPhone?: string | null;
+  plotCode?: string | null;
+  note?: string | null;
+  requestedDate?: string | null;
+}
+
+type DetailState =
+  | { kind: "reservation_request"; data: ReservationDetail }
+  | {
+      kind: "offline_appointment";
+      data: AppointmentDetail;
+      request?: ReservationDetail;
+    }
+  | { kind: "service_order"; data: ServiceOrderDetail }
+  | { kind: "none" };
+
+function actionRoute(
+  detail: DetailState,
+): { label: string; to: string } | null {
+  switch (detail.kind) {
+    case "reservation_request":
+      return {
+        label: "Đi tới Xử lý yêu cầu",
+        to: `${ROUTES.ADMIN_REQUESTS}?request=${detail.data.id}`,
+      };
+    case "offline_appointment":
+      return {
+        label: "Đi tới Xử lý yêu cầu",
+        to: `${ROUTES.ADMIN_REQUESTS}?appointment=${detail.data.id}`,
+      };
+    case "service_order":
+      return {
+        label: "Đi tới Quản lý dịch vụ",
+        to: `${ROUTES.ADMIN_SERVICES}?order=${detail.data.id}`,
+      };
+    default:
+      return null;
+  }
+}
+
+export default function NotificationManagementPage() {
+  const navigate = useNavigate();
+  const [view, setView] = useState<"feed" | "broadcast">("feed");
+
+  // --- Feed thực (thông báo cá nhân của admin) ---
+  const [items, setItems] = useState<FeedNotification[]>([]);
+  const [feedTab, setFeedTab] =
+    useState<(typeof FEED_TABS)[number]["value"]>("all");
+  const [feedLoading, setFeedLoading] = useState(true);
+  const [feedError, setFeedError] = useState("");
+  const requestInFlightRef = useRef(false);
+  const mutationVersionRef = useRef(0);
+
+  const [activeNotification, setActiveNotification] =
+    useState<FeedNotification | null>(null);
+  const [detail, setDetail] = useState<DetailState>({ kind: "none" });
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState("");
+
+  const loadFeed = useCallback(async (silent = false) => {
+    if (requestInFlightRef.current) return;
+    requestInFlightRef.current = true;
+    const requestVersion = mutationVersionRef.current;
+    if (!silent) setFeedLoading(true);
+    setFeedError("");
     try {
-      const response = await api.get("/admin/notifications", {
-        params: { page: 1, pageSize: 100 },
-      });
-      setRows(response.data.data?.items ?? []);
-      setMessage("");
+      const response =
+        await api.get<ApiResponse<FeedNotification[]>>("/notifications");
+      if (requestVersion === mutationVersionRef.current) {
+        setItems(
+          [...(response.data.data ?? [])].sort(
+            (a, b) =>
+              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+          ),
+        );
+      }
     } catch {
-      setMessage("Không thể tải danh sách thông báo.");
+      setFeedError("Không thể tải danh sách thông báo.");
     } finally {
-      setLoading(false);
+      requestInFlightRef.current = false;
+      if (!silent) setFeedLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    queueMicrotask(() => void load());
-  }, [load]);
+    const initialLoadId = window.setTimeout(() => void loadFeed(), 0);
+    const refreshId = window.setInterval(() => void loadFeed(true), 5_000);
+    return () => {
+      window.clearTimeout(initialLoadId);
+      window.clearInterval(refreshId);
+    };
+  }, [loadFeed]);
 
-  const visible = useMemo(
-    () =>
-      rows.filter((row) => {
-        if (tab === "unread") return !row.isRead;
-        if (tab === "broadcast") return row.broadcast;
-        return true;
-      }),
-    [rows, tab],
+  const unreadCount = useMemo(
+    () => items.filter((item) => !item.isRead).length,
+    [items],
   );
+  const visible = useMemo(
+    () => (feedTab === "unread" ? items.filter((item) => !item.isRead) : items),
+    [items, feedTab],
+  );
+
+  async function markRead(item: FeedNotification) {
+    if (item.isRead) return;
+    mutationVersionRef.current += 1;
+    setItems((current) =>
+      current.map((entry) =>
+        entry.id === item.id ? { ...entry, isRead: true } : entry,
+      ),
+    );
+    try {
+      await api.patch(`/notifications/${item.id}/read`);
+    } catch {
+      void loadFeed(true);
+    }
+  }
+
+  async function markAllRead() {
+    if (unreadCount === 0) return;
+    mutationVersionRef.current += 1;
+    const previous = items;
+    setItems((current) => current.map((item) => ({ ...item, isRead: true })));
+    try {
+      await api.patch("/notifications/read-all");
+    } catch {
+      setItems(previous);
+    }
+  }
+
+  async function openDetail(item: FeedNotification) {
+    setActiveNotification(item);
+    setDetail({ kind: "none" });
+    setDetailError("");
+    void markRead(item);
+
+    if (!item.relatedEntityType || !item.relatedEntityId) return;
+
+    setDetailLoading(true);
+    try {
+      if (item.relatedEntityType === "reservation_request") {
+        const response = await api.get<ApiResponse<ReservationDetail>>(
+          `/admin/reservations/${item.relatedEntityId}`,
+        );
+        setDetail({ kind: "reservation_request", data: response.data.data });
+      } else if (item.relatedEntityType === "offline_appointment") {
+        const appointmentId = item.relatedEntityId;
+        const listResponse = await api.get<
+          ApiResponse<{ items: AppointmentDetail[] }>
+        >("/admin/appointments", { params: { page: 1, pageSize: 200 } });
+        const appointment = listResponse.data.data?.items?.find(
+          (row) => row.id === appointmentId,
+        );
+        if (!appointment) {
+          setDetailError("Lịch hẹn này không còn tồn tại.");
+        } else {
+          let request: ReservationDetail | undefined;
+          try {
+            const requestResponse = await api.get<
+              ApiResponse<ReservationDetail>
+            >(`/admin/reservations/${appointment.reservationRequestId}`);
+            request = requestResponse.data.data;
+          } catch {
+            request = undefined;
+          }
+          setDetail({
+            kind: "offline_appointment",
+            data: appointment,
+            request,
+          });
+        }
+      } else if (item.relatedEntityType === "service_order") {
+        const response = await api.get<ApiResponse<ServiceOrderDetail>>(
+          `/admin/service-orders/${item.relatedEntityId}`,
+        );
+        setDetail({ kind: "service_order", data: response.data.data });
+      }
+    } catch {
+      setDetailError("Không thể tải chi tiết thông báo này.");
+    } finally {
+      setDetailLoading(false);
+    }
+  }
+
+  function closeDetail() {
+    setActiveNotification(null);
+    setDetail({ kind: "none" });
+    setDetailError("");
+  }
+
+  function goToProcessing() {
+    const route = actionRoute(detail);
+    if (!route) return;
+    closeDetail();
+    navigate(route.to);
+  }
+
+  // --- Soạn / gửi thông báo hàng loạt (tính năng sẵn có, giữ nguyên) ---
+  const [rows, setRows] = useState<BroadcastRow[]>([]);
+  const [broadcastLoading, setBroadcastLoading] = useState(true);
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
+  const [sending, setSending] = useState(false);
+  const [broadcastMessage, setBroadcastMessage] = useState("");
+
+  const loadBroadcastHistory = useCallback(async () => {
+    setBroadcastLoading(true);
+    try {
+      const response = await api.get<ApiResponse<{ items: BroadcastRow[] }>>(
+        "/admin/notifications",
+        { params: { page: 1, pageSize: 100, broadcast: true } },
+      );
+      setRows(response.data.data?.items ?? []);
+    } catch {
+      setBroadcastMessage("Không thể tải lịch sử thông báo đã gửi.");
+    } finally {
+      setBroadcastLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (view === "broadcast") queueMicrotask(() => void loadBroadcastHistory());
+  }, [view, loadBroadcastHistory]);
 
   async function send() {
     if (!title.trim() || !content.trim()) {
-      setMessage("Vui lòng nhập đầy đủ tiêu đề và nội dung.");
+      setBroadcastMessage("Vui lòng nhập đầy đủ tiêu đề và nội dung.");
       return;
     }
     setSending(true);
@@ -73,105 +360,376 @@ export default function NotificationManagementPage() {
       });
       setTitle("");
       setContent("");
-      setMessage("Đã gửi thông báo trong ứng dụng.");
-      await load();
+      setBroadcastMessage("Đã gửi thông báo trong ứng dụng.");
+      await loadBroadcastHistory();
     } catch {
-      setMessage("Không thể gửi thông báo.");
+      setBroadcastMessage("Không thể gửi thông báo.");
     } finally {
       setSending(false);
     }
   }
 
+  const route = actionRoute(detail);
+
   return (
     <div className="admin-page admin-core-page admin-notification-page">
       <header className="admin-page-header">
         <div>
-          <h1>Thông báo hệ thống</h1>
+          <h1>Thông báo</h1>
           <p className="admin-page-description">
-            Quản lý nội dung đã gửi và soạn thông báo mới cho khách hàng.
+            Theo dõi các thao tác của khách hàng cần admin xử lý, và soạn thông
+            báo gửi tới khách hàng.
           </p>
         </div>
       </header>
 
-      <div className="admin-notification-layout">
-        <section className="admin-core-panel">
-          <div className="admin-core-tabs" role="tablist" aria-label="Bộ lọc thông báo">
-            {TABS.map((item) => (
+      <div className="admin-notification-view-tabs">
+        <button
+          type="button"
+          className={view === "feed" ? "is-active" : ""}
+          onClick={() => setView("feed")}
+        >
+          Thông báo của bạn
+          {unreadCount > 0 && (
+            <span className="admin-notification-view-tabs__badge">
+              {unreadCount}
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
+          className={view === "broadcast" ? "is-active" : ""}
+          onClick={() => setView("broadcast")}
+        >
+          Gửi thông báo cho khách hàng
+        </button>
+      </div>
+
+      {view === "feed" ? (
+        <div className="admin-notification-feed-layout">
+          <section className="admin-core-panel">
+            <div
+              className="admin-core-tabs"
+              role="tablist"
+              aria-label="Bộ lọc thông báo"
+            >
+              {FEED_TABS.map((item) => (
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={feedTab === item.value}
+                  className={feedTab === item.value ? "is-active" : ""}
+                  key={item.value}
+                  onClick={() => setFeedTab(item.value)}
+                >
+                  {item.label}
+                </button>
+              ))}
+              <button
+                type="button"
+                className="admin-notification-mark-all"
+                disabled={unreadCount === 0}
+                onClick={() => void markAllRead()}
+              >
+                Đánh dấu tất cả đã đọc
+              </button>
+            </div>
+
+            {feedError && <p className="admin-core-alert">{feedError}</p>}
+
+            <div className="admin-notification-feed-list">
+              {feedLoading ? (
+                <div className="admin-core-empty">Đang tải...</div>
+              ) : visible.length === 0 ? (
+                <div className="admin-core-empty">
+                  Chưa có thông báo nào cần xử lý.
+                </div>
+              ) : (
+                visible.map((item) => (
+                  <article
+                    key={item.id}
+                    className={`admin-notification-feed-item${
+                      item.isRead ? "" : " is-unread"
+                    }${activeNotification?.id === item.id ? " is-active" : ""}`}
+                  >
+                    <button
+                      type="button"
+                      className="admin-notification-feed-item__content"
+                      onClick={() => void openDetail(item)}
+                    >
+                      <span className="admin-notification-feed-item__head">
+                        {!item.isRead && (
+                          <i
+                            className="admin-notification-feed-item__dot"
+                            aria-hidden="true"
+                          />
+                        )}
+                        <span className="admin-notification-feed-item__type">
+                          {typeLabel(item.type)}
+                        </span>
+                        <time>{formatTime(item.createdAt)}</time>
+                      </span>
+                      <strong>{item.title}</strong>
+                      <p>{item.message}</p>
+                    </button>
+                    <button
+                      type="button"
+                      className="admin-notification-feed-item__cta"
+                      onClick={() => void openDetail(item)}
+                    >
+                      Xem chi tiết
+                    </button>
+                  </article>
+                ))
+              )}
+            </div>
+          </section>
+
+          <aside className="admin-core-panel admin-notification-detail">
+            <header className="admin-core-panel__header">
+              <div>
+                <h2>Chi tiết thông báo</h2>
+                <p>Thông tin liên quan &amp; xử lý</p>
+              </div>
+            </header>
+
+            {!activeNotification ? (
+              <div className="admin-core-empty">
+                Chọn một thông báo để xem chi tiết.
+              </div>
+            ) : (
+              <div className="admin-notification-detail__body">
+                <p className="admin-notification-detail__type">
+                  {typeLabel(activeNotification.type)}
+                </p>
+                <h3>{activeNotification.title}</h3>
+                <p className="admin-notification-detail__message">
+                  {activeNotification.message}
+                </p>
+                <time>{formatTime(activeNotification.createdAt)}</time>
+
+                {detailLoading && (
+                  <p className="admin-notification-detail__state">
+                    Đang tải thông tin liên quan...
+                  </p>
+                )}
+                {detailError && (
+                  <p className="admin-core-alert">{detailError}</p>
+                )}
+
+                {detail.kind === "reservation_request" && (
+                  <dl className="admin-notification-detail__facts">
+                    <div>
+                      <dt>Khách hàng</dt>
+                      <dd>{detail.data.customerName ?? "—"}</dd>
+                    </div>
+                    <div>
+                      <dt>Liên hệ</dt>
+                      <dd>
+                        {detail.data.customerPhone ?? "—"}
+                        {detail.data.customerEmail
+                          ? ` · ${detail.data.customerEmail}`
+                          : ""}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Loại yêu cầu</dt>
+                      <dd>
+                        {detail.data.type === "purchase" ? "Mua lô" : "Giữ chỗ"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Lô đất</dt>
+                      <dd>
+                        {detail.data.plots?.length
+                          ? detail.data.plots
+                              .map((plot) => plot.code)
+                              .join(", ")
+                          : "—"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Tổng giá trị</dt>
+                      <dd>{money(detail.data.totalPrice)}</dd>
+                    </div>
+                  </dl>
+                )}
+
+                {detail.kind === "offline_appointment" && (
+                  <dl className="admin-notification-detail__facts">
+                    <div>
+                      <dt>Khách hàng</dt>
+                      <dd>{detail.request?.customerName ?? "—"}</dd>
+                    </div>
+                    <div>
+                      <dt>Lô đất</dt>
+                      <dd>
+                        {detail.request?.plots?.length
+                          ? detail.request.plots
+                              .map((plot) => plot.code)
+                              .join(", ")
+                          : "—"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Thời gian hẹn</dt>
+                      <dd>
+                        {new Intl.DateTimeFormat("vi-VN", {
+                          dateStyle: "short",
+                          timeStyle: "short",
+                        }).format(new Date(detail.data.scheduledAt))}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Địa điểm</dt>
+                      <dd>{detail.data.location}</dd>
+                    </div>
+                    <div>
+                      <dt>Phản hồi của khách</dt>
+                      <dd>
+                        {detail.data.customerStatus === "confirmed"
+                          ? "Đã xác nhận"
+                          : detail.data.customerStatus === "declined"
+                            ? "Đã từ chối"
+                            : "Chờ phản hồi"}
+                        {detail.data.statusNote
+                          ? ` — ${detail.data.statusNote}`
+                          : ""}
+                      </dd>
+                    </div>
+                  </dl>
+                )}
+
+                {detail.kind === "service_order" && (
+                  <dl className="admin-notification-detail__facts">
+                    <div>
+                      <dt>Khách hàng</dt>
+                      <dd>
+                        {detail.data.customerName}
+                        {detail.data.customerPhone
+                          ? ` · ${detail.data.customerPhone}`
+                          : ""}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Dịch vụ</dt>
+                      <dd>{detail.data.serviceName}</dd>
+                    </div>
+                    <div>
+                      <dt>Lô đất</dt>
+                      <dd>{detail.data.plotCode ?? "—"}</dd>
+                    </div>
+                    <div>
+                      <dt>Giá trị</dt>
+                      <dd>{money(detail.data.amount)}</dd>
+                    </div>
+                    {detail.data.note && (
+                      <div>
+                        <dt>Ghi chú khách</dt>
+                        <dd>{detail.data.note}</dd>
+                      </div>
+                    )}
+                  </dl>
+                )}
+
+                {route && (
+                  <button
+                    type="button"
+                    className="admin-notification-submit"
+                    onClick={goToProcessing}
+                  >
+                    {route.label}
+                  </button>
+                )}
+              </div>
+            )}
+          </aside>
+        </div>
+      ) : (
+        <div className="admin-notification-layout">
+          <section className="admin-core-panel">
+            <div
+              className="admin-core-tabs"
+              role="tablist"
+              aria-label="Lịch sử thông báo đã gửi"
+            >
               <button
                 type="button"
                 role="tab"
-                aria-selected={tab === item.value}
-                className={tab === item.value ? "is-active" : ""}
-                key={item.value}
-                onClick={() => setTab(item.value)}
+                aria-selected
+                className="is-active"
               >
-                {item.label}
+                Đã gửi chung
               </button>
-            ))}
-          </div>
-
-          <div className="admin-notification-list">
-            {loading ? (
-              <div className="admin-core-empty">Đang tải...</div>
-            ) : visible.length === 0 ? (
-              <div className="admin-core-empty">Không có thông báo.</div>
-            ) : (
-              visible.map((row) => (
-                <article key={row.id}>
-                  <strong>{row.title}</strong>
-                  <p>{row.message}</p>
-                  <small>
-                    {row.recipientName ?? "Khách hàng"} ·{" "}
-                    {new Date(row.createdAt).toLocaleString("vi-VN")}
-                  </small>
-                </article>
-              ))
-            )}
-          </div>
-        </section>
-
-        <aside className="admin-core-panel admin-notification-compose">
-          <header className="admin-core-panel__header">
-            <div>
-              <h2>Soạn thông báo</h2>
-              <p>Gửi trong ứng dụng</p>
             </div>
-          </header>
-          <div className="admin-notification-form">
-            <label>
-              <span>Gửi đến</span>
-              <input value="Tất cả khách hàng" disabled />
-            </label>
-            <label>
-              <span>Tiêu đề</span>
-              <input
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-              />
-            </label>
-            <label>
-              <span>Nội dung</span>
-              <textarea
-                value={content}
-                onChange={(event) => setContent(event.target.value)}
-                rows={6}
-              />
-            </label>
-            <p className="admin-notification-channel">
-              Kênh gửi: thông báo trong ứng dụng
-            </p>
-            {message && <div className="admin-notification-message">{message}</div>}
-            <button
-              type="button"
-              className="admin-notification-submit"
-              onClick={() => void send()}
-              disabled={sending}
-            >
-              {sending ? "Đang gửi..." : "Gửi ngay"}
-            </button>
-          </div>
-        </aside>
-      </div>
+
+            <div className="admin-notification-list">
+              {broadcastLoading ? (
+                <div className="admin-core-empty">Đang tải...</div>
+              ) : rows.length === 0 ? (
+                <div className="admin-core-empty">Chưa gửi thông báo nào.</div>
+              ) : (
+                rows.map((row) => (
+                  <article key={row.id}>
+                    <strong>{row.title}</strong>
+                    <p>{row.message}</p>
+                    <small>
+                      {row.recipientName ?? "Khách hàng"} ·{" "}
+                      {new Date(row.createdAt).toLocaleString("vi-VN")}
+                    </small>
+                  </article>
+                ))
+              )}
+            </div>
+          </section>
+
+          <aside className="admin-core-panel admin-notification-compose">
+            <header className="admin-core-panel__header">
+              <div>
+                <h2>Soạn thông báo</h2>
+                <p>Gửi trong ứng dụng</p>
+              </div>
+            </header>
+            <div className="admin-notification-form">
+              <label>
+                <span>Gửi đến</span>
+                <input value="Tất cả khách hàng" disabled />
+              </label>
+              <label>
+                <span>Tiêu đề</span>
+                <input
+                  value={title}
+                  onChange={(event) => setTitle(event.target.value)}
+                />
+              </label>
+              <label>
+                <span>Nội dung</span>
+                <textarea
+                  value={content}
+                  onChange={(event) => setContent(event.target.value)}
+                  rows={6}
+                />
+              </label>
+              <p className="admin-notification-channel">
+                Kênh gửi: thông báo trong ứng dụng
+              </p>
+              {broadcastMessage && (
+                <div className="admin-notification-message">
+                  {broadcastMessage}
+                </div>
+              )}
+              <button
+                type="button"
+                className="admin-notification-submit"
+                onClick={() => void send()}
+                disabled={sending}
+              >
+                {sending ? "Đang gửi..." : "Gửi ngay"}
+              </button>
+            </div>
+          </aside>
+        </div>
+      )}
     </div>
   );
 }

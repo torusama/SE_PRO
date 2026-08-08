@@ -97,9 +97,13 @@ export class ContractsService {
         [id],
       ),
       this.database.query(
-        `SELECT ownership_id AS id, user_id AS "userId", ownership_start AS "startedAt",
-                ownership_end AS "endedAt", is_current AS "isCurrent", transfer_note AS note
-         FROM ownership_records WHERE contract_id=$1 ORDER BY ownership_start DESC`,
+        `SELECT o.ownership_id AS id, o.user_id AS "userId",
+                p.plot_code AS "plotCode", o.ownership_start AS "startedAt",
+                o.ownership_end AS "endedAt", o.is_current AS "isCurrent",
+                o.transfer_note AS note
+         FROM ownership_records o
+         JOIN plots p ON p.plot_id = o.plot_id
+         WHERE o.contract_id=$1 ORDER BY o.ownership_start DESC`,
         [id],
       ),
     ]);
@@ -268,6 +272,47 @@ export class ContractsService {
     });
   }
 
+  async markPdfGenerated(
+    id: number,
+    adminId: number,
+    context?: AdminRequestContext,
+  ) {
+    return this.database.transaction(async (client) => {
+      const updated = await client.query<{
+        id: number;
+        contractCode: string;
+        generatedPdfAt: Date | string;
+      }>(
+        `UPDATE contracts
+         SET generated_pdf_at = NOW(), generated_pdf_by = $2, updated_at = NOW()
+         WHERE contract_id = $1 AND status = 'draft' AND is_deleted = FALSE
+           AND EXISTS (
+             SELECT 1 FROM offline_appointments appointment
+             WHERE appointment.request_id = contracts.request_id
+               AND appointment.customer_status = 'confirmed'
+               AND appointment.is_deleted = FALSE
+           )
+         RETURNING contract_id AS id, contract_code AS "contractCode",
+                   generated_pdf_at AS "generatedPdfAt"`,
+        [id, adminId],
+      );
+      const contract = updated.rows[0];
+      if (!contract) {
+        throw new BadRequestException(
+          'The customer must confirm the appointment before generating the contract PDF',
+        );
+      }
+      await this.audit?.record(client, {
+        action: 'contract.pdf.generate',
+        entityType: 'contract',
+        entityId: id,
+        after: { generatedPdfAt: contract.generatedPdfAt },
+        context: context ?? { adminId, ipAddress: null, userAgent: null },
+      });
+      return contract;
+    });
+  }
+
   async saveSignedEvidence(
     id: number,
     adminId: number,
@@ -285,17 +330,23 @@ export class ContractsService {
       const contract = await client.query<{
         id: number;
         status: string;
+        paymentStatus: string;
       }>(
-        `SELECT contract_id AS id, status
+        `SELECT contract_id AS id, status, payment_status AS "paymentStatus"
          FROM contracts
          WHERE contract_id = $1 AND is_deleted = FALSE
          FOR UPDATE`,
         [id],
       );
       if (!contract.rows[0]) throw new NotFoundException('Contract not found');
-      if (!['draft', 'active'].includes(contract.rows[0].status)) {
+      if (contract.rows[0].status !== 'draft') {
         throw new BadRequestException(
           'Signed evidence cannot be added to this contract status',
+        );
+      }
+      if (contract.rows[0].paymentStatus !== 'paid') {
+        throw new BadRequestException(
+          'The contract must be paid in full before signed evidence is uploaded',
         );
       }
       const count = await client.query<{ total: number }>(
@@ -367,10 +418,12 @@ export class ContractsService {
         userId: number;
         status: string;
         paymentStatus: string;
+        generatedPdfAt: Date | string | null;
       }>(
         `SELECT contract_id AS id, contract_code AS "contractCode",
                 user_id AS "userId", status,
-                payment_status AS "paymentStatus"
+                payment_status AS "paymentStatus",
+                generated_pdf_at AS "generatedPdfAt"
          FROM contracts
          WHERE contract_id = $1 AND is_deleted = FALSE
          FOR UPDATE`,
@@ -386,6 +439,11 @@ export class ContractsService {
       if (contract.paymentStatus !== 'paid') {
         throw new BadRequestException(
           'The contract must be paid in full before ownership can be activated',
+        );
+      }
+      if (!contract.generatedPdfAt) {
+        throw new BadRequestException(
+          'Generate the contract PDF before activating ownership',
         );
       }
       const evidence = await client.query(
@@ -498,7 +556,8 @@ export class ContractsService {
         `SELECT contract_id AS id, contract_code AS "contractCode",
                 user_id AS "userId", total_amount::float AS "totalAmount",
                 paid_amount::float AS "paidAmount",
-                payment_status AS "paymentStatus"
+                payment_status AS "paymentStatus", status,
+                generated_pdf_at AS "generatedPdfAt"
          FROM contracts
          WHERE contract_id = $1 AND is_deleted = FALSE
          FOR UPDATE`,
@@ -506,6 +565,11 @@ export class ContractsService {
       );
       const before = locked.rows[0];
       if (!before) throw new NotFoundException('Contract not found');
+      if (before.status !== 'draft' || !before.generatedPdfAt) {
+        throw new BadRequestException(
+          'Generate the draft contract PDF before recording payment',
+        );
+      }
       if (body.amount > before.totalAmount - before.paidAmount) {
         throw new BadRequestException(
           'Payment amount exceeds the outstanding balance',
@@ -582,7 +646,8 @@ export class ContractsService {
   }
 
   private baseQuery(suffix: string) {
-    return `SELECT c.contract_id AS id, c.contract_code AS "contractCode", c.status,
+    return `SELECT c.contract_id AS id, c.request_id AS "requestId",
+                   c.contract_code AS "contractCode", c.status,
                    c.total_amount::float AS "totalAmount", c.paid_amount::float AS "paidAmount",
                    (c.total_amount - c.paid_amount)::float AS "remainingAmount",
                    c.payment_status AS "paymentStatus", c.contract_date AS "contractDate",
@@ -591,6 +656,7 @@ export class ContractsService {
                    c.contract_base_content AS "contractBaseContent",
                    c.inheritance_content AS "inheritanceContent",
                    c.inheritance_updated_at AS "inheritanceUpdatedAt",
+                   c.generated_pdf_at AS "generatedPdfAt",
                    (c.status = 'draft' OR (
                      c.status = 'active'
                      AND NOT EXISTS (

@@ -200,6 +200,8 @@ describe('ContractsService admin operations', () => {
               totalAmount: 100,
               paidAmount: 0,
               paymentStatus: 'unpaid',
+              status: 'draft',
+              generatedPdfAt: new Date(),
             },
           ],
         };
@@ -277,6 +279,7 @@ describe('ContractsService admin operations', () => {
               userId: 7,
               status: 'draft',
               paymentStatus: 'paid',
+              generatedPdfAt: new Date(),
             },
           ],
         };
@@ -300,6 +303,7 @@ describe('ContractsService admin operations', () => {
               userId: 7,
               status: 'draft',
               paymentStatus: 'paid',
+              generatedPdfAt: new Date(),
             },
           ],
         };

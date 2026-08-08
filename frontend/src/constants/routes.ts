@@ -22,6 +22,7 @@ export const ROUTES = {
   AVAILABILITY: '/lich-ranh',
   APPOINTMENTS: '/lich-hen',
   AI_AGENT:     '/tu-van-ai',
+  DECEASED_FAMILY: '/gia-dinh-tuong-niem',
 
   // === Admin ===
   ADMIN_DASHBOARD:    '/admin',
@@ -36,4 +37,5 @@ export const ROUTES = {
   ADMIN_APPOINTMENTS: '/admin/lich-hen',
   ADMIN_REMINDERS:    '/admin/nhac-lich',
   ADMIN_AI_AGENT:     '/admin/ai-agent',
+  ADMIN_DECEASED:     '/admin/ho-so-nguoi-da-khuat',
 } as const
