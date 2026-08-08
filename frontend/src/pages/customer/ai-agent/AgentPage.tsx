@@ -30,36 +30,109 @@ import type {
 } from "./agent.types";
 import "./AgentPage.css";
 
-const STARTER_PROMPTS = [
-  {
-    title: "Kiểm tra mức cạnh tranh",
-    text: "Kiểm tra mức cạnh tranh nội bộ của lô A-01-001.",
-  },
-  {
-    title: "Tổng quan chăm sóc",
-    text: "Tóm tắt các yêu cầu, đơn dịch vụ, lịch hẹn và nhắc lịch của tôi.",
-  },
-  {
-    icon: "◇",
-    title: "Tìm theo ngân sách",
-    text: "Mình cần 1 lô dưới 150 triệu.",
-  },
-  {
-    icon: "⌘",
-    title: "Lô liền kề",
-    text: "Tìm 3 lô liền nhau ở Khu A, ngân sách 450 triệu.",
-  },
-  {
-    icon: "⇄",
-    title: "So sánh phương án",
-    text: "So sánh 2 phương án phù hợp ngân sách 300 triệu.",
-  },
-  {
-    icon: "✦",
-    title: "Dịch vụ chăm sóc",
-    text: "Gợi ý dịch vụ chăm sóc mộ định kỳ.",
-  },
-];
+export interface SuggestedPrompt {
+  category: string;
+  text: string;
+}
+
+export function getContextualPrompts(
+  lastMessage?: ChatMessage,
+): SuggestedPrompt[] {
+  if (!lastMessage || lastMessage.role !== "assistant") {
+    return [
+      {
+        category: "Tìm lô đất",
+        text: "Mình cần tìm 1 lô ở Khu A với ngân sách dưới 150 triệu.",
+      },
+      {
+        category: "So sánh phương án",
+        text: "So sánh 2 phương án đất nghĩa trang phù hợp ngân sách 300 triệu.",
+      },
+      {
+        category: "Dịch vụ chăm sóc",
+        text: "Gợi ý gói chăm sóc phần mộ và thay hoa tươi định kỳ hàng tháng.",
+      },
+    ];
+  }
+
+  const response = lastMessage.response;
+  const content = lastMessage.content || "";
+  const prompts: SuggestedPrompt[] = [];
+
+  if (response?.recommendations && response.recommendations.length > 0) {
+    prompts.push({
+      category: "So sánh chi tiết",
+      text: "So sánh điểm khác biệt giữa các lô vừa gợi ý.",
+    });
+    prompts.push({
+      category: "Chi phí & Đặt cọc",
+      text: "Tư vấn chi tiết tổng chi phí và quy trình đặt giữ lô.",
+    });
+    prompts.push({
+      category: "Xem sơ đồ",
+      text: "Cho mình xem vị trí chi tiết các lô này trên bản đồ.",
+    });
+  } else if (response?.baziSuggestion) {
+    prompts.push({
+      category: "Hướng phong thủy",
+      text: "Giải thích chi tiết các hướng hợp tuổi cho gia đình.",
+    });
+    prompts.push({
+      category: "Chọn lô theo tuổi",
+      text: "Tìm lô có hướng phù hợp nhất với kết quả phong thủy trên.",
+    });
+    prompts.push({
+      category: "Phương án thay thế",
+      text: "Gợi ý thêm hướng dự phòng nếu khu vực này hết lô.",
+    });
+  } else if (
+    response?.suggestedServices &&
+    response.suggestedServices.length > 0
+  ) {
+    prompts.push({
+      category: "Đặt dịch vụ",
+      text: "Hướng dẫn cách đăng ký dịch vụ và hình thức thanh toán.",
+    });
+    prompts.push({
+      category: "Lịch định kỳ",
+      text: "Tư vấn tần suất và quy trình thực hiện dịch vụ chăm sóc.",
+    });
+    prompts.push({
+      category: "Báo giá dịch vụ",
+      text: "Chi tiết các gói dịch vụ và bảng giá kèm theo.",
+    });
+  } else {
+    if (content.includes("lô") || content.includes("khu")) {
+      prompts.push({
+        category: "Chi phí hoàn thiện",
+        text: "Chi phí xây dựng và hoàn thiện phần mộ khoảng bao nhiêu?",
+      });
+      prompts.push({
+        category: "Hồ sơ pháp lý",
+        text: "Quy trình ký hợp đồng và giấy tờ gồm những gì?",
+      });
+      prompts.push({
+        category: "Phương án khác",
+        text: "Có phương án nào ở khu vực lân cận không?",
+      });
+    } else {
+      prompts.push({
+        category: "Tư vấn chi tiết",
+        text: "Tư vấn giúp mình các bước tiếp theo cần chuẩn bị.",
+      });
+      prompts.push({
+        category: "Tham quan thực tế",
+        text: "Đặt lịch hẹn đến tham quan thực tế hoa viên.",
+      });
+      prompts.push({
+        category: "Liên hệ tư vấn",
+        text: "Cần chuẩn bị thông tin gì trước khi ký hợp đồng?",
+      });
+    }
+  }
+
+  return prompts.slice(0, 3);
+}
 
 const createLocalId = () =>
   `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -109,6 +182,47 @@ export default function AgentPage() {
   const requestControllerRef = useRef<AbortController | null>(null);
   const requestStartedAtRef = useRef(0);
   const presentationTimersRef = useRef<number[]>([]);
+  const [isInputFocused, setIsInputFocused] = useState(false);
+  const [isInputHovered, setIsInputHovered] = useState(false);
+  const [isIdleAfterOneMin, setIsIdleAfterOneMin] = useState(false);
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (idleTimerRef.current) {
+      clearTimeout(idleTimerRef.current);
+      idleTimerRef.current = null;
+    }
+
+    if (loading || input.trim() !== "") {
+      setIsIdleAfterOneMin(false);
+      return;
+    }
+
+    if (messages.length === 0) {
+      setIsIdleAfterOneMin(true);
+      return;
+    }
+
+    setIsIdleAfterOneMin(false);
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage && lastMessage.role === "assistant") {
+      idleTimerRef.current = setTimeout(() => {
+        setIsIdleAfterOneMin(true);
+      }, 60000);
+    }
+
+    return () => {
+      if (idleTimerRef.current) {
+        clearTimeout(idleTimerRef.current);
+      }
+    };
+  }, [messages, loading, input]);
+
+  const lastAssistantMessage = [...messages]
+    .reverse()
+    .find((m) => m.role === "assistant");
+  const suggestedPrompts = getContextualPrompts(lastAssistantMessage);
+
   const canPersistConversations = Boolean(
     token && (role === "customer" || role === "admin"),
   );
@@ -718,20 +832,6 @@ export default function AgentPage() {
                       <span>Chi phí minh bạch</span>
                       <span>Tư vấn theo nhu cầu</span>
                     </div>
-                    <div className="agent-starter-grid">
-                      {STARTER_PROMPTS.map((prompt) => (
-                        <button
-                          type="button"
-                          key={prompt.title}
-                          onClick={() => void sendMessage(prompt.text)}
-                        >
-                          <div>
-                            <strong>{prompt.title}</strong>
-                            <small>{prompt.text}</small>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
                   </section>
                 )}
 
@@ -789,14 +889,58 @@ export default function AgentPage() {
               </div>
             </div>
 
-            <form className="agent-composer" onSubmit={submit}>
+            <form
+              className="agent-composer"
+              onSubmit={submit}
+              onMouseEnter={() => setIsInputHovered(true)}
+              onMouseLeave={() => setIsInputHovered(false)}
+            >
               <div className="agent-composer-inner">
+                {!loading &&
+                  !input.trim() &&
+                  isIdleAfterOneMin &&
+                  (isInputFocused || isInputHovered) && (
+                    <div className="agent-floating-suggestions">
+                      <div className="agent-floating-header">
+                        <div className="agent-floating-label">
+                          <Sparkles size={13} className="agent-sparkle-icon" />
+                          <span>Gợi ý câu hỏi AI</span>
+                        </div>
+                      </div>
+
+                      <div className="agent-prompt-pills-row">
+                        {suggestedPrompts.map((prompt, idx) => (
+                          <button
+                            key={`${prompt.category}-${idx}`}
+                            type="button"
+                            className="agent-prompt-pill"
+                            onClick={() => void sendMessage(prompt.text)}
+                            title={prompt.text}
+                          >
+                            <div className="agent-prompt-pill-content">
+                              <span className="agent-prompt-pill-category">
+                                {prompt.category}
+                              </span>
+                              <span className="agent-prompt-pill-text">
+                                {prompt.text}
+                              </span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                 <div className="agent-input-wrap">
                   <textarea
                     ref={inputRef}
                     rows={1}
                     value={input}
                     onChange={(event) => setInput(event.target.value)}
+                    onFocus={() => setIsInputFocused(true)}
+                    onBlur={() => {
+                      setTimeout(() => setIsInputFocused(false), 200);
+                    }}
                     onKeyDown={handleKeyDown}
                     placeholder="Nhắn tin cho trợ lý…"
                     maxLength={2000}
