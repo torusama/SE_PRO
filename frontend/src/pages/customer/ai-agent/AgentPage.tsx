@@ -55,6 +55,11 @@ export function getContextualPrompts(
     ];
   }
 
+  const backendFollowUps = lastMessage.response?.suggestedFollowUps;
+  if (backendFollowUps && backendFollowUps.length > 0) {
+    return backendFollowUps.slice(0, 3);
+  }
+
   const response = lastMessage.response;
   const content = lastMessage.content || "";
   const prompts: SuggestedPrompt[] = [];

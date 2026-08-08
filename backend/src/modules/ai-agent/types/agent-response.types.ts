@@ -145,6 +145,7 @@ export interface RecommendationResult {
     maximumListedPrice: number;
     scope: 'matching_available_inventory';
   };
+  suggestedFollowUps?: Array<{ category: string; text: string }>;
   rankerVersion: string;
   fallbackUsed: boolean;
   rankerFallbackReason?: string;

@@ -35,6 +35,7 @@ export interface AgentResponse {
   requirements: Record<string, unknown>;
   recommendations: AgentRecommendation[];
   suggestedServices: AgentService[];
+  suggestedFollowUps?: Array<{ category: string; text: string }>;
   baziSuggestion?: {
     preferredDirections: string[];
     alternativeDirections: string[];

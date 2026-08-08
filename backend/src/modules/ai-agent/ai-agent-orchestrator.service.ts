@@ -1727,10 +1727,72 @@ Bạn muốn mình đi sâu vào yêu cầu lô, đơn dịch vụ hay lịch ch
     });
   }
 
+  private async generateSuggestedFollowUps(
+    userMessage: string,
+    assistantMessage: string,
+  ): Promise<Array<{ category: string; text: string }>> {
+    if (!this.nvidia.isConfigured() || !assistantMessage.trim()) {
+      return [];
+    }
+
+    const prompt = `Dựa vào tin nhắn gần nhất của khách hàng: "${userMessage.slice(0, 300)}" và câu trả lời của Trợ lý tư vấn Vĩnh Phúc Viên: "${assistantMessage.slice(0, 500)}".
+Hãy đóng vai Trợ lý AI, gợi ý đúng 3 câu hỏi tiếp theo ngắn gọn, tự nhiên mà khách hàng có thể muốn hỏi tiếp.
+Yêu cầu bắt buộc:
+1. Trả về đúng định dạng JSON Array chứa 3 object: [{"category": "...", "text": "..."}, ...]
+2. TUỆT ĐỐI KHÔNG sử dụng emoji hay bất kỳ biểu tượng nào.
+3. Nội dung bằng tiếng Việt, xưng hô lịch sự (ví dụ: "Cho mình hỏi...", "Tư vấn chi tiết..."), tập trung vào nhu cầu tiếp theo về đất nghĩa trang, dịch vụ chăm sóc, phong thủy hay thủ tục.
+
+Ví dụ JSON output:
+[
+  {"category": "Chi phí đặt giữ", "text": "Chi phí đặt cọc và giữ lô diễn ra như thế nào?"},
+  {"category": "Hướng phong thủy", "text": "Khu vực này có hợp với gia chủ tuổi Mậu Thìn không?"},
+  {"category": "Xem thực tế", "text": "Tôi muốn đăng ký xem thực tế hoa viên vào cuối tuần."}
+]`;
+
+    try {
+      const response = await this.nvidia.chat(
+        [{ role: 'user', content: prompt }],
+        [],
+        'auto',
+        {
+          temperature: 0.4,
+          maxTokens: 300,
+          timeoutMs: 1500,
+          totalTimeoutMs: 1800,
+        },
+      );
+      const content = response.choices[0]?.message?.content?.trim() ?? '';
+      const jsonMatch = content.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed
+            .slice(0, 3)
+            .map((item: { category?: string; text?: string }) => ({
+              category: String(item.category || 'Gợi ý hỏi')
+                .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '')
+                .trim(),
+              text: String(item.text || '')
+                .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '')
+                .trim(),
+            }))
+            .filter((item) => item.text.length > 0);
+        }
+      }
+    } catch (err) {
+      this.logger.debug(
+        `[generateSuggestedFollowUps] Fallback to empty due to error: ${err}`,
+      );
+    }
+
+    return [];
+  }
+
   private async finish(input: {
     conversation: ConversationRow | null;
     sessionId: string;
     userMessageId: number | null;
+    userMessage?: string;
     assistantMessage: string;
     intent: string;
     requirements: AgentRequirements;
@@ -1793,6 +1855,17 @@ Bạn muốn mình đi sâu vào yêu cầu lô, đơn dịch vụ hay lịch ch
         suggestedServices,
         baziSuggestion,
       });
+
+    const suggestedFollowUps = await this.withTimeout(
+      this.generateSuggestedFollowUps(
+        input.userMessage ?? '',
+        assistantMessage,
+      ),
+      1800,
+      [],
+      'suggested_followups',
+    );
+
     const actions = [
       ...recommendations.flatMap((option) => [
         { type: 'VIEW_ON_MAP', plotIds: option.plotIds },
@@ -1824,6 +1897,7 @@ Bạn muốn mình đi sâu vào yêu cầu lô, đơn dịch vụ hay lịch ch
             suggestedServices,
             baziSuggestion,
             quickReplies,
+            suggestedFollowUps,
             actions,
           },
         )
@@ -1838,6 +1912,7 @@ Bạn muốn mình đi sâu vào yêu cầu lô, đơn dịch vụ hay lịch ch
       suggestedServices,
       baziSuggestion,
       quickReplies,
+      suggestedFollowUps,
       actions,
       metadata,
     };
