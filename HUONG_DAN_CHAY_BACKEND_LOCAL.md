@@ -52,10 +52,51 @@ DATABASE_URL=postgresql://postgres:MAT_KHAU_POSTGRES_CUA_BAN@localhost:5432/ceme
 JWT_SECRET=change_this_secret
 JWT_EXPIRES_IN=1d
 
-FRONTEND_URL=http://localhost:3000
+FRONTEND_URL=http://localhost:5173
+
+# Gửi email từ Gmail cá nhân qua Gmail HTTP API
+GMAIL_CLIENT_ID=
+GMAIL_CLIENT_SECRET=
+GMAIL_REFRESH_TOKEN=
+GMAIL_SENDER_EMAIL=your-account@gmail.com
+GMAIL_API_TIMEOUT_MS=15000
 ```
 
 Không commit file `.env` thật lên repo.
+
+### Cấp quyền Gmail API lần đầu
+
+1. Tạo project trong Google Cloud Console và bật **Gmail API**.
+2. Trong Google Auth Platform, cấu hình Audience là **External**. Nếu ứng dụng
+   đang ở trạng thái Testing, thêm Gmail dùng để gửi vào danh sách Test users.
+3. Tạo OAuth Client với Application type là **Desktop app**.
+4. Điền Client ID, Client Secret và Gmail gửi thư vào `backend/.env`:
+
+```env
+GMAIL_CLIENT_ID=...
+GMAIL_CLIENT_SECRET=...
+GMAIL_SENDER_EMAIL=your-account@gmail.com
+```
+
+5. Từ thư mục `backend`, chạy:
+
+```powershell
+npm run email:gmail:authorize
+```
+
+6. Mở liên kết được in ra terminal, đăng nhập đúng `GMAIL_SENDER_EMAIL` và cấp
+   quyền gửi email. Google chuyển về callback local; script tự ghi
+   `GMAIL_REFRESH_TOKEN` vào `.env` và không in token ra màn hình.
+7. Khởi động lại backend.
+
+OAuth app ở trạng thái Testing sẽ làm quyền của test user, bao gồm refresh
+token, hết hạn sau 7 ngày. Khi cấu hình ổn định, chuyển Publishing status sang
+In production; ứng dụng chưa xác minh có thể hiện cảnh báo khi chính bạn cấp
+quyền nhưng chỉ tài khoản Gmail gửi thư cần thực hiện bước này.
+
+Nếu thiếu một trong bốn biến `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`,
+`GMAIL_REFRESH_TOKEN`, `GMAIL_SENDER_EMAIL`, backend vẫn khởi động nhưng các
+chức năng bắt buộc gửi email sẽ báo chưa cấu hình.
 
 ## 4. Tạo Và Import Database
 
