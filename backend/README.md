@@ -52,10 +52,25 @@ DATABASE_URL=postgresql://postgres:password@localhost:5432/cemetery_db
 DB_MIGRATIONS_ENABLED=true
 JWT_SECRET=change_this_secret
 JWT_EXPIRES_IN=1d
-FRONTEND_URL=http://localhost:3000
+FRONTEND_URL=http://localhost:5173
+GMAIL_CLIENT_ID=
+GMAIL_CLIENT_SECRET=
+GMAIL_REFRESH_TOKEN=
+GMAIL_SENDER_EMAIL=your-account@gmail.com
 ```
 
 Do not commit a real `.env` file.
+
+Email is sent from a personal Gmail account through the Gmail HTTPS API. Enable
+the Gmail API in Google Cloud, create an OAuth client of type `Desktop app`, set
+the client ID/secret and sender address in `.env`, then authorize once:
+
+```bash
+npm run email:gmail:authorize
+```
+
+The command prints an authorization URL and stores the returned refresh token
+directly in `.env` without printing the token to the terminal.
 
 ## Implemented MVP Modules
 
