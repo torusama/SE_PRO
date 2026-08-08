@@ -1,197 +1,222 @@
-import { useEffect, useMemo, useState } from 'react'
-import { api } from '@/lib/api'
-import DemoPaymentPanel from '@/components/payment/DemoPaymentPanel'
-import './ServiceManagementPage.css'
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { api } from "@/lib/api";
+import DemoPaymentPanel from "@/components/payment/DemoPaymentPanel";
+import "./ServiceManagementPage.css";
 
 type OrderStatus =
-  | 'submitted'
-  | 'pending_confirm'
-  | 'confirmed'
-  | 'in_progress'
-  | 'completed'
-  | 'cancelled'
+  | "submitted"
+  | "pending_confirm"
+  | "confirmed"
+  | "in_progress"
+  | "completed"
+  | "cancelled";
 
 interface ApiResponse<T> {
-  success: boolean
-  message?: string
-  data: T
+  success: boolean;
+  message?: string;
+  data: T;
 }
 
 interface Assignee {
-  id: number
-  name: string
+  id: number;
+  name: string;
 }
 
 interface OrderHistory {
-  id: number
-  action: string
-  previousStatus?: OrderStatus | null
-  newStatus?: OrderStatus | null
-  note?: string | null
-  createdAt: string
-  changedByName?: string | null
-  assignedToName?: string | null
+  id: number;
+  action: string;
+  previousStatus?: OrderStatus | null;
+  newStatus?: OrderStatus | null;
+  note?: string | null;
+  createdAt: string;
+  changedByName?: string | null;
+  assignedToName?: string | null;
 }
 
 interface ServiceOrder {
-  id: number
-  status: OrderStatus
-  amount: number
-  requestedDate?: string | null
-  scheduledDate?: string | null
-  createdAt: string
-  updatedAt: string
-  serviceName: string
-  category: string
-  plotCode?: string | null
-  customerName: string
-  customerEmail?: string
-  customerPhone?: string | null
-  note?: string | null
-  adminNote?: string | null
-  assignedTo?: number | null
-  assignedToName?: string | null
-  adminName?: string | null
-  completionNote?: string | null
-  completionImages?: string[] | null
-  completedAt?: string | null
-  paymentStatus?: 'unpaid' | 'awaiting_confirmation' | 'paid'
-  paymentCode?: string | null
-  paidAt?: string | null
-  paymentConfirmedAt?: string | null
-  history?: OrderHistory[]
+  id: number;
+  status: OrderStatus;
+  amount: number;
+  requestedDate?: string | null;
+  scheduledDate?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  serviceName: string;
+  category: string;
+  plotCode?: string | null;
+  customerName: string;
+  customerEmail?: string;
+  customerPhone?: string | null;
+  note?: string | null;
+  adminNote?: string | null;
+  assignedTo?: number | null;
+  assignedToName?: string | null;
+  adminName?: string | null;
+  completionNote?: string | null;
+  completionImages?: string[] | null;
+  completedAt?: string | null;
+  paymentStatus?: "unpaid" | "awaiting_confirmation" | "paid";
+  paymentCode?: string | null;
+  paidAt?: string | null;
+  paymentConfirmedAt?: string | null;
+  history?: OrderHistory[];
 }
 
 const STATUS_META: Record<OrderStatus, { label: string; tone: string }> = {
-  submitted: { label: 'Mới gửi', tone: 'amber' },
-  pending_confirm: { label: 'Chờ xác nhận', tone: 'amber' },
-  confirmed: { label: 'Đã xác nhận', tone: 'teal' },
-  in_progress: { label: 'Đang thực hiện', tone: 'blue' },
-  completed: { label: 'Hoàn thành', tone: 'green' },
-  cancelled: { label: 'Đã huỷ', tone: 'red' },
-}
+  submitted: { label: "Mới gửi", tone: "amber" },
+  pending_confirm: { label: "Chờ xác nhận", tone: "amber" },
+  confirmed: { label: "Đã xác nhận", tone: "teal" },
+  in_progress: { label: "Đang thực hiện", tone: "blue" },
+  completed: { label: "Hoàn thành", tone: "green" },
+  cancelled: { label: "Đã huỷ", tone: "red" },
+};
 
 const NEXT_STATUSES: Record<OrderStatus, OrderStatus[]> = {
-  submitted: ['submitted', 'pending_confirm', 'confirmed', 'cancelled'],
-  pending_confirm: ['pending_confirm', 'confirmed', 'cancelled'],
-  confirmed: ['confirmed', 'in_progress', 'cancelled'],
-  in_progress: ['in_progress', 'cancelled'],
-  completed: ['completed'],
-  cancelled: ['cancelled'],
-}
+  submitted: ["submitted", "pending_confirm", "confirmed", "cancelled"],
+  pending_confirm: ["pending_confirm", "confirmed", "cancelled"],
+  confirmed: ["confirmed", "in_progress", "cancelled"],
+  in_progress: ["in_progress", "cancelled"],
+  completed: ["completed"],
+  cancelled: ["cancelled"],
+};
 
-const STATUS_FILTERS: Array<{ value: 'all' | OrderStatus; label: string }> = [
-  { value: 'all', label: 'Tất cả' },
-  { value: 'submitted', label: 'Mới gửi' },
-  { value: 'confirmed', label: 'Đã xác nhận' },
-  { value: 'in_progress', label: 'Đang thực hiện' },
-  { value: 'completed', label: 'Hoàn thành' },
-  { value: 'cancelled', label: 'Đã huỷ' },
-]
+const STATUS_FILTERS: Array<{ value: "all" | OrderStatus; label: string }> = [
+  { value: "all", label: "Tất cả" },
+  { value: "submitted", label: "Mới gửi" },
+  { value: "confirmed", label: "Đã xác nhận" },
+  { value: "in_progress", label: "Đang thực hiện" },
+  { value: "completed", label: "Hoàn thành" },
+  { value: "cancelled", label: "Đã huỷ" },
+];
 
-const money = new Intl.NumberFormat('vi-VN', {
-  style: 'currency',
-  currency: 'VND',
+const money = new Intl.NumberFormat("vi-VN", {
+  style: "currency",
+  currency: "VND",
   maximumFractionDigits: 0,
-})
+});
 
 function formatDate(value?: string | null, withTime = false) {
-  if (!value) return '—'
-  return new Intl.DateTimeFormat('vi-VN', withTime
-    ? { dateStyle: 'medium', timeStyle: 'short' }
-    : { dateStyle: 'medium' }).format(new Date(value))
+  if (!value) return "—";
+  return new Intl.DateTimeFormat(
+    "vi-VN",
+    withTime
+      ? { dateStyle: "medium", timeStyle: "short" }
+      : { dateStyle: "medium" },
+  ).format(new Date(value));
 }
 
 function orderCode(id: number) {
-  return `DV-${String(id).padStart(5, '0')}`
+  return `DV-${String(id).padStart(5, "0")}`;
 }
 
 function getErrorMessage(error: unknown) {
-  if (typeof error === 'object' && error !== null && 'response' in error) {
-    const response = (error as { response?: { data?: { message?: string } } }).response
-    if (response?.data?.message) return response.data.message
+  if (typeof error === "object" && error !== null && "response" in error) {
+    const response = (error as { response?: { data?: { message?: string } } })
+      .response;
+    if (response?.data?.message) return response.data.message;
   }
-  return 'Không thể thực hiện yêu cầu. Vui lòng thử lại.'
+  return "Không thể thực hiện yêu cầu. Vui lòng thử lại.";
 }
 
 export default function ServiceManagementPage() {
-  const [orders, setOrders] = useState<ServiceOrder[]>([])
-  const [assignees, setAssignees] = useState<Assignee[]>([])
-  const [selected, setSelected] = useState<ServiceOrder | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [detailLoading, setDetailLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [notice, setNotice] = useState('')
-  const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<'all' | OrderStatus>('all')
+  const [searchParams] = useSearchParams();
+  const requestedOrderId = Number(searchParams.get("order")) || undefined;
+  const [orders, setOrders] = useState<ServiceOrder[]>([]);
+  const [assignees, setAssignees] = useState<Assignee[]>([]);
+  const [selected, setSelected] = useState<ServiceOrder | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | OrderStatus>("all");
 
   async function loadOrders(silent = false) {
-    if (!silent) setLoading(true)
-    setError('')
+    if (!silent) setLoading(true);
+    setError("");
     try {
       const [ordersResponse, assigneesResponse] = await Promise.all([
-        api.get<ApiResponse<{ items: ServiceOrder[] }>>('/admin/service-orders', {
-          params: { page: 1, pageSize: 100 },
-        }),
-        api.get<ApiResponse<Assignee[]>>('/admin/service-order-assignees'),
-      ])
-      setOrders(ordersResponse.data.data?.items ?? [])
-      setAssignees(assigneesResponse.data.data ?? [])
+        api.get<ApiResponse<{ items: ServiceOrder[] }>>(
+          "/admin/service-orders",
+          {
+            params: { page: 1, pageSize: 100 },
+          },
+        ),
+        api.get<ApiResponse<Assignee[]>>("/admin/service-order-assignees"),
+      ]);
+      setOrders(ordersResponse.data.data?.items ?? []);
+      setAssignees(assigneesResponse.data.data ?? []);
     } catch (requestError) {
-      setError(getErrorMessage(requestError))
+      setError(getErrorMessage(requestError));
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
   useEffect(() => {
     // Nạp dữ liệu từ API khi route admin được mở.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    void loadOrders()
-  }, [])
+    void loadOrders();
+  }, []);
+
+  useEffect(() => {
+    // Đến từ thông báo "Đơn dịch vụ mới": mở sẵn chi tiết đơn liên quan.
+    if (!requestedOrderId) return;
+    void openDetail(requestedOrderId);
+  }, [requestedOrderId]);
 
   async function openDetail(orderId: number) {
-    setDetailLoading(true)
-    setError('')
+    setDetailLoading(true);
+    setError("");
     try {
-      const response = await api.get<ApiResponse<ServiceOrder>>(`/admin/service-orders/${orderId}`)
-      setSelected(response.data.data)
+      const response = await api.get<ApiResponse<ServiceOrder>>(
+        `/admin/service-orders/${orderId}`,
+      );
+      setSelected(response.data.data);
     } catch (requestError) {
-      setError(getErrorMessage(requestError))
+      setError(getErrorMessage(requestError));
     } finally {
-      setDetailLoading(false)
+      setDetailLoading(false);
     }
   }
 
   const filtered = useMemo(() => {
-    const query = search.trim().toLowerCase()
+    const query = search.trim().toLowerCase();
     return orders.filter((order) => {
       const statusMatches =
-        statusFilter === 'all' ||
+        statusFilter === "all" ||
         order.status === statusFilter ||
-        (statusFilter === 'submitted' && order.status === 'pending_confirm')
+        (statusFilter === "submitted" && order.status === "pending_confirm");
       const searchMatches =
         !query ||
         orderCode(order.id).toLowerCase().includes(query) ||
         order.serviceName.toLowerCase().includes(query) ||
         order.customerName.toLowerCase().includes(query) ||
-        order.plotCode?.toLowerCase().includes(query)
-      return statusMatches && searchMatches
-    })
-  }, [orders, search, statusFilter])
+        order.plotCode?.toLowerCase().includes(query);
+      return statusMatches && searchMatches;
+    });
+  }, [orders, search, statusFilter]);
 
-  const stats = useMemo(() => ({
-    total: orders.length,
-    waiting: orders.filter((order) => ['submitted', 'pending_confirm'].includes(order.status)).length,
-    processing: orders.filter((order) => ['confirmed', 'in_progress'].includes(order.status)).length,
-    completed: orders.filter((order) => order.status === 'completed').length,
-  }), [orders])
+  const stats = useMemo(
+    () => ({
+      total: orders.length,
+      waiting: orders.filter((order) =>
+        ["submitted", "pending_confirm"].includes(order.status),
+      ).length,
+      processing: orders.filter((order) =>
+        ["confirmed", "in_progress"].includes(order.status),
+      ).length,
+      completed: orders.filter((order) => order.status === "completed").length,
+    }),
+    [orders],
+  );
 
   async function refreshSelected(message: string) {
-    if (!selected) return
-    await Promise.all([loadOrders(true), openDetail(selected.id)])
-    setNotice(message)
-    window.setTimeout(() => setNotice(''), 3500)
+    if (!selected) return;
+    await Promise.all([loadOrders(true), openDetail(selected.id)]);
+    setNotice(message);
+    window.setTimeout(() => setNotice(""), 3500);
   }
 
   return (
@@ -200,15 +225,25 @@ export default function ServiceManagementPage() {
         <div>
           <p className="service-admin__eyebrow">Vận hành dịch vụ</p>
           <h1>Quản lý đơn dịch vụ</h1>
-          <p>Theo dõi, phân công và lưu lại toàn bộ quá trình phục vụ khách hàng.</p>
+          <p>
+            Theo dõi, phân công và lưu lại toàn bộ quá trình phục vụ khách hàng.
+          </p>
         </div>
-        <button className="service-admin__refresh" onClick={() => void loadOrders()} disabled={loading}>
-          {loading ? 'Đang làm mới…' : 'Làm mới danh sách'}
+        <button
+          className="service-admin__refresh"
+          onClick={() => void loadOrders()}
+          disabled={loading}
+        >
+          {loading ? "Đang làm mới…" : "Làm mới danh sách"}
         </button>
       </header>
 
-      {notice && <div className="service-alert service-alert--success">{notice}</div>}
-      {error && <div className="service-alert service-alert--error">{error}</div>}
+      {notice && (
+        <div className="service-alert service-alert--success">{notice}</div>
+      )}
+      {error && (
+        <div className="service-alert service-alert--error">{error}</div>
+      )}
 
       <section className="service-stats" aria-label="Tổng quan đơn dịch vụ">
         <Stat label="Tổng đơn" value={stats.total} tone="teal" />
@@ -230,7 +265,7 @@ export default function ServiceManagementPage() {
             {STATUS_FILTERS.map((filter) => (
               <button
                 key={filter.value}
-                className={statusFilter === filter.value ? 'active' : ''}
+                className={statusFilter === filter.value ? "active" : ""}
                 onClick={() => setStatusFilter(filter.value)}
               >
                 {filter.label}
@@ -263,23 +298,40 @@ export default function ServiceManagementPage() {
                 {filtered.map((order) => (
                   <tr key={order.id}>
                     <td>
-                      <button className="service-code" onClick={() => void openDetail(order.id)}>
+                      <button
+                        className="service-code"
+                        onClick={() => void openDetail(order.id)}
+                      >
                         {orderCode(order.id)}
                       </button>
                       <small>Tạo {formatDate(order.createdAt)}</small>
                     </td>
                     <td>
                       <strong>{order.serviceName}</strong>
-                      <small>{order.customerName}{order.plotCode ? ` · Lô ${order.plotCode}` : ''}</small>
+                      <small>
+                        {order.customerName}
+                        {order.plotCode ? ` · Lô ${order.plotCode}` : ""}
+                      </small>
                     </td>
                     <td>
-                      <span>{formatDate(order.scheduledDate || order.requestedDate)}</span>
-                      <small>{order.scheduledDate ? 'Lịch đã xác nhận' : 'Ngày khách yêu cầu'}</small>
+                      <span>
+                        {formatDate(order.scheduledDate || order.requestedDate)}
+                      </span>
+                      <small>
+                        {order.scheduledDate
+                          ? "Lịch đã xác nhận"
+                          : "Ngày khách yêu cầu"}
+                      </small>
                     </td>
                     <td>
-                      <span>{order.assignedToName || 'Chưa phân công'}</span>
+                      <span>{order.assignedToName || "Chưa phân công"}</span>
                     </td>
-                    <td><StatusBadge status={order.status} paymentStatus={order.paymentStatus} /></td>
+                    <td>
+                      <StatusBadge
+                        status={order.status}
+                        paymentStatus={order.paymentStatus}
+                      />
+                    </td>
                     <td>
                       <button
                         className="service-row-action"
@@ -298,8 +350,18 @@ export default function ServiceManagementPage() {
       </section>
 
       {(selected || detailLoading) && (
-        <div className="service-drawer-layer" role="presentation" onMouseDown={() => !detailLoading && setSelected(null)}>
-          <aside className="service-drawer" role="dialog" aria-modal="true" aria-label="Chi tiết đơn dịch vụ" onMouseDown={(event) => event.stopPropagation()}>
+        <div
+          className="service-drawer-layer"
+          role="presentation"
+          onMouseDown={() => !detailLoading && setSelected(null)}
+        >
+          <aside
+            className="service-drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Chi tiết đơn dịch vụ"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
             {detailLoading && !selected ? (
               <div className="service-empty">Đang tải chi tiết...</div>
             ) : selected ? (
@@ -314,26 +376,55 @@ export default function ServiceManagementPage() {
         </div>
       )}
     </div>
-  )
+  );
 }
 
-function Stat({ label, value, tone }: { label: string; value: number; tone: string }) {
+function Stat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: string;
+}) {
   return (
     <article className={`service-stat service-stat--${tone}`}>
-      <div><strong>{value}</strong><span>{label}</span></div>
+      <div>
+        <strong>{value}</strong>
+        <span>{label}</span>
+      </div>
     </article>
-  )
+  );
 }
 
-function StatusBadge({ status, paymentStatus }: { status: OrderStatus; paymentStatus?: 'unpaid' | 'awaiting_confirmation' | 'paid' }) {
-  const meta = STATUS_META[status]
-  if (status === 'confirmed' && paymentStatus === 'awaiting_confirmation') {
-    return <span className="service-status service-status--amber">Đã thanh toán - chờ duyệt</span>
+function StatusBadge({
+  status,
+  paymentStatus,
+}: {
+  status: OrderStatus;
+  paymentStatus?: "unpaid" | "awaiting_confirmation" | "paid";
+}) {
+  const meta = STATUS_META[status];
+  if (status === "confirmed" && paymentStatus === "awaiting_confirmation") {
+    return (
+      <span className="service-status service-status--amber">
+        Đã thanh toán - chờ duyệt
+      </span>
+    );
   }
-  if (status === 'in_progress' && paymentStatus === 'paid') {
-    return <span className="service-status service-status--blue">Đã thanh toán - đang thực hiện</span>
+  if (status === "in_progress" && paymentStatus === "paid") {
+    return (
+      <span className="service-status service-status--blue">
+        Đã thanh toán - đang thực hiện
+      </span>
+    );
   }
-  return <span className={`service-status service-status--${meta.tone}`}>{meta.label}</span>
+  return (
+    <span className={`service-status service-status--${meta.tone}`}>
+      {meta.label}
+    </span>
+  );
 }
 
 function OrderDetail({
@@ -342,81 +433,89 @@ function OrderDetail({
   onClose,
   onSaved,
 }: {
-  order: ServiceOrder
-  assignees: Assignee[]
-  onClose: () => void
-  onSaved: (message: string) => void
+  order: ServiceOrder;
+  assignees: Assignee[];
+  onClose: () => void;
+  onSaved: (message: string) => void;
 }) {
-  const [status, setStatus] = useState(order.status)
-  const [assignedTo, setAssignedTo] = useState(order.assignedTo ? String(order.assignedTo) : '')
-  const [scheduledDate, setScheduledDate] = useState(order.scheduledDate?.slice(0, 10) ?? '')
-  const [adminNote, setAdminNote] = useState(order.adminNote ?? '')
-  const [completionNote, setCompletionNote] = useState('')
-  const [evidence, setEvidence] = useState<File[]>([])
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
+  const [status, setStatus] = useState(order.status);
+  const [assignedTo, setAssignedTo] = useState(
+    order.assignedTo ? String(order.assignedTo) : "",
+  );
+  const [scheduledDate, setScheduledDate] = useState(
+    order.scheduledDate?.slice(0, 10) ?? "",
+  );
+  const [adminNote, setAdminNote] = useState(order.adminNote ?? "");
+  const [completionNote, setCompletionNote] = useState("");
+  const [evidence, setEvidence] = useState<File[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   async function save() {
-    setSaving(true)
-    setError('')
+    setSaving(true);
+    setError("");
     try {
       await api.patch(`/admin/service-orders/${order.id}`, {
         status,
         ...(assignedTo ? { assignedTo: Number(assignedTo) } : {}),
         adminNote,
         ...(scheduledDate ? { scheduledDate } : {}),
-      })
-      onSaved('Đã cập nhật đơn dịch vụ và gửi thông báo cho khách hàng khi cần.')
+      });
+      onSaved(
+        "Đã cập nhật đơn dịch vụ và gửi thông báo cho khách hàng khi cần.",
+      );
     } catch (requestError) {
-      setError(getErrorMessage(requestError))
+      setError(getErrorMessage(requestError));
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
   }
 
   async function complete() {
     if (evidence.length === 0) {
-      setError('Vui lòng chọn ít nhất một ảnh bằng chứng hoàn thành.')
-      return
+      setError("Vui lòng chọn ít nhất một ảnh bằng chứng hoàn thành.");
+      return;
     }
-    setSaving(true)
-    setError('')
+    setSaving(true);
+    setError("");
     try {
-      const form = new FormData()
-      form.append('completionNote', completionNote)
-      evidence.forEach((file) => form.append('evidence', file))
+      const form = new FormData();
+      form.append("completionNote", completionNote);
+      evidence.forEach((file) => form.append("evidence", file));
       await api.post(`/admin/service-orders/${order.id}/completion`, form, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      })
-      onSaved('Dịch vụ đã được xác nhận hoàn thành và khách hàng đã nhận thông báo.')
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      onSaved(
+        "Dịch vụ đã được xác nhận hoàn thành và khách hàng đã nhận thông báo.",
+      );
     } catch (requestError) {
-      setError(getErrorMessage(requestError))
+      setError(getErrorMessage(requestError));
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
   }
 
   function selectEvidence(fileList: FileList | null) {
-    const files = Array.from(fileList ?? [])
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp']
+    const files = Array.from(fileList ?? []);
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
     if (files.length > 10) {
-      setError('Chỉ được tải lên tối đa 10 ảnh bằng chứng.')
-      return
+      setError("Chỉ được tải lên tối đa 10 ảnh bằng chứng.");
+      return;
     }
     if (files.some((file) => !allowedTypes.includes(file.type))) {
-      setError('Chỉ chấp nhận ảnh JPG, PNG hoặc WEBP.')
-      return
+      setError("Chỉ chấp nhận ảnh JPG, PNG hoặc WEBP.");
+      return;
     }
     if (files.some((file) => file.size > 10 * 1024 * 1024)) {
-      setError('Mỗi ảnh bằng chứng không được vượt quá 10 MB.')
-      return
+      setError("Mỗi ảnh bằng chứng không được vượt quá 10 MB.");
+      return;
     }
-    setError('')
-    setEvidence(files)
+    setError("");
+    setEvidence(files);
   }
 
-  const canComplete = order.status === 'in_progress'
-  const terminal = ['completed', 'cancelled'].includes(order.status)
+  const canComplete = order.status === "in_progress";
+  const terminal = ["completed", "cancelled"].includes(order.status);
 
   return (
     <>
@@ -424,45 +523,64 @@ function OrderDetail({
         <div>
           <span>{orderCode(order.id)}</span>
           <h2>{order.serviceName}</h2>
-          <StatusBadge status={order.status} paymentStatus={order.paymentStatus} />
+          <StatusBadge
+            status={order.status}
+            paymentStatus={order.paymentStatus}
+          />
         </div>
-        <button onClick={onClose} aria-label="Đóng chi tiết">Đóng</button>
+        <button onClick={onClose} aria-label="Đóng chi tiết">
+          Đóng
+        </button>
       </div>
 
       <div className="service-drawer__body">
-        {error && <div className="service-alert service-alert--error">{error}</div>}
+        {error && (
+          <div className="service-alert service-alert--error">{error}</div>
+        )}
 
         <section className="detail-card detail-customer">
           <h3>Thông tin khách hàng</h3>
           <div className="detail-grid">
             <Detail label="Họ tên" value={order.customerName} />
-            <Detail label="Mã lô" value={order.plotCode || 'Không gắn lô'} />
-            <Detail label="Email" value={order.customerEmail || '—'} />
-            <Detail label="Số điện thoại" value={order.customerPhone || '—'} />
+            <Detail label="Mã lô" value={order.plotCode || "Không gắn lô"} />
+            <Detail label="Email" value={order.customerEmail || "—"} />
+            <Detail label="Số điện thoại" value={order.customerPhone || "—"} />
           </div>
         </section>
 
         <section className="detail-card">
           <h3>Thông tin yêu cầu</h3>
           <div className="detail-grid">
-            <Detail label="Ngày gửi" value={formatDate(order.createdAt, true)} />
-            <Detail label="Ngày khách yêu cầu" value={formatDate(order.requestedDate)} />
+            <Detail
+              label="Ngày gửi"
+              value={formatDate(order.createdAt, true)}
+            />
+            <Detail
+              label="Ngày khách yêu cầu"
+              value={formatDate(order.requestedDate)}
+            />
             <Detail label="Chi phí" value={money.format(order.amount)} />
-            <Detail label="Ghi chú khách hàng" value={order.note || 'Không có ghi chú'} wide />
+            <Detail
+              label="Ghi chú khách hàng"
+              value={order.note || "Không có ghi chú"}
+              wide
+            />
           </div>
         </section>
 
-        {order.status === 'confirmed' && (
+        {order.status === "confirmed" && (
           <DemoPaymentPanel
             orderId={order.id}
             amount={order.amount}
-            paymentStatus={order.paymentStatus ?? 'unpaid'}
+            paymentStatus={order.paymentStatus ?? "unpaid"}
             paymentCode={order.paymentCode}
             paidAt={order.paidAt}
             paymentConfirmedAt={order.paymentConfirmedAt}
             variant="admin"
             onChanged={() => {
-              onSaved('Đã xác nhận thanh toán và chuyển đơn sang trạng thái Thực hiện.')
+              onSaved(
+                "Đã xác nhận thanh toán và chuyển đơn sang trạng thái Thực hiện.",
+              );
             }}
           />
         )}
@@ -473,30 +591,57 @@ function OrderDetail({
             <div className="detail-form-grid">
               <label>
                 Trạng thái
-                <select value={status} onChange={(event) => setStatus(event.target.value as OrderStatus)}>
+                <select
+                  value={status}
+                  onChange={(event) =>
+                    setStatus(event.target.value as OrderStatus)
+                  }
+                >
                   {NEXT_STATUSES[order.status].map((value) => (
-                    <option key={value} value={value}>{STATUS_META[value].label}</option>
+                    <option key={value} value={value}>
+                      {STATUS_META[value].label}
+                    </option>
                   ))}
                 </select>
               </label>
               <label>
                 Người xử lý
-                <select value={assignedTo} onChange={(event) => setAssignedTo(event.target.value)}>
+                <select
+                  value={assignedTo}
+                  onChange={(event) => setAssignedTo(event.target.value)}
+                >
                   <option value="">Chưa phân công</option>
-                  {assignees.map((assignee) => <option key={assignee.id} value={assignee.id}>{assignee.name}</option>)}
+                  {assignees.map((assignee) => (
+                    <option key={assignee.id} value={assignee.id}>
+                      {assignee.name}
+                    </option>
+                  ))}
                 </select>
               </label>
               <label>
                 Lịch thực hiện
-                <input type="date" value={scheduledDate} onChange={(event) => setScheduledDate(event.target.value)} />
+                <input
+                  type="date"
+                  value={scheduledDate}
+                  onChange={(event) => setScheduledDate(event.target.value)}
+                />
               </label>
               <label className="wide">
                 Ghi chú nội bộ
-                <textarea value={adminNote} onChange={(event) => setAdminNote(event.target.value)} rows={3} maxLength={2000} />
+                <textarea
+                  value={adminNote}
+                  onChange={(event) => setAdminNote(event.target.value)}
+                  rows={3}
+                  maxLength={2000}
+                />
               </label>
             </div>
-            <button className="service-primary" onClick={() => void save()} disabled={saving}>
-              {saving ? 'Đang lưu…' : 'Lưu cập nhật'}
+            <button
+              className="service-primary"
+              onClick={() => void save()}
+              disabled={saving}
+            >
+              {saving ? "Đang lưu…" : "Lưu cập nhật"}
             </button>
           </section>
         )}
@@ -506,10 +651,19 @@ function OrderDetail({
             <h3>Xác nhận hoàn thành</h3>
             <label>
               Ghi chú kết quả
-              <textarea value={completionNote} onChange={(event) => setCompletionNote(event.target.value)} rows={3} maxLength={2000} placeholder="Mô tả công việc đã thực hiện..." />
+              <textarea
+                value={completionNote}
+                onChange={(event) => setCompletionNote(event.target.value)}
+                rows={3}
+                maxLength={2000}
+                placeholder="Mô tả công việc đã thực hiện..."
+              />
             </label>
             <label className="evidence-picker">
-              <span><strong>Chọn ảnh bằng chứng</strong>Tối đa 10 ảnh JPG, PNG hoặc WEBP · 10 MB/ảnh</span>
+              <span>
+                <strong>Chọn ảnh bằng chứng</strong>Tối đa 10 ảnh JPG, PNG hoặc
+                WEBP · 10 MB/ảnh
+              </span>
               <input
                 type="file"
                 accept=".jpg,.jpeg,.png,.webp"
@@ -517,20 +671,35 @@ function OrderDetail({
                 onChange={(event) => selectEvidence(event.target.files)}
               />
             </label>
-            {evidence.length > 0 && <p className="file-summary">Đã chọn {evidence.length} ảnh: {evidence.map((file) => file.name).join(', ')}</p>}
-            <button className="service-primary" onClick={() => void complete()} disabled={saving}>
-              {saving ? 'Đang xác nhận…' : 'Xác nhận dịch vụ hoàn thành'}
+            {evidence.length > 0 && (
+              <p className="file-summary">
+                Đã chọn {evidence.length} ảnh:{" "}
+                {evidence.map((file) => file.name).join(", ")}
+              </p>
+            )}
+            <button
+              className="service-primary"
+              onClick={() => void complete()}
+              disabled={saving}
+            >
+              {saving ? "Đang xác nhận…" : "Xác nhận dịch vụ hoàn thành"}
             </button>
           </section>
         )}
 
-        {order.status === 'completed' && (
+        {order.status === "completed" && (
           <section className="detail-card">
             <h3>Kết quả hoàn thành</h3>
-            <p className="completion-note">{order.completionNote || 'Không có ghi chú hoàn thành.'}</p>
+            <p className="completion-note">
+              {order.completionNote || "Không có ghi chú hoàn thành."}
+            </p>
             <div className="evidence-grid">
               {(order.completionImages ?? []).map((filename) => (
-                <EvidenceImage key={filename} orderId={order.id} filename={filename} />
+                <EvidenceImage
+                  key={filename}
+                  orderId={order.id}
+                  filename={filename}
+                />
               ))}
             </div>
           </section>
@@ -544,8 +713,13 @@ function OrderDetail({
                 <div className="history-dot" />
                 <div>
                   <strong>{historyLabel(item)}</strong>
-                  <span>{item.changedByName || 'Hệ thống'} · {formatDate(item.createdAt, true)}</span>
-                  {item.assignedToName && <p>Người xử lý: {item.assignedToName}</p>}
+                  <span>
+                    {item.changedByName || "Hệ thống"} ·{" "}
+                    {formatDate(item.createdAt, true)}
+                  </span>
+                  {item.assignedToName && (
+                    <p>Người xử lý: {item.assignedToName}</p>
+                  )}
                   {item.note && <p>{item.note}</p>}
                 </div>
               </article>
@@ -554,46 +728,74 @@ function OrderDetail({
         </section>
       </div>
     </>
-  )
+  );
 }
 
-function Detail({ label, value, wide = false }: { label: string; value: string; wide?: boolean }) {
-  return <div className={wide ? 'wide' : ''}><span>{label}</span><strong>{value}</strong></div>
+function Detail({
+  label,
+  value,
+  wide = false,
+}: {
+  label: string;
+  value: string;
+  wide?: boolean;
+}) {
+  return (
+    <div className={wide ? "wide" : ""}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
 }
 
 function historyLabel(item: OrderHistory) {
-  if (item.action === 'submitted') return 'Khách hàng gửi yêu cầu'
-  if (item.action === 'assigned') return 'Phân công người xử lý'
-  if (item.action === 'completed') return 'Xác nhận hoàn thành'
-  if (item.newStatus) return `Cập nhật trạng thái: ${STATUS_META[item.newStatus]?.label ?? item.newStatus}`
-  return 'Cập nhật thông tin đơn'
+  if (item.action === "submitted") return "Khách hàng gửi yêu cầu";
+  if (item.action === "assigned") return "Phân công người xử lý";
+  if (item.action === "completed") return "Xác nhận hoàn thành";
+  if (item.newStatus)
+    return `Cập nhật trạng thái: ${STATUS_META[item.newStatus]?.label ?? item.newStatus}`;
+  return "Cập nhật thông tin đơn";
 }
 
-function EvidenceImage({ orderId, filename }: { orderId: number; filename: string }) {
-  const [url, setUrl] = useState('')
-  const [failed, setFailed] = useState(false)
+function EvidenceImage({
+  orderId,
+  filename,
+}: {
+  orderId: number;
+  filename: string;
+}) {
+  const [url, setUrl] = useState("");
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    let objectUrl = ''
-    let active = true
-    void api.get(`/service-orders/${orderId}/evidence/${encodeURIComponent(filename)}`, { responseType: 'blob' })
+    let objectUrl = "";
+    let active = true;
+    void api
+      .get(
+        `/service-orders/${orderId}/evidence/${encodeURIComponent(filename)}`,
+        { responseType: "blob" },
+      )
       .then((response) => {
-        if (!active) return
-        objectUrl = URL.createObjectURL(response.data)
-        setUrl(objectUrl)
+        if (!active) return;
+        objectUrl = URL.createObjectURL(response.data);
+        setUrl(objectUrl);
       })
       .catch(() => {
-        if (active) setFailed(true)
-      })
+        if (active) setFailed(true);
+      });
     return () => {
-      active = false
-      if (objectUrl) URL.revokeObjectURL(objectUrl)
-    }
-  }, [filename, orderId])
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [filename, orderId]);
 
-  return failed
-    ? <div className="evidence-loading">Không tải được ảnh</div>
-    : url
-    ? <a href={url} target="_blank" rel="noreferrer"><img src={url} alt="Bằng chứng hoàn thành dịch vụ" /></a>
-    : <div className="evidence-loading">Đang tải ảnh…</div>
+  return failed ? (
+    <div className="evidence-loading">Không tải được ảnh</div>
+  ) : url ? (
+    <a href={url} target="_blank" rel="noreferrer">
+      <img src={url} alt="Bằng chứng hoàn thành dịch vụ" />
+    </a>
+  ) : (
+    <div className="evidence-loading">Đang tải ảnh…</div>
+  );
 }

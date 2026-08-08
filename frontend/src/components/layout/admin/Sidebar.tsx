@@ -19,23 +19,25 @@ const MENU: MenuGroup[] = [
     items: [
       { label: "Dashboard", to: ROUTES.ADMIN_DASHBOARD },
       { label: "Hoạt động gần đây", to: ROUTES.ADMIN_ACTIVITY },
-    ],
-  },
-  {
-    section: "Lô đất",
-    items: [
-      { label: "Bản đồ 2D", to: ROUTES.ADMIN_MAP },
-      { label: "Xử lý yêu cầu", to: ROUTES.ADMIN_REQUESTS },
-    ],
-  },
-  {
-    section: "Giao dịch",
-    items: [
-      { label: "Hợp đồng & Sở hữu", to: ROUTES.ADMIN_CONTRACTS },
-      { label: "Quản lý dịch vụ", to: ROUTES.ADMIN_SERVICES },
       { label: "Thông báo", to: ROUTES.ADMIN_NOTIFY },
+    ],
+  },
+  {
+    // Thứ tự phản ánh đúng quy trình xử lý mua bán đất:
+    // Xử lý yêu cầu -> Chuyển nhượng -> Hẹn lịch -> Duyệt hợp đồng -> Bàn giao (Bản đồ 2D).
+    section: "Quản lý mua bán đất",
+    items: [
+      { label: "Xử lý yêu cầu", to: ROUTES.ADMIN_REQUESTS },
       { label: "Chuyển nhượng", to: ROUTES.ADMIN_TRANSFER },
       { label: "Phê duyệt lịch hẹn", to: ROUTES.ADMIN_APPOINTMENTS },
+      { label: "Hợp đồng & Sở hữu", to: ROUTES.ADMIN_CONTRACTS },
+      { label: "Bản đồ 2D", to: ROUTES.ADMIN_MAP },
+    ],
+  },
+  {
+    section: "Quản lý dịch vụ",
+    items: [
+      { label: "Quản lý dịch vụ", to: ROUTES.ADMIN_SERVICES },
       { label: "Nhắc lịch ngày giỗ", to: ROUTES.ADMIN_REMINDERS },
     ],
   },
