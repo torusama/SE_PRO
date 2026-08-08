@@ -254,7 +254,7 @@ export class EmailService {
 
   private getFrontendUrl(): string {
     const raw =
-      this.config.get<string>('frontendUrl') ||
+      this.config?.get<string>('frontendUrl') ||
       process.env.FRONTEND_URL ||
       'http://localhost:5173';
     const firstUrl = raw.split(',')[0].trim();

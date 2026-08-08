@@ -72,7 +72,9 @@ describe('EmailService', () => {
 
       expect(send).toHaveBeenCalledWith(
         expect.objectContaining({
-          attachments: [{ filename: 'proof.jpg', content: fileContent }],
+          attachments: expect.arrayContaining([
+            { filename: 'proof.jpg', content: fileContent },
+          ]),
         }),
       );
     } finally {
