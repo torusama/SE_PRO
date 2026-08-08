@@ -47,6 +47,7 @@
 }
 
 .admin-shell {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -65,11 +66,56 @@
     linear-gradient(180deg, var(--admin-canvas) 0%, var(--admin-canvas-2) 100%);
 }
 
+/* Soft, slow-drifting light washes behind the whole admin canvas —
+   a quiet "aurora" motion, never distracting from content. */
+.admin-shell::before {
+  position: absolute;
+  inset: -12%;
+  z-index: 0;
+  background:
+    radial-gradient(
+      620px 460px at 18% 22%,
+      rgba(120, 168, 255, 0.16),
+      transparent 62%
+    ),
+    radial-gradient(
+      680px 500px at 82% 18%,
+      rgba(178, 150, 255, 0.12),
+      transparent 60%
+    ),
+    radial-gradient(
+      560px 460px at 46% 96%,
+      rgba(120, 200, 255, 0.12),
+      transparent 60%
+    );
+  content: "";
+  filter: blur(2px);
+  pointer-events: none;
+  animation: admin-aurora-drift 34s ease-in-out infinite alternate;
+}
+
 .admin-shell__lower {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex: 1;
   min-height: 0;
   overflow: hidden;
+}
+
+@keyframes admin-aurora-drift {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: translate3d(1.5%, -2%, 0) scale(1.03);
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(-2%, 1.5%, 0) scale(1);
+    opacity: 0.9;
+  }
 }
 
 .admin-workspace {
@@ -392,51 +438,6 @@
   }
 }
 
-.admin-sidebar__user {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  border-top: 1px solid var(--admin-line);
-  background: rgba(255, 255, 255, 0.35);
-  padding: 14px 16px;
-}
-
-.admin-sidebar__initials {
-  display: grid;
-  width: 30px;
-  height: 30px;
-  flex: 0 0 30px;
-  place-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  border-radius: 50%;
-  background: linear-gradient(
-    180deg,
-    var(--admin-accent-2),
-    var(--admin-accent)
-  );
-  box-shadow: 0 3px 8px -3px var(--admin-glow);
-  color: #ffffff;
-  font-size: 10px;
-  font-weight: 700;
-}
-
-.admin-sidebar__user p {
-  max-width: 142px;
-  overflow: hidden;
-  color: var(--admin-ink);
-  font-size: 11px;
-  font-weight: 650;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.admin-sidebar__user span:not(.admin-sidebar__initials) {
-  color: var(--admin-muted);
-  font-size: 9px;
-}
-
 /* Shared page primitives */
 .admin-theme .admin-page {
   width: 100%;
@@ -507,10 +508,14 @@
 .admin-theme select,
 .admin-theme textarea {
   border-color: var(--admin-line);
-  background: var(--admin-paper-strong);
+  background: rgba(255, 255, 255, 0.66);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset;
   transition:
     border-color 160ms ease,
-    box-shadow 160ms ease;
+    box-shadow 160ms ease,
+    background-color 160ms ease;
 }
 
 .admin-theme input:focus,
@@ -521,7 +526,9 @@
   outline: none;
 }
 
-/* Glossy treatment for the solid ink/navy "primary" buttons used across pages */
+/* Flat, minimal buttons — matches the customer profile page's clean pill
+   buttons (solid fill for primary, quiet outline for secondary), but keeps
+   the admin's own navy/blue accent colors instead of switching palettes. */
 .admin-theme
   :is(
     .approve,
@@ -530,17 +537,12 @@
     .service-primary,
     .admin-notification-submit
   ) {
-  position: relative;
-  overflow: hidden;
-  background: linear-gradient(
-    180deg,
-    var(--admin-accent-2) 0%,
-    var(--admin-accent) 100%
-  ) !important;
-  border-color: var(--admin-accent) !important;
-  box-shadow:
-    0 6px 16px -8px var(--admin-glow),
-    0 1px 0 rgba(255, 255, 255, 0.35) inset;
+  border: 1px solid rgba(28, 63, 143, 0.4) !important;
+  border-radius: 9px !important;
+  background: var(--admin-accent-2) !important;
+  color: var(--admin-paper);
+  font-weight: 650;
+  box-shadow: none;
 }
 
 .admin-theme
@@ -551,10 +553,39 @@
     .service-primary,
     .admin-notification-submit
   ):hover:not(:disabled) {
-  box-shadow:
-    0 10px 22px -8px var(--admin-glow),
-    0 1px 0 rgba(255, 255, 255, 0.4) inset;
-  filter: brightness(1.05);
+  background: var(--admin-accent-bright) !important;
+  border-color: rgba(47, 111, 228, 0.55) !important;
+  box-shadow: none;
+  filter: none;
+  transform: none;
+}
+
+.admin-theme
+  :is(
+    .approve,
+    .complete,
+    .primary-button,
+    .service-primary,
+    .admin-notification-submit
+  ):active:not(:disabled) {
+  transform: none;
+}
+
+/* Ghost / outline buttons — secondary actions, "back" links */
+.admin-theme :is(.secondary-button, .back-button) {
+  border: 1px solid var(--admin-line-strong) !important;
+  border-radius: 9px !important;
+  background: transparent !important;
+  color: var(--admin-text);
+  box-shadow: none;
+}
+
+.admin-theme :is(.secondary-button, .back-button):hover:not(:disabled) {
+  border-color: var(--admin-accent-2) !important;
+  background: var(--admin-soft) !important;
+  color: var(--admin-accent-2);
+  box-shadow: none;
+  transform: none;
 }
 
 .admin-theme table {
@@ -649,6 +680,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .admin-theme,
+  .admin-theme::before,
+  .admin-theme::after,
   .admin-theme *,
   .admin-theme *::before,
   .admin-theme *::after {

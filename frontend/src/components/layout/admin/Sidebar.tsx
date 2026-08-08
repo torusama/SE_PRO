@@ -1,6 +1,5 @@
 import { NavLink } from "react-router-dom";
 import { ROUTES } from "../../../constants/routes";
-import { useAuthStore } from "@/store/authStore";
 
 type MenuItem = {
   label: string;
@@ -48,8 +47,6 @@ const MENU: MenuGroup[] = [
 ];
 
 export default function Sidebar() {
-  const user = useAuthStore((state) => state.user);
-
   return (
     <aside className="admin-sidebar">
       <nav className="admin-sidebar__nav" aria-label="Điều hướng quản trị">
@@ -76,18 +73,6 @@ export default function Sidebar() {
           </section>
         ))}
       </nav>
-
-      {user && (
-        <div className="admin-sidebar__user">
-          <span className="admin-sidebar__initials" aria-hidden="true">
-            {user.initials}
-          </span>
-          <div>
-            <p>{user.name}</p>
-            <span>Quản trị viên</span>
-          </div>
-        </div>
-      )}
     </aside>
   );
 }
