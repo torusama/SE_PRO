@@ -1,3 +1,11 @@
+<p align="center">
+  <img
+    src="https://drive.google.com/uc?export=view&id=1VrcdWFqFQGaPHCgkoL-_PLuT6c3uUA_C"
+    alt="Vĩnh Phúc Viên"
+    width="100%"
+  />
+</p>
+
 <div align="center">
 
 # Vĩnh Phúc Viên
