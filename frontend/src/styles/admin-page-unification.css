@@ -4,13 +4,14 @@
  * feature-specific layouts and business behavior remain untouched.
  */
 
-.admin-theme :is(
-  .appointment-admin,
-  .reminder-admin,
-  .service-admin,
-  .transfer-page,
-  .admin-map-page
-) {
+.admin-theme
+  :is(
+    .appointment-admin,
+    .reminder-admin,
+    .service-admin,
+    .transfer-page,
+    .admin-map-page
+  ) {
   width: 100%;
   max-width: 1480px;
   margin: 0 auto;
@@ -18,25 +19,28 @@
   color: var(--admin-text);
 }
 
-.admin-theme :is(
-  .appointment-admin > header,
-  .reminder-admin-header,
-  .service-admin__header,
-  .transfer-header,
-  .admin-map-page-header
-) {
+.admin-theme
+  :is(
+    .appointment-admin > header,
+    .reminder-admin-header,
+    .service-admin__header,
+    .transfer-header,
+    .admin-map-page-header
+  ) {
   align-items: flex-end;
   gap: 24px;
   margin-bottom: 22px;
 }
 
-.admin-theme :is(
-  .appointment-admin,
-  .reminder-admin,
-  .service-admin,
-  .transfer-page,
-  .admin-map-page
-) h1 {
+.admin-theme
+  :is(
+    .appointment-admin,
+    .reminder-admin,
+    .service-admin,
+    .transfer-page,
+    .admin-map-page
+  )
+  h1 {
   margin: 0;
   color: var(--admin-ink);
   font-family: var(--font-display, inherit);
@@ -46,13 +50,15 @@
   line-height: 1.15;
 }
 
-.admin-theme :is(
-  .appointment-admin > header,
-  .reminder-admin-header,
-  .service-admin__header,
-  .transfer-header,
-  .admin-map-page-header
-) p {
+.admin-theme
+  :is(
+    .appointment-admin > header,
+    .reminder-admin-header,
+    .service-admin__header,
+    .transfer-header,
+    .admin-map-page-header
+  )
+  p {
   color: var(--admin-muted);
   font-size: 11px;
   letter-spacing: 0;
@@ -60,54 +66,72 @@
   text-transform: none;
 }
 
-.admin-theme :is(
-  .appointment-admin,
-  .reminder-admin,
-  .service-admin,
-  .transfer-page,
-  .admin-map-page
-) :is(h2, h3) {
+.admin-theme
+  :is(
+    .appointment-admin,
+    .reminder-admin,
+    .service-admin,
+    .transfer-page,
+    .admin-map-page
+  )
+  :is(h2, h3) {
   color: var(--admin-ink);
   font-weight: 600;
 }
 
-.admin-theme :is(
-  .admin-appointment-list article,
-  .reminder-stat-card,
-  .reminder-toolbar,
-  .reminder-table-wrap,
-  .service-stat,
-  .service-panel,
-  .detail-card,
-  .transfer-card,
-  .admin-map-shell
-) {
+.admin-theme
+  :is(
+    .admin-appointment-list article,
+    .reminder-stat-card,
+    .reminder-toolbar,
+    .reminder-table-wrap,
+    .service-stat,
+    .service-panel,
+    .detail-card,
+    .transfer-card,
+    .admin-map-shell
+  ) {
   border-color: var(--admin-line);
-  background: var(--admin-paper);
-  box-shadow: none;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.98),
+    rgba(255, 255, 255, 0.9)
+  );
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.7) inset,
+    0 10px 24px -20px var(--admin-glow);
 }
 
-.admin-theme :is(
-  .admin-appointment-list article,
-  .reminder-stat-card,
-  .service-stat,
-  .service-panel,
-  .detail-card,
-  .transfer-card,
-  .admin-map-shell
-) {
+.admin-theme
+  :is(
+    .admin-appointment-list article,
+    .reminder-stat-card,
+    .service-stat,
+    .service-panel,
+    .detail-card,
+    .transfer-card,
+    .admin-map-shell
+  ) {
   transition:
     border-color 180ms ease,
     background-color 180ms ease,
-    transform 180ms ease;
+    box-shadow 220ms ease,
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.admin-theme :is(
-  .admin-appointment-list article,
-  .transfer-card,
-  .detail-card
-):hover {
+.admin-theme
+  :is(
+    .admin-appointment-list article,
+    .transfer-card,
+    .detail-card,
+    .service-stat,
+    .reminder-stat-card
+  ):hover {
   border-color: var(--admin-line-strong);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.8) inset,
+    0 16px 30px -16px var(--admin-glow);
+  transform: translateY(-2px);
 }
 
 /* Appointment management */
@@ -302,7 +326,7 @@
 .admin-theme .service-drawer {
   border-left: 1px solid var(--admin-line);
   background: var(--admin-paper);
-  box-shadow: -12px 0 34px rgba(43, 41, 38, 0.1);
+  box-shadow: -12px 0 34px rgba(14, 26, 74, 0.14);
   animation: admin-drawer-enter 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
@@ -377,7 +401,7 @@
 .admin-theme .transfer-actions {
   border-color: var(--admin-line);
   background: var(--admin-paper);
-  box-shadow: 0 -8px 24px rgba(43, 41, 38, 0.05);
+  box-shadow: 0 -8px 24px rgba(14, 26, 74, 0.08);
 }
 
 /* Map: retain the spatial SVG and semantic lot colors, simplify its chrome. */
@@ -414,30 +438,33 @@
   color: var(--admin-ink);
 }
 
-.admin-theme :is(
-  .service-table tbody tr,
-  .plot-table tbody tr,
-  .reminder-table tbody tr,
-  .admin-core-table-wrap tbody tr
-) {
+.admin-theme
+  :is(
+    .service-table tbody tr,
+    .plot-table tbody tr,
+    .reminder-table tbody tr,
+    .admin-core-table-wrap tbody tr
+  ) {
   transition: background-color 150ms ease;
 }
 
-.admin-theme :is(
-  .service-table tbody tr,
-  .plot-table tbody tr,
-  .reminder-table tbody tr,
-  .admin-core-table-wrap tbody tr
-):hover {
-  background: var(--admin-soft);
+.admin-theme
+  :is(
+    .service-table tbody tr,
+    .plot-table tbody tr,
+    .reminder-table tbody tr,
+    .admin-core-table-wrap tbody tr
+  ):hover {
+  background: linear-gradient(
+    90deg,
+    var(--admin-soft-strong),
+    var(--admin-soft) 60%,
+    transparent
+  );
+  box-shadow: 2px 0 0 var(--admin-accent-2) inset;
 }
 
-.admin-theme :is(
-  .service-empty,
-  .empty-state,
-  .reminder-empty,
-  .admin-empty
-) {
+.admin-theme :is(.service-empty, .empty-state, .reminder-empty, .admin-empty) {
   animation: admin-content-enter 280ms ease both;
 }
 
@@ -461,49 +488,65 @@
   }
 }
 
-.admin-theme :is(
-  .admin-map-header-actions button,
-  .admin-map-management-actions button
-) {
+.admin-theme
+  :is(.admin-map-header-actions button, .admin-map-management-actions button) {
   border-color: var(--admin-line-strong);
   border-radius: 7px;
   background: var(--admin-paper);
   color: var(--admin-text);
+  transition:
+    border-color 160ms ease,
+    box-shadow 200ms ease,
+    transform 140ms ease;
+}
+
+.admin-theme
+  :is(
+    .admin-map-header-actions button,
+    .admin-map-management-actions button
+  ):hover:not(:disabled) {
+  border-color: var(--admin-accent-2);
+  box-shadow: 0 8px 18px -12px var(--admin-glow);
+  color: var(--admin-accent-2);
+  transform: translateY(-1px);
 }
 
 /* Horizontal scrolling should stay functional but visually quiet. */
-.admin-theme :is(
-  .admin-workspace,
-  .service-table-wrap,
-  .plot-table-wrap,
-  .reminder-table-wrap,
-  .admin-core-table-wrap,
-  .agent-admin__table-wrap
-) {
+.admin-theme
+  :is(
+    .admin-workspace,
+    .service-table-wrap,
+    .plot-table-wrap,
+    .reminder-table-wrap,
+    .admin-core-table-wrap,
+    .agent-admin__table-wrap
+  ) {
   scrollbar-color: var(--admin-line-strong) transparent;
   scrollbar-width: thin;
 }
 
-.admin-theme :is(
-  .admin-workspace,
-  .service-table-wrap,
-  .plot-table-wrap,
-  .reminder-table-wrap,
-  .admin-core-table-wrap,
-  .agent-admin__table-wrap
-)::-webkit-scrollbar {
+.admin-theme
+  :is(
+    .admin-workspace,
+    .service-table-wrap,
+    .plot-table-wrap,
+    .reminder-table-wrap,
+    .admin-core-table-wrap,
+    .agent-admin__table-wrap
+  )::-webkit-scrollbar {
   width: 7px;
   height: 7px;
 }
 
-.admin-theme :is(
-  .admin-workspace,
-  .service-table-wrap,
-  .plot-table-wrap,
-  .reminder-table-wrap,
-  .admin-core-table-wrap,
-  .agent-admin__table-wrap
-)::-webkit-scrollbar-thumb {
+.admin-theme
+  :is(
+    .admin-workspace,
+    .service-table-wrap,
+    .plot-table-wrap,
+    .reminder-table-wrap,
+    .admin-core-table-wrap,
+    .agent-admin__table-wrap
+  )::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
   border-radius: 99px;
   background: var(--admin-line-strong);
@@ -511,13 +554,14 @@
 }
 
 @media (max-width: 900px) {
-  .admin-theme :is(
-    .appointment-admin > header,
-    .reminder-admin-header,
-    .service-admin__header,
-    .transfer-header,
-    .admin-map-page-header
-  ) {
+  .admin-theme
+    :is(
+      .appointment-admin > header,
+      .reminder-admin-header,
+      .service-admin__header,
+      .transfer-header,
+      .admin-map-page-header
+    ) {
     align-items: flex-start;
     flex-direction: column;
   }
