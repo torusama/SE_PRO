@@ -156,9 +156,8 @@ SE_PRO-main/
 │   ├── src/modules/deceased/         # Hồ sơ người đã khuất/gia đình
 │   └── database/                     # Schema gốc, seed, migrations
 ├── ml-service/                       # FastAPI PlotRanker tùy chọn
-├── AI_AGENT_CODEX_README.md          # Đặc tả kỹ thuật AI chi tiết
-├── HUONG_DAN_CHAY_BACKEND_LOCAL.md   # Hướng dẫn backend local
-└── HUONG_DAN_DONG_BO_DATABASE_SAU_KHI_PULL.md
+├── README.md
+└── README.vi.md
 ```
 
 ## Chạy local
