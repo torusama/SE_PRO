@@ -33,6 +33,10 @@ export class CreateReminderDto {
   ownershipId?: number;
 
   @IsOptional()
+  @IsInt()
+  deceasedProfileId?: number;
+
+  @IsOptional()
   @IsIn(['death_anniversary', 'memorial', 'maintenance', 'other'])
   reminderType?: ReminderType;
 

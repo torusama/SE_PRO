@@ -71,7 +71,27 @@ export class CemeteryServicesService {
     );
     if (!type) throw new NotFoundException('Không tìm thấy loại dịch vụ');
 
-    if (dto.plotId !== undefined) {
+    let resolvedPlotId = dto.plotId;
+    if (dto.deceasedProfileId !== undefined) {
+      const profile = await this.database.queryOne<{ plot_id: number }>(
+        `SELECT dp.plot_id FROM deceased_profiles dp
+         WHERE dp.deceased_profile_id=$1 AND dp.is_deleted=FALSE
+           AND (EXISTS(SELECT 1 FROM ownership_records o WHERE o.plot_id=dp.plot_id AND o.user_id=$2 AND o.is_current=TRUE)
+             OR EXISTS(SELECT 1 FROM resource_permissions rp JOIN family_memberships fm ON fm.membership_id=rp.membership_id AND fm.is_active=TRUE
+               JOIN family_groups fg ON fg.family_id=fm.family_id AND fg.status='active' AND fg.is_deleted=FALSE
+               WHERE fm.user_id=$2 AND rp.resource_type='deceased_profile' AND rp.resource_id=dp.deceased_profile_id
+                 AND rp.action='order_service' AND rp.revoked_at IS NULL))`,
+        [dto.deceasedProfileId, userId],
+      );
+      if (!profile)
+        throw new ForbiddenException(
+          'Bạn không có quyền đặt dịch vụ cho hồ sơ này',
+        );
+      if (resolvedPlotId !== undefined && resolvedPlotId !== profile.plot_id)
+        throw new BadRequestException('Hồ sơ không thuộc lô đã chọn');
+      resolvedPlotId = profile.plot_id;
+    }
+    if (resolvedPlotId !== undefined && dto.deceasedProfileId === undefined) {
       const ownedPlot = await this.database.queryOne(
         `SELECT 1
          FROM ownership_records o
@@ -79,7 +99,7 @@ export class CemeteryServicesService {
          JOIN contracts c ON c.contract_id = o.contract_id
                           AND c.status = 'active' AND c.is_deleted = FALSE
          WHERE o.user_id = $1 AND o.plot_id = $2 AND o.is_current = TRUE`,
-        [userId, dto.plotId],
+        [userId, resolvedPlotId],
       );
       if (!ownedPlot) {
         throw new ForbiddenException(
@@ -91,7 +111,7 @@ export class CemeteryServicesService {
     return this.database.transaction(async (client) => {
       const idempotencyKey = [
         userId,
-        dto.plotId ?? 'none',
+        resolvedPlotId ?? 'none',
         dto.serviceTypeId,
         dto.requestedDate ?? 'none',
       ].join(':');
@@ -111,7 +131,7 @@ export class CemeteryServicesService {
          LIMIT 1`,
         [
           userId,
-          dto.plotId ?? null,
+          resolvedPlotId ?? null,
           dto.serviceTypeId,
           dto.requestedDate ?? null,
         ],
@@ -122,12 +142,13 @@ export class CemeteryServicesService {
 
       const result = await client.query(
         `INSERT INTO service_orders
-           (user_id, plot_id, service_type_id, unit_price, amount, requested_date, note)
-         VALUES ($1, $2, $3, $4, $4, $5, $6)
+           (user_id, plot_id, deceased_profile_id, service_type_id, unit_price, amount, requested_date, note)
+         VALUES ($1, $2, $3, $4, $5, $5, $6, $7)
          RETURNING order_id AS id, status, amount::float`,
         [
           userId,
-          dto.plotId ?? null,
+          resolvedPlotId ?? null,
+          dto.deceasedProfileId ?? null,
           dto.serviceTypeId,
           type.base_price,
           dto.requestedDate ?? null,

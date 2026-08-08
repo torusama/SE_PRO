@@ -15,6 +15,10 @@ export class CreateServiceOrderDto {
   plotId?: number;
 
   @IsOptional()
+  @IsNumber()
+  deceasedProfileId?: number;
+
+  @IsOptional()
   @IsDateString()
   requestedDate?: string;
 

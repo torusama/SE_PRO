@@ -49,9 +49,7 @@ export class PlotsService {
       }
       const after = await mutation(client, before);
       const entityId =
-        id ??
-        Number((after as Record<string, unknown> | null)?.id ?? 0) ??
-        null;
+        id ?? Number((after as Record<string, unknown> | null)?.id ?? 0);
       await this.audit?.record(client, {
         action,
         entityType: 'plot',
@@ -244,8 +242,7 @@ export class PlotsService {
               zone_name AS "zoneName", row_number AS "rowCode",
               column_number AS "plotNumber", status, price::float,
               area_sqm::float AS area, direction, plot_type AS "plotType",
-              description, image_url AS "imageUrl", owner_id AS "ownerId",
-              owner_name AS "ownerName", deceased_name AS "deceasedName"
+              description, image_url AS "imageUrl"
        FROM vw_plots_map
        WHERE plot_id = $1`,
       [id],

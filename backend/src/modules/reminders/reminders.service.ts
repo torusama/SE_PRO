@@ -69,13 +69,26 @@ export class RemindersService {
       dto.remindDay,
       dto.specificDate,
     );
+    if (dto.deceasedProfileId !== undefined) {
+      const allowed = await this.database.queryOne(
+        `SELECT 1 FROM deceased_profiles dp
+         WHERE dp.deceased_profile_id=$1 AND dp.is_deleted=FALSE
+           AND (EXISTS(SELECT 1 FROM ownership_records o WHERE o.plot_id=dp.plot_id AND o.user_id=$2 AND o.is_current=TRUE)
+             OR EXISTS(SELECT 1 FROM resource_permissions rp JOIN family_memberships fm ON fm.membership_id=rp.membership_id AND fm.is_active=TRUE
+               JOIN family_groups fg ON fg.family_id=fm.family_id AND fg.status='active' AND fg.is_deleted=FALSE
+               WHERE fm.user_id=$2 AND rp.resource_type='deceased_profile' AND rp.resource_id=dp.deceased_profile_id
+                 AND rp.action='view_profile' AND rp.revoked_at IS NULL))`,
+        [dto.deceasedProfileId, userId],
+      );
+      if (!allowed) throw new NotFoundException('Không tìm thấy hồ sơ');
+    }
     const row = await this.database.queryOne<ReminderRow>(
       `INSERT INTO reminders AS r
          (user_id, plot_id, ownership_id, title, description,
           remind_month, remind_day, lunar_month, lunar_day, is_leap_month,
           specific_date, reminder_type, is_recurring, notify_days_before,
-          notify_email, notify_emails)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+          notify_email, notify_emails, deceased_profile_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
        RETURNING ${SELECT_FIELDS}`,
       [
         userId,
@@ -94,6 +107,17 @@ export class RemindersService {
         dto.notifyDaysBefore ?? 3,
         dto.notifyEmail ?? (dto.notifyEmails?.length ? true : false),
         dto.notifyEmails ?? [],
+        dto.deceasedProfileId ?? null,
+      ],
+    );
+
+    await this.database.query(
+      `INSERT INTO audit_logs(user_id,action,entity_type,entity_id,new_value)
+       VALUES($1,'reminder.create','reminder',$2,$3::jsonb)`,
+      [
+        userId,
+        row!.id,
+        JSON.stringify({ deceasedProfileId: dto.deceasedProfileId ?? null }),
       ],
     );
 

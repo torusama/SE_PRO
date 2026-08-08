@@ -2,6 +2,15 @@ import { BadRequestException } from '@nestjs/common';
 import { PlotsService } from './plots.service';
 
 describe('PlotsService admin operations', () => {
+  it('keeps public plot detail free of owner and deceased fields', async () => {
+    const database = { queryOne: jest.fn().mockResolvedValue({ id: 1 }) };
+    const service = new PlotsService(database as never);
+    await service.findOne(1);
+    const sql = database.queryOne.mock.calls[0][0] as string;
+    expect(sql).not.toContain('owner_name');
+    expect(sql).not.toContain('owner_phone');
+    expect(sql).not.toContain('deceased_name');
+  });
   it('returns paginated plot records', async () => {
     const database = {
       queryOne: jest.fn().mockResolvedValue({ total: '1' }),
@@ -97,7 +106,9 @@ describe('PlotsService admin operations', () => {
       }),
     };
     const database = {
-      transaction: jest.fn(async (callback: any) => callback(client)),
+      transaction: jest.fn((callback: (value: typeof client) => unknown) =>
+        Promise.resolve(callback(client)),
+      ),
     };
     const audit = { record: jest.fn() };
     const service = new PlotsService(database as never, audit as never);
@@ -117,7 +128,9 @@ describe('PlotsService admin operations', () => {
       }),
     };
     const database = {
-      transaction: jest.fn(async (callback: any) => callback(client)),
+      transaction: jest.fn((callback: (value: typeof client) => unknown) =>
+        Promise.resolve(callback(client)),
+      ),
     };
     const audit = { record: jest.fn() };
     const service = new PlotsService(database as never, audit as never);

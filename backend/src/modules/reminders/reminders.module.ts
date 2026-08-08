@@ -6,9 +6,10 @@ import {
   RemindersController,
 } from './reminders.controller';
 import { RemindersService } from './reminders.service';
+import { DeceasedModule } from '../deceased/deceased.module';
 
 @Module({
-  imports: [NotificationsModule, EmailModule],
+  imports: [NotificationsModule, EmailModule, DeceasedModule],
   controllers: [RemindersController, AdminRemindersController], // ← thêm AdminRemindersController
   providers: [RemindersService],
   exports: [RemindersService],
