@@ -156,9 +156,8 @@ SE_PRO-main/
 │   ├── src/modules/deceased/         # Deceased/family records
 │   └── database/                     # Base schema, seed, migrations
 ├── ml-service/                       # Optional FastAPI PlotRanker service
-├── AI_AGENT_CODEX_README.md          # Deep AI implementation specification
-├── HUONG_DAN_CHAY_BACKEND_LOCAL.md   # Detailed local backend guide (VI)
-└── HUONG_DAN_DONG_BO_DATABASE_SAU_KHI_PULL.md
+├── README.md
+└── README.vi.md
 ```
 
 ## Quick Start
