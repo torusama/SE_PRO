@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import * as fs from 'fs';
 import * as path from 'path';
 import { GmailApiClient } from './gmail-api.client';
-import { GmailMessage } from './gmail-message';
+import { GmailAttachment, GmailMessage } from './gmail-message';
 
 // Gói gọn việc gửi mail qua Gmail HTTP API. Không cứng bất kỳ nội dung/mẫu
 // email nào chứa dữ liệu giả — OTP luôn được sinh ngẫu nhiên thật.
@@ -68,8 +68,9 @@ export class EmailService {
     return `<span role="button" tabindex="0" title="Bấm để sao chép" onclick="try{navigator.clipboard&&navigator.clipboard.writeText(${jsValue});this.setAttribute('title','Đã sao chép');}catch(e){}" style="display:inline-block;cursor:pointer;-webkit-user-select:all;user-select:all;font-family:${fontFamily};font-size:${fontSize};line-height:inherit;font-weight:${fontWeight};letter-spacing:${letterSpacing};color:${color};">${safeValue}</span>`;
   }
 
-  private getBannerAttachment(filename: string) {
+  private getBannerAttachment(filename: string, cid: string): GmailAttachment | null {
     const candidates = [
+      path.join(process.cwd(), 'src', 'modules', 'email', 'banner', filename),
       path.join(process.cwd(), 'src', 'email', 'banner', filename),
       path.join(process.cwd(), 'email', 'banner', filename),
       path.join(__dirname, 'banner', filename),
@@ -86,6 +87,8 @@ export class EmailService {
     return {
       filename,
       content: fs.readFileSync(bannerPath),
+      cid,
+      contentDisposition: 'inline',
     };
   }
 
@@ -278,7 +281,7 @@ export class EmailService {
     }
     const safePurpose = this.escapeHtml(purpose);
     const bannerCid = 'vpv-mail-3-otp';
-    const banner = this.getBannerAttachment('mail-3.png');
+    const banner = this.getBannerAttachment('mail-3.png', bannerCid);
 
     const content = this.renderDarkHero({
       kicker: 'Xác thực tài khoản',
@@ -322,7 +325,7 @@ export class EmailService {
       .trim();
     const safeMessage = this.escapeHtml(normalizedMessage).replace(/\n/g, '<br/>');
     const bannerCid = 'vpv-mail-1-reminder';
-    const banner = this.getBannerAttachment('mail-1.png');
+    const banner = this.getBannerAttachment('mail-1.png', bannerCid);
     const reminderUrl = `${this.getFrontendUrl()}/nhac-lich`;
 
     const content = this.renderLightCard({
@@ -389,7 +392,7 @@ export class EmailService {
     const copyableOrderCode = this.renderCopyableCode(orderCode);
     const copyablePlotCode = params.plotCode ? this.renderCopyableCode(params.plotCode) : '';
     const bannerCid = 'vpv-mail-1-order';
-    const banner = this.getBannerAttachment('mail-1.png');
+    const banner = this.getBannerAttachment('mail-1.png', bannerCid);
     const serviceUrl = `${this.getFrontendUrl()}/dich-vu`;
 
     const row = (label: string, value: string, last = false) => `
@@ -472,7 +475,7 @@ export class EmailService {
     const safeNote = this.escapeHtml(noteText).replace(/\n/g, '<br/>');
     const copyableOrderCode = this.renderCopyableCode(orderCode);
     const bannerCid = 'vpv-mail-2-completed';
-    const banner = this.getBannerAttachment('mail-2.png');
+    const banner = this.getBannerAttachment('mail-2.png', bannerCid);
     const serviceUrl = `${this.getFrontendUrl()}/dich-vu`;
 
     const content = this.renderLightCard({
@@ -528,7 +531,7 @@ export class EmailService {
     }
     const safeResetLink = this.escapeHtml(resetLink);
     const bannerCid = 'vpv-mail-3-reset';
-    const banner = this.getBannerAttachment('mail-3.png');
+    const banner = this.getBannerAttachment('mail-3.png', bannerCid);
 
     const content = this.renderDarkHero({
       kicker: 'Bảo mật tài khoản',
