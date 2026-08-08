@@ -14,7 +14,7 @@ export class EmailService {
 
   constructor(
     private readonly gmailApi: GmailApiClient,
-    private readonly config: ConfigService,
+    private readonly config?: ConfigService,
   ) {
     if (!this.gmailApi.isConfigured()) {
       // Không throw để các API không phụ thuộc email vẫn khởi động được. Các
