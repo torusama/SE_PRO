@@ -19,6 +19,8 @@ import { TrainingService } from './training.service';
 import { ConversationHistoryService } from './conversation-history.service';
 import { AdminAiActivityQueryDto } from './dto/admin-ai-activity-query.dto';
 import { LearningAnalyticsService } from './learning-analytics.service';
+import { KnowledgeService } from './knowledge.service';
+import { ReviewKnowledgeDto } from './dto/review-knowledge.dto';
 
 interface AdminUser {
   id: number;
@@ -33,6 +35,7 @@ export class AiAgentAdminController {
     private readonly training: TrainingService,
     private readonly conversations: ConversationHistoryService,
     private readonly analytics: LearningAnalyticsService,
+    private readonly knowledge: KnowledgeService,
   ) {}
 
   @Get('conversations')
@@ -94,6 +97,60 @@ export class AiAgentAdminController {
       success: true,
       message: 'AI feedback rejected',
       data: await this.feedback.review(Number(id), user.id, 'reject', dto),
+    };
+  }
+
+  @Get('knowledge')
+  async listKnowledge(@Query('status') status?: string) {
+    return {
+      success: true,
+      message: 'AI knowledge proposals retrieved',
+      data: await this.knowledge.listKnowledgeForReview(status),
+    };
+  }
+
+  @Get('knowledge/:id')
+  async getKnowledge(@Param('id') id: string) {
+    return {
+      success: true,
+      message: 'AI knowledge proposal retrieved',
+      data: await this.knowledge.getKnowledgeForReview(Number(id)),
+    };
+  }
+
+  @Patch('knowledge/:id/approve')
+  async approveKnowledge(
+    @CurrentUser() user: AdminUser,
+    @Param('id') id: string,
+    @Body() dto: ReviewKnowledgeDto,
+  ) {
+    return {
+      success: true,
+      message: 'AI knowledge proposal approved',
+      data: await this.knowledge.reviewKnowledgeProposal(
+        Number(id),
+        user.id,
+        'approve',
+        dto.reviewNote,
+      ),
+    };
+  }
+
+  @Patch('knowledge/:id/reject')
+  async rejectKnowledge(
+    @CurrentUser() user: AdminUser,
+    @Param('id') id: string,
+    @Body() dto: ReviewKnowledgeDto,
+  ) {
+    return {
+      success: true,
+      message: 'AI knowledge proposal rejected',
+      data: await this.knowledge.reviewKnowledgeProposal(
+        Number(id),
+        user.id,
+        'reject',
+        dto.reviewNote,
+      ),
     };
   }
 

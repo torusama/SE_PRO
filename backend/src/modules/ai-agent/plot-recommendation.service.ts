@@ -272,6 +272,15 @@ export class PlotRecommendationService {
     if (dto.plotType) {
       conditions.push(`plot_type = ${add(dto.plotType)}`);
     }
+    if (dto.excludePlotIds?.length) {
+      const excluded = [...new Set(dto.excludePlotIds)]
+        .map(Number)
+        .filter((value) => Number.isInteger(value) && value > 0)
+        .slice(0, 100);
+      if (excluded.length) {
+        conditions.push(`NOT (plot_id = ANY(${add(excluded)}::int[]))`);
+      }
+    }
     if (dto.minAreaSqm !== undefined) {
       conditions.push(`area_sqm >= ${add(dto.minAreaSqm)}`);
     }

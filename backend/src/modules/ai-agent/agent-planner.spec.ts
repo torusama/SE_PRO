@@ -256,4 +256,38 @@ describe('agent planner', () => {
       'lô family chuyên dụng',
     );
   });
+  it('parses a one-call conversational response and consultation-topic memory', () => {
+    const plan = parseAgentPlan(
+      JSON.stringify({
+        intent: 'general_question',
+        action: 'none',
+        contextMode: 'continue',
+        needsClarification: false,
+        clarificationQuestion: '',
+        directResponse:
+          'Mình hiểu. Khi phù hợp mình sẽ ưu tiên giải thích theo góc nhìn phong thủy.',
+        memoryProposals: [
+          {
+            category: 'conversation_preference',
+            title: 'Ưu tiên chủ đề phong thủy',
+            content:
+              'Người dùng muốn các cuộc trao đổi phù hợp ưu tiên góc nhìn phong thủy.',
+            memoryType: 'user_preference',
+            requestedScope: 'user',
+            memoryKey: 'consultation_topic_preference',
+            reason: 'Explicit reusable conversation preference',
+          },
+        ],
+      }),
+    );
+
+    expect(plan.action).toBe('none');
+    expect(plan.directResponse).toContain('phong thủy');
+    expect(plan.memoryProposals?.[0]).toMatchObject({
+      memoryType: 'user_preference',
+      requestedScope: 'user',
+      memoryKey: 'consultation_topic_preference',
+    });
+  });
+
 });

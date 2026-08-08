@@ -86,4 +86,41 @@ describe('OpenAiService', () => {
     );
     expect(result.choices[0].message.content).toBe('Success with key2');
   });
+
+  it('keeps the same API key inside one user turn and rotates on the next turn', async () => {
+    jest.spyOn(configService, 'get').mockImplementation((key: string) => {
+      if (key === 'ai.openai.apiKey') return undefined;
+      if (key === 'ai.openai.apiKeys') return 'sk-key1,sk-key2';
+      if (key === 'ai.enableLlm') return true;
+      if (key === 'ai.openai.baseUrl') return 'https://api.openai.com/v1';
+      if (key === 'ai.openai.model') return 'gpt-4o-mini';
+      if (key === 'ai.openai.timeoutMs') return 1000;
+      if (key === 'ai.openai.totalTimeoutMs') return 2000;
+      return null;
+    });
+
+    const mockFetch = global.fetch as jest.Mock;
+    mockFetch.mockImplementation(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        choices: [{ message: { role: 'assistant', content: 'ok' } }],
+      }),
+    }));
+
+    await service.chat([{ role: 'user', content: 'first' }], [], 'auto', {
+      routingKey: 'turn-1',
+    });
+    await service.chat([{ role: 'user', content: 'compose' }], [], 'auto', {
+      routingKey: 'turn-1',
+    });
+    await service.chat([{ role: 'user', content: 'second' }], [], 'auto', {
+      routingKey: 'turn-2',
+    });
+
+    expect(
+      mockFetch.mock.calls.map((call) => call[1].headers.Authorization),
+    ).toEqual(['Bearer sk-key1', 'Bearer sk-key1', 'Bearer sk-key2']);
+  });
+
 });

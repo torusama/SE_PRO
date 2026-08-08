@@ -28,6 +28,7 @@ interface ReminderRow {
   specificDate: string | null;
   reminderType: string;
   isRecurring: boolean;
+  calendarType: string | null;
   notifyDaysBefore: number;
   notifyEmail: boolean;
   notifyEmails: string[];
@@ -45,6 +46,7 @@ const SELECT_FIELDS = `r.reminder_id AS id, r.user_id AS "userId", r.plot_id AS 
        r.lunar_month AS "lunarMonth", r.lunar_day AS "lunarDay",
        r.is_leap_month AS "isLeapMonth", r.specific_date AS "specificDate",
        r.reminder_type AS "reminderType", r.is_recurring AS "isRecurring",
+       r.calendar_type AS "calendarType",
        r.notify_days_before AS "notifyDaysBefore",
        r.notify_email AS "notifyEmail", r.notify_emails AS "notifyEmails",
        r.is_active AS "isActive",
@@ -63,6 +65,7 @@ export class RemindersService {
 
   async create(userId: number, dto: CreateReminderDto) {
     const isRecurring = dto.isRecurring ?? true;
+    const calendarType = dto.calendarType ?? 'solar';
     const { remindMonth, remindDay, specificDate } = this.resolveDate(
       isRecurring,
       dto.remindMonth,
@@ -86,9 +89,9 @@ export class RemindersService {
       `INSERT INTO reminders AS r
          (user_id, plot_id, ownership_id, title, description,
           remind_month, remind_day, lunar_month, lunar_day, is_leap_month,
-          specific_date, reminder_type, is_recurring, notify_days_before,
+          specific_date, reminder_type, is_recurring, calendar_type, notify_days_before,
           notify_email, notify_emails, deceased_profile_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
        RETURNING ${SELECT_FIELDS}`,
       [
         userId,
@@ -98,12 +101,13 @@ export class RemindersService {
         dto.description?.trim() || null,
         remindMonth,
         remindDay,
-        dto.lunarMonth ?? null,
-        dto.lunarDay ?? null,
+        dto.lunarMonth ?? (calendarType === 'lunar' ? remindMonth : null),
+        dto.lunarDay ?? (calendarType === 'lunar' ? remindDay : null),
         dto.isLeapMonth ?? false,
         specificDate,
         dto.reminderType ?? 'death_anniversary',
         isRecurring,
+        calendarType,
         dto.notifyDaysBefore ?? 3,
         dto.notifyEmail ?? (dto.notifyEmails?.length ? true : false),
         dto.notifyEmails ?? [],
@@ -346,14 +350,15 @@ export class RemindersService {
         (isRecurring ? (existing.remindDay ?? undefined) : undefined),
       dto.specificDate ?? existing.specificDate ?? undefined,
     );
+    const calendarType = dto.calendarType ?? existing.calendarType ?? 'solar';
     const row = await this.database.queryOne<ReminderRow>(
       `UPDATE reminders AS r SET
          title = $3, description = $4, plot_id = $5, ownership_id = $6,
-         reminder_type = $7, is_recurring = $8,
-         remind_month = $9, remind_day = $10,
-         lunar_month = $11, lunar_day = $12, is_leap_month = $13,
-         specific_date = $14, notify_days_before = $15,
-         is_active = $16, notify_email = $17, notify_emails = $18,
+         reminder_type = $7, is_recurring = $8, calendar_type = $9,
+         remind_month = $10, remind_day = $11,
+         lunar_month = $12, lunar_day = $13, is_leap_month = $14,
+         specific_date = $15, notify_days_before = $16,
+         is_active = $17, notify_email = $18, notify_emails = $19,
          updated_at = NOW()
        WHERE r.reminder_id = $1 AND r.user_id = $2 AND r.is_deleted = FALSE
        RETURNING ${SELECT_FIELDS}`,
@@ -368,10 +373,11 @@ export class RemindersService {
         dto.ownershipId ?? existing.ownershipId,
         dto.reminderType ?? existing.reminderType,
         isRecurring,
+        calendarType,
         remindMonth,
         remindDay,
-        dto.lunarMonth ?? existing.lunarMonth,
-        dto.lunarDay ?? existing.lunarDay,
+        dto.lunarMonth ?? (calendarType === 'lunar' ? remindMonth : existing.lunarMonth),
+        dto.lunarDay ?? (calendarType === 'lunar' ? remindDay : existing.lunarDay),
         dto.isLeapMonth ?? existing.isLeapMonth,
         specificDate,
         dto.notifyDaysBefore ?? existing.notifyDaysBefore,

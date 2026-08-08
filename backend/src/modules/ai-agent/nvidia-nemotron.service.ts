@@ -15,10 +15,28 @@ class NvidiaHttpError extends Error {
   }
 }
 
+type LlmCallOptions = {
+  temperature?: number;
+  maxTokens?: number;
+  routingKey?: string;
+  timeoutMs?: number;
+  totalTimeoutMs?: number;
+};
+
+interface KeyCandidate {
+  apiKey: string;
+  slot: number;
+  cooldownUntil: number;
+}
+
 @Injectable()
 export class NvidiaNemotronService {
   private readonly logger = new Logger(NvidiaNemotronService.name);
   private readonly cooldownUntil = new Map<string, number>();
+  private readonly affinity = new Map<
+    string,
+    { apiKey: string; expiresAt: number }
+  >();
   private rotationCursor = 0;
 
   constructor(private readonly config: ConfigService) {}
@@ -40,8 +58,8 @@ export class NvidiaNemotronService {
     messages: NvidiaMessage[],
     tools: readonly unknown[] = [],
     toolChoice: unknown = 'auto',
-    options: { temperature?: number } = {},
-  ) {
+    options: LlmCallOptions = {},
+  ): Promise<NvidiaChatResponse> {
     const apiKeys = this.getConfiguredApiKeys();
     if (
       this.config.get<boolean>('ai.enableLlm') === false ||
@@ -54,14 +72,18 @@ export class NvidiaNemotronService {
       this.config.get<string>('ai.nvidia.baseUrl') ??
       'https://integrate.api.nvidia.com/v1'
     ).replace(/\/+$/, '');
-    const timeoutMs = this.positiveConfig('ai.nvidia.timeoutMs', 30_000);
-    const totalTimeoutMs = this.positiveConfig(
-      'ai.nvidia.totalTimeoutMs',
-      55_000,
+    const configuredTimeoutMs = this.positiveConfig(
+      'ai.nvidia.timeoutMs',
+      7_000,
+    );
+    const timeoutMs = this.clampTimeout(options.timeoutMs, configuredTimeoutMs);
+    const totalTimeoutMs = this.clampTimeout(
+      options.totalTimeoutMs,
+      this.positiveConfig('ai.nvidia.totalTimeoutMs', 12_000),
     );
     const maxAttempts = Math.min(
       apiKeys.length,
-      this.positiveConfig('ai.nvidia.maxAttempts', 3),
+      this.positiveConfig('ai.nvidia.maxAttempts', 2),
     );
     const body = {
       model: this.model,
@@ -76,11 +98,24 @@ export class NvidiaNemotronService {
         options.temperature ??
         this.config.get<number>('ai.nvidia.temperature') ??
         0.2,
-      max_tokens: this.config.get<number>('ai.nvidia.maxTokens') ?? 2048,
+      max_tokens:
+        options.maxTokens ??
+        this.config.get<number>('ai.nvidia.maxTokens') ??
+        2048,
       stream: false,
     };
 
-    const candidates = this.selectCandidates(apiKeys, maxAttempts);
+    const candidates = this.selectCandidates(
+      apiKeys,
+      maxAttempts,
+      options.routingKey,
+    );
+    if (!candidates.length) {
+      throw new ServiceUnavailableException(
+        'All NVIDIA API keys are temporarily cooling down',
+      );
+    }
+
     const deadline = Date.now() + totalTimeoutMs;
     let lastError: unknown;
 
@@ -89,10 +124,13 @@ export class NvidiaNemotronService {
       const remainingBudgetMs = deadline - Date.now();
       if (remainingBudgetMs <= 0) break;
       const remainingAttempts = candidates.length - attempt;
-      const attemptTimeoutMs = Math.max(
-        1,
-        Math.min(timeoutMs, Math.floor(remainingBudgetMs / remainingAttempts)),
+      const reserveForBackupKeys = Math.max(0, remainingAttempts - 1) * 1_500;
+      const currentBudgetMs = Math.max(
+        1_000,
+        remainingBudgetMs -
+          Math.min(reserveForBackupKeys, Math.max(0, remainingBudgetMs - 1)),
       );
+      const attemptTimeoutMs = Math.min(timeoutMs, currentBudgetMs);
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), attemptTimeoutMs);
       try {
@@ -117,6 +155,7 @@ export class NvidiaNemotronService {
             'NVIDIA API returned an invalid response',
           );
         }
+        this.rememberAffinity(options.routingKey, candidate.apiKey);
         return payload;
       } catch (error) {
         lastError = error;
@@ -139,6 +178,7 @@ export class NvidiaNemotronService {
             candidate.apiKey,
             error instanceof NvidiaHttpError ? error : undefined,
           );
+          this.forgetAffinityIfMatches(options.routingKey, candidate.apiKey);
           this.logger.warn(
             `NVIDIA attempt ${attempt + 1}/${candidates.length} failed on key slot ${candidate.slot + 1}; ${this.safeFailureReason(error, isTimeout)}`,
           );
@@ -147,14 +187,10 @@ export class NvidiaNemotronService {
           }
         }
 
-        if (
-          error instanceof ServiceUnavailableException ||
-          error instanceof NvidiaHttpError
-        ) {
+        if (error instanceof ServiceUnavailableException) throw error;
+        if (error instanceof NvidiaHttpError) {
           throw new ServiceUnavailableException(
-            error instanceof NvidiaHttpError
-              ? `NVIDIA API unavailable (HTTP ${error.status})`
-              : error.message,
+            `NVIDIA API unavailable (HTTP ${error.status})`,
           );
         }
         throw new ServiceUnavailableException('NVIDIA API unavailable');
@@ -216,9 +252,22 @@ export class NvidiaNemotronService {
       .filter(Boolean);
   }
 
-  private selectCandidates(apiKeys: string[], maxAttempts: number) {
-    const startIndex = this.rotationCursor % apiKeys.length;
-    this.rotationCursor = (this.rotationCursor + 1) % apiKeys.length;
+  private selectCandidates(
+    apiKeys: string[],
+    maxAttempts: number,
+    routingKey?: string,
+  ): KeyCandidate[] {
+    this.pruneAffinity();
+    const affinityKey = routingKey
+      ? this.affinity.get(routingKey)?.apiKey
+      : undefined;
+    const affinityIndex = affinityKey ? apiKeys.indexOf(affinityKey) : -1;
+    const startIndex =
+      affinityIndex >= 0 ? affinityIndex : this.rotationCursor % apiKeys.length;
+    if (affinityIndex < 0) {
+      this.rotationCursor = (this.rotationCursor + 1) % apiKeys.length;
+    }
+
     const ordered = apiKeys.map((_, offset) => {
       const slot = (startIndex + offset) % apiKeys.length;
       return {
@@ -228,18 +277,34 @@ export class NvidiaNemotronService {
       };
     });
     const now = Date.now();
-    const available = ordered.filter(
-      (candidate) => candidate.cooldownUntil <= now,
-    );
-    const selected =
-      available.length > 0
-        ? available
-        : [
-            [...ordered].sort(
-              (left, right) => left.cooldownUntil - right.cooldownUntil,
-            )[0],
-          ];
-    return selected.slice(0, maxAttempts);
+    return ordered
+      .filter((candidate) => candidate.cooldownUntil <= now)
+      .slice(0, maxAttempts);
+  }
+
+  private rememberAffinity(routingKey: string | undefined, apiKey: string) {
+    if (!routingKey) return;
+    this.affinity.set(routingKey, {
+      apiKey,
+      expiresAt: Date.now() + 120_000,
+    });
+  }
+
+  private forgetAffinityIfMatches(
+    routingKey: string | undefined,
+    apiKey: string,
+  ) {
+    if (!routingKey) return;
+    if (this.affinity.get(routingKey)?.apiKey === apiKey) {
+      this.affinity.delete(routingKey);
+    }
+  }
+
+  private pruneAffinity() {
+    const now = Date.now();
+    for (const [key, value] of this.affinity) {
+      if (value.expiresAt <= now) this.affinity.delete(key);
+    }
   }
 
   private cooldownKey(apiKey: string, error?: NvidiaHttpError) {
@@ -251,10 +316,17 @@ export class NvidiaNemotronService {
       'ai.nvidia.invalidKeyCooldownMs',
       600_000,
     );
+    const transientCooldownMs = this.positiveConfig(
+      'ai.router.transientKeyCooldownMs',
+      800,
+    );
+    const status = error?.status;
     const cooldownMs =
-      error?.status === 401 || error?.status === 403
+      status === 401 || status === 403
         ? invalidKeyCooldownMs
-        : Math.max(normalCooldownMs, error?.retryAfterMs ?? 0);
+        : status === 429
+          ? Math.max(normalCooldownMs, error?.retryAfterMs ?? 0)
+          : transientCooldownMs;
     this.cooldownUntil.set(apiKey, Date.now() + cooldownMs);
   }
 
@@ -285,5 +357,10 @@ export class NvidiaNemotronService {
   private positiveConfig(key: string, fallback: number) {
     const value = Number(this.config.get<number | string>(key));
     return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
+  }
+
+  private clampTimeout(value: number | undefined, fallback: number) {
+    if (!Number.isFinite(value) || Number(value) <= 0) return fallback;
+    return Math.max(250, Math.floor(Number(value)));
   }
 }

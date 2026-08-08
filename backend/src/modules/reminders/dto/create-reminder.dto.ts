@@ -44,6 +44,10 @@ export class CreateReminderDto {
   @IsBoolean()
   isRecurring?: boolean;
 
+  @IsOptional()
+  @IsIn(['solar', 'lunar'])
+  calendarType?: 'solar' | 'lunar';
+
   // Bắt buộc khi isRecurring = true (mặc định true)
   @ValidateIf((dto) => dto.isRecurring !== false)
   @IsInt()

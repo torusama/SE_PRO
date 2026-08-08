@@ -19,6 +19,7 @@ export const USER_MEMORY_KEYS = [
   'preferred_plot_type',
   'response_detail_preference',
   'service_interest',
+  'consultation_topic_preference',
 ] as const;
 
 export type UserMemoryKey = (typeof USER_MEMORY_KEYS)[number];

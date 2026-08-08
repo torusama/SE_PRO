@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'crypto';
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { PoolClient, QueryResultRow } from 'pg';
 import { DatabaseService } from '../../database/database.service';
 import {
@@ -10,6 +10,7 @@ import {
   USER_MEMORY_KEYS,
   UserMemoryKey,
 } from './tools/agent-tool.types';
+import { KnowledgeEmbeddingService } from './knowledge-embedding.service';
 
 interface NormalizedProposal extends MemoryProposal {
   category: string;
@@ -72,7 +73,10 @@ const MAX_REASON_LENGTH = 1000;
 export class AutonomousLearningService {
   private readonly logger = new Logger(AutonomousLearningService.name);
 
-  constructor(private readonly database: DatabaseService) {}
+  constructor(
+    private readonly database: DatabaseService,
+    @Optional() private readonly embeddings?: KnowledgeEmbeddingService,
+  ) {}
 
   async processProposal(
     rawProposal: MemoryProposal,
@@ -103,6 +107,17 @@ export class AutonomousLearningService {
         case 'information_correction':
           result = await this.storeGlobalProposal(proposal, context);
           break;
+      }
+      if (
+        this.embeddings &&
+        result.knowledgeEntryId &&
+        ['saved_user_memory', 'verified_and_activated'].includes(result.status)
+      ) {
+        // Vectorization happens only after the validated DB transaction has
+        // committed. It is deliberately non-blocking for the chat workflow.
+        void this.embeddings
+          .embedKnowledgeEntry(result.knowledgeEntryId)
+          .catch(() => undefined);
       }
       return this.result(context, proposal.memoryType, result);
     } catch (error) {
@@ -821,16 +836,24 @@ export class AutonomousLearningService {
   private isExplicitPreference(sourceMessage: string) {
     const folded = this.fold(sourceMessage);
     const asksToRemember =
-      /\b(remember|please remember|ghi nho|hay nho|luu lai)\b/.test(folded);
-    const hasFirstPerson =
-      /\b(i|we|my|our|toi|minh|chung toi|gia dinh toi|gia dinh minh)\b/.test(
+      /\b(remember|please remember|ghi nho|nho giup|hay nho|luu lai|luu giup)\b/.test(
         folded,
       );
-    const statesPreference =
-      /\b(prefer|preference|want|need|like|priority|uu tien|thich|muon|can|khong con can)\b/.test(
+    if (asksToRemember) return true;
+
+    // Accept normal colloquial Vietnamese self-reference ("tui", "t", "tao",
+    // "em"...) but require an actual first-person preference assertion. This
+    // avoids treating questions like "bạn biết tui thích gì không?" as new
+    // memory just because they contain the word "thích".
+    const firstPersonPreference =
+      /^(?:i|we|toi|minh|tui|tao|t|to|em|anh|chi|chung toi|gia dinh toi|gia dinh minh)\b.{0,160}\b(?:prefer|preference|want|need|like|priority|uu tien|thich|muon|can|doi y|thay doi|cap nhat|sua lai|khong con can|change|update)\b/.test(
         folded,
       );
-    return asksToRemember || (hasFirstPerson && statesPreference);
+    const preferenceQuestion =
+      /\b(?:thich gi|uu tien gi|muon gi|so thich gi|biet .* thich gi)\b/.test(
+        folded,
+      );
+    return firstPersonPreference && !preferenceQuestion;
   }
 
   private isSafePreference(content: string) {
@@ -844,6 +867,13 @@ export class AutonomousLearningService {
     const text = this.fold(
       `${proposal.category} ${proposal.title} ${proposal.content}`,
     );
+    if (
+      /\b(phong thuy|feng shui|fengshui|bazi|bat tu|am trach|van hoa|cultural|consultation topic|chu de tu van|chu de tro chuyen)\b/.test(
+        text,
+      )
+    ) {
+      return 'consultation_topic_preference';
+    }
     if (
       /\b(quiet|yen tinh|entrance|gate|gan cong|vi tri|location)\b/.test(text)
     ) {

@@ -194,7 +194,10 @@ describe('AiAgentOrchestratorService application-level learning', () => {
       { id: 7, role: 'admin' },
     );
 
-    expect(knowledge.getUserPromptContext).toHaveBeenCalledWith(7);
+    expect(knowledge.getUserPromptContext).toHaveBeenCalledWith(
+      7,
+      expect.stringContaining('Remember that I prefer plots near the entrance'),
+    );
     expect(tools.execute).toHaveBeenNthCalledWith(
       1,
       'propose_knowledge_update',

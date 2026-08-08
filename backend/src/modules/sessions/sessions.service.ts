@@ -10,6 +10,15 @@ interface RequestInfo {
 // Quản lý phiên đăng nhập thật theo thiết bị (bảng user_sessions). Không có dữ
 // liệu mẫu/giả lập nào ở đây — mọi thiết bị hiển thị trên UI đều tương ứng 1 JWT
 // thật đã được phát hành, phân tích trực tiếp từ header User-Agent của request.
+function cleanIpAddress(ip?: string | null): string | null {
+  if (!ip) return null;
+  const cleaned = ip.replace(/^::ffff:/, '');
+  if (cleaned === '::1' || cleaned === '127.0.0.1' || cleaned === 'localhost') {
+    return null;
+  }
+  return cleaned;
+}
+
 @Injectable()
 export class SessionsService {
   constructor(private readonly database: DatabaseService) {}
@@ -48,7 +57,7 @@ export class SessionsService {
         label,
         browser,
         os,
-        info.ip ?? null,
+        cleanIpAddress(info.ip),
         info.userAgent ?? null,
       ],
     );
@@ -88,7 +97,7 @@ export class SessionsService {
       deviceLabel: r.device_label,
       browser: r.browser,
       os: r.os,
-      ipAddress: r.ip_address,
+      ipAddress: cleanIpAddress(r.ip_address),
       createdAt: r.created_at,
       lastActiveAt: r.last_active_at,
       isCurrent: r.jti === currentJti,

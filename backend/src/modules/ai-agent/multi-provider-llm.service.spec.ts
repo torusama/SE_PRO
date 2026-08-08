@@ -97,4 +97,28 @@ describe('MultiProviderLlmService', () => {
     expect(openAiSecondary.chat).toHaveBeenCalledTimes(1);
     expect(result.choices[0].message.content).toBe('OpenAI 120B success');
   });
+
+  it('keeps one provider for a user turn and rotates the next user turn', async () => {
+    const response = (content: string): NvidiaChatResponse => ({
+      choices: [{ message: { role: 'assistant', content } }],
+    });
+
+    jest.spyOn(openAiPrimary, 'isConfigured').mockReturnValue(true);
+    jest.spyOn(openAiSecondary, 'isConfigured').mockReturnValue(true);
+    jest.spyOn(nvidiaService, 'isConfigured').mockReturnValue(true);
+    jest.spyOn(openAiPrimary, 'chat').mockResolvedValue(response('primary'));
+    jest
+      .spyOn(openAiSecondary, 'chat')
+      .mockResolvedValue(response('secondary'));
+    jest.spyOn(nvidiaService, 'chat').mockResolvedValue(response('nvidia'));
+
+    await service.chat([], [], 'auto', { routingKey: 'turn-1' });
+    await service.chat([], [], 'auto', { routingKey: 'turn-1' });
+    await service.chat([], [], 'auto', { routingKey: 'turn-2' });
+
+    expect(openAiPrimary.chat).toHaveBeenCalledTimes(2);
+    expect(openAiSecondary.chat).toHaveBeenCalledTimes(1);
+    expect(nvidiaService.chat).not.toHaveBeenCalled();
+  });
+
 });

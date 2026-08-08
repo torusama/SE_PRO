@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  IsArray,
   IsBoolean,
   IsDateString,
   IsIn,
@@ -63,6 +64,13 @@ export class RecommendPlotsDto {
   @IsOptional()
   @IsBoolean()
   preferNearEntrance?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @Type(() => Number)
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  excludePlotIds?: number[];
 
   @IsOptional()
   @IsDateString()

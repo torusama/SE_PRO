@@ -1,0 +1,39 @@
+export type AiQuickReply = {
+  id: string;
+  label: string;
+  message: string;
+  emphasis?: 'normal' | 'strong';
+};
+
+type Props = {
+  items?: AiQuickReply[];
+  disabled?: boolean;
+  onSend: (message: string) => void | Promise<void>;
+};
+
+/**
+ * Render directly under one assistant message.
+ * Clicking a label sends the hidden natural-language message through the same
+ * chat submit function as if the customer typed it themselves.
+ */
+export function QuickReplies({ items = [], disabled = false, onSend }: Props) {
+  if (!items.length) return null;
+
+  return (
+    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
+      {items.map((item) => (
+        <button
+          key={item.id}
+          type="button"
+          disabled={disabled}
+          onClick={() => void onSend(item.message)}
+          className={`text-left underline underline-offset-4 transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50 ${
+            item.emphasis === 'strong' ? 'font-semibold' : 'font-medium'
+          }`}
+        >
+          {item.label}
+        </button>
+      ))}
+    </div>
+  );
+}

@@ -15,10 +15,28 @@ class OpenAiHttpError extends Error {
   }
 }
 
+type LlmCallOptions = {
+  temperature?: number;
+  maxTokens?: number;
+  routingKey?: string;
+  timeoutMs?: number;
+  totalTimeoutMs?: number;
+};
+
+interface KeyCandidate {
+  apiKey: string;
+  slot: number;
+  cooldownUntil: number;
+}
+
 @Injectable()
 export class OpenAiService {
   protected readonly logger: Logger;
   private readonly cooldownUntil = new Map<string, number>();
+  private readonly affinity = new Map<
+    string,
+    { apiKey: string; expiresAt: number }
+  >();
   private rotationCursor = 0;
 
   constructor(protected readonly config: ConfigService) {
@@ -46,7 +64,7 @@ export class OpenAiService {
     messages: NvidiaMessage[],
     tools: readonly unknown[] = [],
     toolChoice: unknown = 'auto',
-    options: { temperature?: number } = {},
+    options: LlmCallOptions = {},
   ): Promise<NvidiaChatResponse> {
     const apiKeys = this.getConfiguredApiKeys();
     if (
@@ -62,9 +80,19 @@ export class OpenAiService {
       this.config.get<string>(`${this.configPrefix}.baseUrl`) ??
       'https://api.openai.com/v1'
     ).replace(/\/+$/, '');
-    const timeoutMs =
-      this.config.get<number>(`${this.configPrefix}.timeoutMs`) || 15_000;
-    const maxAttempts = Math.min(apiKeys.length, 3);
+    const configuredTimeoutMs = this.positiveConfig(
+      `${this.configPrefix}.timeoutMs`,
+      7_000,
+    );
+    const timeoutMs = this.clampTimeout(options.timeoutMs, configuredTimeoutMs);
+    const totalTimeoutMs = this.clampTimeout(
+      options.totalTimeoutMs,
+      this.positiveConfig(`${this.configPrefix}.totalTimeoutMs`, 12_000),
+    );
+    const maxAttempts = Math.min(
+      apiKeys.length,
+      this.positiveConfig(`${this.configPrefix}.maxAttempts`, 2),
+    );
 
     const body = {
       model: this.model,
@@ -73,18 +101,42 @@ export class OpenAiService {
         options.temperature ??
         this.config.get<number>('ai.nvidia.temperature') ??
         0.2,
-      max_tokens: this.config.get<number>('ai.nvidia.maxTokens') ?? 2048,
+      max_tokens:
+        options.maxTokens ??
+        this.config.get<number>('ai.nvidia.maxTokens') ??
+        2048,
       tools: tools.length > 0 ? tools : undefined,
       tool_choice: tools.length > 0 ? toolChoice : undefined,
     };
 
-    const candidates = this.selectCandidates(apiKeys, maxAttempts);
+    const candidates = this.selectCandidates(
+      apiKeys,
+      maxAttempts,
+      options.routingKey,
+    );
+    if (!candidates.length) {
+      throw new ServiceUnavailableException(
+        `All OpenAI API keys are temporarily cooling down for provider (${this.configPrefix})`,
+      );
+    }
+
+    const deadline = Date.now() + totalTimeoutMs;
     let lastError: unknown;
 
     for (let attempt = 0; attempt < candidates.length; attempt += 1) {
       const candidate = candidates[attempt];
+      const remainingBudgetMs = deadline - Date.now();
+      if (remainingBudgetMs <= 0) break;
+      const remainingAttempts = candidates.length - attempt;
+      const reserveForBackupKeys = Math.max(0, remainingAttempts - 1) * 1_500;
+      const currentBudgetMs = Math.max(
+        1_000,
+        remainingBudgetMs -
+          Math.min(reserveForBackupKeys, Math.max(0, remainingBudgetMs - 1)),
+      );
+      const attemptTimeoutMs = Math.min(timeoutMs, currentBudgetMs);
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      const timer = setTimeout(() => controller.abort(), attemptTimeoutMs);
 
       try {
         this.logger.log(
@@ -102,7 +154,7 @@ export class OpenAiService {
         });
 
         if (!response.ok) {
-          const errorText = await response.text().catch(() => '');
+          await response.text().catch(() => '');
           throw new OpenAiHttpError(
             response.status,
             this.retryAfterMs(response.headers.get('retry-after')),
@@ -115,6 +167,7 @@ export class OpenAiService {
             'OpenAI API returned an invalid response',
           );
         }
+        this.rememberAffinity(options.routingKey, candidate.apiKey);
         return payload;
       } catch (error) {
         lastError = error;
@@ -129,39 +182,39 @@ export class OpenAiService {
             ));
         const retryableHttp =
           error instanceof OpenAiHttpError &&
-          (error.status === 429 || error.status >= 500);
+          this.isRetryableStatus(error.status);
+        const retryable = isTimeout || isNetworkFailure || retryableHttp;
 
-        if (isTimeout || isNetworkFailure || retryableHttp) {
+        if (retryable) {
           this.cooldownKey(
             candidate.apiKey,
             error instanceof OpenAiHttpError ? error : undefined,
           );
+          this.forgetAffinityIfMatches(options.routingKey, candidate.apiKey);
           this.logger.warn(
-            `OpenAI attempt ${attempt + 1}/${candidates.length} failed on key slot ${candidate.slot + 1}; ${
-              isTimeout
-                ? 'timeout'
-                : error instanceof Error
-                  ? error.message
-                  : String(error)
-            }`,
+            `OpenAI attempt ${attempt + 1}/${candidates.length} failed on key slot ${candidate.slot + 1}; ${this.safeFailureReason(error, isTimeout)}`,
           );
-
-          if (attempt + 1 < candidates.length) {
+          if (attempt + 1 < candidates.length && Date.now() < deadline) {
             continue;
           }
         }
 
         if (error instanceof ServiceUnavailableException) throw error;
+        if (error instanceof OpenAiHttpError) {
+          throw new ServiceUnavailableException(
+            `OpenAI API unavailable (HTTP ${error.status})`,
+          );
+        }
+        throw new ServiceUnavailableException('OpenAI API unavailable');
       } finally {
         clearTimeout(timer);
       }
     }
 
-    throw (
-      lastError ||
-      new ServiceUnavailableException(
-        `All OpenAI API key attempts failed for provider (${this.configPrefix})`,
-      )
+    throw new ServiceUnavailableException(
+      lastError instanceof OpenAiHttpError
+        ? `OpenAI API unavailable (HTTP ${lastError.status})`
+        : 'OpenAI API unavailable',
     );
   }
 
@@ -196,7 +249,7 @@ export class OpenAiService {
         );
       }
     } catch {
-      // Accept simple multiline block wrapped in {} or [].
+      // Accept simple multiline blocks wrapped in {} or [].
     }
 
     const withoutOpeningWrapper =
@@ -214,9 +267,22 @@ export class OpenAiService {
       .filter(Boolean);
   }
 
-  private selectCandidates(apiKeys: string[], maxAttempts: number) {
-    const startIndex = this.rotationCursor % apiKeys.length;
-    this.rotationCursor = (this.rotationCursor + 1) % apiKeys.length;
+  private selectCandidates(
+    apiKeys: string[],
+    maxAttempts: number,
+    routingKey?: string,
+  ): KeyCandidate[] {
+    this.pruneAffinity();
+    const affinityKey = routingKey
+      ? this.affinity.get(routingKey)?.apiKey
+      : undefined;
+    const affinityIndex = affinityKey ? apiKeys.indexOf(affinityKey) : -1;
+    const startIndex =
+      affinityIndex >= 0 ? affinityIndex : this.rotationCursor % apiKeys.length;
+    if (affinityIndex < 0) {
+      this.rotationCursor = (this.rotationCursor + 1) % apiKeys.length;
+    }
+
     const ordered = apiKeys.map((_, offset) => {
       const slot = (startIndex + offset) % apiKeys.length;
       return {
@@ -226,39 +292,94 @@ export class OpenAiService {
       };
     });
     const now = Date.now();
-    const available = ordered.filter(
-      (candidate) => candidate.cooldownUntil <= now,
-    );
-    const selected =
-      available.length > 0
-        ? available
-        : [
-            [...ordered].sort(
-              (left, right) => left.cooldownUntil - right.cooldownUntil,
-            )[0],
-          ];
-    return selected.slice(0, maxAttempts);
+    return ordered
+      .filter((candidate) => candidate.cooldownUntil <= now)
+      .slice(0, maxAttempts);
+  }
+
+  private rememberAffinity(routingKey: string | undefined, apiKey: string) {
+    if (!routingKey) return;
+    this.affinity.set(routingKey, {
+      apiKey,
+      expiresAt: Date.now() + 120_000,
+    });
+  }
+
+  private forgetAffinityIfMatches(
+    routingKey: string | undefined,
+    apiKey: string,
+  ) {
+    if (!routingKey) return;
+    if (this.affinity.get(routingKey)?.apiKey === apiKey) {
+      this.affinity.delete(routingKey);
+    }
+  }
+
+  private pruneAffinity() {
+    const now = Date.now();
+    for (const [key, value] of this.affinity) {
+      if (value.expiresAt <= now) this.affinity.delete(key);
+    }
   }
 
   private cooldownKey(apiKey: string, error?: OpenAiHttpError) {
-    const normalCooldownMs = 60_000;
-    const invalidKeyCooldownMs = 600_000;
-    const isAuthFailure = error?.status === 401 || error?.status === 403;
-    const cooldownMs = isAuthFailure
-      ? invalidKeyCooldownMs
-      : (error?.retryAfterMs ?? normalCooldownMs);
+    const normalCooldownMs = this.positiveConfig(
+      `${this.configPrefix}.keyCooldownMs`,
+      60_000,
+    );
+    const invalidKeyCooldownMs = this.positiveConfig(
+      `${this.configPrefix}.invalidKeyCooldownMs`,
+      600_000,
+    );
+    const transientCooldownMs = this.positiveConfig(
+      'ai.router.transientKeyCooldownMs',
+      800,
+    );
+    const status = error?.status;
+    const cooldownMs =
+      status === 401 || status === 403
+        ? invalidKeyCooldownMs
+        : status === 429
+          ? Math.max(normalCooldownMs, error?.retryAfterMs ?? 0)
+          : transientCooldownMs;
     this.cooldownUntil.set(apiKey, Date.now() + cooldownMs);
+  }
+
+  private isRetryableStatus(status: number) {
+    return (
+      status === 401 ||
+      status === 403 ||
+      status === 408 ||
+      status === 429 ||
+      status >= 500
+    );
   }
 
   private retryAfterMs(headerValue?: string | null) {
     if (!headerValue) return undefined;
     const seconds = Number(headerValue);
-    if (!Number.isNaN(seconds) && seconds > 0) return seconds * 1000;
+    if (!Number.isNaN(seconds) && seconds >= 0) return seconds * 1000;
     const absoluteTime = Date.parse(headerValue);
     if (!Number.isNaN(absoluteTime)) {
       return Math.max(0, absoluteTime - Date.now());
     }
     return undefined;
+  }
+
+  private safeFailureReason(error: unknown, isTimeout: boolean) {
+    if (isTimeout) return 'timeout';
+    if (error instanceof OpenAiHttpError) return `HTTP ${error.status}`;
+    return 'network error';
+  }
+
+  private positiveConfig(key: string, fallback: number) {
+    const value = Number(this.config.get<number | string>(key));
+    return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
+  }
+
+  private clampTimeout(value: number | undefined, fallback: number) {
+    if (!Number.isFinite(value) || Number(value) <= 0) return fallback;
+    return Math.max(250, Math.floor(Number(value)));
   }
 }
 

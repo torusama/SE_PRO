@@ -10,6 +10,7 @@ import { AiAgentService } from './ai-agent.service';
 import { AgentToolRegistryService } from './agent-tool-registry.service';
 import { BaziRuleService } from './bazi-rule.service';
 import { KnowledgeService } from './knowledge.service';
+import { KnowledgeEmbeddingService } from './knowledge-embedding.service';
 import { NvidiaNemotronService } from './nvidia-nemotron.service';
 import { PlotRecommendationService } from './plot-recommendation.service';
 import { PlotRankerClient } from './plot-ranker.client';
@@ -46,6 +47,7 @@ import { AgentInsightsService } from './agent-insights.service';
     PlotRankerClient,
     BaziRuleService,
     KnowledgeService,
+    KnowledgeEmbeddingService,
     FeedbackService,
     TrainingService,
     ConversationHistoryService,
