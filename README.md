@@ -338,13 +338,13 @@ python -m pytest -q
 
 ## Team
 
-| Student ID | Member | Main responsibility in the project plan |
-| --- | --- | --- |
-| 24127318 | Võ Tấn An | Project Manager / Business Analyst / Documentation Lead |
-| 24127147 | Mai Khánh Băng | Frontend — Customer Portal |
-| 24127435 | Đoàn Võ Ngọc Lâm | Frontend — Admin Portal & 2D Map |
-| 24127204 | Nguyễn Ngọc Minh | Backend — Core System & Database |
-| 24127037 | Trần Minh Hiển | Backend — Services, Notifications, AI Agent & Deployment |
+| Student ID | Member           | Role & Main Responsibilities |
+| ---------- | ---------------- | ---------------------------- |
+| 24127318   | Võ Tấn An        | **Project Lead / AI & System Design** — System architecture, 2D cemetery map, AI Cemetery Concierge Agent, project documentation and final report |
+| 24127147   | Mai Khánh Băng   | **Frontend & QA** — Overall UI design, customer self-service portal, notifications, database foundation support, testing and test documentation |
+| 24127435   | Đoàn Võ Ngọc Lâm | **Backend & Deployment** — Core backend, plot purchase workflows, family plot planning, admin data integration, deployment, deceased and family records |
+| 24127204   | Nguyễn Ngọc Minh | **Frontend & Authentication** — Frontend foundation, authentication and authorization, cemetery service booking, memorial reminders and user guidance |
+| 24127037   | Trần Minh Hiển   | **Backend & Business Workflows** — Database foundation, plot administration, contracts and ownership, transfer/inheritance, service management and multilingual support |
 
 **Supervisor:** Trương Phước Lộc · Trần Duy Hoàng  
 **Course:** Introduction to Software Engineering · Software Engineering Department · University of Science, VNU-HCM
