@@ -33,12 +33,20 @@ export class CreateReminderDto {
   ownershipId?: number;
 
   @IsOptional()
+  @IsInt()
+  deceasedProfileId?: number;
+
+  @IsOptional()
   @IsIn(['death_anniversary', 'memorial', 'maintenance', 'other'])
   reminderType?: ReminderType;
 
   @IsOptional()
   @IsBoolean()
   isRecurring?: boolean;
+
+  @IsOptional()
+  @IsIn(['solar', 'lunar'])
+  calendarType?: 'solar' | 'lunar';
 
   // Bắt buộc khi isRecurring = true (mặc định true)
   @ValidateIf((dto) => dto.isRecurring !== false)

@@ -473,3 +473,26 @@ Tất cả endpoint dưới đây yêu cầu Bearer JWT, `JwtAuthGuard`, `RolesG
 
 Migration bắt buộc trước khi dùng audit API:
 `database/migrations/013_admin_audit_entity_key.sql`.
+
+## AI chat quick replies (v17)
+
+`POST /api/ai-agent/chat` may return:
+
+```json
+{
+  "success": true,
+  "data": {
+    "assistantMessage": "Chào bạn!...",
+    "quickReplies": [
+      {
+        "id": "help-plots",
+        "label": "Gợi ý lô phù hợp",
+        "message": "Gợi ý cho mình vài lô phù hợp nhé.",
+        "emphasis": "strong"
+      }
+    ]
+  }
+}
+```
+
+The frontend renders `label` as clickable text and submits `message` through the normal chat endpoint. A quick reply never bypasses authentication, booking confirmation, or administrator approval.

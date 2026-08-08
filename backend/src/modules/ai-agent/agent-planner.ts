@@ -57,6 +57,12 @@ export const AGENT_PLANNER_TOOL = {
         },
         needsClarification: { type: 'boolean' },
         clarificationQuestion: { type: 'string' },
+        directResponse: {
+          type: 'string',
+          maxLength: 4000,
+          description:
+            'For action=none, write the final natural response to the user here so the backend can answer in one LLM call. Do not claim persistence succeeded; the backend appends trusted memory outcomes separately. Omit or leave empty for tool actions.',
+        },
         budgetMin: { type: 'number', minimum: 0 },
         budgetMax: {
           type: 'number',
@@ -183,6 +189,7 @@ export const AGENT_PLANNER_TOOL = {
         'contextMode',
         'needsClarification',
         'clarificationQuestion',
+        'directResponse',
       ],
     },
   },
@@ -219,6 +226,7 @@ export interface AgentPlan {
   contextMode: 'continue' | 'replace' | 'relax';
   needsClarification: boolean;
   clarificationQuestion: string;
+  directResponse?: string;
   requirements: AgentRequirements;
   memoryProposals?: MemoryProposal[];
 }
@@ -412,6 +420,7 @@ export function parseAgentPlan(raw: string): AgentPlan {
         : 'replace',
     needsClarification: parsed.needsClarification === true,
     clarificationQuestion: optionalString(parsed.clarificationQuestion) ?? '',
+    directResponse: optionalString(parsed.directResponse),
     requirements: Object.fromEntries(
       Object.entries(requirements).filter(([, value]) => value !== undefined),
     ),

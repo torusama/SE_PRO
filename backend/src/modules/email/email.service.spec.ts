@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { unlink, writeFile } from 'node:fs/promises';
+import { ConfigService } from '@nestjs/config';
 import { EmailService } from './email.service';
 import { GmailApiClient } from './gmail-api.client';
 import { GmailMessage } from './gmail-message';
@@ -12,8 +13,11 @@ describe('EmailService', () => {
       isConfigured: jest.fn().mockReturnValue(configured),
       send: jest.fn().mockResolvedValue(undefined),
     } as unknown as GmailApiClient;
+    const config = {
+      get: jest.fn().mockReturnValue('http://localhost:5173'),
+    } as unknown as ConfigService;
     return {
-      service: new EmailService(gmailApi),
+      service: new EmailService(gmailApi, config),
       send: gmailApi.send as jest.MockedFunction<
         (message: GmailMessage) => Promise<void>
       >,
@@ -72,7 +76,9 @@ describe('EmailService', () => {
 
       expect(send).toHaveBeenCalledWith(
         expect.objectContaining({
-          attachments: [{ filename: 'proof.jpg', content: fileContent }],
+          attachments: expect.arrayContaining([
+            { filename: 'proof.jpg', content: fileContent },
+          ]),
         }),
       );
     } finally {

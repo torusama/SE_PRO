@@ -46,7 +46,7 @@ describe('KnowledgeService prompt retrieval', () => {
     const userQuery = database.query.mock.calls.find(([sql]) =>
       String(sql).includes("scope = 'user'"),
     );
-    expect(userQuery?.[1]).toEqual([5]);
+    expect(userQuery?.[1]).toEqual([5, 8]);
     expect(String(userQuery?.[0])).toContain("validation_status = 'active'");
     expect(String(userQuery?.[0])).toContain('is_active = TRUE');
     expect(String(userQuery?.[0])).toContain('effective_to');

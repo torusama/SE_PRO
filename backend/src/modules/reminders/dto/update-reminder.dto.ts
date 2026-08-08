@@ -39,6 +39,10 @@ export class UpdateReminderDto {
   isRecurring?: boolean;
 
   @IsOptional()
+  @IsIn(['solar', 'lunar'])
+  calendarType?: 'solar' | 'lunar';
+
+  @IsOptional()
   @IsInt()
   @Min(1)
   @Max(12)

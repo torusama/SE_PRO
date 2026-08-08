@@ -23,6 +23,7 @@ import RemindersPage from "@/pages/customer/reminder/RemindersPage";
 import AvailabilityPage from "@/pages/customer/availability/AvailabilityPage";
 import AppointmentsPage from "@/pages/customer/appointments/AppointmentsPage";
 import AgentPage from "@/pages/customer/ai-agent/AgentPage";
+import DeceasedFamilyPage from "@/pages/shared/deceased-family/DeceasedFamilyPage";
 
 // Admin pages
 import DashboardPage from "@/pages/admin/dashboard/DashboardPage";
@@ -63,6 +64,7 @@ const router = createBrowserRouter([
         element: <RequireAuth />,
         children: [
           { path: ROUTES.PROFILE, element: <ProfilePage /> },
+          { path: ROUTES.DECEASED_FAMILY, element: <DeceasedFamilyPage /> },
 
           {
             element: <RequireCompleteProfile />,
@@ -105,6 +107,7 @@ const router = createBrowserRouter([
           { path: "lich-hen", element: <AppointmentManagementPage /> },
           { path: "nhac-lich", element: <ReminderManagementPage /> },
           { path: "ai-agent", element: <AgentAdminPage /> },
+          { path: "ho-so-nguoi-da-khuat", element: <DeceasedFamilyPage /> },
         ],
       },
     ],

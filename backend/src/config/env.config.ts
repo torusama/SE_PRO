@@ -33,12 +33,53 @@ export const envConfig = () => ({
     plotRankerEnabled:
       (process.env.AI_PLOT_RANKER_ENABLED ?? 'false') === 'true',
     retrainMinSamples: Number(process.env.AI_RETRAIN_MIN_SAMPLES) || 20,
+    router: {
+      totalTimeoutMs: Number(process.env.AI_LLM_TOTAL_TIMEOUT_MS) || 10000,
+      providerTimeoutMs: Number(process.env.AI_LLM_PROVIDER_TIMEOUT_MS) || 6000,
+      providerCooldownMs: Number(process.env.AI_LLM_PROVIDER_COOLDOWN_MS) || 0,
+      transientKeyCooldownMs:
+        Number(process.env.AI_LLM_TRANSIENT_KEY_COOLDOWN_MS) || 800,
+      rotateProviders:
+        (process.env.AI_LLM_ROTATE_PROVIDERS ?? 'false') === 'true',
+    },
+    rag: {
+      enabled: (process.env.AI_RAG_ENABLED ?? 'true') === 'true',
+      // A dedicated embedding key remains optional. By default RAG reuses the
+      // existing NVIDIA NIM key pool so the project does not need an extra
+      // OpenAI account/key just for embeddings.
+      apiKey: process.env.AI_EMBEDDING_API_KEY,
+      apiKeys: process.env.AI_EMBEDDING_API_KEYS,
+      baseUrl:
+        process.env.AI_EMBEDDING_API_BASE_URL ??
+        process.env.NVIDIA_API_BASE_URL ??
+        'https://integrate.api.nvidia.com/v1',
+      // BGE-M3 is multilingual (including Vietnamese) and is available as a
+      // NVIDIA NIM embedding model. Its fixed dense embedding size is 1024.
+      model: process.env.AI_EMBEDDING_MODEL ?? 'baai/bge-m3',
+      dimension: Number(process.env.AI_EMBEDDING_DIMENSION) || 1024,
+      timeoutMs: Number(process.env.AI_EMBEDDING_TIMEOUT_MS) || 1000,
+      totalTimeoutMs: Number(process.env.AI_EMBEDDING_TOTAL_TIMEOUT_MS) || 1400,
+      maxAttempts: Number(process.env.AI_EMBEDDING_MAX_ATTEMPTS) || 2,
+      keyCooldownMs: Number(process.env.AI_EMBEDDING_KEY_COOLDOWN_MS) || 60000,
+      invalidKeyCooldownMs:
+        Number(process.env.AI_EMBEDDING_INVALID_KEY_COOLDOWN_MS) || 600000,
+      userLimit: Number(process.env.AI_RAG_USER_LIMIT) || 8,
+      globalLimit: Number(process.env.AI_RAG_GLOBAL_LIMIT) || 6,
+      backfillOnStartup:
+        (process.env.AI_RAG_BACKFILL_ON_STARTUP ?? 'true') === 'true',
+      backfillBatchSize: Number(process.env.AI_RAG_BACKFILL_BATCH_SIZE) || 5,
+    },
     openai: {
       apiKey: process.env.OPENAI_API_KEY,
       apiKeys: process.env.OPENAI_API_KEYS,
       baseUrl: process.env.OPENAI_API_BASE_URL ?? 'https://api.openai.com/v1',
       model: process.env.OPENAI_MODEL ?? 'gpt-4o-mini',
-      timeoutMs: Number(process.env.OPENAI_TIMEOUT_MS) || 15000,
+      timeoutMs: Number(process.env.OPENAI_TIMEOUT_MS) || 7000,
+      totalTimeoutMs: Number(process.env.OPENAI_TOTAL_TIMEOUT_MS) || 12000,
+      maxAttempts: Number(process.env.OPENAI_MAX_ATTEMPTS) || 2,
+      keyCooldownMs: Number(process.env.OPENAI_KEY_COOLDOWN_MS) || 60000,
+      invalidKeyCooldownMs:
+        Number(process.env.OPENAI_INVALID_KEY_COOLDOWN_MS) || 600000,
     },
     openaiSecondary: {
       apiKey: process.env.OPENAI_SECONDARY_API_KEY,
@@ -47,7 +88,14 @@ export const envConfig = () => ({
         process.env.OPENAI_SECONDARY_API_BASE_URL ??
         'https://api.openai.com/v1',
       model: process.env.OPENAI_SECONDARY_MODEL ?? 'gpt-4o',
-      timeoutMs: Number(process.env.OPENAI_SECONDARY_TIMEOUT_MS) || 15000,
+      timeoutMs: Number(process.env.OPENAI_SECONDARY_TIMEOUT_MS) || 7000,
+      totalTimeoutMs:
+        Number(process.env.OPENAI_SECONDARY_TOTAL_TIMEOUT_MS) || 12000,
+      maxAttempts: Number(process.env.OPENAI_SECONDARY_MAX_ATTEMPTS) || 2,
+      keyCooldownMs:
+        Number(process.env.OPENAI_SECONDARY_KEY_COOLDOWN_MS) || 60000,
+      invalidKeyCooldownMs:
+        Number(process.env.OPENAI_SECONDARY_INVALID_KEY_COOLDOWN_MS) || 600000,
     },
     nvidia: {
       apiKey: process.env.NVIDIA_API_KEY,
@@ -56,9 +104,9 @@ export const envConfig = () => ({
         process.env.NVIDIA_API_BASE_URL ??
         'https://integrate.api.nvidia.com/v1',
       model: process.env.NVIDIA_MODEL ?? 'meta/llama-3.1-70b-instruct',
-      timeoutMs: Number(process.env.NVIDIA_TIMEOUT_MS) || 15000,
-      totalTimeoutMs: Number(process.env.NVIDIA_TOTAL_TIMEOUT_MS) || 30000,
-      maxAttempts: Number(process.env.NVIDIA_MAX_ATTEMPTS) || 3,
+      timeoutMs: Number(process.env.NVIDIA_TIMEOUT_MS) || 7000,
+      totalTimeoutMs: Number(process.env.NVIDIA_TOTAL_TIMEOUT_MS) || 12000,
+      maxAttempts: Number(process.env.NVIDIA_MAX_ATTEMPTS) || 2,
       keyCooldownMs: Number(process.env.NVIDIA_KEY_COOLDOWN_MS) || 60000,
       invalidKeyCooldownMs:
         Number(process.env.NVIDIA_INVALID_KEY_COOLDOWN_MS) || 600000,

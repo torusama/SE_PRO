@@ -176,6 +176,15 @@ interface SessionRow {
   isCurrent: boolean;
 }
 
+function formatIpDisplay(ip: string | null): string {
+  if (!ip) return "";
+  const cleaned = ip.replace(/^::ffff:/, "");
+  if (cleaned === "::1" || cleaned === "127.0.0.1" || cleaned === "localhost") {
+    return "";
+  }
+  return `${cleaned} · `;
+}
+
 function getErrorMessage(error: unknown, fallback: string): string {
   if (
     error &&
@@ -1909,7 +1918,7 @@ export default function ProfilePage() {
                           )}
                         </h4>
                         <p>
-                          {s.ipAddress ? `${s.ipAddress} · ` : ""}
+                          {formatIpDisplay(s.ipAddress)}
                           Hoạt động {formatRelativeTime(s.lastActiveAt)}
                         </p>
                       </div>
@@ -2832,6 +2841,12 @@ function PasswordModal({
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const isCurrentFilled = current.trim().length > 0;
+  const isNextFilled = next.length > 0;
+  const isConfirmFilled = confirm.length > 0;
+
+  const canSendOtp = isCurrentFilled && isNextFilled && isConfirmFilled;
+
   useEffect(() => {
     if (otpCooldown <= 0) return;
     const t = setInterval(
@@ -2842,6 +2857,27 @@ function PasswordModal({
   }, [otpCooldown]);
 
   async function handleSendOtp() {
+    if (!isCurrentFilled) {
+      setError("Vui lòng nhập Mật khẩu hiện tại trước.");
+      return;
+    }
+    if (!isNextFilled) {
+      setError("Vui lòng nhập Mật khẩu mới.");
+      return;
+    }
+    if (next.length < 8) {
+      setError("Mật khẩu mới cần tối thiểu 8 ký tự.");
+      return;
+    }
+    if (!isConfirmFilled) {
+      setError("Vui lòng nhập Xác nhận mật khẩu mới.");
+      return;
+    }
+    if (next !== confirm) {
+      setError("Xác nhận mật khẩu mới không khớp.");
+      return;
+    }
+
     setError(null);
     setOtpSending(true);
     try {
@@ -2866,6 +2902,10 @@ function PasswordModal({
     }
     if (next !== confirm) {
       setError("Xác nhận mật khẩu không khớp.");
+      return;
+    }
+    if (!otpSent) {
+      setError("Vui lòng nhấn nút 'Gửi mã OTP' để lấy mã xác thực trước.");
       return;
     }
     if (otpCode.trim().length !== 6) {
@@ -2909,7 +2949,10 @@ function PasswordModal({
           <input
             type="password"
             value={current}
-            onChange={(e) => setCurrent(e.target.value)}
+            onChange={(e) => {
+              setCurrent(e.target.value);
+              setError(null);
+            }}
             placeholder="••••••••"
           />
         </div>
@@ -2918,8 +2961,16 @@ function PasswordModal({
           <input
             type="password"
             value={next}
-            onChange={(e) => setNext(e.target.value)}
-            placeholder="••••••••"
+            disabled={!isCurrentFilled}
+            onChange={(e) => {
+              setNext(e.target.value);
+              setError(null);
+            }}
+            placeholder={
+              !isCurrentFilled
+                ? "Vui lòng nhập mật khẩu hiện tại trước"
+                : "•••••••• (tối thiểu 8 ký tự)"
+            }
           />
         </div>
         <div className="modal-field">
@@ -2927,8 +2978,16 @@ function PasswordModal({
           <input
             type="password"
             value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-            placeholder="••••••••"
+            disabled={!isNextFilled}
+            onChange={(e) => {
+              setConfirm(e.target.value);
+              setError(null);
+            }}
+            placeholder={
+              !isNextFilled
+                ? "Vui lòng nhập mật khẩu mới trước"
+                : "••••••••"
+            }
           />
         </div>
         <div className="modal-field">
@@ -2939,13 +2998,19 @@ function PasswordModal({
               maxLength={6}
               placeholder="Mã 6 số"
               value={otpCode}
+              disabled={!otpSent}
               onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
             />
             <button
               type="button"
               className="otp-btn"
               onClick={handleSendOtp}
-              disabled={otpSending || otpCooldown > 0}
+              disabled={otpSending || otpCooldown > 0 || !canSendOtp}
+              title={
+                !canSendOtp
+                  ? "Vui lòng điền tuần tự Mật khẩu hiện tại, Mật khẩu mới và Xác nhận mật khẩu để gửi mã OTP"
+                  : ""
+              }
             >
               {otpSending
                 ? "Đang gửi…"
@@ -2956,6 +3021,18 @@ function PasswordModal({
                     : "Gửi mã OTP"}
             </button>
           </div>
+          {!canSendOtp && (
+            <p
+              style={{
+                fontSize: 11.5,
+                color: "var(--text-muted)",
+                marginTop: 5,
+              }}
+            >
+              * Cần điền tuần tự Mật khẩu hiện tại, Mật khẩu mới và Xác nhận
+              mật khẩu trước khi bấm Gửi mã OTP.
+            </p>
+          )}
         </div>
       </div>
 

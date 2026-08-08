@@ -220,6 +220,8 @@ export class ConversationHistoryService {
             recommendations: persisted.recommendations ?? [],
             suggestedServices: persisted.suggestedServices ?? [],
             baziSuggestion: persisted.baziSuggestion,
+            quickReplies: persisted.quickReplies ?? [],
+            suggestedFollowUps: persisted.suggestedFollowUps ?? [],
             actions: persisted.actions ?? [],
             metadata: agentMetadata,
           },

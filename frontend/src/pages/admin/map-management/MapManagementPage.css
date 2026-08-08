@@ -42,8 +42,8 @@
 }
 
 .admin-primary-button {
-  border-color: #0c9b7b !important;
-  background: #0c9b7b !important;
+  border-color: #0c329b !important;
+  background: #0c329b !important;
   color: #fff !important;
   font-weight: 700;
 }
@@ -65,7 +65,7 @@
   overflow-y: auto;
   background: #fff;
   scrollbar-width: thin;
-  scrollbar-color: #cbd5e1 transparent;
+  scrollbar-color: #cbd1e1 transparent;
 }
 
 .admin-map-left::-webkit-scrollbar,
@@ -84,7 +84,7 @@
 .admin-map-left::-webkit-scrollbar-thumb,
 .admin-map-right::-webkit-scrollbar-thumb,
 .plot-modal::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #cbd1e1;
   border-radius: 10px;
   transition: background 0.2s ease;
 }
@@ -92,7 +92,7 @@
 .admin-map-left::-webkit-scrollbar-thumb:hover,
 .admin-map-right::-webkit-scrollbar-thumb:hover,
 .plot-modal::-webkit-scrollbar-thumb:hover {
-  background: #0c9b7b;
+  background: #0c329b;
 }
 
 .admin-map-left::-webkit-scrollbar-button,
@@ -121,7 +121,7 @@
   align-items: center;
   gap: 8px;
   margin-bottom: 12px;
-  color: #0c8a70;
+  color: #0c2e8a;
   font-size: 11px;
   font-weight: 650;
   letter-spacing: 0.08em;
@@ -146,18 +146,20 @@
   padding: 8px 12px;
   border: 1px solid var(--color-border);
   border-radius: 8px;
-  background: #fafaf8;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  background: #f8f9fa;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
 }
 
 .admin-map-search:focus-within {
-  border-color: #0c9b7b;
-  box-shadow: 0 0 0 3px rgba(12, 155, 123, 0.08);
+  border-color: #0c329b;
+  box-shadow: 0 0 0 3px rgba(12, 50, 155, 0.1);
   background: #ffffff;
 }
 
 .admin-search-icon {
-  color: #77716a;
+  color: #6b6e76;
   flex-shrink: 0;
 }
 
@@ -200,14 +202,14 @@
   white-space: nowrap;
 }
 .admin-map-chips button:hover {
-  border-color: #a8dcd0;
-  color: #0c9b7b;
-  background: #f4faf8;
+  border-color: #a8b6dc;
+  color: #0c329b;
+  background: #f4f6fa;
 }
 .admin-map-chips button.active {
-  border-color: #0c9b7b;
-  color: #08745d;
-  background: #e8f5f1;
+  border-color: #0c329b;
+  color: #082574;
+  background: #e8ebf5;
   font-weight: 600;
 }
 
@@ -232,12 +234,12 @@
   transition: all 0.15s ease;
 }
 .admin-map-zone-list button:hover {
-  border-color: #e5e2da;
-  background: #fafaf8;
+  border-color: #dcdee3;
+  background: #f8f9fa;
 }
 .admin-map-zone-list button.active {
-  border-color: #a8dcd0;
-  background: #f0f7f4;
+  border-color: #a8b6dc;
+  background: #f0f2f7;
 }
 .admin-map-zone-list i {
   width: 10px;
@@ -247,7 +249,7 @@
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
 }
 .admin-map-zone-list i.all-zones {
-  background: linear-gradient(135deg, #0c9b7b, #d0a83b);
+  background: linear-gradient(135deg, #0c329b, #d0a83b);
 }
 .admin-map-zone-list strong {
   flex: 1;
@@ -256,7 +258,7 @@
   color: var(--color-text-primary);
 }
 .admin-map-zone-list button.active strong {
-  color: #08745d;
+  color: #082574;
   font-weight: 650;
 }
 .admin-map-zone-list span {
@@ -287,7 +289,7 @@
   flex-shrink: 0;
 }
 .admin-map-legend i.no-data {
-  border-color: #aab3bd;
+  border-color: #aaafbd;
   border-style: dashed;
   background: #f5f6f7;
 }
@@ -306,7 +308,7 @@
   justify-content: center;
   text-align: center;
   padding: 10px 6px;
-  border: 1px solid #e2dfd7;
+  border: 1px solid #d9dbe0;
   border-radius: 10px;
   background: #ffffff;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
@@ -316,15 +318,15 @@
 }
 
 .admin-map-stats .stat-card:hover {
-  border-color: #a8dcd0;
+  border-color: #a8b6dc;
   background: #f8fbf9;
   transform: translateY(-1px);
 }
 
 .admin-map-stats .stat-card.active {
-  border-color: #0c9b7b;
-  background: #f0f7f4;
-  box-shadow: 0 0 0 2px rgba(12, 155, 123, 0.18);
+  border-color: #0c329b;
+  background: #f0f2f7;
+  box-shadow: 0 0 0 2px rgba(12, 50, 155, 0.2);
 }
 
 .admin-map-stats .stat-num {
@@ -334,14 +336,14 @@
   font-weight: 800;
   line-height: 1.1;
   letter-spacing: -0.02em;
-  color: #0c9b7b;
+  color: #0c329b;
   margin-bottom: 3px;
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
 
 .admin-map-stats .stat-num.teal {
-  color: #0c9b7b;
+  color: #0c329b;
 }
 
 .admin-map-stats .stat-num.green {
@@ -361,14 +363,14 @@
 }
 
 .admin-map-stats .stat-num.gray {
-  color: #6b7280;
+  color: #6b7180;
 }
 
 .admin-map-stats .stat-lbl {
   display: block;
   font-size: 11px;
   font-weight: 500;
-  color: #64748b;
+  color: #646e8b;
   line-height: 1.35;
   text-transform: none;
   text-align: center;
@@ -380,7 +382,7 @@
 }
 
 .admin-map-stats .stat-card-total .stat-lbl {
-  color: #08745d;
+  color: #082574;
   font-weight: 600;
 }
 
@@ -389,7 +391,7 @@
   min-width: 0;
   flex-direction: column;
   overflow: hidden;
-  background: #fbfbf9;
+  background: #f9fafb;
 }
 .admin-map-toolbar {
   display: flex;
@@ -419,8 +421,8 @@
   border-right: 0;
 }
 .admin-map-mode-switch button.active {
-  background: #e8f7f3;
-  color: #08745d;
+  background: #e8ecf7;
+  color: #082574;
   font-weight: 700;
 }
 
@@ -439,7 +441,7 @@
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  background: #fafaf8;
+  background: #f8f9fa;
   touch-action: none;
   cursor: grab;
   user-select: none;
@@ -466,7 +468,7 @@
 }
 #admin-grid path {
   fill: none;
-  stroke: #e9eeeb;
+  stroke: #e9eaee;
   stroke-width: 0.5;
 }
 /* ranh giới tổng thể khu đất: đa giác không đều (giống thửa đất thật) */
@@ -488,7 +490,7 @@
   fill: #7b6bcc;
 }
 .admin-map-connector-road {
-  fill: #e7f4ef;
+  fill: #e7eaf4;
   stroke-dasharray: 3 3;
 }
 .admin-map-zone-badge {
@@ -501,12 +503,12 @@
   pointer-events: none;
 }
 .admin-map-road {
-  fill: #edf7f4;
+  fill: #edf0f7;
   stroke: none;
 }
 .admin-map-road-diagonal {
-  fill: #e7f4ef;
-  stroke: #a6d6cb;
+  fill: #e7eaf4;
+  stroke: #a6b3d6;
   stroke-width: 0.5;
 }
 .admin-spirit-park-rect {
@@ -538,7 +540,13 @@
 }
 .admin-map-zone-label {
   fill: #9ba8a4;
-  font-family: "Be Vietnam Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family:
+    "Be Vietnam Pro",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
   font-size: 13px;
   font-weight: 700;
   font-variant-numeric: lining-nums;
@@ -547,7 +555,9 @@
 
 .admin-map-plot {
   cursor: pointer;
-  transition: opacity 0.25s ease, filter 0.25s ease;
+  transition:
+    opacity 0.25s ease,
+    filter 0.25s ease;
 }
 .admin-map-plot.dimmed {
   opacity: 0.12;
@@ -599,13 +609,13 @@
 }
 .admin-map-compass circle {
   fill: #fff;
-  stroke: #a6d6cb;
+  stroke: #a6b3d6;
 }
 .admin-map-compass .north {
   fill: #d34a4a;
 }
 .admin-map-compass .south {
-  fill: #49a995;
+  fill: #4963a9;
 }
 .admin-map-compass text {
   fill: #b43131;
@@ -746,9 +756,9 @@
   border-radius: 50%;
 }
 .admin-map-status.no-data {
-  border-color: #aab3bd;
+  border-color: #aaafbd;
   background: #f4f5f6;
-  color: #626d78;
+  color: #626878;
 }
 .admin-map-divider {
   height: 1px;
@@ -777,12 +787,12 @@
 .admin-map-description {
   margin-top: 13px;
   padding: 12px;
-  border: 1px solid #cde5df;
+  border: 1px solid #cdd3e5;
   border-radius: 8px;
-  background: #f3faf8;
+  background: #f3f5fa;
 }
 .admin-map-description > span {
-  color: #08745d;
+  color: #082574;
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -834,7 +844,7 @@
 }
 .admin-map-management-actions button.unlock {
   border-color: #92cfc1;
-  color: #08745d;
+  color: #082574;
 }
 
 .admin-map-toast {
@@ -844,8 +854,8 @@
 }
 .admin-map-toast.success {
   border: 1px solid #9bd6c8;
-  background: #effaf7;
-  color: #08745d;
+  background: #eff2fa;
+  color: #082574;
 }
 .admin-map-toast.error {
   border: 1px solid #e5aaaa;
@@ -885,7 +895,7 @@
 }
 .plot-modal h2 {
   margin: 3px 0 0;
-  color: #08745d;
+  color: #082574;
   font-size: 20px;
 }
 .plot-modal header button {
@@ -930,7 +940,7 @@
 .plot-modal input[readonly] {
   cursor: not-allowed;
   background: #f3f4f6;
-  color: #667085;
+  color: #666e85;
 }
 .plot-price-input {
   position: relative;
@@ -945,7 +955,7 @@
   position: absolute;
   top: 50%;
   right: 11px;
-  color: #98a2b3;
+  color: #989fb3;
   font-size: 11px;
   pointer-events: none;
   transform: translateY(-50%);

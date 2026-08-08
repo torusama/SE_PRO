@@ -32,6 +32,8 @@ export interface AgentRequirements {
   maxAreaSqm?: number;
   needAdjacent?: boolean;
   preferNearEntrance?: boolean;
+  /** Session-local plots to omit when the customer asks for different options. */
+  excludePlotIds?: number[];
   birthDate?: string;
   birthTime?: string;
   gender?: 'male' | 'female' | 'other';
@@ -143,6 +145,7 @@ export interface RecommendationResult {
     maximumListedPrice: number;
     scope: 'matching_available_inventory';
   };
+  suggestedFollowUps?: Array<{ category: string; text: string }>;
   rankerVersion: string;
   fallbackUsed: boolean;
   rankerFallbackReason?: string;

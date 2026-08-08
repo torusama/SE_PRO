@@ -4,6 +4,8 @@ import { extname } from 'node:path';
 export type GmailAttachment = {
   filename: string;
   content: Buffer;
+  cid?: string;
+  contentDisposition?: 'inline' | 'attachment';
 };
 
 export type GmailMessage = {
@@ -115,11 +117,15 @@ export function buildGmailRawMessage(
         'Tên file đính kèm',
       );
       const encodedFilename = encodeMimeWord(filename);
+      const disposition =
+        attachment.contentDisposition ?? (attachment.cid ? 'inline' : 'attachment');
+      const cidHeader = attachment.cid ? `\r\nContent-ID: <${attachment.cid}>` : '';
+
       parts.push(
         `--${mixedBoundary}`,
         `Content-Type: ${attachmentContentType(filename)}; name="${encodedFilename}"`,
         'Content-Transfer-Encoding: base64',
-        `Content-Disposition: attachment; filename="${encodedFilename}"`,
+        `Content-Disposition: ${disposition}; filename="${encodedFilename}"${cidHeader}`,
         '',
         wrapBase64(attachment.content),
       );

@@ -19,6 +19,7 @@ import { AppointmentsModule } from './modules/appointments/appointments.module';
 import { AuthorizedPersonsModule } from './modules/authorized-persons/authorized-persons.module';
 import { AdminAuditModule } from './modules/admin-audit/admin-audit.module';
 import { TransfersModule } from './modules/transfers/transfers.module';
+import { DeceasedModule } from './modules/deceased/deceased.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { TransfersModule } from './modules/transfers/transfers.module';
     AuthorizedPersonsModule,
     AdminAuditModule,
     TransfersModule,
+    DeceasedModule,
   ],
 })
 export class AppModule {}

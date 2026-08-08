@@ -396,6 +396,7 @@ export default function RequestsPage() {
   const [searchParams] = useSearchParams();
   const requestedAppointmentId =
     Number(searchParams.get("appointment")) || undefined;
+  const requestedRequestId = Number(searchParams.get("request")) || undefined;
   const [tab, setTab] = useState<RequestType>("reserve");
   const [requests, setRequests] = useState<RequestItem[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -479,6 +480,17 @@ export default function RequestsPage() {
       setSelectedId(requestedRequest.id);
     });
   }, [appointments, requestedAppointmentId, requests]);
+  // Đến từ thông báo "Yêu cầu duyệt lô": nhảy thẳng tới yêu cầu tương ứng.
+  useEffect(() => {
+    if (!requestedRequestId) return;
+    const target = requests.find((item) => item.id === requestedRequestId);
+    if (!target) return;
+
+    queueMicrotask(() => {
+      setTab(target.type);
+      setSelectedId(target.id);
+    });
+  }, [requestedRequestId, requests]);
   useEffect(() => {
     if (!selectedId) return;
     void api
@@ -1253,8 +1265,8 @@ export default function RequestsPage() {
                         <div>
                           <h3>Hợp đồng ký & quyền sở hữu</h3>
                           <p>
-                            Bước 1 tải bản đã ký lên hệ thống. Bước 2 kiểm tra tài
-                            liệu và xác nhận kích hoạt quyền sở hữu.
+                            Bước 1 tải bản đã ký lên hệ thống. Bước 2 kiểm tra
+                            tài liệu và xác nhận kích hoạt quyền sở hữu.
                           </p>
                         </div>
                       </div>
@@ -1282,7 +1294,9 @@ export default function RequestsPage() {
                             }
                             if (selectedFiles.length > 10) {
                               setFiles([]);
-                              setEvidenceError("Chỉ được tải lên tối đa 10 tệp.");
+                              setEvidenceError(
+                                "Chỉ được tải lên tối đa 10 tệp.",
+                              );
                               event.currentTarget.value = "";
                               return;
                             }

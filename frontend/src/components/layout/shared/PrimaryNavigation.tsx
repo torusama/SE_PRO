@@ -20,10 +20,13 @@ export default function PrimaryNavigation({
   variant = "dark",
 }: PrimaryNavigationProps) {
   const role = useAuthStore((state) => state.role);
+  const customerItems = role === "customer"
+    ? [...PUBLIC_ITEMS, { label: "Gia đình tưởng niệm", to: ROUTES.DECEASED_FAMILY }]
+    : PUBLIC_ITEMS;
   const items =
     role === "admin"
-      ? [...PUBLIC_ITEMS, { label: "Admin", to: ROUTES.ADMIN_DASHBOARD }]
-      : PUBLIC_ITEMS;
+      ? [...customerItems, { label: "Admin", to: ROUTES.ADMIN_DASHBOARD }]
+      : customerItems;
 
   return (
     <nav
