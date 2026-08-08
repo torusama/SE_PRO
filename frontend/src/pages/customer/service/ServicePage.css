@@ -105,6 +105,26 @@
   color: var(--text);
 }
 
+.service-page .service-help-btn {
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid rgba(10, 255, 212, 0.3);
+  background: transparent;
+  color: var(--teal-glow, #0affd4);
+  cursor: pointer;
+  transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+
+.service-page .service-help-btn:hover {
+  background: rgba(10, 255, 212, 0.1);
+  color: var(--text, #d4e8e0);
+  border-color: var(--teal-glow, #0affd4);
+}
+
 .service-page .breadcrumb .sep {
   color: #4d5a55;
 }

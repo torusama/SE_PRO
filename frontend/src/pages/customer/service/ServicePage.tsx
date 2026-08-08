@@ -11,11 +11,13 @@ import {
   ArrowRight,
   Check,
   AlertCircle,
+  HelpCircle,
 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/store/authStore'
 import { ROUTES } from '@/constants/routes'
 import DemoPaymentPanel from '@/components/payment/DemoPaymentPanel'
+import GuidePopup, { type GuideStep } from '@/components/guide/GuidePopup'
 import './ServicePage.css'
 
 type Tab = 'catalogue' | 'book' | 'track'
@@ -140,6 +142,21 @@ function formatDate(value?: string | null) {
   if (!value) return '—'
   return new Intl.DateTimeFormat('vi-VN', { dateStyle: 'medium' }).format(new Date(value))
 }
+
+// Số ngày tối thiểu phải đặt trước so với ngày mong muốn thực hiện dịch vụ.
+// Ví dụ: MIN_BOOKING_LEAD_DAYS = 5, muốn có dịch vụ ngày 13 thì phải đặt chậm nhất ngày 8.
+const MIN_BOOKING_LEAD_DAYS = 5
+
+function getMinBookableDateStr() {
+  const d = new Date()
+  d.setDate(d.getDate() + MIN_BOOKING_LEAD_DAYS)
+  return d.toISOString().slice(0, 10)
+}
+
+// So sánh 2 chuỗi ngày dạng 'YYYY-MM-DD' theo lịch (không phụ thuộc giờ/múi giờ)
+function isDateBeforeMin(dateStr: string, minDateStr: string) {
+  return dateStr < minDateStr
+}
 function getErrorMessage(error: unknown) {
   if (typeof error === 'object' && error !== null && 'response' in error) {
     const response = (error as { response?: { data?: { message?: string } } }).response
@@ -149,6 +166,34 @@ function getErrorMessage(error: unknown) {
 }
 
 const PAGE_SIZE = 5
+
+const SERVICE_GUIDE_STORAGE_KEY = 'hideGuide_servicePage'
+const SERVICE_GUIDE_STEPS: GuideStep[] = [
+  {
+    title: 'Bước 1: Chọn dịch vụ',
+    desc: 'Khách hàng truy cập vào mục Dịch vụ, xem danh sách các dịch vụ do nghĩa trang cung cấp và lựa chọn dịch vụ mong muốn (mai táng, chăm sóc mộ, dọn dẹp mộ, thay hoa, thắp hương, tưởng niệm,...).',
+  },
+  {
+    title: 'Bước 2: Chọn lô đất hoặc phần mộ',
+    desc: 'Khách hàng chọn lô đất hoặc phần mộ cần sử dụng dịch vụ. Hệ thống hiển thị thông tin liên quan để khách hàng xác nhận.',
+  },
+  {
+    title: 'Bước 3: Chọn thời gian thực hiện',
+    desc: 'Khách hàng lựa chọn ngày và thời gian mong muốn thực hiện dịch vụ, đồng thời có thể nhập thêm ghi chú hoặc yêu cầu đặc biệt (nếu có).',
+  },
+  {
+    title: 'Bước 4: Gửi yêu cầu dịch vụ',
+    desc: 'Sau khi kiểm tra lại thông tin, khách hàng gửi yêu cầu. Hệ thống ghi nhận yêu cầu và chuyển đến quản trị viên để xử lý.',
+  },
+  {
+    title: 'Bước 5: Xử lý yêu cầu',
+    desc: 'Quản trị viên tiếp nhận yêu cầu, xem xét thông tin và cập nhật trạng thái xử lý (đã tiếp nhận, đang thực hiện, hoàn thành hoặc từ chối nếu cần).',
+  },
+  {
+    title: 'Bước 6: Theo dõi tiến độ',
+    desc: 'Khách hàng có thể theo dõi trạng thái xử lý dịch vụ trên hệ thống cho đến khi dịch vụ được hoàn tất.',
+  },
+]
 
 export default function ServicePage() {
   const navigate = useNavigate()
@@ -172,6 +217,8 @@ export default function ServicePage() {
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const [submitOk, setSubmitOk] = useState('')
+
+  const [guideOpen, setGuideOpen] = useState(false)
 
   // Theo dõi đơn
   const [statusFilter, setStatusFilter] = useState<'all' | OrderStatus>('all')
@@ -322,6 +369,13 @@ export default function ServicePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated])
 
+  useEffect(() => {
+    // Chỉ tự động hiện hướng dẫn nếu người dùng chưa tick "Không hiển thị lại".
+    if (localStorage.getItem(SERVICE_GUIDE_STORAGE_KEY) !== 'true') {
+      setGuideOpen(true)
+    }
+  }, [])
+
   const stats = useMemo(() => {
     const now = new Date()
     const inProgress = orders.filter((o) => ['submitted', 'pending_confirm', 'confirmed', 'in_progress'].includes(o.status)).length
@@ -387,6 +441,14 @@ export default function ServicePage() {
       setSubmitError('Vui lòng chọn ngày mong muốn thực hiện dịch vụ.')
       return
     }
+    const minBookableDate = getMinBookableDateStr()
+    if (isDateBeforeMin(requestedDate, minBookableDate)) {
+      setSubmitError(
+        `Bạn cần đặt dịch vụ trước ít nhất ${MIN_BOOKING_LEAD_DAYS} ngày. ` +
+        `Vui lòng chọn ngày thực hiện từ ${formatDate(minBookableDate)} trở đi.`
+      )
+      return
+    }
 
     setSubmitting(true)
     setSubmitError('')
@@ -434,7 +496,24 @@ export default function ServicePage() {
         <button type="button" onClick={() => navigate(ROUTES.HOME)}>Trang chủ</button>
         <span className="sep">/</span>
         <span className="current">Dịch vụ</span>
+        <button
+          type="button"
+          className="service-help-btn"
+          aria-label="Xem hướng dẫn đặt dịch vụ"
+          onClick={() => setGuideOpen(true)}
+        >
+          <HelpCircle size={18} strokeWidth={1.8} />
+        </button>
       </div>
+
+      <GuidePopup
+        open={guideOpen}
+        onClose={() => setGuideOpen(false)}
+        title="Quy trình đặt dịch vụ"
+        steps={SERVICE_GUIDE_STEPS}
+        storageKey={SERVICE_GUIDE_STORAGE_KEY}
+        finishLabel="Bắt đầu đặt dịch vụ"
+      />
 
       <main>
         <header className="page-header" data-reveal>
@@ -744,7 +823,7 @@ function BookTab(props: {
   } = props
 
   const hasPlots = ownedPlots.length > 0
-  const todayStr = new Date().toISOString().slice(0, 10)
+  const minDateStr = getMinBookableDateStr()
 
   if (!hasPlots) {
     return (
@@ -822,8 +901,11 @@ function BookTab(props: {
             <div className="form-fields-grid">
               <div className="field">
                 <label htmlFor="service-requested-date">Ngày mong muốn thực hiện *</label>
-                <input id="service-requested-date" type="date" min={todayStr} value={requestedDate} onChange={(e) => setRequestedDate(e.target.value)} required />
-                <span className="field-hint">Lịch chính thức sẽ được cập nhật sau khi đơn được duyệt.</span>
+                <input id="service-requested-date" type="date" min={minDateStr} value={requestedDate} onChange={(e) => setRequestedDate(e.target.value)} required />
+                <span className="field-hint">
+                  Vui lòng đặt trước ít nhất {MIN_BOOKING_LEAD_DAYS} ngày (sớm nhất có thể chọn: {formatDate(minDateStr)}).
+                  Lịch chính thức sẽ được cập nhật sau khi đơn được duyệt.
+                </span>
               </div>
               <div className="field field-note">
                 <label htmlFor="service-note">Yêu cầu đặc biệt</label>

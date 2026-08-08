@@ -38,6 +38,7 @@ import TransferPage from "@/pages/admin/transfer/TransferPage";
 import AppointmentManagementPage from "@/pages/admin/appointment-management/AppointmentManagementPage";
 import ReminderManagementPage from "@/pages/admin/reminder-management/ReminderManagementPage";
 import AgentAdminPage from "@/pages/admin/ai-agent/AgentAdminPage";
+import DeceasedProfilesAdminPage from "@/pages/admin/deceased-profiles/DeceasedProfilesAdminPage";
 
 // Auth
 import LoginPage from "@/pages/auth/LoginPage";
@@ -107,7 +108,7 @@ const router = createBrowserRouter([
           { path: "lich-hen", element: <AppointmentManagementPage /> },
           { path: "nhac-lich", element: <ReminderManagementPage /> },
           { path: "ai-agent", element: <AgentAdminPage /> },
-          { path: "ho-so-nguoi-da-khuat", element: <DeceasedFamilyPage /> },
+          { path: "ho-so-nguoi-da-khuat", element: <DeceasedProfilesAdminPage /> },
         ],
       },
     ],
