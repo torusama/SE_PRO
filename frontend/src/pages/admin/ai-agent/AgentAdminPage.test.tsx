@@ -219,6 +219,118 @@ describe("AgentAdminPage learning analytics", () => {
     expect(container.querySelector("[class*='icon']")).toBeNull();
   });
 
+  it("loads a quarantined FAQ proposal and sends both admin review actions", async () => {
+    const proposal = {
+      knowledgeEntryId: 73,
+      category: "Dịch vụ chăm sóc mộ",
+      title: "Khách có thể yêu cầu dịch vụ chăm sóc mộ từ xa không?",
+      content:
+        "Khách có thể gửi yêu cầu dịch vụ trên hệ thống và theo dõi trạng thái.",
+      knowledgeType: "faq",
+      status: "quarantined",
+      validationReason: "Customer-provided business knowledge is unverified.",
+      sourceRole: "customer",
+      createdAt: "2026-07-29T09:00:00.000Z",
+    };
+    apiMock.get.mockImplementation(
+      (url: string, config?: { params?: { days?: number } }) => {
+        if (url === "/admin/ai-agent/learning-analytics") {
+          return Promise.resolve({
+            data: { data: analytics(config?.params?.days ?? 30) },
+          });
+        }
+        if (url === "/admin/ai-agent/knowledge") {
+          return Promise.resolve({ data: { data: [proposal] } });
+        }
+        if (url === "/admin/ai-agent/feedback") {
+          return Promise.reject(new Error("feedback endpoint unavailable"));
+        }
+        return Promise.resolve({ data: { data: [] } });
+      },
+    );
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    render(<AgentAdminPage />);
+    await screen.findByText("Memory đang hoạt động");
+    fireEvent.click(
+      screen.getByRole("button", { name: "Kiểm duyệt tri thức" }),
+    );
+
+    expect(
+      await screen.findByText(proposal.title),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Các phần còn lại vẫn sử dụng bình thường/i)).toBeInTheDocument();
+    expect(apiMock.get).toHaveBeenCalledWith("/admin/ai-agent/knowledge", {
+      params: { status: "quarantined" },
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Duyệt" }),
+    );
+    await waitFor(() =>
+      expect(apiMock.patch).toHaveBeenCalledWith(
+        "/admin/ai-agent/knowledge/73/approve",
+        {
+          reviewNote: "Đã kiểm tra và phê duyệt bởi quản trị viên",
+        },
+      ),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /chối/i }));
+    await waitFor(() =>
+      expect(apiMock.patch).toHaveBeenCalledWith(
+        "/admin/ai-agent/knowledge/73/reject",
+        {
+          reviewNote: "Nội dung chưa đủ căn cứ để sử dụng",
+        },
+      ),
+    );
+  });
+
+  it("sends the backend reviewNote contract when approving feedback", async () => {
+    const pendingFeedback = {
+      feedbackId: 81,
+      feedbackType: "correction",
+      correctedContent: "Nội dung đã được kiểm chứng",
+      reason: "Câu trả lời cũ chưa chính xác",
+      status: "pending",
+      createdAt: "2026-08-08T10:00:00.000Z",
+    };
+    apiMock.get.mockImplementation(
+      (url: string, config?: { params?: { days?: number } }) => {
+        if (url === "/admin/ai-agent/learning-analytics") {
+          return Promise.resolve({
+            data: { data: analytics(config?.params?.days ?? 30) },
+          });
+        }
+        if (url === "/admin/ai-agent/feedback") {
+          return Promise.resolve({ data: { data: [pendingFeedback] } });
+        }
+        return Promise.resolve({ data: { data: [] } });
+      },
+    );
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    render(<AgentAdminPage />);
+    await screen.findByText("Memory đang hoạt động");
+    fireEvent.click(
+      screen.getByRole("button", { name: "Kiểm duyệt tri thức" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Duyệt và xác minh" }),
+    );
+
+    await waitFor(() =>
+      expect(apiMock.patch).toHaveBeenCalledWith(
+        "/admin/ai-agent/feedback/81/approve",
+        {
+          reviewNote: "Đã kiểm tra bởi quản trị viên",
+          applyCorrection: true,
+        },
+      ),
+    );
+  });
+
   it("shows a calm empty state instead of zero-height chart noise", async () => {
     const zeroActivity = analytics(30);
     zeroActivity.timeline = Array.from({ length: 30 }, (_, index) => ({

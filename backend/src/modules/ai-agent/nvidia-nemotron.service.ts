@@ -83,7 +83,7 @@ export class NvidiaNemotronService {
     );
     const maxAttempts = Math.min(
       apiKeys.length,
-      this.positiveConfig('ai.nvidia.maxAttempts', 2),
+      this.positiveConfig('ai.nvidia.maxAttempts', 10),
     );
     const body = {
       model: this.model,
@@ -123,14 +123,9 @@ export class NvidiaNemotronService {
       const candidate = candidates[attempt];
       const remainingBudgetMs = deadline - Date.now();
       if (remainingBudgetMs <= 0) break;
-      const remainingAttempts = candidates.length - attempt;
-      const reserveForBackupKeys = Math.max(0, remainingAttempts - 1) * 1_500;
-      const currentBudgetMs = Math.max(
-        1_000,
-        remainingBudgetMs -
-          Math.min(reserveForBackupKeys, Math.max(0, remainingBudgetMs - 1)),
-      );
-      const attemptTimeoutMs = Math.min(timeoutMs, currentBudgetMs);
+      // Fast credential failures can rotate immediately. A slow request gets
+      // the configured timeout and then yields to the next provider route.
+      const attemptTimeoutMs = Math.min(timeoutMs, remainingBudgetMs);
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), attemptTimeoutMs);
       try {

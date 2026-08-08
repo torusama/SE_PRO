@@ -11,6 +11,7 @@ import {
   UserMemoryKey,
 } from './tools/agent-tool.types';
 import { KnowledgeEmbeddingService } from './knowledge-embedding.service';
+import { isRuntimeOperationalClaim } from './knowledge-safety.util';
 
 interface NormalizedProposal extends MemoryProposal {
   category: string;
@@ -331,6 +332,17 @@ export class AutonomousLearningService {
         context.userId !== null &&
         context.role !== null &&
         ADMIN_ROLES.has(context.role.toLowerCase());
+      if (
+        isTrustedAdmin &&
+        proposal.memoryType !== 'information_correction' &&
+        isRuntimeOperationalClaim(proposal.content)
+      ) {
+        return {
+          status: 'rejected',
+          message:
+            'Operational rules must be changed through the authoritative backend workflow, not chat knowledge.',
+        };
+      }
       const canActivate =
         isTrustedAdmin && proposal.memoryType !== 'information_correction';
       const effectiveFrom = this.parseDate(proposal.effectiveFrom);

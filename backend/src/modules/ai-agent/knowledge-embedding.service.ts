@@ -47,7 +47,7 @@ export class KnowledgeEmbeddingService implements OnModuleInit {
 
   /**
    * RAG in this backend is intentionally pinned to a fixed vector dimension.
-   * The migration switches the column to VECTOR(1024) for NVIDIA NIM BGE-M3.
+   * The migration switches the column to VECTOR(1024) for NVIDIA NIM models.
    * Checking the actual column type prevents a stale VECTOR(1536) schema from
    * causing a request-time error after upgrading from the previous build.
    */
@@ -101,9 +101,9 @@ export class KnowledgeEmbeddingService implements OnModuleInit {
 
   /**
    * Generate an embedding through the NVIDIA NIM /v1/embeddings endpoint.
-   * BGE-M3 uses query/passsage modes: query for the live user question and
-   * passage for stored memory/knowledge. Keeping these modes correct improves
-   * retrieval quality without changing the safety/validation rules.
+   * The configured retrieval model uses query/passsage modes: query for the
+   * live user question and passage for stored memory/knowledge. Keeping these
+   * modes correct improves retrieval quality without changing validation.
    */
   async embed(
     text: string,
@@ -146,10 +146,11 @@ export class KnowledgeEmbeddingService implements OnModuleInit {
           },
           body: JSON.stringify({
             model: this.embeddingModel(),
-            input,
+            input: [input],
             input_type: inputType,
-            modality: 'text',
             encoding_format: 'float',
+            truncate: 'END',
+            dimensions: this.embeddingDimension(),
           }),
           signal: controller.signal,
         });
@@ -213,7 +214,12 @@ export class KnowledgeEmbeddingService implements OnModuleInit {
 
   async backfillMissingActiveEntries() {
     if (this.backfillRunning || !this.isConfigured()) return 0;
-    if (!(await this.supportsPgVector())) return 0;
+    if (!(await this.supportsPgVector())) {
+      this.logger.warn(
+        'Semantic RAG is unavailable because PostgreSQL has no compatible pgvector column; structured SQL knowledge fallback remains active.',
+      );
+      return 0;
+    }
     this.backfillRunning = true;
     let completed = 0;
     try {
@@ -276,7 +282,10 @@ export class KnowledgeEmbeddingService implements OnModuleInit {
   }
 
   embeddingModel() {
-    return this.config.get<string>('ai.rag.model') ?? 'baai/bge-m3';
+    return (
+      this.config.get<string>('ai.rag.model') ??
+      'nvidia/llama-nemotron-embed-1b-v2'
+    );
   }
 
   embeddingDimension() {

@@ -91,7 +91,7 @@ export class OpenAiService {
     );
     const maxAttempts = Math.min(
       apiKeys.length,
-      this.positiveConfig(`${this.configPrefix}.maxAttempts`, 2),
+      this.positiveConfig(`${this.configPrefix}.maxAttempts`, 10),
     );
 
     const body = {
@@ -127,14 +127,10 @@ export class OpenAiService {
       const candidate = candidates[attempt];
       const remainingBudgetMs = deadline - Date.now();
       if (remainingBudgetMs <= 0) break;
-      const remainingAttempts = candidates.length - attempt;
-      const reserveForBackupKeys = Math.max(0, remainingAttempts - 1) * 1_500;
-      const currentBudgetMs = Math.max(
-        1_000,
-        remainingBudgetMs -
-          Math.min(reserveForBackupKeys, Math.max(0, remainingBudgetMs - 1)),
-      );
-      const attemptTimeoutMs = Math.min(timeoutMs, currentBudgetMs);
+      // Give the active key its real per-request timeout. Fast failures such as
+      // 401/429 still leave budget for rotation; a genuine timeout should move
+      // to the next provider instead of starving every key to one second.
+      const attemptTimeoutMs = Math.min(timeoutMs, remainingBudgetMs);
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), attemptTimeoutMs);
 

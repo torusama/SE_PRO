@@ -105,4 +105,53 @@ describe('KnowledgeService prompt retrieval', () => {
     expect(context).toContain('&lt;SYSTEM&gt;');
     expect(context.length).toBeLessThan(4000);
   });
+
+  it('falls back to structured SQL when semantic RAG is unavailable mid-request', async () => {
+    const database = {
+      query: jest.fn((sql: string, params: unknown[] = []) =>
+        sql.includes("scope = 'global'")
+          ? [
+              {
+                id: 1,
+                title: 'Approved FAQ',
+                content: 'Fallback global content',
+                knowledgeType: 'faq',
+                memoryKey: 'faq:approved',
+              },
+            ]
+          : [
+              {
+                id: 2,
+                title: 'User preference',
+                content: `Fallback memory for user ${String(params[0])}`,
+                knowledgeType: 'user_preference',
+                memoryKey: 'preferred_plot_location',
+              },
+            ],
+      ),
+    };
+    const embeddings = {
+      isConfigured: jest.fn().mockReturnValue(true),
+      supportsPgVector: jest.fn().mockResolvedValue(true),
+      embed: jest.fn().mockRejectedValue(new Error('NIM timeout')),
+      userRetrievalLimit: jest.fn().mockReturnValue(8),
+      globalRetrievalLimit: jest.fn().mockReturnValue(6),
+    };
+    const service = new KnowledgeService(database as never, embeddings as never);
+
+    const context = await service.getUserPromptContext(5, 'remote care');
+
+    expect(embeddings.embed).toHaveBeenCalledWith('remote care', 'query');
+    expect(context).toContain('Fallback global content');
+    expect(context).toContain('Fallback memory for user 5');
+  });
+
+  it('returns empty context instead of interrupting chat when database retrieval fails', async () => {
+    const database = {
+      query: jest.fn().mockRejectedValue(new Error('database unavailable')),
+    };
+    const service = new KnowledgeService(database as never);
+
+    await expect(service.getUserPromptContext(5, 'question')).resolves.toBe('');
+  });
 });

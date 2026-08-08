@@ -20,6 +20,8 @@ export interface LlmCallOptions {
   timeoutMs?: number;
   /** Total wall-clock budget for the whole multi-provider call. */
   totalTimeoutMs?: number;
+  /** Try this route first, then retain normal cross-provider failover. */
+  preferredProviderId?: 'openai-primary' | 'openai-secondary' | 'nvidia';
 }
 
 export interface LlmProvider {
@@ -80,16 +82,6 @@ export class MultiProviderLlmService {
       });
     }
 
-    if (this.openAiSecondary.isConfigured()) {
-      providers.push({
-        id: 'openai-secondary',
-        name: `OpenAI Secondary (${this.openAiSecondary.model})`,
-        isConfigured: () => this.openAiSecondary.isConfigured(),
-        model: this.openAiSecondary.model,
-        chat: (...args) => this.openAiSecondary.chat(...args),
-      });
-    }
-
     if (this.nvidia.isConfigured()) {
       providers.push({
         id: 'nvidia',
@@ -97,6 +89,20 @@ export class MultiProviderLlmService {
         isConfigured: () => this.nvidia.isConfigured(),
         model: this.nvidia.model,
         chat: (...args) => this.nvidia.chat(...args),
+      });
+    }
+
+    // The 120B route is deliberately last. Live NIM health checks show that it
+    // can be much slower than the lightweight NVIDIA fallback, so trying it
+    // second can consume the entire request deadline before a healthy route is
+    // reached.
+    if (this.openAiSecondary.isConfigured()) {
+      providers.push({
+        id: 'openai-secondary',
+        name: `OpenAI Secondary (${this.openAiSecondary.model})`,
+        isConfigured: () => this.openAiSecondary.isConfigured(),
+        model: this.openAiSecondary.model,
+        chat: (...args) => this.openAiSecondary.chat(...args),
       });
     }
 
@@ -126,7 +132,11 @@ export class MultiProviderLlmService {
       options.timeoutMs,
       this.positiveConfig('ai.router.providerTimeoutMs', 6_000),
     );
-    const ordered = this.selectProviders(providers, options.routingKey);
+    const ordered = this.selectProviders(
+      providers,
+      options.routingKey,
+      options.preferredProviderId,
+    );
     if (!ordered.length) {
       throw new ServiceUnavailableException(
         'All AI providers are temporarily cooling down',
@@ -141,11 +151,14 @@ export class MultiProviderLlmService {
       const remainingBudgetMs = deadline - Date.now();
       if (remainingBudgetMs <= 0) break;
 
-      const remainingProviders = ordered.length - i;
-      const reserveForBackups = Math.max(0, remainingProviders - 1) * 1_500;
+      const hasBackup = i + 1 < ordered.length;
+      const reserveForBackup =
+        hasBackup && remainingBudgetMs > 3_000
+          ? Math.min(1_500, remainingBudgetMs - 1_000)
+          : 0;
       const currentBudget = Math.max(
         1_000,
-        remainingBudgetMs - Math.min(reserveForBackups, remainingBudgetMs - 1),
+        remainingBudgetMs - reserveForBackup,
       );
       const attemptTimeoutMs = Math.min(providerTimeoutMs, currentBudget);
 
@@ -192,12 +205,13 @@ export class MultiProviderLlmService {
   private selectProviders(
     providers: LlmProvider[],
     routingKey?: string,
+    preferredProviderId?: string,
   ): LlmProvider[] {
     this.pruneAffinity();
     const now = Date.now();
-    const preferredId = routingKey
-      ? this.affinity.get(routingKey)?.providerId
-      : undefined;
+    const preferredId =
+      preferredProviderId ??
+      (routingKey ? this.affinity.get(routingKey)?.providerId : undefined);
     const preferredIndex = preferredId
       ? providers.findIndex((provider) => provider.id === preferredId)
       : -1;

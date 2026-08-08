@@ -8,6 +8,7 @@ import {
 import { DatabaseService } from '../../database/database.service';
 import { KnowledgeEmbeddingService } from './knowledge-embedding.service';
 import { PLOT_PENDING_HOLD_MINUTES } from '../reservations/reservation-policy.constants';
+import { isRuntimeOperationalClaim } from './knowledge-safety.util';
 
 interface PromptKnowledgeRow {
   id: number;
@@ -617,7 +618,7 @@ export class KnowledgeService {
         isActive: current.is_active,
       };
 
-      if (action === 'approve' && this.isRuntimeOperationalClaim(current.content)) {
+      if (action === 'approve' && isRuntimeOperationalClaim(current.content)) {
         throw new BadRequestException(
           'This proposal attempts to change runtime operational behavior. Chat knowledge approval cannot modify reservation timing, prices/discounts, roles, permissions, or other backend rules.',
         );
@@ -729,26 +730,6 @@ export class KnowledgeService {
       void this.embeddings.embedKnowledgeEntry(id).catch(() => undefined);
     }
     return reviewed;
-  }
-
-  private isRuntimeOperationalClaim(content: string) {
-    const folded = content
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/đ/g, 'd')
-      .toLowerCase()
-      .replace(/[^a-z0-9%\s]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-    return (
-      /\b(?:giu cho|dat cho|reservation)\b.{0,80}\b(?:phut|gio|ngay|tuan|thang|toi da|het han)\b/.test(
-        folded,
-      ) ||
-      /\b(?:giam|discount)\b.{0,30}\d+\s*%/.test(folded) ||
-      /\b(?:role|quyen|phan quyen|admin|jwt|timeout|api key|cau hinh)\b/.test(
-        folded,
-      )
-    );
   }
 
   private promptSection(

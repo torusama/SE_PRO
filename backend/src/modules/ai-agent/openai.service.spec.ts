@@ -123,4 +123,79 @@ describe('OpenAiService', () => {
     ).toEqual(['Bearer sk-key1', 'Bearer sk-key1', 'Bearer sk-key2']);
   });
 
+  it('can exhaust more than two fast-failing keys before succeeding', async () => {
+    jest.spyOn(configService, 'get').mockImplementation((key: string) => {
+      if (key === 'ai.openai.apiKeys') return 'key-1,key-2,key-3,key-4';
+      if (key === 'ai.enableLlm') return true;
+      if (key === 'ai.openai.baseUrl') return 'https://api.openai.com/v1';
+      if (key === 'ai.openai.model') return 'openai/gpt-oss-20b';
+      if (key === 'ai.openai.timeoutMs') return 1000;
+      if (key === 'ai.openai.totalTimeoutMs') return 3000;
+      if (key === 'ai.openai.maxAttempts') return 10;
+      return undefined;
+    });
+    const mockFetch = global.fetch as jest.Mock;
+    for (let index = 0; index < 3; index += 1) {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        headers: { get: () => null },
+        text: async () => '',
+      });
+    }
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        choices: [{ message: { role: 'assistant', content: 'fourth key' } }],
+      }),
+    });
+
+    await expect(
+      service.chat([{ role: 'user', content: 'hi' }]),
+    ).resolves.toMatchObject({
+      choices: [{ message: { content: 'fourth key' } }],
+    });
+    expect(mockFetch).toHaveBeenCalledTimes(4);
+  });
+
+  it('does not divide the first request timeout across every key in a large pool', async () => {
+    jest.useFakeTimers();
+    try {
+      jest.spyOn(configService, 'get').mockImplementation((key: string) => {
+        if (key === 'ai.openai.apiKeys')
+          return Array.from({ length: 10 }, (_, index) => `key-${index + 1}`).join(
+            ',',
+          );
+        if (key === 'ai.enableLlm') return true;
+        if (key === 'ai.openai.baseUrl') return 'https://api.openai.com/v1';
+        if (key === 'ai.openai.timeoutMs') return 6000;
+        if (key === 'ai.openai.totalTimeoutMs') return 6000;
+        if (key === 'ai.openai.maxAttempts') return 10;
+        return undefined;
+      });
+      const mockFetch = global.fetch as jest.Mock;
+      mockFetch.mockImplementation(
+        (_url: string, init: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            init.signal?.addEventListener('abort', () =>
+              reject(Object.assign(new Error('timeout'), { name: 'AbortError' })),
+            );
+          }),
+      );
+
+      const result = service
+        .chat([{ role: 'user', content: 'hi' }])
+        .catch((error: unknown) => error);
+      await jest.advanceTimersByTimeAsync(1000);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      await jest.advanceTimersByTimeAsync(4999);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      await jest.advanceTimersByTimeAsync(1);
+      await expect(result).resolves.toBeDefined();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
 });

@@ -201,4 +201,42 @@ describe('NvidiaNemotronService', () => {
     );
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it('gives the first request a usable timeout with a large key pool', async () => {
+    jest.useFakeTimers();
+    try {
+      const fetchMock = jest
+        .spyOn(global, 'fetch')
+        .mockImplementation(
+          (_url: string | URL | Request, init?: RequestInit) =>
+            new Promise((_resolve, reject) => {
+              init?.signal?.addEventListener('abort', () =>
+                reject(
+                  Object.assign(new Error('timeout'), { name: 'AbortError' }),
+                ),
+              );
+            }),
+        );
+      const service = createService({
+        'ai.nvidia.apiKey': undefined,
+        'ai.nvidia.apiKeys': Array.from(
+          { length: 10 },
+          (_, index) => `key-${index + 1}`,
+        ).join(','),
+        'ai.nvidia.timeoutMs': 6000,
+        'ai.nvidia.totalTimeoutMs': 6000,
+        'ai.nvidia.maxAttempts': 10,
+      });
+
+      const result = service.chat(messages).catch((error: unknown) => error);
+      await jest.advanceTimersByTimeAsync(1000);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      await jest.advanceTimersByTimeAsync(4999);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      await jest.advanceTimersByTimeAsync(1);
+      await expect(result).resolves.toBeDefined();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });

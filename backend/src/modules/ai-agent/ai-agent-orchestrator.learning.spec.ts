@@ -72,7 +72,7 @@ function plannerPlan(): AgentPlan {
   };
 }
 
-function setup(memoryFailure = false) {
+function setup(memoryFailure = false, messagePersistenceFailure = false) {
   let messageId = 100;
   const database = {
     queryOne: jest.fn((sql: string) => {
@@ -80,6 +80,9 @@ function setup(memoryFailure = false) {
         return { id: 10, sessionId: 'SES-1', userId: 7 };
       }
       if (sql.includes('INSERT INTO ai_messages')) {
+        if (messagePersistenceFailure) {
+          throw new Error('message database unavailable');
+        }
         messageId += 1;
         return { id: messageId };
       }
@@ -140,9 +143,16 @@ function setup(memoryFailure = false) {
   };
   const tools = {
     isAllowed: jest.fn(() => true),
-    execute: jest.fn((name: string) => {
+    execute: jest.fn((name: string, args?: { memoryType?: string }) => {
       if (name === 'propose_knowledge_update') {
         if (memoryFailure) throw new Error('memory unavailable');
+        if (args?.memoryType === 'faq') {
+          return {
+            status: 'stored_for_validation',
+            message: 'queued for review',
+            knowledgeEntryId: 56,
+          };
+        }
         return {
           status: 'saved_user_memory',
           message: 'saved',
@@ -163,6 +173,7 @@ function setup(memoryFailure = false) {
         '</VERIFIED_GLOBAL_KNOWLEDGE>',
       ].join('\n'),
     ),
+    getActiveUserPreferences: jest.fn(() => []),
     getCurrentVersion: jest.fn(() => 'kb-test'),
   };
   const booking = {
@@ -182,6 +193,41 @@ function setup(memoryFailure = false) {
 }
 
 describe('AiAgentOrchestratorService application-level learning', () => {
+  it('returns a local user-facing answer when every model provider fails', async () => {
+    const { service, nvidia } = setup();
+    nvidia.chat.mockReset().mockRejectedValue(
+      new Error('All AI LLM providers failed'),
+    );
+
+    const result = await service.chat(
+      {
+        sessionId: 'SES-1',
+        message: 'Hello, what can you help me with?',
+      },
+      { id: 7, role: 'customer' },
+    );
+
+    expect(result.assistantMessage.trim().length).toBeGreaterThan(20);
+    expect(result.metadata.fallbackUsed).toBe(true);
+    expect(result.metadata.fallbackReason).toBe('LLM_AGENT_PLAN_FAILED');
+  });
+
+  it('still returns the generated answer when message persistence fails', async () => {
+    const { service } = setup(false, true);
+
+    const result = await service.chat(
+      {
+        sessionId: 'SES-1',
+        message:
+          'Recommend two adjacent plots under 400,000,000 VND near the entrance.',
+      },
+      { id: 7, role: 'customer' },
+    );
+
+    expect(result.assistantMessage.trim().length).toBeGreaterThan(20);
+    expect(result.messageId).toBeNull();
+  });
+
   it('saves memory and still executes the primary recommendation with the trusted role', async () => {
     const { service, tools, nvidia, knowledge } = setup();
 
@@ -219,11 +265,9 @@ describe('AiAgentOrchestratorService application-level learning', () => {
       expect.objectContaining({ userId: 7, role: 'admin' }),
     );
     expect(result.recommendations).toHaveLength(1);
-    expect(result.assistantMessage).toContain('Mình đã lưu sở thích');
+    expect(result.assistantMessage).toContain('Mình đã ghi nhớ');
     const plannerSystemPrompt = nvidia.chat.mock.calls[0][0][0].content;
-    const composerSystemPrompt = nvidia.chat.mock.calls[1][0][0].content;
     expect(plannerSystemPrompt).toContain('<PERSISTENT_USER_PREFERENCES>');
-    expect(composerSystemPrompt).toContain('<VERIFIED_GLOBAL_KNOWLEDGE>');
   });
 
   it('continues the primary action and does not claim storage when memory persistence fails', async () => {
@@ -244,10 +288,39 @@ describe('AiAgentOrchestratorService application-level learning', () => {
       expect.objectContaining({ role: 'customer' }),
     );
     expect(result.recommendations).toHaveLength(1);
-    expect(result.assistantMessage).toContain('chưa thể lưu');
+    expect(result.assistantMessage).not.toContain('chưa thể lưu');
     expect(result.assistantMessage).not.toContain('Mình đã lưu sở thích');
     expect(result.metadata.learningResults).toEqual([
       expect.objectContaining({ status: 'error' }),
     ]);
+  });
+
+  it('quarantines an explicit customer FAQ submission instead of listing care services', async () => {
+    const { service, tools, nvidia } = setup();
+
+    const result = await service.chat(
+      {
+        sessionId: 'SES-1',
+        message:
+          'Mình muốn đóng góp một FAQ để quản trị viên kiểm tra: khách có thể yêu cầu dịch vụ chăm sóc mộ từ xa không? Câu trả lời đề xuất là có thể gửi yêu cầu dịch vụ trên hệ thống và theo dõi trạng thái. Đây chỉ là đề xuất, hãy gửi quản trị viên duyệt trước khi sử dụng.',
+      },
+      { id: 7, role: 'customer' },
+    );
+
+    expect(tools.execute).toHaveBeenCalledTimes(1);
+    expect(tools.execute).toHaveBeenCalledWith(
+      'propose_knowledge_update',
+      expect.objectContaining({
+        category: 'Dịch vụ chăm sóc mộ',
+        memoryType: 'faq',
+        requestedScope: 'global',
+        title: 'khách có thể yêu cầu dịch vụ chăm sóc mộ từ xa không?',
+      }),
+      expect.objectContaining({ userId: 7, role: 'customer' }),
+    );
+    expect(result.suggestedServices).toEqual([]);
+    expect(result.assistantMessage).toContain('quản trị kiểm tra');
+    // The planner is skipped; the only model call is optional follow-up generation.
+    expect(nvidia.chat).toHaveBeenCalledTimes(1);
   });
 });

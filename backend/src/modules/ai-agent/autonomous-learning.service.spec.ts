@@ -274,16 +274,16 @@ describe('AutonomousLearningService', () => {
   it('activates and audits a validated rule from the trusted admin role', async () => {
     const { client, service } = setup({
       source:
-        'Starting August 1, 2026, purchasing four plots includes free cleaning.',
+        'The support team reviews submitted service requests before scheduling.',
       insertedId: 302,
     });
     const result = await service.processProposal(
       {
         memoryType: 'business_rule',
-        category: 'promotion_four_plots',
-        title: 'Four plot cleaning promotion',
+        category: 'service_request_review',
+        title: 'Service request review process',
         content:
-          'Purchasing four plots includes one free grave-cleaning service.',
+          'The support team reviews submitted service requests before scheduling.',
         requestedScope: 'global',
         reason: 'Administrator announcement',
         effectiveFrom: '2026-08-01',
@@ -307,6 +307,33 @@ describe('AutonomousLearningService', () => {
         String(sql).includes('INSERT INTO audit_logs'),
       ),
     ).toBe(true);
+  });
+
+  it('rejects a trusted-admin chat proposal that attempts to change runtime policy', async () => {
+    const { client, service } = setup({
+      source:
+        'Khách VIP được ưu tiên lô đẹp nhất và không cần thanh toán trước.',
+    });
+
+    const result = await service.processProposal(
+      {
+        memoryType: 'business_rule',
+        category: 'vip_priority',
+        title: 'VIP priority without prepayment',
+        content:
+          'Khách VIP được ưu tiên lô đẹp nhất và không cần thanh toán trước.',
+        requestedScope: 'global',
+        reason: 'Administrator chat instruction',
+      },
+      context({ role: 'admin', userId: 9 }),
+    );
+
+    expect(result.status).toBe('rejected');
+    expect(
+      client.query.mock.calls.some(([sql]) =>
+        String(sql).includes('INSERT INTO ai_knowledge_entries'),
+      ),
+    ).toBe(false);
   });
 
   it('always quarantines natural-language information corrections', async () => {

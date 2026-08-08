@@ -33,6 +33,18 @@ type ModelVersion = {
   createdAt: string;
 };
 
+type KnowledgeProposal = {
+  knowledgeEntryId: number;
+  category: string;
+  title: string;
+  content: string;
+  knowledgeType: string;
+  status: string;
+  validationReason?: string;
+  sourceRole?: string;
+  createdAt: string;
+};
+
 type Tab = "overview" | "journal" | "review" | "ranker";
 
 const tabs: Array<{ id: Tab; label: string }> = [
@@ -57,11 +69,32 @@ const metricsText = (metrics?: Record<string, number>) =>
         .join(" · ")
     : "Chưa có số liệu đánh giá";
 
+const knowledgeTypeLabel = (value: string) =>
+  ({
+    faq: "FAQ đề xuất",
+    business_rule: "Quy định đề xuất",
+    information_correction: "Hiệu chỉnh đề xuất",
+  })[value] ?? value;
+
+const sourceRoleLabel = (value?: string) =>
+  value === "customer" ? "Khách hàng" : value || "Không xác định";
+
+const reviewReasonLabel = (value?: string) => {
+  if (!value) return "Cần kiểm tra trước khi sử dụng.";
+  if (/customer-provided business knowledge is unverified/i.test(value)) {
+    return "Nguồn khách hàng, cần quản trị viên xác minh trước khi sử dụng.";
+  }
+  return value;
+};
+
 export default function AgentAdminPage() {
   const [tab, setTab] = useState<Tab>("overview");
   const [feedback, setFeedback] = useState<Feedback[]>([]);
   const [runs, setRuns] = useState<TrainingRun[]>([]);
   const [models, setModels] = useState<ModelVersion[]>([]);
+  const [knowledgeProposals, setKnowledgeProposals] = useState<
+    KnowledgeProposal[]
+  >([]);
   const [analytics, setAnalytics] = useState<LearningAnalytics>();
   const [analyticsDays, setAnalyticsDays] = useState(30);
   const [loading, setLoading] = useState(true);
@@ -71,33 +104,54 @@ export default function AgentAdminPage() {
   const loadData = useCallback(async () => {
     setLoading(true);
     setError(undefined);
-    try {
-      const [feedbackRes, runsRes, modelsRes, analyticsRes] = await Promise.all(
-        [
-          api.get("/admin/ai-agent/feedback"),
-          api.get("/admin/ai-agent/training-runs"),
-          api.get("/admin/ai-agent/model-versions"),
-          api.get("/admin/ai-agent/learning-analytics", {
-            params: { days: analyticsDays },
-          }),
-        ],
-      );
-      setFeedback(feedbackRes.data.data ?? feedbackRes.data);
-      setRuns(runsRes.data.data ?? runsRes.data);
-      setModels(modelsRes.data.data ?? modelsRes.data);
-      setAnalytics(analyticsRes.data.data ?? analyticsRes.data);
-    } catch {
+    const results = await Promise.allSettled([
+      api.get("/admin/ai-agent/feedback"),
+      api.get("/admin/ai-agent/training-runs"),
+      api.get("/admin/ai-agent/model-versions"),
+      api.get("/admin/ai-agent/learning-analytics", {
+        params: { days: analyticsDays },
+      }),
+      api.get("/admin/ai-agent/knowledge", {
+        params: { status: "quarantined" },
+      }),
+    ]);
+
+    const labels = [
+      "phản hồi",
+      "lần huấn luyện",
+      "phiên bản model",
+      "thống kê học tập",
+      "tri thức chờ duyệt",
+    ];
+    const failed = results.flatMap((result, index) =>
+      result.status === "rejected" ? [labels[index]] : [],
+    );
+    const payload = <T,>(result: PromiseSettledResult<{ data: unknown }>) =>
+      result.status === "fulfilled"
+        ? (((result.value.data as { data?: T }).data ?? result.value.data) as T)
+        : undefined;
+
+    const feedbackData = payload<Feedback[]>(results[0]);
+    const runsData = payload<TrainingRun[]>(results[1]);
+    const modelsData = payload<ModelVersion[]>(results[2]);
+    const analyticsData = payload<LearningAnalytics>(results[3]);
+    const knowledgeData = payload<KnowledgeProposal[]>(results[4]);
+    if (feedbackData) setFeedback(feedbackData);
+    if (runsData) setRuns(runsData);
+    if (modelsData) setModels(modelsData);
+    if (analyticsData) setAnalytics(analyticsData);
+    if (knowledgeData) setKnowledgeProposals(knowledgeData);
+
+    if (failed.length) {
       setError(
-        "Không tải được dữ liệu AI Agent. Kiểm tra migration và kết nối backend.",
+        `Không tải được: ${failed.join(", ")}. Các phần còn lại vẫn sử dụng bình thường.`,
       );
-    } finally {
-      setLoading(false);
     }
+    setLoading(false);
   }, [analyticsDays]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => void loadData(), 0);
-    return () => window.clearTimeout(timer);
+    void loadData();
   }, [loadData]);
 
   const reviewFeedback = async (
@@ -114,13 +168,42 @@ export default function AgentAdminPage() {
     setBusy(`feedback-${item.feedbackId}`);
     try {
       await api.patch(`/admin/ai-agent/feedback/${item.feedbackId}/${action}`, {
-        reviewerNote:
+        reviewNote:
           action === "approve"
             ? "Đã kiểm tra bởi quản trị viên"
             : "Không đủ căn cứ áp dụng",
         applyCorrection,
       });
       await loadData();
+    } catch {
+      setError(
+        "Không thể cập nhật phản hồi. Dữ liệu chưa bị thay đổi, vui lòng thử lại.",
+      );
+    } finally {
+      setBusy(undefined);
+    }
+  };
+
+  const reviewKnowledge = async (
+    item: KnowledgeProposal,
+    action: "approve" | "reject",
+  ) => {
+    const label = action === "approve" ? "Duyệt và kích hoạt" : "Từ chối";
+    if (!window.confirm(`${label} đề xuất tri thức này?`)) return;
+
+    setBusy(`knowledge-${item.knowledgeEntryId}`);
+    try {
+      await api.patch(`/admin/ai-agent/knowledge/${item.knowledgeEntryId}/${action}`, {
+        reviewNote:
+          action === "approve"
+            ? "Đã kiểm tra và phê duyệt bởi quản trị viên"
+            : "Nội dung chưa đủ căn cứ để sử dụng",
+      });
+      await loadData();
+    } catch {
+      setError(
+        "Không thể duyệt tri thức. Nội dung vẫn ở trạng thái chờ xác minh.",
+      );
     } finally {
       setBusy(undefined);
     }
@@ -167,6 +250,7 @@ export default function AgentAdminPage() {
   const pendingCount = feedback.filter(
     (item) => item.status === "pending",
   ).length;
+  const pendingKnowledgeCount = knowledgeProposals.length;
   const activeModel = models.find((item) => item.status === "active");
 
   return (
@@ -238,12 +322,72 @@ export default function AgentAdminPage() {
                   </p>
                 </div>
                 <div className="agent-admin__section-count">
-                  <strong>{pendingCount}</strong>
-                  <span>đang chờ duyệt</span>
+                  <strong>{pendingKnowledgeCount}</strong>
+                  <span>FAQ/tri thức chờ duyệt</span>
                 </div>
               </header>
 
-              <div className="agent-admin__list">
+              <div className="agent-admin__review-queue">
+                {knowledgeProposals.map((item) => (
+                  <article
+                    className="agent-admin__knowledge-review"
+                    key={item.knowledgeEntryId}
+                  >
+                    <div className="agent-admin__knowledge-main">
+                      <div className="agent-admin__knowledge-meta">
+                        <span className="agent-admin__status status-quarantined">
+                          Chờ xác minh
+                        </span>
+                        <span>{knowledgeTypeLabel(item.knowledgeType)}</span>
+                        <span>{sourceRoleLabel(item.sourceRole)}</span>
+                      </div>
+                      <h3>{item.title}</h3>
+                      <p className="agent-admin__knowledge-category">
+                        {item.category}
+                      </p>
+                      <details className="agent-admin__knowledge-content">
+                        <summary>Xem nội dung khách gửi</summary>
+                        <p>{item.content}</p>
+                      </details>
+                      <p className="agent-admin__review-note">
+                        {reviewReasonLabel(item.validationReason)}
+                      </p>
+                    </div>
+                    <div className="agent-admin__knowledge-actions">
+                      <time>{formatDate(item.createdAt)}</time>
+                      <div className="agent-admin__actions">
+                        <button
+                          disabled={busy === `knowledge-${item.knowledgeEntryId}`}
+                          onClick={() => reviewKnowledge(item, "approve")}
+                          type="button"
+                        >
+                          Duyệt
+                        </button>
+                        <button
+                          className="danger"
+                          disabled={busy === `knowledge-${item.knowledgeEntryId}`}
+                          onClick={() => reviewKnowledge(item, "reject")}
+                          type="button"
+                        >
+                          Từ chối
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+                {!knowledgeProposals.length && (
+                  <div className="agent-admin__empty">
+                    Chưa có FAQ hoặc đề xuất tri thức nào chờ kiểm duyệt.
+                  </div>
+                )}
+              </div>
+
+              <section className="agent-admin__subsection">
+                <header>
+                  <h3>Phản hồi cần xử lý</h3>
+                  <p>{pendingCount} phản hồi khách hàng đang chờ duyệt.</p>
+                </header>
+                <div className="agent-admin__list">
                 {feedback.map((item) => (
                   <article
                     className="agent-admin__feedback"
@@ -293,10 +437,11 @@ export default function AgentAdminPage() {
                 ))}
                 {!feedback.length && (
                   <div className="agent-admin__empty">
-                    Chưa có đề xuất tri thức nào cần kiểm duyệt.
+                    Chưa có phản hồi nào cần kiểm duyệt.
                   </div>
                 )}
-              </div>
+                </div>
+              </section>
             </section>
           )}
 

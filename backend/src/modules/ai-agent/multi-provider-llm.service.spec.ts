@@ -33,7 +33,7 @@ describe('MultiProviderLlmService', () => {
     await expect(service.chat([])).rejects.toThrow(ServiceUnavailableException);
   });
 
-  it('falls back through Primary OpenAI (20B) -> Secondary OpenAI (120B) -> NVIDIA NIM', async () => {
+  it('uses the fast NVIDIA route before the slow 120B fallback', async () => {
     const mockNvidiaResponse: NvidiaChatResponse = {
       choices: [
         {
@@ -53,11 +53,7 @@ describe('MultiProviderLlmService', () => {
     jest
       .spyOn(openAiPrimary, 'chat')
       .mockRejectedValue(new Error('OpenAI 20B timeout after 15000ms'));
-
-    // Mock Secondary (120B) failure
-    jest
-      .spyOn(openAiSecondary, 'chat')
-      .mockRejectedValue(new Error('OpenAI 120B rate limit 429'));
+    jest.spyOn(openAiSecondary, 'chat');
 
     // Mock NVIDIA NIM success
     jest.spyOn(nvidiaService, 'chat').mockResolvedValue(mockNvidiaResponse);
@@ -65,18 +61,18 @@ describe('MultiProviderLlmService', () => {
     const result = await service.chat([]);
 
     expect(openAiPrimary.chat).toHaveBeenCalledTimes(1);
-    expect(openAiSecondary.chat).toHaveBeenCalledTimes(1);
     expect(nvidiaService.chat).toHaveBeenCalledTimes(1);
+    expect(openAiSecondary.chat).not.toHaveBeenCalled();
     expect(result.choices[0].message.content).toBe('NVIDIA fallback success');
   });
 
-  it('uses Secondary OpenAI (120B) directly if Primary (20B) key is missing', async () => {
-    const mockSecondaryResponse: NvidiaChatResponse = {
+  it('uses NVIDIA directly if Primary (20B) key is missing', async () => {
+    const mockNvidiaResponse: NvidiaChatResponse = {
       choices: [
         {
           message: {
             role: 'assistant',
-            content: 'OpenAI 120B success',
+            content: 'NVIDIA success',
           },
         },
       ],
@@ -87,15 +83,15 @@ describe('MultiProviderLlmService', () => {
     jest.spyOn(nvidiaService, 'isConfigured').mockReturnValue(true);
 
     jest.spyOn(openAiPrimary, 'chat');
-    jest
-      .spyOn(openAiSecondary, 'chat')
-      .mockResolvedValue(mockSecondaryResponse);
+    jest.spyOn(openAiSecondary, 'chat');
+    jest.spyOn(nvidiaService, 'chat').mockResolvedValue(mockNvidiaResponse);
 
     const result = await service.chat([]);
 
     expect(openAiPrimary.chat).not.toHaveBeenCalled();
-    expect(openAiSecondary.chat).toHaveBeenCalledTimes(1);
-    expect(result.choices[0].message.content).toBe('OpenAI 120B success');
+    expect(nvidiaService.chat).toHaveBeenCalledTimes(1);
+    expect(openAiSecondary.chat).not.toHaveBeenCalled();
+    expect(result.choices[0].message.content).toBe('NVIDIA success');
   });
 
   it('keeps one provider for a user turn and rotates the next user turn', async () => {
@@ -106,6 +102,9 @@ describe('MultiProviderLlmService', () => {
     jest.spyOn(openAiPrimary, 'isConfigured').mockReturnValue(true);
     jest.spyOn(openAiSecondary, 'isConfigured').mockReturnValue(true);
     jest.spyOn(nvidiaService, 'isConfigured').mockReturnValue(true);
+    jest.spyOn(configService, 'get').mockImplementation((key: string) =>
+      key === 'ai.router.rotateProviders' ? true : undefined,
+    );
     jest.spyOn(openAiPrimary, 'chat').mockResolvedValue(response('primary'));
     jest
       .spyOn(openAiSecondary, 'chat')
@@ -117,8 +116,33 @@ describe('MultiProviderLlmService', () => {
     await service.chat([], [], 'auto', { routingKey: 'turn-2' });
 
     expect(openAiPrimary.chat).toHaveBeenCalledTimes(2);
-    expect(openAiSecondary.chat).toHaveBeenCalledTimes(1);
-    expect(nvidiaService.chat).not.toHaveBeenCalled();
+    expect(nvidiaService.chat).toHaveBeenCalledTimes(1);
+    expect(openAiSecondary.chat).not.toHaveBeenCalled();
+  });
+
+  it('honors an explicit preferred model while preserving backup failover', async () => {
+    const response = (content: string): NvidiaChatResponse => ({
+      choices: [{ message: { role: 'assistant', content } }],
+    });
+    jest.spyOn(openAiPrimary, 'isConfigured').mockReturnValue(true);
+    jest.spyOn(openAiSecondary, 'isConfigured').mockReturnValue(true);
+    jest.spyOn(nvidiaService, 'isConfigured').mockReturnValue(true);
+    jest.spyOn(configService, 'get').mockImplementation((key: string) =>
+      key === 'ai.router.rotateProviders' ? true : undefined,
+    );
+    jest.spyOn(openAiPrimary, 'chat').mockResolvedValue(response('20b'));
+    jest
+      .spyOn(openAiSecondary, 'chat')
+      .mockResolvedValue(response('120b'));
+    jest.spyOn(nvidiaService, 'chat').mockResolvedValue(response('nvidia'));
+
+    const result = await service.chat([], [], 'auto', {
+      preferredProviderId: 'openai-primary',
+    });
+
+    expect(result.choices[0].message.content).toBe('20b');
+    expect(openAiPrimary.chat).toHaveBeenCalledTimes(1);
+    expect(openAiSecondary.chat).not.toHaveBeenCalled();
   });
 
 });

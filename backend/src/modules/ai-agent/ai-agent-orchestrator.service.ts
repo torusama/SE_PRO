@@ -354,17 +354,29 @@ export class AiAgentOrchestratorService {
     let requirements = context.requirements;
     let intent = context.intent;
     let userMessageId: number | null = null;
+    let userMessageSaveAttempted = false;
     let learningResults: AutonomousLearningResult[] = [];
 
     const saveUserMessage = async () => {
-      if (userMessageId || !conversation) return userMessageId;
-      userMessageId = await this.saveMessage(
-        conversation.id,
-        'user',
-        this.redactSensitiveData(dto.message),
-        intent,
-        requirements,
-      );
+      if (userMessageId || userMessageSaveAttempted || !conversation) {
+        return userMessageId;
+      }
+      userMessageSaveAttempted = true;
+      try {
+        userMessageId = await this.saveMessage(
+          conversation.id,
+          'user',
+          this.redactSensitiveData(dto.message),
+          intent,
+          requirements,
+        );
+      } catch (error) {
+        this.logger.error(
+          `[chat persistence] Could not save user message; continuing the response: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
       return userMessageId;
     };
 
@@ -499,6 +511,42 @@ export class AiAgentOrchestratorService {
 
     const recoveredPreferenceProposal =
       this.recoverExplicitUserPreferenceProposal(dto.message);
+    const recoveredKnowledgeProposal =
+      this.recoverExplicitKnowledgeProposal(dto.message);
+
+    // A customer explicitly submitting a FAQ/knowledge candidate must never be
+    // routed as a request to consume that service. In particular, phrases such
+    // as "đóng góp FAQ" can mention a care service while the actual intent is
+    // to send a proposal for administrative review.
+    if (recoveredKnowledgeProposal?.length) {
+      await saveUserMessage();
+      learningResults = await this.processMemoryProposals(
+        recoveredKnowledgeProposal,
+        {
+          conversationId: conversation?.id ?? null,
+          sourceMessageId: userMessageId,
+          userId,
+          role: userRole,
+          sessionId,
+        },
+      );
+      return this.finish({
+        conversation,
+        sessionId,
+        userMessageId,
+        userMessage: dto.message,
+        assistantMessage:
+          recoveredKnowledgeProposal[0].category === 'Dịch vụ chăm sóc mộ'
+            ? 'Cảm ơn bạn đã gửi đề xuất FAQ về dịch vụ chăm sóc mộ từ xa.'
+            : 'Cảm ơn bạn đã gửi đề xuất FAQ để quản trị viên kiểm tra.',
+        intent: 'general_question',
+        requirements,
+        recommendationResult: null,
+        traceId,
+        fallbackUsed: false,
+        learningResults,
+      });
+    }
 
     // Pure preference updates are authoritative memory operations, not a reason
     // to risk a slow external LLM call. Persist them through the normal safety
@@ -636,9 +684,15 @@ export class AiAgentOrchestratorService {
       plan.requirements = requirements;
       intent = plan.intent;
       await saveUserMessage();
+      // The recovery proposal is only a backstop for providers that omitted a
+      // preference. When the planner already produced one, persisting both can
+      // create competing preference records from the same customer sentence.
+      const hasPlannerUserPreference = plan.memoryProposals?.some(
+        (proposal) => proposal.memoryType === 'user_preference',
+      );
       plan.memoryProposals = this.mergeMemoryProposals(
         plan.memoryProposals,
-        recoveredPreferenceProposal,
+        hasPlannerUserPreference ? undefined : recoveredPreferenceProposal,
       );
       learningResults = await this.processMemoryProposals(
         plan.memoryProposals,
@@ -810,6 +864,7 @@ export class AiAgentOrchestratorService {
         conversation,
         sessionId,
         userMessageId,
+        userMessage: dto.message,
         assistantMessage,
         intent,
         requirements,
@@ -964,8 +1019,9 @@ Today: ${new Date().toISOString().slice(0, 10)}`,
         temperature: 0,
         routingKey,
         maxTokens: 700,
-        timeoutMs: 2400,
-        totalTimeoutMs: 3800,
+        timeoutMs: 10_000,
+        totalTimeoutMs: 13_000,
+        preferredProviderId: 'openai-primary',
       },
     );
     const assistant = response.choices[0].message;
@@ -973,11 +1029,21 @@ Today: ${new Date().toISOString().slice(0, 10)}`,
       (call) => call.function.name === AGENT_PLANNER_TOOL_NAME,
     );
     if (plannerCall) {
-      return parseAgentPlan(plannerCall.function.arguments);
+      try {
+        return parseAgentPlan(plannerCall.function.arguments);
+      } catch (error) {
+        this.logger.warn(
+          `[agent planner] Invalid tool arguments (${error instanceof Error ? error.name : 'unknown error'})`,
+        );
+        throw error;
+      }
     }
 
     const inlineJson = assistant.content?.match(/\{[\s\S]*\}/)?.[0];
     if (inlineJson) return parseAgentPlan(inlineJson);
+    this.logger.warn(
+      `[agent planner] Provider response had no usable structured plan; toolCalls=${assistant.tool_calls?.map((call) => call.function.name).join(',') || 'none'}, contentLength=${assistant.content?.length ?? 0}`,
+    );
     throw new ServiceUnavailableException(
       'NVIDIA did not return a structured agent plan',
     );
@@ -1323,9 +1389,9 @@ Write the final helpful, highly consultative response now.
     try {
       const response = await this.nvidia.chat(messages, [], 'auto', {
         routingKey: input.routingKey,
-        maxTokens: 1600,
-        timeoutMs: 2400,
-        totalTimeoutMs: 3500,
+        maxTokens: 900,
+        timeoutMs: 8000,
+        totalTimeoutMs: 10_000,
       });
       const content = response.choices[0].message.content?.trim() ?? '';
       console.log('[composeAgentResponse debug]:', {
@@ -1716,6 +1782,7 @@ Bạn muốn mình đi sâu vào yêu cầu lô, đơn dịch vụ hay lịch ch
       conversation: input.conversation,
       sessionId: input.sessionId,
       userMessageId: input.userMessageId,
+      userMessage: input.message,
       assistantMessage,
       intent: resolvedIntent,
       requirements: input.requirements,
@@ -1759,6 +1826,7 @@ Ví dụ JSON output:
           maxTokens: 300,
           timeoutMs: 1500,
           totalTimeoutMs: 1800,
+          preferredProviderId: 'openai-primary',
         },
       );
       const content = response.choices[0]?.message?.content?.trim() ?? '';
@@ -1884,8 +1952,10 @@ Ví dụ JSON output:
         requiresConfirmation: true,
       })),
     ];
-    const messageId = input.conversation
-      ? await this.saveMessage(
+    let messageId: number | null = null;
+    if (input.conversation) {
+      try {
+        messageId = await this.saveMessage(
           input.conversation.id,
           'assistant',
           assistantMessage,
@@ -1900,8 +1970,15 @@ Ví dụ JSON output:
             suggestedFollowUps,
             actions,
           },
-        )
-      : null;
+        );
+      } catch (error) {
+        this.logger.error(
+          `[chat persistence] Could not save assistant message; returning it without a message id: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    }
     return {
       sessionId: input.sessionId,
       messageId,
@@ -1964,6 +2041,53 @@ Ví dụ JSON output:
       merged.push(proposal);
     }
     return merged.length ? merged : undefined;
+  }
+
+  /**
+   * Captures an explicit customer FAQ submission without relying on the
+   * planner. This is intentionally narrow: a normal question containing the
+   * word "dịch vụ" must still reach service consultation, while an explicit
+   * proposal for admin review is stored as unverified global knowledge.
+   */
+  private recoverExplicitKnowledgeProposal(
+    message: string,
+  ): MemoryProposal[] | undefined {
+    const folded = this.foldForMemory(message);
+    const isFaqSubmission = /\b(?:faq|cau hoi thuong gap)\b/.test(folded);
+    const isContribution = /\b(?:dong gop|de xuat|gui|tao|them)\b/.test(
+      folded,
+    );
+    const asksForReview =
+      /\b(?:quan tri vien|admin|duyet|kiem tra|xem xet|phe duyet)\b/.test(
+        folded,
+      );
+
+    if (!isFaqSubmission || !isContribution || !asksForReview) {
+      return undefined;
+    }
+
+    const sanitized = this.redactSensitiveData(message).trim().slice(0, 5000);
+    const question =
+      sanitized.match(/:\s*([^?\n]{5,300}\?)/)?.[1]?.trim() ??
+      sanitized.match(/(?:^|\n)\s*([^?\n]{5,300}\?)/)?.[1]?.trim() ??
+      '';
+    const concernsCareService = /\b(?:dich vu|cham soc|mo tu xa)\b/.test(
+      folded,
+    );
+
+    return [
+      {
+        category: concernsCareService
+          ? 'Dịch vụ chăm sóc mộ'
+          : 'FAQ đề xuất',
+        title: question || 'Đề xuất FAQ từ khách hàng',
+        content: sanitized,
+        memoryType: 'faq',
+        requestedScope: 'global',
+        reason:
+          'The customer explicitly submitted this FAQ candidate for administrator review.',
+      },
+    ];
   }
 
   /**
@@ -2522,7 +2646,7 @@ Ví dụ JSON output:
   private isPurePreferenceStatement(message: string) {
     const folded = this.foldForMemory(message);
     const asksForAction =
-      /\b(?:tim|goi y|de xuat|so sanh|mua|giu cho|dat cho|dat mua|gui yeu cau|cho xem|xem lo|kiem tra lo|dat dich vu)\b/.test(
+      /\b(?:tim|goi y|de xuat|so sanh|mua|giu cho|dat cho|dat mua|gui yeu cau|cho xem|xem lo|kiem tra lo|dat dich vu|recommend|suggest|show)\b/.test(
         folded,
       );
     const question =
