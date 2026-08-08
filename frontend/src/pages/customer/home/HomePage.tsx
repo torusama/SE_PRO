@@ -2045,7 +2045,9 @@ export default function HomePage() {
           </p>
           <a
             className="footer-contact-email"
-            href="mailto:vinhphucvien@gmail.com"
+            href="https://docs.google.com/forms/d/e/1FAIpQLSfbPhLkxC5gnYHM1Q4IVUC8uIJc8OlGIuYOWgTGiA6wet1e5g/viewform?usp=dialog"
+            target="_blank"
+            rel="noopener noreferrer"
           >
             vinhphucvien@gmail.com
           </a>
