@@ -8,7 +8,10 @@ import {
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentResponse } from "./agent.types";
-import AgentPage from "./AgentPage";
+import AgentPage, {
+  toComparisonAssessmentOption,
+  toComparisonDecisionContext,
+} from "./AgentPage";
 
 const apiMock = vi.hoisted(() => ({
   get: vi.fn(),
@@ -96,6 +99,51 @@ describe("AgentPage automatic map presentation", () => {
     authState.token = null;
     authState.role = null;
     authState.user = null;
+  });
+
+  it("normalizes comparison evidence to the backend DTO limits", () => {
+    const mapped = toComparisonAssessmentOption({
+      ...response.recommendations[0],
+      reasons: Array.from({ length: 9 }, (_, index) =>
+        `Reason ${index + 1} ${"x".repeat(260)}`,
+      ),
+      tradeOffs: Array.from({ length: 6 }, (_, index) =>
+        `Trade-off ${index + 1}`,
+      ),
+    });
+
+    expect(mapped).not.toHaveProperty("reasons");
+    expect(mapped).not.toHaveProperty("tradeOffs");
+    expect(mapped).not.toHaveProperty("optionId");
+    expect(mapped).not.toHaveProperty("highlightPlotIds");
+  });
+
+  it("passes the matching conversation priorities to a comparison decision", () => {
+    const context = toComparisonDecisionContext(
+      [
+        {
+          localId: "assistant-1",
+          role: "assistant",
+          content: "Các phương án phù hợp.",
+          createdAt: new Date(),
+          response: {
+            ...response,
+            requirements: {
+              budgetMax: 100_000_000,
+              preferredDirection: "Đông",
+              preferNearEntrance: true,
+            },
+          },
+        },
+      ],
+      response.recommendations,
+    );
+
+    expect(context).toEqual({
+      budgetMax: 100_000_000,
+      preferredDirection: "Đông",
+      preferNearEntrance: true,
+    });
   });
 
   it("shows the default welcome immediately without calling the LLM", async () => {

@@ -105,6 +105,9 @@ export class EmailService {
     bannerCid: string;
     content: string;
     footerLine: string;
+    /** Total artwork height. Reminder emails use a taller canvas because AI
+     * copy can legitimately wrap to more lines than transactional content. */
+    canvasHeight?: number;
     /**
      * Keep the footer anchored to the exact same Y position even when a
      * service card needs a little more vertical room. The reminder uses the
@@ -124,12 +127,15 @@ export class EmailService {
     const footerBrand = dark ? '#fff0ce' : '#fff5dc';
     const footerSlogan = dark ? '#eadfc9' : '#eee7d6';
 
-    // Header is always 112px and the whole artwork is always 849px.
-    // The footer content itself needs 107px. By shrinking only the empty
-    // space above that footer, its visible text stays at the same Y position
-    // as the reminder email while giving tall service cards more room.
-    const contentHeight = Math.min(Math.max(params.contentHeight ?? 592, 592), 630);
-    const footerHeight = 849 - 112 - contentHeight;
+    // The footer needs at least 107px. The reminder template opts into a taller
+    // canvas so long AI copy cannot overflow the artwork and push the footer
+    // into the client's plain fallback background.
+    const contentHeight = Math.min(Math.max(params.contentHeight ?? 592, 592), 760);
+    const canvasHeight = Math.min(
+      Math.max(params.canvasHeight ?? 849, 112 + contentHeight + 107),
+      1100,
+    );
+    const footerHeight = canvasHeight - 112 - contentHeight;
     const footerShiftDown = Math.min(Math.max(params.footerShiftDown ?? 0, 0), 18);
     const footerTopSpace = footerHeight - 107 + footerShiftDown;
     const footerBottomSpace = 22 - footerShiftDown;
@@ -145,10 +151,10 @@ export class EmailService {
     <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" bgcolor="#eef0ea" style="width:100%;border-collapse:collapse;background-color:#eef0ea;">
       <tr>
         <td align="center" style="padding:24px 0;">
-          <table role="presentation" width="600" height="849" border="0" cellspacing="0" cellpadding="0" bgcolor="${dark ? '#2f7459' : '#dff3ef'}" background="cid:${params.bannerCid}" style="width:600px;height:849px;border-collapse:separate;border-spacing:0;table-layout:fixed;background-color:${dark ? '#2f7459' : '#dff3ef'};background-image:url('cid:${params.bannerCid}');background-repeat:no-repeat;background-position:center top;background-size:600px 849px;border-radius:16px;overflow:hidden;">
+          <table role="presentation" width="600" height="${canvasHeight}" border="0" cellspacing="0" cellpadding="0" bgcolor="${dark ? '#2f7459' : '#dff3ef'}" background="cid:${params.bannerCid}" style="width:600px;height:${canvasHeight}px;border-collapse:separate;border-spacing:0;table-layout:fixed;background-color:${dark ? '#2f7459' : '#dff3ef'};background-image:url('cid:${params.bannerCid}');background-repeat:no-repeat;background-position:center top;background-size:600px ${canvasHeight}px;border-radius:16px;overflow:hidden;">
             <tr>
-              <td width="600" height="849" valign="top" style="width:600px;height:849px;padding:0;margin:0;">
-                <table role="presentation" width="600" height="849" border="0" cellspacing="0" cellpadding="0" style="width:600px;height:849px;border-collapse:collapse;table-layout:fixed;">
+              <td width="600" height="${canvasHeight}" valign="top" style="width:600px;height:${canvasHeight}px;padding:0;margin:0;">
+                <table role="presentation" width="600" height="${canvasHeight}" border="0" cellspacing="0" cellpadding="0" style="width:600px;height:${canvasHeight}px;border-collapse:collapse;table-layout:fixed;">
                   <!-- IMPORTANT: fixed-height rows must NOT have vertical padding.
                        Gmail adds TD padding on top of the declared height, which made
                        the 849px artwork end early and pushed the footer into a fake
@@ -239,13 +245,15 @@ export class EmailService {
   private renderLightCard(params: {
     topSpace: number;
     content: string;
+    width?: number;
   }): string {
+    const width = Math.min(Math.max(params.width ?? 480, 420), 520);
     return `
       <table role="presentation" width="600" border="0" cellspacing="0" cellpadding="0" style="width:600px;border-collapse:collapse;">
         <tr><td height="${params.topSpace}" style="height:${params.topSpace}px;font-size:0;line-height:0;">&nbsp;</td></tr>
         <tr>
           <td align="center" valign="top" style="text-align:center;">
-            <table role="presentation" align="center" width="480" border="0" cellspacing="0" cellpadding="0" bgcolor="#eef7f3" style="width:480px;margin:0 auto;border-collapse:separate;border-spacing:0;background-color:rgba(238,248,244,.76);border:1px solid rgba(255,255,255,.72);border-radius:18px;box-shadow:0 10px 26px rgba(39,74,64,.10);">
+            <table role="presentation" align="center" width="${width}" border="0" cellspacing="0" cellpadding="0" bgcolor="#eef7f3" style="width:${width}px;margin:0 auto;border-collapse:separate;border-spacing:0;background-color:rgba(238,248,244,.76);border:1px solid rgba(255,255,255,.72);border-radius:18px;box-shadow:0 10px 26px rgba(39,74,64,.10);">
               <tr>
                 <td style="padding:30px 36px 32px;text-align:left;font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#365f56;">${params.content}</td>
               </tr>
@@ -321,7 +329,11 @@ export class EmailService {
     }
     const safeTitle = this.escapeHtml(title);
     const normalizedMessage = message
-      .replace(/^\s*Kính\s+(?:báo|gửi)\s+quý\s+khách\s*[:：,.-]?\s*/i, '')
+      .replace(/^\s*Kính\s+(?:báo|gửi)[^\r\n]*[,.:：-]?\s*(?:\r?\n)+/i, '')
+      .replace(
+        /(?:\r?\n)+\s*Trân trọng[,.]?\s*(?:(?:\r?\n)+\s*Vĩnh Phúc Viên\s*)?$/i,
+        '',
+      )
       .trim();
     const safeMessage = this.escapeHtml(normalizedMessage).replace(/\n/g, '<br/>');
     const bannerCid = 'vpv-mail-1-reminder';
@@ -329,7 +341,8 @@ export class EmailService {
     const reminderUrl = `${this.getFrontendUrl()}/nhac-lich`;
 
     const content = this.renderLightCard({
-      topSpace: 90,
+      topSpace: 48,
+      width: 510,
       content: `
         <div style="font-family:'Segoe UI',Tahoma,Arial,sans-serif;font-size:11.5px;line-height:18px;letter-spacing:3.1px;font-weight:600;text-transform:uppercase;color:#78998f;">Lịch tưởng niệm sắp tới</div>
         <div style="margin-top:14px;font-family:'Segoe UI',Tahoma,Arial,sans-serif;font-size:22px;line-height:31px;font-weight:600;color:#2f5b51;">${safeTitle}</div>
@@ -344,6 +357,9 @@ export class EmailService {
       bannerCid,
       footerLine: 'Bạn nhận được email này vì đã bật thông báo nhắc lịch trên Vĩnh Phúc Viên.',
       content,
+      contentHeight: 700,
+      canvasHeight: 930,
+      footerShiftDown: 12,
     });
 
     await this.sendEmail({

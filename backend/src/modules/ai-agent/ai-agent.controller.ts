@@ -20,10 +20,13 @@ import { ChatDto } from './dto/chat.dto';
 import { CreateFeedbackDto } from './dto/create-feedback.dto';
 import { CreateAiDraftDto } from './dto/create-ai-draft.dto';
 import { RecommendPlotsDto } from './dto/recommend-plots.dto';
+import { CompareRecommendationsDto } from './dto/compare-recommendations.dto';
 import { FeedbackService } from './feedback.service';
 import { ConversationHistoryService } from './conversation-history.service';
 import { ProactiveConciergeDto } from './dto/proactive-concierge.dto';
 import { ProactiveConciergeService } from './proactive-concierge.service';
+import { PlotIntroductionDto } from './dto/plot-introduction.dto';
+import { PlotIntroductionService } from './plot-introduction.service';
 
 interface AuthenticatedUser {
   id: number;
@@ -38,6 +41,7 @@ export class AiAgentController {
     private readonly feedbackService: FeedbackService,
     private readonly conversations: ConversationHistoryService,
     private readonly proactiveConcierge: ProactiveConciergeService,
+    private readonly plotIntroductions: PlotIntroductionService,
   ) {}
 
   @Post('chat')
@@ -50,6 +54,17 @@ export class AiAgentController {
       success: true,
       message: 'AI response generated',
       data: await this.aiAgentOrchestrator.chat(dto, user),
+    };
+  }
+
+  @Post('plot-introduction')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('customer', 'admin')
+  async plotIntroduction(@Body() dto: PlotIntroductionDto) {
+    return {
+      success: true,
+      message: 'Plot introduction generated',
+      data: await this.plotIntroductions.generate(dto.plotId),
     };
   }
 
@@ -125,6 +140,16 @@ export class AiAgentController {
       success: true,
       message: 'AI plot recommendations retrieved',
       data: await this.aiAgentService.recommend(dto),
+    };
+  }
+
+  @Post('comparison-assessment')
+  @UseGuards(OptionalJwtAuthGuard)
+  async compareRecommendations(@Body() dto: CompareRecommendationsDto) {
+    return {
+      success: true,
+      message: 'AI comparison assessment generated',
+      data: await this.aiAgentOrchestrator.generateComparisonAssessment(dto),
     };
   }
 

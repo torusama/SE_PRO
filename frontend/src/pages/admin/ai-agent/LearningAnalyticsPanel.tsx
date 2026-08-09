@@ -34,6 +34,7 @@ export type LearningAnalytics = {
     knowledgeUpdates: number;
     signals: number;
     recommendations: number;
+    aiAccesses: number;
   }>;
   recentUpdates: Array<{
     versionId: number;
@@ -76,8 +77,8 @@ const labels: Record<string, string> = {
   rejected: "Đã từ chối",
   proposed: "Đề xuất",
   validating: "Đang xác minh",
-  training_ready: "Đủ dữ liệu đánh giá offline",
-  analytics_only: "Chỉ dùng phân tích",
+  training_ready: "Đủ dữ liệu để đánh giá",
+  analytics_only: "Chỉ dùng thống kê",
   preferred_plot_location: "Vị trí lô ưu tiên",
   minimum_budget: "Ngân sách tối thiểu",
   maximum_budget: "Ngân sách tối đa",
@@ -85,26 +86,31 @@ const labels: Record<string, string> = {
   preferred_direction: "Hướng ưu tiên",
   preferred_plot_type: "Loại lô ưu tiên",
   preferred_service: "Dịch vụ ưu tiên",
+  preferred_zone: "Khu vực ưu tiên",
+  service_interest: "Dịch vụ quan tâm",
+  consultation_topic_preference: "Chủ đề tư vấn ưu tiên",
+  accessibility_priority: "Ưu tiên khả năng tiếp cận",
   response_detail_preference: "Mức chi tiết câu trả lời",
-  disabled: "PlotRanker đang tắt",
-  no_active_model: "Chưa có model active",
-  service_unavailable: "ML service không khả dụng",
-  invalid_response: "Phản hồi ML không hợp lệ",
-  incomplete_response: "Phản hồi ML chưa đầy đủ",
-  request_failed: "Yêu cầu ML thất bại",
+  disabled: "Bộ xếp hạng AI đang tắt",
+  no_active_model: "Chưa có phiên bản đang dùng",
+  service_unavailable: "Dịch vụ xếp hạng AI không khả dụng",
+  invalid_response: "Kết quả xếp hạng không hợp lệ",
+  incomplete_response: "Kết quả xếp hạng chưa đầy đủ",
+  request_failed: "Yêu cầu xếp hạng thất bại",
 };
 
 const label = (value: string) =>
-  labels[value] ??
-  value
-    .replaceAll("_", " ")
-    .replace(/\b\w/g, (character) => character.toUpperCase());
+  labels[value] ?? (/^[a-z0-9_]+$/i.test(value) ? "Mục hệ thống khác" : value);
 
-const formatDate = (value: string) =>
-  new Intl.DateTimeFormat("vi-VN", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(new Date(value));
+const formatDate = (value: string) => {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "—"
+    : new Intl.DateTimeFormat("vi-VN", {
+        dateStyle: "short",
+        timeStyle: "short",
+      }).format(date);
+};
 
 function MetricCard({
   label: metricLabel,
@@ -181,8 +187,20 @@ function ActivityTimeline({ analytics }: { analytics: LearningAnalytics }) {
       item.signals +
       item.recommendations,
   );
-  const periodTotal = dailyTotals.reduce((sum, value) => sum + value, 0);
-  const maxValue = Math.max(1, ...dailyTotals);
+  const learningPeriodTotal = dailyTotals.reduce(
+    (sum, value) => sum + value,
+    0,
+  );
+  const accessTotal = analytics.timeline.reduce(
+    (sum, item) => sum + (item.aiAccesses ?? 0),
+    0,
+  );
+  const chartTotal = learningPeriodTotal + accessTotal;
+  const maxValue = Math.max(
+    1,
+    ...dailyTotals,
+    ...analytics.timeline.map((item) => item.aiAccesses ?? 0),
+  );
   const seriesTotals = analytics.timeline.reduce(
     (totals, item) => ({
       memory: totals.memory + item.memoryUpdates,
@@ -193,21 +211,31 @@ function ActivityTimeline({ analytics }: { analytics: LearningAnalytics }) {
     { memory: 0, knowledge: 0, signals: 0, recommendations: 0 },
   );
   const labelInterval = Math.max(1, Math.ceil(analytics.timeline.length / 7));
+  const accessLinePoints = analytics.timeline
+    .map((item, index) => {
+      const x = ((index + 0.5) / analytics.timeline.length) * 100;
+      const y = 100 - ((item.aiAccesses ?? 0) / maxValue) * 100;
+      return `${x},${y}`;
+    })
+    .join(" ");
 
   return (
     <section className="learning-analytics__timeline-card">
       <header>
         <div>
           <h3>Hoạt động theo ngày</h3>
-          <p>Số lần hệ thống ghi nhớ, cập nhật tri thức và xử lý đề xuất.</p>
+          <p>
+            Cột thể hiện hoạt động học tập; đường thể hiện lượt khách sử dụng
+            trợ lý AI.
+          </p>
         </div>
-        {periodTotal > 0 && (
+        {chartTotal > 0 && (
           <dl
             className="learning-analytics__timeline-totals"
             aria-label="Tổng hoạt động trong kỳ"
           >
             <div>
-              <dt>Memory</dt>
+              <dt>Ghi nhớ</dt>
               <dd>{numberFormat.format(seriesTotals.memory)}</dd>
             </div>
             <div>
@@ -215,30 +243,48 @@ function ActivityTimeline({ analytics }: { analytics: LearningAnalytics }) {
               <dd>{numberFormat.format(seriesTotals.knowledge)}</dd>
             </div>
             <div>
-              <dt>Signal</dt>
+              <dt>Phản hồi</dt>
               <dd>{numberFormat.format(seriesTotals.signals)}</dd>
             </div>
             <div>
               <dt>Đề xuất</dt>
               <dd>{numberFormat.format(seriesTotals.recommendations)}</dd>
             </div>
+            <div>
+              <dt>Truy cập AI</dt>
+              <dd>{numberFormat.format(accessTotal)}</dd>
+            </div>
           </dl>
         )}
       </header>
 
-      {periodTotal === 0 ? (
+      {chartTotal === 0 ? (
         <div className="learning-analytics__timeline-empty">
           <strong>
             Chưa có hoạt động học tập trong {analytics.period.days} ngày gần
             nhất
           </strong>
           <p>
-            Biểu đồ sẽ xuất hiện khi Agent lưu memory, cập nhật Knowledge Base
+            Biểu đồ sẽ xuất hiện khi trợ lý lưu ghi nhớ, cập nhật kho tri thức
             hoặc ghi nhận một lượt đề xuất.
           </p>
         </div>
       ) : (
         <div className="learning-analytics__timeline-body">
+          <div
+            aria-label="Chú thích biểu đồ"
+            className="learning-analytics__timeline-legend"
+          >
+            <span>
+              <i className="is-bar" /> Hoạt động học tập
+            </span>
+            <span>
+              <i className="is-line" /> Lượt truy cập AI
+            </span>
+            <small>
+              Mỗi tin nhắn khách gửi được tính là một lượt truy cập.
+            </small>
+          </div>
           <div
             className="learning-analytics__timeline-chart"
             style={
@@ -247,12 +293,23 @@ function ActivityTimeline({ analytics }: { analytics: LearningAnalytics }) {
               } as CSSProperties
             }
           >
+            <svg
+              aria-hidden="true"
+              className="learning-analytics__access-line"
+              preserveAspectRatio="none"
+              viewBox="0 0 100 100"
+            >
+              <polyline
+                points={accessLinePoints}
+                vectorEffect="non-scaling-stroke"
+              />
+            </svg>
             {analytics.timeline.map((item, index) => {
               const total = dailyTotals[index];
               const showDate =
                 index % labelInterval === 0 ||
                 index === analytics.timeline.length - 1;
-              const ariaLabel = `${item.date}: ${item.memoryUpdates} memory, ${item.knowledgeUpdates} tri thức, ${item.signals} signal, ${item.recommendations} recommendation`;
+              const ariaLabel = `${item.date}: ${item.memoryUpdates} lượt ghi nhớ, ${item.knowledgeUpdates} lượt cập nhật tri thức, ${item.signals} phản hồi, ${item.recommendations} lượt đề xuất, ${item.aiAccesses ?? 0} lượt truy cập AI`;
               return (
                 <div
                   aria-label={ariaLabel}
@@ -270,6 +327,18 @@ function ActivityTimeline({ analytics }: { analytics: LearningAnalytics }) {
                               8,
                               (total / maxValue) * 100,
                             )}%`,
+                          } as CSSProperties
+                        }
+                      />
+                    )}
+                    {(item.aiAccesses ?? 0) > 0 && (
+                      <i
+                        className="learning-analytics__access-point"
+                        style={
+                          {
+                            "--line-position": `${
+                              ((item.aiAccesses ?? 0) / maxValue) * 100
+                            }%`,
                           } as CSSProperties
                         }
                       />
@@ -303,7 +372,8 @@ export default function LearningAnalyticsPanel({
   if (!analytics) {
     return (
       <div className="agent-admin__empty">
-        Chưa tải được thống kê. Hãy kiểm tra migration AI Agent.
+        Chưa tải được thống kê. Hãy kiểm tra việc cập nhật cơ sở dữ liệu của trợ
+        lý AI.
       </div>
     );
   }
@@ -316,8 +386,8 @@ export default function LearningAnalyticsPanel({
         <div>
           <h2>Tổng quan học tập</h2>
           <p>
-            Dữ liệu thật từ memory, Knowledge Base và các lượt đề xuất trên toàn
-            hệ thống.
+            Dữ liệu thật từ ghi nhớ cá nhân, kho tri thức dùng chung và các lượt
+            đề xuất trên toàn hệ thống.
           </p>
         </div>
         <div
@@ -343,26 +413,26 @@ export default function LearningAnalyticsPanel({
         className="learning-analytics__metrics"
       >
         <MetricCard
-          label="Memory đang hoạt động"
-          note={`${numberFormat.format(current.usersWithMemory)} người dùng có memory`}
+          label="Ghi nhớ cá nhân đang dùng"
+          note={`${numberFormat.format(current.usersWithMemory)} người dùng có dữ liệu cá nhân hóa`}
           tone="teal"
           value={current.activeUserMemories}
         />
         <MetricCard
-          label="Tri thức global đã xác minh"
-          note="Đang hiệu lực trong Knowledge Base"
+          label="Tri thức dùng chung đã xác minh"
+          note="Đang có hiệu lực trong kho tri thức"
           tone="gold"
           value={current.activeGlobalKnowledge}
         />
         <MetricCard
-          label="Claim chờ xác minh"
-          note="Không được đưa vào prompt retrieval"
+          label="Đề xuất chờ xác minh"
+          note="Chưa được trợ lý dùng để trả lời"
           tone="rose"
           value={current.quarantinedKnowledge}
         />
         <MetricCard
           label={`Cập nhật trong ${analytics.period.days} ngày`}
-          note={`${activity.globalKnowledgeUpdates} global · ${activity.memoryUpdates} user memory`}
+          note={`${activity.globalKnowledgeUpdates} tri thức dùng chung · ${activity.memoryUpdates} ghi nhớ cá nhân`}
           tone="blue"
           value={activity.memoryUpdates + activity.globalKnowledgeUpdates}
         />
@@ -373,28 +443,28 @@ export default function LearningAnalyticsPanel({
         className="learning-analytics__metrics compact"
       >
         <MetricCard
-          label="Recommendation signals"
+          label="Phản hồi về đề xuất"
           note={`${activity.trainingReadySignals} đủ dữ liệu · ${
             activity.recommendationSignals - activity.trainingReadySignals
-          } analytics-only`}
+          } chỉ dùng thống kê`}
           tone="teal"
           value={activity.recommendationSignals}
         />
         <MetricCard
-          label="Recommendation runs"
-          note={`${activity.rankerEnabledRuns} lượt bật PlotRanker`}
+          label="Lượt gợi ý lô"
+          note={`${activity.rankerEnabledRuns} lượt dùng bộ xếp hạng AI`}
           tone="blue"
           value={activity.recommendationRuns}
         />
         <MetricCard
-          label="ML ranking thành công"
-          note="Có đầy đủ ranking response"
+          label="Xếp hạng AI thành công"
+          note="Nhận đủ kết quả xếp hạng hợp lệ"
           tone="gold"
           value={activity.mlRankedRuns}
         />
         <MetricCard
-          label="Tỷ lệ fallback"
-          note={`${activity.fallbackRuns} lượt về deterministic ranking`}
+          label="Tỷ lệ dùng phương án dự phòng"
+          note={`${activity.fallbackRuns} lượt quay về quy tắc nghiệp vụ`}
           tone="rose"
           value={`${activity.fallbackRate.toFixed(1)}%`}
         />
@@ -404,24 +474,24 @@ export default function LearningAnalyticsPanel({
 
       <div className="learning-analytics__distribution-grid">
         <Distribution
-          description="Snapshot hiện tại theo validation lifecycle."
+          description="Số lượng hiện tại theo từng trạng thái kiểm duyệt."
           items={analytics.knowledgeByStatus}
-          title="Trạng thái Knowledge Base"
+          title="Trạng thái kho tri thức"
         />
         <Distribution
-          description="Các preference key đang hoạt động, không hiển thị nội dung riêng tư."
+          description="Các loại thông tin cá nhân hóa đang dùng; không hiển thị nội dung riêng tư."
           items={analytics.memoryByKey}
-          title="Memory được ghi nhận nhiều nhất"
+          title="Thông tin cá nhân hóa được ghi nhận nhiều nhất"
         />
         <Distribution
           description={`Tín hiệu trong ${analytics.period.days} ngày gần nhất.`}
           items={analytics.signalReadiness}
-          title="Mức sẵn sàng của signal"
+          title="Mức sẵn sàng của phản hồi"
         />
         <Distribution
-          description="Lý do hệ thống giữ deterministic ranking."
+          description="Lý do hệ thống quay về xếp hạng theo quy tắc nghiệp vụ."
           items={analytics.fallbackReasons}
-          title="Nguyên nhân PlotRanker fallback"
+          title="Nguyên nhân dùng phương án dự phòng"
         />
       </div>
 

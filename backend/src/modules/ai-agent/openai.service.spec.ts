@@ -1,5 +1,5 @@
 import { ConfigService } from '@nestjs/config';
-import { OpenAiService } from './openai.service';
+import { EmailDraftAiService, OpenAiService } from './openai.service';
 
 describe('OpenAiService', () => {
   let service: OpenAiService;
@@ -159,14 +159,41 @@ describe('OpenAiService', () => {
     expect(mockFetch).toHaveBeenCalledTimes(4);
   });
 
+  it('can disable model thinking through the OpenAI-compatible request body', async () => {
+    jest.spyOn(configService, 'get').mockImplementation((key: string) => {
+      if (key === 'ai.openai.apiKeys') return 'key-1';
+      if (key === 'ai.enableLlm') return true;
+      if (key === 'ai.openai.baseUrl')
+        return 'https://integrate.api.nvidia.com/v1';
+      if (key === 'ai.openai.model') return 'nvidia/nemotron-3-nano-30b-a3b';
+      return undefined;
+    });
+    const mockFetch = global.fetch as jest.Mock;
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        choices: [{ message: { role: 'assistant', content: 'Kết luận.' } }],
+      }),
+    });
+
+    await service.chat([{ role: 'user', content: 'So sánh' }], [], 'auto', {
+      enableThinking: false,
+    });
+
+    const body = JSON.parse(String(mockFetch.mock.calls[0][1].body));
+    expect(body.chat_template_kwargs).toEqual({ enable_thinking: false });
+  });
+
   it('does not divide the first request timeout across every key in a large pool', async () => {
     jest.useFakeTimers();
     try {
       jest.spyOn(configService, 'get').mockImplementation((key: string) => {
         if (key === 'ai.openai.apiKeys')
-          return Array.from({ length: 10 }, (_, index) => `key-${index + 1}`).join(
-            ',',
-          );
+          return Array.from(
+            { length: 10 },
+            (_, index) => `key-${index + 1}`,
+          ).join(',');
         if (key === 'ai.enableLlm') return true;
         if (key === 'ai.openai.baseUrl') return 'https://api.openai.com/v1';
         if (key === 'ai.openai.timeoutMs') return 6000;
@@ -179,7 +206,9 @@ describe('OpenAiService', () => {
         (_url: string, init: RequestInit) =>
           new Promise((_resolve, reject) => {
             init.signal?.addEventListener('abort', () =>
-              reject(Object.assign(new Error('timeout'), { name: 'AbortError' })),
+              reject(
+                Object.assign(new Error('timeout'), { name: 'AbortError' }),
+              ),
             );
           }),
       );
@@ -197,5 +226,53 @@ describe('OpenAiService', () => {
       jest.useRealTimers();
     }
   });
+});
 
+describe('EmailDraftAiService', () => {
+  afterEach(() => {
+    jest.resetAllMocks();
+  });
+
+  it('uses only the dedicated email key namespace and rotates after a rate limit', async () => {
+    const configService = new ConfigService();
+    jest.spyOn(configService, 'get').mockImplementation((key: string) => {
+      if (key === 'ai.enableLlm') return true;
+      if (key === 'ai.emailDraft.apiKey') return undefined;
+      if (key === 'ai.emailDraft.apiKeys') return 'email-key-1,email-key-2';
+      if (key === 'ai.emailDraft.baseUrl') return 'https://integrate.api.nvidia.com/v1';
+      if (key === 'ai.emailDraft.model') return 'openai/gpt-oss-20b';
+      if (key === 'ai.emailDraft.timeoutMs') return 10000;
+      if (key === 'ai.emailDraft.totalTimeoutMs') return 22000;
+      if (key === 'ai.emailDraft.maxAttempts') return 3;
+      return null;
+    });
+    const service = new EmailDraftAiService(configService);
+    const mockFetch = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        headers: { get: () => null },
+        text: async () => 'Rate limited',
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          choices: [{ message: { role: 'assistant', content: 'Email draft' } }],
+        }),
+      });
+    global.fetch = mockFetch;
+
+    const result = await service.chat([{ role: 'user', content: 'Draft email' }]);
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(mockFetch.mock.calls[0][1].headers.Authorization).toBe(
+      'Bearer email-key-1',
+    );
+    expect(mockFetch.mock.calls[1][1].headers.Authorization).toBe(
+      'Bearer email-key-2',
+    );
+    expect(result.choices[0].message.content).toBe('Email draft');
+  });
 });

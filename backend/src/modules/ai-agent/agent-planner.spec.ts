@@ -17,6 +17,8 @@ describe('agent planner', () => {
           clarificationQuestion: '',
           budgetMax: 300_000_000,
           numberOfPlots: 2,
+          recommendationCount: 2,
+          comparisonRequested: true,
           needAdjacent: true,
           preferNearEntrance: true,
         }),
@@ -30,6 +32,8 @@ describe('agent planner', () => {
       requirements: {
         budgetMax: 300_000_000,
         numberOfPlots: 2,
+        recommendationCount: 2,
+        comparisonRequested: true,
         needAdjacent: true,
         preferNearEntrance: true,
       },
@@ -201,6 +205,68 @@ describe('agent planner', () => {
     });
   });
 
+  it('parses a plot-viewing appointment as an operational action', () => {
+    expect(
+      parseAgentPlan(
+        JSON.stringify({
+          intent: 'appointment_booking',
+          action: 'prepare_appointment',
+          contextMode: 'replace',
+          needsClarification: false,
+          clarificationQuestion: '',
+          directResponse: '',
+          appointmentDate: '2026-08-20',
+          appointmentStartTime: '09:00',
+          appointmentEndTime: '10:00',
+          appointmentTopic: 'Tham quan lô A-01-001',
+          selectedPlotCode: 'A-01-001',
+        }),
+      ),
+    ).toMatchObject({
+      intent: 'appointment_booking',
+      action: 'prepare_appointment',
+      requirements: {
+        appointmentDate: '2026-08-20',
+        appointmentStartTime: '09:00',
+        appointmentEndTime: '10:00',
+        appointmentTopic: 'Tham quan lô A-01-001',
+        selectedPlotCode: 'A-01-001',
+      },
+    });
+  });
+
+  it('parses a memorial reminder draft without losing email recipients', () => {
+    expect(
+      parseAgentPlan(
+        JSON.stringify({
+          intent: 'memorial_reminder',
+          action: 'prepare_memorial_reminder',
+          contextMode: 'replace',
+          needsClarification: false,
+          clarificationQuestion: '',
+          directResponse: '',
+          reminderTitle: 'Tưởng niệm người thân',
+          reminderDescription: 'Lời nhắc trang trọng cho gia đình.',
+          reminderDate: '2026-08-20',
+          reminderRecurring: true,
+          reminderCalendarType: 'lunar',
+          reminderNotifyDaysBefore: 5,
+          reminderNotifyEmails: [' Family@Example.com ', 'member@example.com'],
+        }),
+      ),
+    ).toMatchObject({
+      intent: 'memorial_reminder',
+      action: 'prepare_memorial_reminder',
+      requirements: {
+        reminderDate: '2026-08-20',
+        reminderRecurring: true,
+        reminderCalendarType: 'lunar',
+        reminderNotifyDaysBefore: 5,
+        reminderNotifyEmails: ['family@example.com', 'member@example.com'],
+      },
+    });
+  });
+
   it('asks for discovery before a vague plot introduction', () => {
     const plan = parseAgentPlan(
       JSON.stringify({
@@ -289,5 +355,4 @@ describe('agent planner', () => {
       memoryKey: 'consultation_topic_preference',
     });
   });
-
 });

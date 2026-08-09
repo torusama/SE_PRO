@@ -14,6 +14,12 @@ export const AGENT_TOOL_DEFINITIONS = [
           budgetMin: { type: 'number', minimum: 0 },
           budgetMax: { type: 'number', minimum: 1 },
           numberOfPlots: { type: 'integer', minimum: 1, maximum: 10 },
+          recommendationCount: {
+            type: 'integer',
+            minimum: 1,
+            maximum: 10,
+          },
+          comparisonRequested: { type: 'boolean' },
           preferredZone: { type: 'string' },
           preferredDirection: { type: 'string' },
           plotType: {
@@ -63,6 +69,12 @@ export const AGENT_TOOL_DEFINITIONS = [
         properties: {
           budgetMax: { type: 'number', minimum: 1 },
           numberOfPlots: { type: 'integer', minimum: 1, maximum: 10 },
+          recommendationCount: {
+            type: 'integer',
+            minimum: 1,
+            maximum: 10,
+          },
+          comparisonRequested: { type: 'boolean' },
           preferredZone: { type: 'string' },
           preferredDirection: { type: 'string' },
           plotType: {
@@ -87,6 +99,12 @@ export const AGENT_TOOL_DEFINITIONS = [
         additionalProperties: false,
         properties: {
           numberOfPlots: { type: 'integer', minimum: 1, maximum: 10 },
+          recommendationCount: {
+            type: 'integer',
+            minimum: 1,
+            maximum: 10,
+          },
+          comparisonRequested: { type: 'boolean' },
           preferredZone: { type: 'string' },
           preferredDirection: { type: 'string' },
           plotType: {

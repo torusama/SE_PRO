@@ -419,8 +419,14 @@
   grid-template-columns: minmax(520px, 52fr) minmax(460px, 48fr);
 }
 
+.agent-workspace.has-workflow-panel {
+  grid-template-columns: minmax(520px, 1fr) minmax(330px, 390px);
+}
+
 .agent-workspace.has-context-map .agent-message-column,
-.agent-workspace.has-context-map .agent-composer-inner {
+.agent-workspace.has-context-map .agent-composer-inner,
+.agent-workspace.has-workflow-panel .agent-message-column,
+.agent-workspace.has-workflow-panel .agent-composer-inner {
   width: min(100%, 820px);
 }
 
@@ -1589,8 +1595,15 @@
 }
 
 @keyframes agent-sparkle-pulse {
-  0%, 100% { opacity: 0.75; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.15); }
+  0%,
+  100% {
+    opacity: 0.75;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
 }
 
 .agent-prompt-pills-row {
@@ -1622,7 +1635,9 @@
   transform: translateY(-2px);
   border-color: rgba(0, 229, 196, 0.5);
   background: rgba(18, 32, 54, 0.96);
-  box-shadow: 0 6px 20px rgba(0, 229, 196, 0.15), 0 2px 6px rgba(0, 0, 0, 0.3);
+  box-shadow:
+    0 6px 20px rgba(0, 229, 196, 0.15),
+    0 2px 6px rgba(0, 0, 0, 0.3);
 }
 
 .agent-prompt-pill:active {
@@ -1739,9 +1754,9 @@
 }
 
 .agent-comparison {
-  width: 100%;
-  max-width: 100%;
-  margin: 22px 0 8px;
+  width: min(960px, calc(100% - 52px));
+  max-width: calc(100% - 52px);
+  margin: 22px 0 14px 52px;
   overflow: hidden;
 }
 
@@ -1786,21 +1801,23 @@
 .agent-comparison-scroll {
   width: 100%;
   max-width: 100%;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
+  overflow: hidden;
 }
 
 .agent-comparison table {
   width: 100%;
-  min-width: 650px;
   border-collapse: collapse;
   table-layout: fixed;
 }
 
+.agent-comparison-criteria-col {
+  width: 118px;
+}
+
 .agent-comparison th,
 .agent-comparison td {
-  min-width: 220px;
-  padding: 14px 16px;
+  min-width: 0;
+  padding: 13px 12px;
   border-bottom: 1px solid var(--agent-border);
   color: #b4c3ca;
   font-size: 12px;
@@ -1816,11 +1833,107 @@
   font-weight: 700;
 }
 
+.agent-comparison th strong,
+.agent-comparison th small {
+  display: block;
+}
+
+.agent-comparison th strong {
+  color: #d4e0e5;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.agent-comparison th small {
+  margin-top: 3px;
+  color: #6f8792;
+  font-size: 9px;
+  font-weight: 500;
+}
+
 .agent-comparison th:first-child,
 .agent-comparison td:first-child {
-  width: 140px;
-  min-width: 140px;
+  width: 118px;
+  min-width: 0;
   color: #78909b;
+}
+
+.agent-comparison-assessment-message {
+  margin-bottom: 24px;
+}
+
+.agent-comparison-assessment-copy {
+  margin: 0;
+  white-space: pre-line;
+}
+
+.agent-comparison-followups,
+.agent-message-followups {
+  margin-top: 13px;
+  color: #e2ebf0;
+}
+
+.agent-message.assistant .agent-markdown,
+.agent-message-followup-sentence {
+  color: #e2ebf0;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.65;
+  letter-spacing: 0.003em;
+}
+
+.agent-message-followup-sentence {
+  margin: 0;
+}
+
+.agent-comparison-followups button,
+.agent-message-followups button {
+  display: inline;
+  margin: 0 1px;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid rgba(0, 229, 196, 0.42);
+  border-radius: 0;
+  color: #8df1e2;
+  background: transparent;
+  font: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    color 150ms ease,
+    border-color 150ms ease;
+}
+
+.agent-comparison-followups button:hover:not(:disabled),
+.agent-comparison-followups button:focus-visible,
+.agent-message-followups button:hover:not(:disabled),
+.agent-message-followups button:focus-visible {
+  color: #b2fff3;
+  border-color: rgba(178, 255, 243, 0.78);
+  background: transparent;
+}
+
+.agent-comparison-followups button:disabled,
+.agent-message-followups button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+@media (max-width: 640px) {
+  .agent-comparison-criteria-col,
+  .agent-comparison th:first-child,
+  .agent-comparison td:first-child {
+    width: 82px;
+  }
+
+  .agent-comparison th,
+  .agent-comparison td {
+    padding: 10px 7px;
+    font-size: 10px;
+  }
 }
 
 .agent-conversation-loading {

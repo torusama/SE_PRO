@@ -153,9 +153,12 @@ export class AutonomousLearningService {
 
     return this.database.transaction(async (client) => {
       const sourceMessage = await this.sourceMessage(client, context);
+      const memoryKey = proposal.memoryKey ?? this.inferMemoryKey(proposal);
       if (
         !sourceMessage ||
         !this.isExplicitPreference(sourceMessage) ||
+        (memoryKey === 'consultation_topic_preference' &&
+          !this.isDurableConsultationPreference(sourceMessage)) ||
         !this.isSafePreference(proposal.content)
       ) {
         return {
@@ -165,7 +168,6 @@ export class AutonomousLearningService {
         };
       }
 
-      const memoryKey = proposal.memoryKey ?? this.inferMemoryKey(proposal);
       const contentHash = this.hash([
         String(context.userId),
         proposal.memoryType,
@@ -790,10 +792,11 @@ export class AutonomousLearningService {
   ): NormalizedProposal | null {
     if (!proposal || typeof proposal !== 'object') return null;
     const category = this.boundedText(proposal.category, MAX_CATEGORY_LENGTH);
-    const title = this.boundedText(proposal.title, MAX_TITLE_LENGTH);
+    const rawTitle = this.boundedText(proposal.title, MAX_TITLE_LENGTH);
     const content = this.boundedText(proposal.content, MAX_CONTENT_LENGTH);
     const reason = this.boundedText(proposal.reason, MAX_REASON_LENGTH);
-    if (!category || !title || !content || !reason) return null;
+    if (!category || !rawTitle || !content || !reason) return null;
+    const title = `${rawTitle.charAt(0).toLocaleUpperCase('vi')}${rawTitle.slice(1)}`;
     if (
       ![
         'user_preference',
@@ -866,6 +869,28 @@ export class AutonomousLearningService {
         folded,
       );
     return firstPersonPreference && !preferenceQuestion;
+  }
+
+  private isDurableConsultationPreference(sourceMessage: string) {
+    const folded = this.fold(sourceMessage);
+    const topic =
+      /\b(?:phong thuy|feng shui|fengshui|bazi|bat tu|am trach|van hoa|tam linh)\b/.test(
+        folded,
+      );
+    if (!topic) return false;
+    const asksToRemember =
+      /\b(?:remember|please remember|ghi nho|nho giup|hay nho|luu lai|luu giup)\b/.test(
+        folded,
+      );
+    const futureScope =
+      /\b(?:tu gio|sau nay|ve sau|lan sau|nhung lan sau|cac lan sau|moi lan|cac lan tu van|nhung lan tu van|trong tuong lai)\b/.test(
+        folded,
+      );
+    const explicitStylePreference =
+      /^(?:i|we|toi|minh|tui|tao|t|em|anh|chi)\b.{0,120}\b(?:prefer|like|thich|uu tien)\b.{0,120}\b(?:consult|conversation|explain|topic|tu van|trao doi|giai thich|chu de|goc nhin)\b/.test(
+        folded,
+      );
+    return asksToRemember || futureScope || explicitStylePreference;
   }
 
   private isSafePreference(content: string) {

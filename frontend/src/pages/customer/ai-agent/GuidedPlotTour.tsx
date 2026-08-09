@@ -12,16 +12,11 @@ import {
   SkipForward,
   Sparkles,
   X,
-} from 'lucide-react'
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useReducer,
-  useState,
-} from 'react'
-import type { AgentRecommendation } from './agent.types'
-import GuidedTourMap from './GuidedTourMap'
+} from "lucide-react";
+import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
+import type { AgentRecommendation } from "./agent.types";
+import { getRecommendationCompareKey } from "./agentDisplay";
+import GuidedTourMap from "./GuidedTourMap";
 import {
   INITIAL_GUIDED_TOUR_STATE,
   buildGuidedTourSteps,
@@ -30,44 +25,44 @@ import {
   getTourKeyboardCommand,
   getTourableRecommendations,
   guidedTourReducer,
-} from './guidedTour'
-import './GuidedPlotTour.css'
+} from "./guidedTour";
+import "./GuidedPlotTour.css";
 
 interface GuidedPlotTourProps {
-  open: boolean
-  recommendations: AgentRecommendation[]
-  comparedIds: string[]
-  onClose: () => void
-  onToggleCompare: (option: AgentRecommendation) => void
-  onStartRequest: (option: AgentRecommendation) => void
-  onOpenFullMap: (option: AgentRecommendation) => void
+  open: boolean;
+  recommendations: AgentRecommendation[];
+  comparedIds: string[];
+  onClose: () => void;
+  onToggleCompare: (option: AgentRecommendation) => void;
+  onStartRequest: (option: AgentRecommendation) => void;
+  onOpenFullMap: (option: AgentRecommendation) => void;
 }
 
 interface TourNarrationProps {
-  text: string
-  revealed: boolean
-  reducedMotion: boolean
-  onComplete: () => void
+  text: string;
+  revealed: boolean;
+  reducedMotion: boolean;
+  onComplete: () => void;
 }
 
 const money = (value: number) =>
-  new Intl.NumberFormat('vi-VN', {
-    style: 'currency',
-    currency: 'VND',
+  new Intl.NumberFormat("vi-VN", {
+    style: "currency",
+    currency: "VND",
     maximumFractionDigits: 0,
-  }).format(value)
+  }).format(value);
 
 function useReducedMotion() {
-  const [reduced, setReduced] = useState(() =>
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches,
-  )
+  const [reduced, setReduced] = useState(
+    () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+  );
   useEffect(() => {
-    const query = window.matchMedia('(prefers-reduced-motion: reduce)')
-    const update = () => setReduced(query.matches)
-    query.addEventListener('change', update)
-    return () => query.removeEventListener('change', update)
-  }, [])
-  return reduced
+    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => setReduced(query.matches);
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+  return reduced;
 }
 
 function TourNarration({
@@ -78,35 +73,35 @@ function TourNarration({
 }: TourNarrationProps) {
   const [visibleLength, setVisibleLength] = useState(() =>
     reducedMotion ? text.length : 0,
-  )
+  );
 
   useEffect(() => {
     if (reducedMotion || revealed) {
-      const completeTimer = window.setTimeout(onComplete, 0)
-      return () => window.clearTimeout(completeTimer)
+      const completeTimer = window.setTimeout(onComplete, 0);
+      return () => window.clearTimeout(completeTimer);
     }
-    const charsPerTick = Math.max(2, Math.ceil(text.length / 90))
+    const charsPerTick = Math.max(2, Math.ceil(text.length / 90));
     const timer = window.setInterval(() => {
       setVisibleLength((current) => {
-        const next = Math.min(text.length, current + charsPerTick)
+        const next = Math.min(text.length, current + charsPerTick);
         if (next >= text.length) {
-          window.clearInterval(timer)
-          onComplete()
+          window.clearInterval(timer);
+          onComplete();
         }
-        return next
-      })
-    }, 24)
-    return () => window.clearInterval(timer)
-  }, [onComplete, reducedMotion, revealed, text.length])
+        return next;
+      });
+    }, 24);
+    return () => window.clearInterval(timer);
+  }, [onComplete, reducedMotion, revealed, text.length]);
 
-  const renderedLength = revealed ? text.length : visibleLength
+  const renderedLength = revealed ? text.length : visibleLength;
 
   return (
     <p className="guided-tour-narration">
       {text.slice(0, renderedLength)}
       {renderedLength < text.length && <span aria-hidden="true" />}
     </p>
-  )
+  );
 }
 
 export default function GuidedPlotTour({
@@ -121,60 +116,58 @@ export default function GuidedPlotTour({
   const validRecommendations = useMemo(
     () => getTourableRecommendations(recommendations),
     [recommendations],
-  )
+  );
   const steps = useMemo(
     () => buildGuidedTourSteps(validRecommendations),
     [validRecommendations],
-  )
+  );
   const [state, dispatch] = useReducer(
     guidedTourReducer,
     INITIAL_GUIDED_TOUR_STATE,
-  )
-  const [revealedStepId, setRevealedStepId] = useState<string | null>(
-    null,
-  )
-  const reducedMotion = useReducedMotion()
-  const activeStep = steps[state.activeStepIndex]
+  );
+  const [revealedStepId, setRevealedStepId] = useState<string | null>(null);
+  const reducedMotion = useReducedMotion();
+  const activeStep = steps[state.activeStepIndex];
   const activeRecommendation =
     validRecommendations[state.activeRecommendationIndex] ??
-    validRecommendations[0]
+    validRecommendations[0];
 
   useEffect(() => {
-    if (open && steps.length) dispatch({ type: 'open' })
-    if (!open) dispatch({ type: 'close' })
-  }, [open, steps.length])
+    if (open && steps.length) dispatch({ type: "open" });
+    if (!open) dispatch({ type: "close" });
+  }, [open, steps.length]);
 
   const completeTyping = useCallback(() => {
-    dispatch({ type: 'typing', value: false })
-  }, [])
+    dispatch({ type: "typing", value: false });
+  }, []);
 
   const goToStep = useCallback(
     (index: number) => {
-      const safeIndex = Math.min(Math.max(index, 0), steps.length - 1)
+      const safeIndex = Math.min(Math.max(index, 0), steps.length - 1);
       const recommendationIndex = getStepRecommendationIndex(
         steps[safeIndex],
         state.activeRecommendationIndex,
-      )
+      );
       dispatch({
-        type: 'set-step',
+        type: "set-step",
         index: safeIndex,
         recommendationIndex,
-      })
+      });
     },
     [state.activeRecommendationIndex, steps],
-  )
+  );
 
   const nextStep = useCallback(() => {
     if (state.activeStepIndex >= steps.length - 1) {
-      dispatch({ type: 'pause' })
-      return
+      dispatch({ type: "pause" });
+      return;
     }
-    goToStep(state.activeStepIndex + 1)
-  }, [goToStep, state.activeStepIndex, steps.length])
+    goToStep(state.activeStepIndex + 1);
+  }, [goToStep, state.activeStepIndex, steps.length]);
 
   const previousStep = useCallback(() => {
-    goToStep(state.activeStepIndex - 1)
-  }, [goToStep, state.activeStepIndex])
+    goToStep(state.activeStepIndex - 1);
+  }, [goToStep, state.activeStepIndex]);
 
   useEffect(() => {
     if (
@@ -184,10 +177,10 @@ export default function GuidedPlotTour({
       !state.autoAdvance ||
       state.isUserControllingMap
     ) {
-      return
+      return;
     }
-    const timer = window.setTimeout(nextStep, reducedMotion ? 900 : 1800)
-    return () => window.clearTimeout(timer)
+    const timer = window.setTimeout(nextStep, reducedMotion ? 900 : 1800);
+    return () => window.clearTimeout(timer);
   }, [
     nextStep,
     open,
@@ -196,59 +189,50 @@ export default function GuidedPlotTour({
     state.isPlaying,
     state.isTyping,
     state.isUserControllingMap,
-  ])
+  ]);
 
   useEffect(() => {
-    if (!open) return
+    if (!open) return;
     const handleKeyboard = (event: globalThis.KeyboardEvent) => {
-      const target = event.target as HTMLElement | null
+      const target = event.target as HTMLElement | null;
       if (
-        target?.tagName === 'INPUT' ||
-        target?.tagName === 'TEXTAREA' ||
+        target?.tagName === "INPUT" ||
+        target?.tagName === "TEXTAREA" ||
         target?.isContentEditable
       ) {
-        return
+        return;
       }
-      const command = getTourKeyboardCommand(event.key, state.isPlaying)
-      if (!command) return
-      event.preventDefault()
-      if (command === 'close') onClose()
-      if (command === 'next') nextStep()
-      if (command === 'previous') previousStep()
-      if (command === 'toggle-play') {
-        dispatch({ type: state.isPlaying ? 'pause' : 'play' })
+      const command = getTourKeyboardCommand(event.key, state.isPlaying);
+      if (!command) return;
+      event.preventDefault();
+      if (command === "close") onClose();
+      if (command === "next") nextStep();
+      if (command === "previous") previousStep();
+      if (command === "toggle-play") {
+        dispatch({ type: state.isPlaying ? "pause" : "play" });
       }
-    }
-    window.addEventListener('keydown', handleKeyboard)
-    return () => window.removeEventListener('keydown', handleKeyboard)
-  }, [
-    nextStep,
-    onClose,
-    open,
-    previousStep,
-    state.isPlaying,
-  ])
+    };
+    window.addEventListener("keydown", handleKeyboard);
+    return () => window.removeEventListener("keydown", handleKeyboard);
+  }, [nextStep, onClose, open, previousStep, state.isPlaying]);
 
-  if (!open || !activeStep || !activeRecommendation) return null
+  if (!open || !activeStep || !activeRecommendation) return null;
 
-  const progress = ((state.activeStepIndex + 1) / steps.length) * 100
+  const progress = ((state.activeStepIndex + 1) / steps.length) * 100;
   const selectedForCompare = comparedIds.includes(
-    activeRecommendation.optionId,
-  )
+    getRecommendationCompareKey(activeRecommendation),
+  );
 
   function selectRecommendation(index: number) {
     dispatch({
-      type: 'select-recommendation',
+      type: "select-recommendation",
       index,
       stepIndex: getRecommendationStepIndex(steps, index),
-    })
+    });
   }
 
   return (
-    <section
-      className="guided-tour-shell"
-      aria-label="Tour giới thiệu lô đất"
-    >
+    <section className="guided-tour-shell" aria-label="Tour giới thiệu lô đất">
       <div className="guided-tour-narrative-panel">
         <header className="guided-tour-header">
           <div>
@@ -263,12 +247,8 @@ export default function GuidedPlotTour({
           </button>
         </header>
 
-        <div
-          className="guided-tour-live"
-          aria-live="polite"
-          aria-atomic="true"
-        >
-          Bước {state.activeStepIndex + 1} trên {steps.length}. Phương án{' '}
+        <div className="guided-tour-live" aria-live="polite" aria-atomic="true">
+          Bước {state.activeStepIndex + 1} trên {steps.length}. Phương án{" "}
           {state.activeRecommendationIndex + 1}.
         </div>
 
@@ -291,23 +271,19 @@ export default function GuidedPlotTour({
               type="button"
               key={option.optionId}
               className={
-                index === state.activeRecommendationIndex
-                  ? 'is-active'
-                  : ''
+                index === state.activeRecommendationIndex ? "is-active" : ""
               }
               aria-pressed={index === state.activeRecommendationIndex}
               onClick={() => selectRecommendation(index)}
             >
               <span>{index + 1}</span>
               <div>
-                <strong>{option.plotCodes.join(' · ')}</strong>
+                <strong>{option.plotCodes.join(" · ")}</strong>
                 <small>
                   {option.zoneName} · {money(option.estimatedTotal)}
                 </small>
               </div>
-              {index === state.activeRecommendationIndex && (
-                <Check size={15} />
-              )}
+              {index === state.activeRecommendationIndex && <Check size={15} />}
             </button>
           ))}
         </div>
@@ -322,11 +298,11 @@ export default function GuidedPlotTour({
           </button>
           <button
             type="button"
-            className={selectedForCompare ? 'is-selected' : ''}
+            className={selectedForCompare ? "is-selected" : ""}
             onClick={() => onToggleCompare(activeRecommendation)}
           >
             <GitCompareArrows size={15} />
-            {selectedForCompare ? 'Đã chọn so sánh' : 'Thêm so sánh'}
+            {selectedForCompare ? "Đã chọn so sánh" : "Thêm so sánh"}
           </button>
           <button
             type="button"
@@ -345,8 +321,8 @@ export default function GuidedPlotTour({
             <button
               type="button"
               onClick={() => {
-                setRevealedStepId(null)
-                dispatch({ type: 'restart' })
+                setRevealedStepId(null);
+                dispatch({ type: "restart" });
               }}
               aria-label="Khởi động lại tour"
               title="Khởi động lại"
@@ -365,9 +341,9 @@ export default function GuidedPlotTour({
               type="button"
               className="guided-tour-play"
               onClick={() =>
-                dispatch({ type: state.isPlaying ? 'pause' : 'play' })
+                dispatch({ type: state.isPlaying ? "pause" : "play" })
               }
-              aria-label={state.isPlaying ? 'Tạm dừng tour' : 'Tiếp tục tour'}
+              aria-label={state.isPlaying ? "Tạm dừng tour" : "Tiếp tục tour"}
             >
               {state.isPlaying ? (
                 <Pause size={19} fill="currentColor" />
@@ -386,8 +362,8 @@ export default function GuidedPlotTour({
             <button
               type="button"
               onClick={() => {
-                setRevealedStepId(activeStep.id)
-                dispatch({ type: 'typing', value: false })
+                setRevealedStepId(activeStep.id);
+                dispatch({ type: "typing", value: false });
               }}
               disabled={!state.isTyping}
               aria-label="Hiện toàn bộ lời giới thiệu"
@@ -400,7 +376,7 @@ export default function GuidedPlotTour({
             <input
               type="checkbox"
               checked={state.autoAdvance}
-              onChange={() => dispatch({ type: 'toggle-auto' })}
+              onChange={() => dispatch({ type: "toggle-auto" })}
             />
             Tự chuyển bước
           </label>
@@ -413,21 +389,21 @@ export default function GuidedPlotTour({
           <span>
             <small>BẢN ĐỒ TƯ VẤN TRỰC QUAN</small>
             <strong>
-              Đang tập trung: {activeRecommendation.plotCodes.join(' · ')}
+              Đang tập trung: {activeRecommendation.plotCodes.join(" · ")}
             </strong>
           </span>
         </div>
         <GuidedTourMap
           activeStep={activeStep}
           reducedMotion={reducedMotion}
-          onUserInteraction={() => dispatch({ type: 'user-interaction' })}
+          onUserInteraction={() => dispatch({ type: "user-interaction" })}
           onCameraAnimatingChange={(value) =>
-            dispatch({ type: 'camera', value })
+            dispatch({ type: "camera", value })
           }
         />
         <aside className="guided-tour-info-card">
           <span>PHƯƠNG ÁN {state.activeRecommendationIndex + 1}</span>
-          <h3>{activeRecommendation.plotCodes.join(' · ')}</h3>
+          <h3>{activeRecommendation.plotCodes.join(" · ")}</h3>
           <div>
             <p>
               <small>Khu vực</small>
@@ -436,8 +412,7 @@ export default function GuidedPlotTour({
             <p>
               <small>Hướng</small>
               <strong>
-                {activeRecommendation.directions.join(', ') ||
-                  'Chưa xác định'}
+                {activeRecommendation.directions.join(", ") || "Chưa xác định"}
               </strong>
             </p>
             <p>
@@ -446,9 +421,7 @@ export default function GuidedPlotTour({
             </p>
             <p>
               <small>Mức phù hợp</small>
-              <strong>
-                {Math.round(activeRecommendation.score * 100)}%
-              </strong>
+              <strong>{Math.round(activeRecommendation.score * 100)}%</strong>
             </p>
           </div>
           <footer>
@@ -465,7 +438,7 @@ export default function GuidedPlotTour({
           <button
             type="button"
             className="guided-tour-resume"
-            onClick={() => dispatch({ type: 'resume' })}
+            onClick={() => dispatch({ type: "resume" })}
           >
             <Eye size={16} />
             Tiếp tục tour tự động
@@ -473,5 +446,5 @@ export default function GuidedPlotTour({
         )}
       </div>
     </section>
-  )
+  );
 }

@@ -171,15 +171,23 @@ describe('KnowledgeService administrator review', () => {
     expect(active.client.query).toHaveBeenCalledTimes(1);
   });
 
-  it('normalizes unsupported list filters and limits review results to global knowledge', async () => {
+  it('supports the all-status inventory while limiting results to global knowledge', async () => {
     const { database, service } = createReviewService(quarantinedFaq);
     database.query.mockResolvedValue([]);
 
-    await service.listKnowledgeForReview('made-up-status');
+    await service.listKnowledgeForReview('all');
 
     expect(database.query).toHaveBeenCalledWith(
       expect.stringContaining("scope = 'global'"),
-      ['quarantined'],
+      ['all'],
+    );
+  });
+
+  it('rejects unsupported list filters instead of silently showing another queue', () => {
+    const { service } = createReviewService(quarantinedFaq);
+
+    expect(() => service.listKnowledgeForReview('made-up-status')).toThrow(
+      BadRequestException,
     );
   });
 

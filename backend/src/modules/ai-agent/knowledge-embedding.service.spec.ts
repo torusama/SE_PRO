@@ -38,6 +38,16 @@ describe('KnowledgeEmbeddingService RAG resilience', () => {
     jest.restoreAllMocks();
   });
 
+  it('does not treat Mistral agent keys as embedding keys', () => {
+    const { service } = createService({
+      'ai.rag.apiKey': undefined,
+      'ai.rag.apiKeys': undefined,
+      'ai.mistralAgent.apiKeys': 'mistral-only',
+    });
+
+    expect(service.isConfigured()).toBe(false);
+  });
+
   it('uses query mode and fails over to a second NVIDIA key on throttling', async () => {
     const { service } = createService();
     global.fetch = jest
@@ -53,9 +63,9 @@ describe('KnowledgeEmbeddingService RAG resilience', () => {
         json: async () => ({ data: [{ embedding: vector() }] }),
       }) as jest.Mock;
 
-    await expect(service.embed('  remote   grave care  ')).resolves.toHaveLength(
-      1024,
-    );
+    await expect(
+      service.embed('  remote   grave care  '),
+    ).resolves.toHaveLength(1024);
 
     expect(global.fetch).toHaveBeenCalledTimes(2);
     const firstOptions = (global.fetch as jest.Mock).mock.calls[0][1];
@@ -71,6 +81,53 @@ describe('KnowledgeEmbeddingService RAG resilience', () => {
       dimensions: 1024,
     });
     expect(requestBody).not.toHaveProperty('modality');
+  });
+
+  it('parses and rotates a multiline dedicated embedding pool', async () => {
+    const { service } = createService({
+      'ai.rag.apiKeys': undefined,
+      'ai.rag.apiKey': `{
+        embed-a
+        embed-b
+      }`,
+    });
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        text: async () => 'busy',
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: [{ embedding: vector() }] }),
+      }) as jest.Mock;
+
+    await expect(service.embed('dedicated pool')).resolves.toHaveLength(1024);
+
+    const authorizations = (global.fetch as jest.Mock).mock.calls.map(
+      (call) => call[1].headers.Authorization,
+    );
+    expect(authorizations).toEqual(['Bearer embed-a', 'Bearer embed-b']);
+  });
+
+  it('deduplicates singular and plural embedding key settings', async () => {
+    const { service } = createService({
+      'ai.rag.apiKeys': 'rag-only',
+      'ai.rag.apiKey': 'rag-only',
+    });
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ data: [{ embedding: vector() }] }),
+    }) as jest.Mock;
+
+    await service.embed('dedicated pool');
+
+    const request = (global.fetch as jest.Mock).mock.calls[0][1];
+    expect(request.headers.Authorization).toBe('Bearer rag-only');
+    expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 
   it('rejects malformed vectors instead of writing incompatible embeddings', async () => {
@@ -105,11 +162,7 @@ describe('KnowledgeEmbeddingService RAG resilience', () => {
     );
     expect(database.query).toHaveBeenCalledWith(
       expect.stringContaining('embedding = $1::vector'),
-      [
-        expect.stringMatching(/^\[/),
-        'nvidia/llama-nemotron-embed-1b-v2',
-        73,
-      ],
+      [expect.stringMatching(/^\[/), 'nvidia/llama-nemotron-embed-1b-v2', 73],
     );
   });
 
@@ -141,11 +194,7 @@ describe('KnowledgeEmbeddingService RAG resilience', () => {
     );
     expect(backfill.database.query).toHaveBeenCalledWith(
       expect.stringContaining('embedding = $1::vector'),
-      [
-        expect.stringMatching(/^\[/),
-        'nvidia/llama-nemotron-embed-1b-v2',
-        2,
-      ],
+      [expect.stringMatching(/^\[/), 'nvidia/llama-nemotron-embed-1b-v2', 2],
     );
   });
 });

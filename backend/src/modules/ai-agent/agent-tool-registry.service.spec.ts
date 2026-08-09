@@ -128,6 +128,53 @@ describe('AgentToolRegistryService', () => {
     );
   });
 
+  it('preserves cumulative plot exclusions for both recommendation tools', async () => {
+    const recommendations = {
+      recommend: jest.fn().mockResolvedValue({ recommendations: [] }),
+      browseAvailablePlots: jest
+        .fn()
+        .mockResolvedValue({ recommendations: [] }),
+    };
+    const recommendationRegistry = new AgentToolRegistryService(
+      recommendations as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+
+    await recommendationRegistry.execute('rank_plot_options', {
+      budgetMax: 100_000_000,
+      numberOfPlots: 1,
+      recommendationCount: 2,
+      comparisonRequested: true,
+      excludePlotIds: [34, 33, 34],
+    });
+    await recommendationRegistry.execute('browse_available_plots', {
+      numberOfPlots: 1,
+      recommendationCount: 2,
+      comparisonRequested: true,
+      excludePlotIds: [34, 33, 34],
+    });
+
+    expect(recommendations.recommend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recommendationCount: 2,
+        comparisonRequested: true,
+        excludePlotIds: [34, 33],
+      }),
+      expect.any(Object),
+    );
+    expect(recommendations.browseAvailablePlots).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recommendationCount: 2,
+        comparisonRequested: true,
+        excludePlotIds: [34, 33],
+      }),
+      expect.any(Object),
+    );
+  });
+
   it('uses only the trusted authenticated user for customer care', async () => {
     const insights = {
       getCustomerCareOverview: jest.fn().mockResolvedValue({

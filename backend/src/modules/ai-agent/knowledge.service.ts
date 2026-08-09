@@ -5,6 +5,7 @@ import {
   NotFoundException,
   Optional,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { DatabaseService } from '../../database/database.service';
 import { KnowledgeEmbeddingService } from './knowledge-embedding.service';
 import { PLOT_PENDING_HOLD_MINUTES } from '../reservations/reservation-policy.constants';
@@ -23,6 +24,7 @@ export class KnowledgeService {
   constructor(
     private readonly database: DatabaseService,
     @Optional() private readonly embeddings?: KnowledgeEmbeddingService,
+    @Optional() private readonly config?: ConfigService,
   ) {}
 
   async getPurchaseProcess() {
@@ -51,8 +53,7 @@ export class KnowledgeService {
     return (
       row ?? {
         title: 'Quy trình tạo yêu cầu mua hoặc giữ chỗ',
-        content:
-          `Chọn phương án, kiểm tra thông tin rồi chủ động gửi yêu cầu để quản trị viên xác minh. Khi yêu cầu được gửi và lô chuyển sang trạng thái chờ xử lý, backend tạm khóa lô trong ${PLOT_PENDING_HOLD_MINUTES} phút để chống trùng/race-condition. Nếu hết thời gian này mà yêu cầu vẫn ở trạng thái pending/submitted, hệ thống tự hủy yêu cầu và trả lô về available. Sau khi quản trị viên duyệt yêu cầu giữ chỗ, lô chuyển sang reserved và hiện backend không có quy tắc tự hết hạn theo số ngày cho trạng thái reserved.`,
+        content: `Chọn phương án, kiểm tra thông tin rồi chủ động gửi yêu cầu để quản trị viên xác minh. Khi yêu cầu được gửi và lô chuyển sang trạng thái chờ xử lý, backend tạm khóa lô trong ${PLOT_PENDING_HOLD_MINUTES} phút để chống trùng/race-condition. Nếu hết thời gian này mà yêu cầu vẫn ở trạng thái pending/submitted, hệ thống tự hủy yêu cầu và trả lô về available. Sau khi quản trị viên duyệt yêu cầu giữ chỗ, lô chuyển sang reserved và hiện backend không có quy tắc tự hết hạn theo số ngày cho trạng thái reserved.`,
         version: 'kb-runtime-policy-v1',
       }
     );
@@ -121,11 +122,13 @@ export class KnowledgeService {
           const vector = await this.embeddings.embed(queryText, 'query');
           const vectorLiteral = this.embeddings.vectorLiteral(vector);
           const embeddingModel = this.embeddings.embeddingModel();
+          const maxCosineDistance = this.maxCosineDistance();
           [globalRows, userRows] = await Promise.all([
             this.semanticGlobalKnowledge(
               vectorLiteral,
               embeddingModel,
               globalLimit,
+              maxCosineDistance,
             ),
             userId === null
               ? Promise.resolve([])
@@ -134,36 +137,31 @@ export class KnowledgeService {
                   vectorLiteral,
                   embeddingModel,
                   userLimit,
+                  maxCosineDistance,
                 ),
           ]);
 
-          // During rollout/backfill, some validated rows may not have vectors yet.
-          // Keep a small recency fallback so persistent memory is never silently lost.
-          const [recentGlobal, recentUser] = await Promise.all([
-            globalRows.length < globalLimit
-              ? this.recentGlobalKnowledge(globalLimit)
-              : Promise.resolve([]),
+          // Personal preferences are bounded, user-owned structured state, so a
+          // recent-memory fallback is safe while vectors are being backfilled.
+          // Global knowledge is deliberately NOT filled with unrelated recent
+          // rows: only semantically relevant, approved records may enter a prompt.
+          const recentUser =
             userId !== null && userRows.length < userLimit
-              ? this.recentUserMemory(userId, userLimit)
-              : Promise.resolve([]),
-          ]);
-          globalRows = this.mergeRows(globalRows, recentGlobal, globalLimit);
+              ? await this.recentUserMemory(userId, userLimit)
+              : [];
           userRows = this.mergeRows(userRows, recentUser, userLimit);
         } catch {
-          // Embedding/RAG is an enhancement. Any provider/vector failure falls
-          // back to the safe structured-memory SQL path for this same turn.
-          [globalRows, userRows] = await this.recentPromptRows(
-            userId,
-            globalLimit,
-            userLimit,
-          );
+          // An embedding outage must not inject arbitrary recent global records.
+          // Keep only authenticated, structured personal memory for continuity;
+          // the main chat continues without global RAG for this turn.
+          globalRows = await this.lexicalGlobalKnowledge(queryText, globalLimit);
+          userRows =
+            userId === null ? [] : await this.recentUserMemory(userId, userLimit);
         }
       } else {
-        [globalRows, userRows] = await this.recentPromptRows(
-          userId,
-          globalLimit,
-          userLimit,
-        );
+        globalRows = await this.lexicalGlobalKnowledge(queryText, globalLimit);
+        userRows =
+          userId === null ? [] : await this.recentUserMemory(userId, userLimit);
       }
 
       const userSection = this.promptSection(
@@ -194,6 +192,7 @@ export class KnowledgeService {
     vector: string,
     embeddingModel: string,
     limit: number,
+    maxCosineDistance: number,
   ) {
     return this.database.query<PromptKnowledgeRow>(
       `WITH candidate_pool AS (
@@ -211,9 +210,10 @@ export class KnowledgeService {
        )
        SELECT id, title, content, "knowledgeType", "memoryKey"
        FROM candidate_pool
+       WHERE (embedding <=> $1::vector) <= $4
        ORDER BY embedding <=> $1::vector
        LIMIT $3`,
-      [vector, embeddingModel, limit],
+      [vector, embeddingModel, limit, maxCosineDistance],
     );
   }
 
@@ -222,6 +222,7 @@ export class KnowledgeService {
     vector: string,
     embeddingModel: string,
     limit: number,
+    maxCosineDistance: number,
   ) {
     return this.database.query<PromptKnowledgeRow>(
       `WITH candidate_pool AS (
@@ -241,9 +242,43 @@ export class KnowledgeService {
        )
        SELECT id, title, content, "knowledgeType", "memoryKey"
        FROM candidate_pool
+       WHERE (embedding <=> $2::vector) <= $5
        ORDER BY embedding <=> $2::vector
        LIMIT $4`,
-      [userId, vector, embeddingModel, limit],
+      [userId, vector, embeddingModel, limit, maxCosineDistance],
+    );
+  }
+
+  private maxCosineDistance() {
+    const configured = Number(
+      this.config?.get<number | string>('ai.rag.maxCosineDistance'),
+    );
+    return Number.isFinite(configured) && configured > 0 && configured < 2
+      ? configured
+      : 0.72;
+  }
+
+  private lexicalGlobalKnowledge(queryText: string, limit: number) {
+    const query = queryText.trim();
+    if (!query) return Promise.resolve([] as PromptKnowledgeRow[]);
+    return this.database.query<PromptKnowledgeRow>(
+      `SELECT knowledge_entry_id AS id, title, content,
+              knowledge_type AS "knowledgeType", memory_key AS "memoryKey"
+       FROM ai_knowledge_entries
+       WHERE scope = 'global'
+         AND is_active = TRUE
+         AND validation_status = 'active'
+         AND (effective_from IS NULL OR effective_from <= NOW())
+         AND (effective_to IS NULL OR effective_to > NOW())
+         AND to_tsvector('simple', COALESCE(title, '') || ' ' || content)
+             @@ plainto_tsquery('simple', $1)
+       ORDER BY ts_rank_cd(
+                  to_tsvector('simple', COALESCE(title, '') || ' ' || content),
+                  plainto_tsquery('simple', $1)
+                ) DESC,
+                updated_at DESC
+       LIMIT $2`,
+      [query, limit],
     );
   }
 
@@ -541,23 +576,31 @@ export class KnowledgeService {
   }
 
   listKnowledgeForReview(status = 'quarantined') {
-    const normalized = ['quarantined', 'active', 'rejected', 'superseded'].includes(
-      status,
-    )
-      ? status
-      : 'quarantined';
+    const supported = [
+      'all',
+      'quarantined',
+      'active',
+      'rejected',
+      'superseded',
+    ];
+    if (!supported.includes(status)) {
+      throw new BadRequestException('Unsupported knowledge status filter');
+    }
     return this.database.query(
       `SELECT knowledge_entry_id AS "knowledgeEntryId", category, title, content,
               knowledge_type AS "knowledgeType", scope, memory_key AS "memoryKey",
               validation_status AS status, validation_reason AS "validationReason",
+              validation_evidence AS "validationEvidence", source_type AS "sourceType",
               source_role AS "sourceRole", source_conversation_id AS "conversationId",
               source_message_id AS "messageId", created_at AS "createdAt",
-              updated_at AS "updatedAt"
+              updated_at AS "updatedAt", effective_from AS "effectiveFrom",
+              effective_to AS "effectiveTo"
        FROM ai_knowledge_entries
-       WHERE scope = 'global' AND validation_status = $1
-       ORDER BY created_at DESC
+       WHERE scope = 'global'
+         AND ($1 = 'all' OR validation_status = $1)
+       ORDER BY updated_at DESC
        LIMIT 200`,
-      [normalized],
+      [status],
     );
   }
 
@@ -605,7 +648,9 @@ export class KnowledgeService {
       const current = currentResult.rows[0];
       if (!current) throw new NotFoundException('Knowledge proposal not found');
       if (current.validation_status !== 'quarantined') {
-        throw new BadRequestException('Only quarantined knowledge can be reviewed');
+        throw new BadRequestException(
+          'Only quarantined knowledge can be reviewed',
+        );
       }
 
       const oldSnapshot = {
@@ -678,7 +723,10 @@ export class KnowledgeService {
         [id],
       );
       const versionNumber = Number(versionResult.rows[0]?.version ?? 1);
-      const versionName = `kb-${id}-v${versionNumber}-${Date.now()}`.slice(0, 50);
+      const versionName = `kb-${id}-v${versionNumber}-${Date.now()}`.slice(
+        0,
+        50,
+      );
       const newSnapshot = {
         ...oldSnapshot,
         validationStatus: nextStatus,
@@ -715,7 +763,11 @@ export class KnowledgeService {
           id,
           current.memory_key ?? current.category,
           JSON.stringify(oldSnapshot),
-          JSON.stringify({ snapshot: newSnapshot, reviewNote: reason, versionName }),
+          JSON.stringify({
+            snapshot: newSnapshot,
+            reviewNote: reason,
+            versionName,
+          }),
         ],
       );
       return {

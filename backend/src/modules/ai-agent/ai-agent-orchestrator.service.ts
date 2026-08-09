@@ -4,12 +4,13 @@ import {
   HttpException,
   Injectable,
   Logger,
+  Optional,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DatabaseService } from '../../database/database.service';
 import { AgentToolRegistryService } from './agent-tool-registry.service';
-import { AgentBookingService } from './agent-booking.service';
+import { AgentBookingService, OwnedPlotContext } from './agent-booking.service';
 import { inlineRecommendationLimitMessage } from './assistant-content.util';
 import {
   AGENT_PLANNER_TOOL,
@@ -23,8 +24,16 @@ import {
   isRecommendationResult,
 } from './agent-grounding';
 import { ChatDto } from './dto/chat.dto';
+import {
+  CompareRecommendationsDto,
+  ComparisonOptionDto,
+} from './dto/compare-recommendations.dto';
 import { KnowledgeService } from './knowledge.service';
 import { MultiProviderLlmService } from './multi-provider-llm.service';
+import {
+  ComparisonAiService,
+  DecisionComparisonAiService,
+} from './openai.service';
 import {
   CEMETERY_AGENT_PROMPT_VERSION,
   CEMETERY_AGENT_SYSTEM_PROMPT,
@@ -34,6 +43,7 @@ import { PlotRecommendationService } from './plot-recommendation.service';
 import {
   AgentPendingAction,
   AgentRequirements,
+  AgentUiDirective,
   BaziSuggestion,
   RecommendationResult,
 } from './types/agent-response.types';
@@ -48,6 +58,11 @@ interface ConversationRow {
   id: number;
   sessionId: string;
   userId: number | null;
+}
+
+interface CustomerProfileContext {
+  dateOfBirth: string | null;
+  gender: 'male' | 'female' | 'other' | null;
 }
 
 interface PersistedMessage {
@@ -75,9 +90,50 @@ export interface QuickReply {
   emphasis?: 'normal' | 'strong';
 }
 
+export interface ComparisonFollowUpAction {
+  id: 'analyze_selected_plots' | 'find_other_plots';
+  label: string;
+  message: string;
+}
+
+interface ParsedComparisonAssessment {
+  assessment: string;
+  followUpPrompt: string;
+  actions: ComparisonFollowUpAction[];
+}
+
 interface DeterministicSocialTurn {
   assistantMessage: string;
   quickReplies: QuickReply[];
+}
+
+const RECOMMENDATION_COUNT_WORDS: Record<string, number> = {
+  mot: 1,
+  hai: 2,
+  ba: 3,
+  bon: 4,
+  nam: 5,
+  sau: 6,
+  bay: 7,
+  tam: 8,
+  chin: 9,
+  muoi: 10,
+};
+
+export function extractRequestedRecommendationCount(message: string) {
+  const folded = normalizeFallbackIntent(message);
+  const optionMatch = folded.match(
+    /\b(\d{1,2}|mot|hai|ba|bon|nam|sau|bay|tam|chin|muoi)\s+(?:phuong an|lua chon)\b/,
+  );
+  const recommendedPlotMatch = folded.match(
+    /\b(?:so sanh|goi y|de xuat|cho xem|xem thu|dua ra|chon ra|tim)\b.{0,45}\b(\d{1,2}|mot|hai|ba|bon|nam|sau|bay|tam|chin|muoi)\s+lo\b/,
+  );
+  const raw = optionMatch?.[1] ?? recommendedPlotMatch?.[1];
+  if (!raw) return undefined;
+  const count = Number(raw) || RECOMMENDATION_COUNT_WORDS[raw];
+  return Number.isInteger(count) && count >= 1 && count <= 10
+    ? count
+    : undefined;
 }
 
 export function extractDeterministicRequirements(
@@ -129,9 +185,64 @@ export function extractDeterministicRequirements(
     'Nam',
     'Bắc',
   ];
-  const preferredDirection = directions.find((direction) =>
-    normalized.includes(direction.toLowerCase()),
+  const foldedForProfile = normalizeFallbackIntent(message);
+  const isAppointmentContext =
+    /\b(?:dat lich|lich hen|hen gap|gap ban quan ly|tham quan|xem thuc te)\b/.test(
+      foldedForProfile,
+    );
+  const reminderContext =
+    /\b(?:nhac lich|nhac nho|tuong niem|ngay gio|gui email nhac)\b/.test(
+      foldedForProfile,
+    );
+  const birthDate =
+    isAppointmentContext || reminderContext ? undefined : extractBirthDate(message);
+  const birthProfileContext =
+    Boolean(birthDate) ||
+    /\b(?:gio sinh|sinh ngay|nam sinh|nu sinh|bat tu|bazi)\b/.test(
+      foldedForProfile,
+    );
+  const preferredDirection = birthProfileContext
+    ? undefined
+    : directions.find((direction) =>
+        normalized.includes(direction.toLowerCase()),
+      );
+  const recommendationCount = extractRequestedRecommendationCount(message);
+  const comparisonRequested = /\b(?:so sanh|doi chieu|dat canh nhau)\b/.test(
+    foldedForProfile,
   );
+  const gender =
+    /\b(?:gioi tinh nu|nu sinh|cho nu|female)\b/.test(foldedForProfile) ||
+    (birthProfileContext && /\bnu\s*$/.test(foldedForProfile)) ||
+    foldedForProfile === 'nu'
+      ? 'female'
+      : /\b(?:gioi tinh nam|nam sinh|cho nam|male)\b/.test(foldedForProfile) ||
+          (birthProfileContext && /\bnam\s*$/.test(foldedForProfile)) ||
+          foldedForProfile === 'nam'
+        ? 'male'
+        : undefined;
+  const birthTimeMatch = isAppointmentContext
+    ? null
+    : message.match(
+        /\b(?:giờ sinh|gio sinh|lúc|luc)\s+(?:khoảng|khoang|tầm|tam)?\s*(\d{1,2})(?::(\d{2})|h(\d{2})?)?\s*(?:h|giờ|gio)?\b/i,
+      );
+  const appointmentTimeMatch = isAppointmentContext
+    ? message.match(
+        /\b(?:lúc|luc|vào|vao)?\s*(\d{1,2})(?::(\d{2})|h(\d{2})?)\s*(?:h|giờ|gio)?\b/i,
+      )
+    : null;
+  const operationalDate = extractBirthDate(message);
+  const emailMatches = reminderContext
+    ? [...message.matchAll(/[\w.+-]+@[\w.-]+\.[a-z]{2,}/gi)].map((item) =>
+        item[0].toLowerCase(),
+      )
+    : [];
+  const reminderSubject = reminderContext
+    ? message
+        .match(
+          /(?:tưởng niệm|ngày giỗ)\s+([^,.;]+?)(?=\s+(?:ngày|vào|lúc)\b|[,.;]|$)/i,
+        )?.[1]
+        ?.trim()
+    : undefined;
   const rejectsNearEntrance =
     /không\s+(?:cần|muốn|ưu tiên)\s+(?:gần|sát)\s+cổng/i.test(normalized);
   const prefersNearEntrance =
@@ -140,12 +251,47 @@ export function extractDeterministicRequirements(
     );
   return {
     budgetMax: budgets.length ? Math.max(...budgets) : undefined,
+    recommendationCount,
+    comparisonRequested,
     numberOfPlots,
     preferredZone: zoneMatch ? `Khu ${zoneMatch[1].toUpperCase()}` : undefined,
     selectedPlotCode: plotCodeMatch
       ? plotCodeMatch[1].replace(/\s/g, '').toUpperCase()
       : undefined,
     preferredDirection,
+    birthDate,
+    birthTime: birthTimeMatch
+      ? `${birthTimeMatch[1].padStart(2, '0')}:${birthTimeMatch[2] ?? birthTimeMatch[3] ?? '00'}`
+      : undefined,
+    appointmentDate: isAppointmentContext ? operationalDate : undefined,
+    appointmentStartTime: appointmentTimeMatch
+      ? `${appointmentTimeMatch[1].padStart(2, '0')}:${appointmentTimeMatch[2] ?? appointmentTimeMatch[3] ?? '00'}`
+      : undefined,
+    appointmentTopic:
+      isAppointmentContext && plotCodeMatch
+        ? `Tham quan và tư vấn lô ${plotCodeMatch[1].replace(/\s/g, '').toUpperCase()}`
+        : isAppointmentContext
+          ? 'Trao đổi với ban quản lý'
+          : undefined,
+    reminderDate: reminderContext ? operationalDate : undefined,
+    reminderTitle: reminderSubject
+      ? `Tưởng niệm ${reminderSubject}`
+      : undefined,
+    reminderRecurring: reminderContext
+      ? /\b(?:hang nam|hang nam|moi nam|dinh ky)\b/.test(foldedForProfile)
+      : undefined,
+    reminderCalendarType: reminderContext
+      ? /\b(?:am lich|lich am)\b/.test(foldedForProfile)
+        ? 'lunar'
+        : 'solar'
+      : undefined,
+    reminderNotifyDaysBefore: reminderContext
+      ? Number(foldedForProfile.match(/\btruoc\s+(\d{1,2})\s+ngay\b/)?.[1] ?? 3)
+      : undefined,
+    reminderNotifyEmails: emailMatches.length
+      ? [...new Set(emailMatches)]
+      : undefined,
+    gender,
     needAdjacent: rejectsAdjacency
       ? false
       : requestsAdjacency
@@ -171,6 +317,41 @@ function normalizeFallbackIntent(message: string) {
     .replace(/[^a-z0-9\s-]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function extractBirthDate(message: string): string | undefined {
+  const iso = message.match(/\b(\d{4})-(\d{1,2})-(\d{1,2})\b/);
+  const vietnamese = message.match(
+    /\b(?:ngay\s+)?(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})\b/i,
+  );
+  const words = message.match(
+    /\bng[aà]y\s+(\d{1,2})\s+th[aá]ng\s+(\d{1,2})\s+n[aă]m\s+(\d{4})\b/i,
+  );
+  const parts = iso
+    ? { year: Number(iso[1]), month: Number(iso[2]), day: Number(iso[3]) }
+    : vietnamese
+      ? {
+          year: Number(vietnamese[3]),
+          month: Number(vietnamese[2]),
+          day: Number(vietnamese[1]),
+        }
+      : words
+        ? {
+            year: Number(words[3]),
+            month: Number(words[2]),
+            day: Number(words[1]),
+          }
+        : null;
+  if (!parts) return undefined;
+  const candidate = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
+  if (
+    candidate.getUTCFullYear() !== parts.year ||
+    candidate.getUTCMonth() !== parts.month - 1 ||
+    candidate.getUTCDate() !== parts.day
+  ) {
+    return undefined;
+  }
+  return `${String(parts.year).padStart(4, '0')}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`;
 }
 
 export function asksForPlotCompetitiveness(message: string) {
@@ -253,9 +434,13 @@ export function resolvePendingBookingReply(
     return {
       ...plan,
       intent:
-        pendingAction.kind === 'service_order'
-          ? 'service_booking'
-          : 'plot_request',
+        pendingAction.kind === 'appointment'
+          ? 'appointment_booking'
+          : pendingAction.kind === 'memorial_reminder'
+            ? 'memorial_reminder'
+            : pendingAction.kind === 'service_order'
+              ? 'service_booking'
+              : 'plot_request',
       action: 'confirm_pending_action',
       contextMode: 'continue',
       needsClarification: false,
@@ -278,6 +463,9 @@ export class AiAgentOrchestratorService {
     private readonly recommendations: PlotRecommendationService,
     private readonly knowledge: KnowledgeService,
     private readonly booking: AgentBookingService,
+    private readonly comparisonAi: ComparisonAiService,
+    @Optional()
+    private readonly decisionComparisonAi?: DecisionComparisonAiService,
   ) {}
 
   async chat(dto: ChatDto, user?: { id: number; role: string } | null) {
@@ -286,35 +474,62 @@ export class AiAgentOrchestratorService {
     const sessionId = dto.sessionId?.trim() || `SES-${randomUUID()}`;
     const traceId = `TRACE-${randomUUID()}`;
     const directRequirements = this.extractRequirements(dto.message);
-    const directIntent = this.detectIntent(dto.message);
+    const ambiguousDomainTurn = this.buildAmbiguousDomainTurn(dto.message);
+    let directIntent = ambiguousDomainTurn
+      ? 'general_question'
+      : this.detectIntent(dto.message);
+    const immediateSafetyTurn = this.buildImmediateSafetyTurn(dto.message);
+    const sensitiveDisclosureRequest = this.isSensitiveSystemDisclosureRequest(
+      dto.message,
+    );
+    const socialTurn = this.buildDeterministicSocialTurn(dto.message);
+    const bareAcknowledgement = this.isBareAcknowledgement(dto.message);
+    const lowInformationTurn = this.isLowInformationTurn(dto.message);
+    const clearlyOutOfScope = this.isClearlyOutOfScope(dto.message);
+    const skipsContextBootstrap = Boolean(
+      immediateSafetyTurn ||
+      sensitiveDisclosureRequest ||
+      (socialTurn && !bareAcknowledgement && !ambiguousDomainTurn) ||
+      lowInformationTurn ||
+      clearlyOutOfScope,
+    );
     const conversation = await this.ensureConversation(sessionId, userId);
-    const [
-      history,
-      pendingAction,
-      persistentKnowledgeContext,
-      activeUserPreferences,
-    ] = await Promise.all([
-      conversation
-        ? this.withTimeout(
+    const history =
+      conversation && !skipsContextBootstrap
+        ? await this.withTimeout(
             this.loadHistory(conversation.id),
             1200,
             [] as PersistedMessage[],
             'history',
           )
-        : Promise.resolve([] as PersistedMessage[]),
-      this.withTimeout(
-        this.booking.loadPendingAction(conversation?.id ?? null),
-        1000,
-        undefined,
-        'pending_action',
-      ),
-      this.withTimeout(
-        this.knowledge.getUserPromptContext(userId, dto.message),
-        1600,
-        '',
-        'memory_context',
-      ),
-      userId === null
+        : ([] as PersistedMessage[]);
+    const [
+      pendingAction,
+      persistentKnowledgeContext,
+      activeUserPreferences,
+      ownedPlots,
+      customerProfile,
+    ] = await Promise.all([
+      skipsContextBootstrap
+        ? Promise.resolve(undefined)
+        : this.withTimeout(
+            this.booking.loadPendingAction(conversation?.id ?? null),
+            1000,
+            undefined,
+            'pending_action',
+          ),
+      skipsContextBootstrap
+        ? Promise.resolve('')
+        : this.withTimeout(
+            this.knowledge.getUserPromptContext(
+              userId,
+              this.buildKnowledgeRetrievalQuery(history, dto.message),
+            ),
+            1600,
+            '',
+            'memory_context',
+          ),
+      userId === null || skipsContextBootstrap
         ? Promise.resolve([])
         : this.withTimeout(
             this.knowledge.getActiveUserPreferences(userId, 20),
@@ -322,17 +537,56 @@ export class AiAgentOrchestratorService {
             [],
             'structured_user_preferences',
           ),
+      userId === null || skipsContextBootstrap
+        ? Promise.resolve(null)
+        : this.withTimeout<OwnedPlotContext[] | null>(
+            this.booking.getOwnedPlots(userId),
+            1200,
+            null,
+            'owned_plots',
+          ),
+      userId === null || skipsContextBootstrap
+        ? Promise.resolve(null)
+        : this.withTimeout<CustomerProfileContext | null>(
+            this.loadCustomerProfile(userId),
+            900,
+            null,
+            'customer_profile',
+          ),
     ]);
+    const baziTopicRefinement = this.isBaziTopicRefinement(
+      dto.message,
+      history,
+    );
+    if (baziTopicRefinement) directIntent = 'bazi_suggestion';
 
     // Build one trusted conversation state BEFORE asking the LLM to plan.
     // Precedence is intentional: older chat context < persistent active memory
     // < the user's latest explicit message. This means a saved budget/location
     // is automatically reused, while a new value in the current turn wins.
     const historyRequirements = this.extractRequirementsFromHistory(history);
-    const memoryRequirements =
-      this.requirementsFromPreferences(activeUserPreferences);
+    const memoryRequirements = this.requirementsFromPreferences(
+      activeUserPreferences,
+    );
+    const baziContextActive = this.isBaziConversationTurn(
+      dto.message,
+      history,
+      directIntent,
+    );
+    const profileRequirements = baziContextActive
+      ? this.requirementsFromCustomerProfile(
+          customerProfile,
+          historyRequirements,
+          directRequirements,
+          dto.message,
+        )
+      : {};
     let trustedRequirements = this.mergeDefinedRequirements(
+      profileRequirements,
       historyRequirements,
+    );
+    trustedRequirements = this.mergeDefinedRequirements(
+      trustedRequirements,
       memoryRequirements,
     );
     trustedRequirements = this.mergeDefinedRequirements(
@@ -350,6 +604,7 @@ export class AiAgentOrchestratorService {
       history,
       trustedRequirements,
       directIntent,
+      baziContextActive,
     );
     let requirements = context.requirements;
     let intent = context.intent;
@@ -380,18 +635,122 @@ export class AiAgentOrchestratorService {
       return userMessageId;
     };
 
-    // Social/casual turns are NOT short-circuited here. The LLM is the primary
-    // conversational brain and receives the full recent conversation + trusted
-    // memory state, so greetings, frustration, slang and cultural discussion can
-    // be answered semantically instead of by a canned sentence. Deterministic
-    // social responses are kept only as a last-resort fallback when every LLM
-    // provider fails.
-
     // High-confidence safety/grounding gates run before the external LLM.
     // They protect the service when a provider times out or returns a weak plan.
     // Ambiguous domain questions still go to the LLM; these gates only cover
     // cases where the correct behavior is deterministic from system scope/state.
-    if (this.isClearlyOutOfScope(dto.message)) {
+    if (immediateSafetyTurn) {
+      await saveUserMessage();
+      return this.finish({
+        conversation,
+        sessionId,
+        userMessageId,
+        assistantMessage: immediateSafetyTurn.assistantMessage,
+        intent: 'general_question',
+        requirements,
+        recommendationResult: null,
+        quickReplies: immediateSafetyTurn.quickReplies,
+        traceId,
+        fallbackUsed: false,
+        llmModel: 'local-safety-response',
+        skipSuggestedFollowUps: true,
+        learningResults,
+      });
+    }
+
+    if (sensitiveDisclosureRequest) {
+      await saveUserMessage();
+      return this.finish({
+        conversation,
+        sessionId,
+        userMessageId,
+        assistantMessage:
+          'Mình không thể cung cấp khóa API, mật khẩu, biến môi trường, prompt hệ thống hoặc hướng dẫn nội bộ. Mình có thể giải thích khả năng của trợ lý và hỗ trợ các nội dung dành cho khách hàng của Vĩnh Phúc Viên.',
+        intent: 'general_question',
+        requirements,
+        recommendationResult: null,
+        quickReplies: this.baseHelpQuickReplies(),
+        traceId,
+        fallbackUsed: false,
+        llmModel: 'local-safety-response',
+        skipSuggestedFollowUps: true,
+        learningResults,
+      });
+    }
+
+    // A bare domain noun is a topic signal, not authorization to run a search.
+    // Ask one useful question instead of silently reusing old filters and
+    // producing a full recommendation the customer did not request.
+    if (ambiguousDomainTurn && !baziTopicRefinement) {
+      await saveUserMessage();
+      const assistantMessage = history.length
+        ? ambiguousDomainTurn.assistantMessage
+        : `Chào bạn. ${ambiguousDomainTurn.assistantMessage}`;
+      return this.finish({
+        conversation,
+        sessionId,
+        userMessageId,
+        assistantMessage,
+        intent: 'clarification',
+        requirements,
+        recommendationResult: null,
+        quickReplies: ambiguousDomainTurn.quickReplies,
+        traceId,
+        fallbackUsed: false,
+        llmModel: 'local-conversation-response',
+        skipSuggestedFollowUps: true,
+        learningResults,
+      });
+    }
+
+    // Short, unambiguous human conversation should feel immediate. It does not
+    // need to consume a main-chat key or wait for provider failover. A greeting
+    // followed by a real domain question does not match this gate and still uses
+    // the semantic planner with the full trusted conversation state.
+    if (
+      socialTurn &&
+      !baziTopicRefinement &&
+      !(bareAcknowledgement && pendingAction)
+    ) {
+      await saveUserMessage();
+      return this.finish({
+        conversation,
+        sessionId,
+        userMessageId,
+        assistantMessage: socialTurn.assistantMessage,
+        intent: 'general_question',
+        requirements,
+        recommendationResult: null,
+        quickReplies: socialTurn.quickReplies,
+        traceId,
+        fallbackUsed: false,
+        llmModel: 'local-conversation-response',
+        skipSuggestedFollowUps: true,
+        learningResults,
+      });
+    }
+
+    if (lowInformationTurn) {
+      await saveUserMessage();
+      return this.finish({
+        conversation,
+        sessionId,
+        userMessageId,
+        assistantMessage:
+          'Mình chưa có đủ thông tin để hiểu bạn muốn tiếp tục việc nào. Bạn có thể nói ngắn gọn như “gợi ý lô phù hợp”, “xem dịch vụ chăm sóc”, “hỏi quy trình giữ chỗ” hoặc nêu mã lô cần kiểm tra.',
+        intent: 'clarification',
+        requirements,
+        recommendationResult: null,
+        quickReplies: this.baseHelpQuickReplies(),
+        traceId,
+        fallbackUsed: false,
+        llmModel: 'local-conversation-response',
+        skipSuggestedFollowUps: true,
+        learningResults,
+      });
+    }
+
+    if (clearlyOutOfScope) {
       await saveUserMessage();
       return this.finish({
         conversation,
@@ -404,11 +763,52 @@ export class AiAgentOrchestratorService {
         quickReplies: this.baseHelpQuickReplies(),
         traceId,
         fallbackUsed: false,
+        llmModel: 'local-scope-response',
+        skipSuggestedFollowUps: true,
         learningResults,
       });
     }
 
-    if (this.isShortConfirmationFollowUp(dto.message, history)) {
+    if (this.isBasicPlotDetailsQuestion(dto.message, requirements)) {
+      await saveUserMessage();
+      const toolOutput = await this.withTimeout(
+        Promise.resolve(
+          this.tools.execute(
+            'analyze_plot_competitiveness',
+            { plotCode: requirements.selectedPlotCode },
+            {
+              conversationId: conversation?.id ?? null,
+              sourceMessageId: userMessageId,
+              userId,
+              role: userRole,
+              sessionId,
+            },
+          ),
+        ),
+        1600,
+        null,
+        'plot_details',
+      );
+      return this.finish({
+        conversation,
+        sessionId,
+        userMessageId,
+        userMessage: dto.message,
+        assistantMessage: this.describeBasicPlotDetails(
+          toolOutput,
+          requirements.selectedPlotCode ?? '',
+        ),
+        intent: 'plot_details',
+        requirements,
+        recommendationResult: null,
+        traceId,
+        fallbackUsed: false,
+        llmModel: 'local-authoritative-data',
+        learningResults,
+      });
+    }
+
+    if (!pendingAction && this.isShortConfirmationFollowUp(dto.message, history)) {
       await saveUserMessage();
       return this.finish({
         conversation,
@@ -420,6 +820,8 @@ export class AiAgentOrchestratorService {
         recommendationResult: null,
         traceId,
         fallbackUsed: false,
+        llmModel: 'local-conversation-response',
+        skipSuggestedFollowUps: true,
         learningResults,
       });
     }
@@ -448,11 +850,14 @@ export class AiAgentOrchestratorService {
           {
             id: 'mutation-feedback',
             label: 'Báo thông tin AI trả lời sai',
-            message: 'Mình muốn báo một thông tin AI trả lời sai để quản trị viên kiểm tra.',
+            message:
+              'Mình muốn báo một thông tin AI trả lời sai để quản trị viên kiểm tra.',
           },
         ],
         traceId,
         fallbackUsed: false,
+        llmModel: 'local-safety-response',
+        skipSuggestedFollowUps: true,
         learningResults,
       });
     }
@@ -471,7 +876,8 @@ export class AiAgentOrchestratorService {
           {
             id: 'hold-process',
             label: 'Xem toàn bộ quy trình giữ chỗ',
-            message: 'Giải thích giúp mình toàn bộ quy trình giữ chỗ từ lúc gửi yêu cầu đến khi được duyệt.',
+            message:
+              'Giải thích giúp mình toàn bộ quy trình giữ chỗ từ lúc gửi yêu cầu đến khi được duyệt.',
             emphasis: 'strong',
           },
           {
@@ -482,6 +888,24 @@ export class AiAgentOrchestratorService {
         ],
         traceId,
         fallbackUsed: false,
+        learningResults,
+      });
+    }
+
+    if (this.isReservationProcessQuestion(dto.message)) {
+      await saveUserMessage();
+      return this.finish({
+        conversation,
+        sessionId,
+        userMessageId,
+        userMessage: dto.message,
+        assistantMessage: this.buildReservationProcessAnswer(),
+        intent: 'purchase_process',
+        requirements,
+        recommendationResult: null,
+        traceId,
+        fallbackUsed: false,
+        llmModel: 'local-authoritative-data',
         learningResults,
       });
     }
@@ -509,10 +933,39 @@ export class AiAgentOrchestratorService {
       });
     }
 
+    const baziIntakeTurn = this.buildBaziIntakeTurn({
+      message: dto.message,
+      intent,
+      requirements,
+      directRequirements,
+      customerProfile,
+    });
+    if (baziIntakeTurn) {
+      intent = 'bazi_suggestion';
+      requirements = baziIntakeTurn.requirements;
+      await saveUserMessage();
+      return this.finish({
+        conversation,
+        sessionId,
+        userMessageId,
+        assistantMessage: baziIntakeTurn.assistantMessage,
+        intent,
+        requirements,
+        recommendationResult: null,
+        quickReplies: baziIntakeTurn.quickReplies,
+        traceId,
+        fallbackUsed: false,
+        llmModel: 'local-authoritative-data',
+        skipSuggestedFollowUps: true,
+        learningResults,
+      });
+    }
+
     const recoveredPreferenceProposal =
       this.recoverExplicitUserPreferenceProposal(dto.message);
-    const recoveredKnowledgeProposal =
-      this.recoverExplicitKnowledgeProposal(dto.message);
+    const recoveredKnowledgeProposal = this.recoverExplicitKnowledgeProposal(
+      dto.message,
+    );
 
     // A customer explicitly submitting a FAQ/knowledge candidate must never be
     // routed as a request to consume that service. In particular, phrases such
@@ -608,7 +1061,48 @@ export class AiAgentOrchestratorService {
       });
     }
 
-    if (!this.nvidia.isConfigured()) {
+    let deterministicAgentPlan = this.buildDeterministicAgentPlan(
+      dto.message,
+      intent,
+      context.requirements,
+      history,
+    );
+    if (pendingAction?.stage === 'awaiting_confirmation') {
+      const pendingIntent: AgentPlan['intent'] =
+        pendingAction.kind === 'service_order'
+          ? 'service_booking'
+          : pendingAction.kind === 'appointment'
+            ? 'appointment_booking'
+            : pendingAction.kind === 'memorial_reminder'
+              ? 'memorial_reminder'
+              : 'plot_request';
+      const candidate = resolvePendingBookingReply(
+        {
+          intent: pendingIntent,
+          action: 'none',
+          contextMode: 'continue',
+          needsClarification: false,
+          clarificationQuestion: '',
+          requirements: context.requirements,
+        },
+        pendingAction,
+        dto.message,
+      );
+      if (candidate.action === 'confirm_pending_action') {
+        deterministicAgentPlan = candidate;
+      } else if (
+        /\b(?:huy|khong dong y|dung lai|bo qua)\b/.test(
+          this.foldForMemory(dto.message),
+        )
+      ) {
+        deterministicAgentPlan = {
+          ...candidate,
+          action: 'cancel_pending_action',
+        };
+      }
+    }
+
+    if (!this.nvidia.isConfigured() && !deterministicAgentPlan) {
       await saveUserMessage();
       learningResults = await this.processMemoryProposals(
         recoveredPreferenceProposal,
@@ -630,6 +1124,8 @@ export class AiAgentOrchestratorService {
         traceId,
         fallbackReason: 'LLM_NOT_CONFIGURED',
         learningResults,
+        ownedPlots,
+        pendingAction,
       });
     }
 
@@ -638,13 +1134,9 @@ export class AiAgentOrchestratorService {
       // decide that we should search inventory. This local plan preserves the
       // active consultation, reuses saved requirements, avoids unnecessary
       // latency, and still executes the same authoritative recommendation tool.
+      const localPlan = deterministicAgentPlan;
       let plan =
-        this.buildDeterministicPlotConsultationPlan(
-          dto.message,
-          intent,
-          context.requirements,
-          history,
-        ) ??
+        localPlan ??
         (await this.createAgentPlan(
           history,
           dto.message,
@@ -658,6 +1150,8 @@ export class AiAgentOrchestratorService {
               memoryKey: item.memoryKey,
               content: item.content,
             })),
+            ownedPlots,
+            customerProfile,
           },
         ));
       plan = resolvePendingBookingReply(plan, pendingAction, dto.message);
@@ -669,11 +1163,7 @@ export class AiAgentOrchestratorService {
         plan.requirements,
         context.requirements,
       );
-      plan = this.reconcilePlannerWithTrustedContext(
-        plan,
-        dto.message,
-        intent,
-      );
+      plan = this.reconcilePlannerWithTrustedContext(plan, dto.message, intent);
       if (
         plan.action === 'browse_available_plots' &&
         !plan.requirements.numberOfPlots
@@ -693,6 +1183,10 @@ export class AiAgentOrchestratorService {
       plan.memoryProposals = this.mergeMemoryProposals(
         plan.memoryProposals,
         hasPlannerUserPreference ? undefined : recoveredPreferenceProposal,
+      );
+      plan.memoryProposals = this.filterDurableMemoryProposals(
+        plan.memoryProposals,
+        dto.message,
       );
       learningResults = await this.processMemoryProposals(
         plan.memoryProposals,
@@ -726,13 +1220,19 @@ export class AiAgentOrchestratorService {
           userMessageId,
           assistantMessage: bookingError.message,
           intent:
-            pendingAction?.kind === 'service_order'
-              ? 'service_booking'
-              : 'plot_request',
+            pendingAction?.kind === 'appointment'
+              ? 'appointment_booking'
+              : pendingAction?.kind === 'memorial_reminder'
+                ? 'memorial_reminder'
+                : pendingAction?.kind === 'service_order'
+                  ? 'service_booking'
+                  : 'plot_request',
           requirements,
           recommendationResult: null,
           traceId,
           fallbackUsed: false,
+          llmModel: localPlan ? 'local-authoritative-data' : undefined,
+          skipSuggestedFollowUps: true,
           learningResults,
         });
       }
@@ -752,8 +1252,13 @@ export class AiAgentOrchestratorService {
           requirements,
           recommendationResult: null,
           suggestedServices: bookingTurn.suggestedServices,
+          quickReplies: bookingTurn.quickReplies,
+          uiDirective: bookingTurn.uiDirective,
+          ownedPlots,
           traceId,
           fallbackUsed: false,
+          llmModel: localPlan ? 'local-authoritative-data' : undefined,
+          skipSuggestedFollowUps: true,
           learningResults,
         });
       }
@@ -810,9 +1315,14 @@ export class AiAgentOrchestratorService {
         sessionId: sessionId,
       });
       let recommendationResult = execution.recommendationResult;
-      let alternativeMessage = requirements.excludePlotIds?.length
-        ? 'Được, mình bỏ các phương án vừa rồi và đổi sang những lô khác nhé. '
-        : '';
+      let alternativeMessage = [
+        this.isBereavementContext(dto.message)
+          ? 'Mình rất tiếc về mất mát của gia đình bạn. Mình sẽ hỗ trợ từng bước để bạn đỡ phải xử lý quá nhiều thông tin cùng lúc. '
+          : '',
+        requirements.excludePlotIds?.length
+          ? 'Được, mình bỏ các phương án vừa rồi và đổi sang những lô khác nhé. '
+          : '',
+      ].join('');
       if (
         recommendationResult &&
         recommendationResult.recommendations.length === 0 &&
@@ -852,6 +1362,7 @@ export class AiAgentOrchestratorService {
         baziSuggestion: execution.baziSuggestion,
         toolOutput: execution.toolOutput,
         prefix: alternativeMessage,
+        ownedPlots,
       });
       // Tool output is authoritative and already has a natural grounded formatter.
       // Do not make a second LLM request after a successful tool call: that old
@@ -871,8 +1382,10 @@ export class AiAgentOrchestratorService {
         recommendationResult,
         suggestedServices: execution.suggestedServices,
         baziSuggestion: execution.baziSuggestion,
+        ownedPlots,
         traceId,
         fallbackUsed: false,
+        llmModel: localPlan ? 'local-authoritative-data' : undefined,
         learningResults,
       });
     } catch (error) {
@@ -905,25 +1418,104 @@ export class AiAgentOrchestratorService {
           error instanceof ServiceUnavailableException
             ? 'LLM_API_UNAVAILABLE'
             : 'LLM_AGENT_PLAN_FAILED',
+        ownedPlots,
+        pendingAction,
       });
     }
   }
 
-  private buildDeterministicPlotConsultationPlan(
+  private buildDeterministicAgentPlan(
     message: string,
     intent: string,
     requirements: AgentRequirements,
     history: PersistedMessage[],
   ): AgentPlan | null {
+    const folded = this.foldForMemory(message);
+    const deterministicPlan = (
+      resolvedIntent: AgentPlan['intent'],
+      action: AgentPlanAction,
+    ): AgentPlan => ({
+      intent: resolvedIntent,
+      action,
+      contextMode: 'replace',
+      needsClarification: false,
+      clarificationQuestion: '',
+      requirements,
+    });
+
+    // High-confidence operational commands with all required date/time fields
+    // can go straight to the authoritative confirmation workflow. Ambiguous
+    // language still goes to the semantic LLM planner below.
+    if (
+      intent === 'appointment_booking' &&
+      requirements.appointmentDate &&
+      requirements.appointmentStartTime
+    ) {
+      return deterministicPlan('appointment_booking', 'prepare_appointment');
+    }
+    if (
+      intent === 'memorial_reminder' &&
+      requirements.reminderDate
+    ) {
+      return deterministicPlan(
+        'memorial_reminder',
+        'prepare_memorial_reminder',
+      );
+    }
+
+    const requestsExactPlotBooking =
+      Boolean(requirements.selectedPlotCode) &&
+      /\b(?:giu cho|dat cho|giu lo|mua lo|gui yeu cau mua)\b/.test(folded);
+    if (requestsExactPlotBooking) {
+      return {
+        ...deterministicPlan('plot_request', 'prepare_plot_request'),
+        requirements: {
+          ...requirements,
+          requestType: /\b(?:giu cho|dat cho|giu lo)\b/.test(folded)
+            ? 'reserve'
+            : 'purchase',
+        },
+      };
+    }
+
+    if (asksForPlotCompetitiveness(message) && requirements.selectedPlotCode) {
+      return deterministicPlan(
+        'plot_competitiveness',
+        'analyze_plot_competitiveness',
+      );
+    }
+    const asksForServiceCatalog =
+      intent === 'service_suggestions' &&
+      /\b(?:dich vu|cham soc|don dep|thap huong)\b/.test(folded) &&
+      /\b(?:nao|nhung gi|hien co|danh sach|cho xem|xem cac|co nhung)\b/.test(
+        folded,
+      ) &&
+      !/\b(?:dat dich vu|gui yeu cau|xac nhan|thanh toan)\b/.test(folded);
+    if (asksForServiceCatalog) {
+      return deterministicPlan(
+        'service_suggestions',
+        'get_service_suggestions',
+      );
+    }
+    const asksForProcess =
+      intent === 'purchase_process' &&
+      /\b(?:quy trinh|thu tuc|cac buoc|lam sao|nhu the nao)\b/.test(folded) &&
+      /\b(?:mua|giu cho|dat cho|gui yeu cau)\b/.test(folded);
+    if (asksForProcess) {
+      return deterministicPlan('purchase_process', 'get_purchase_process');
+    }
+    if (intent === 'bazi_suggestion' && requirements.birthDate) {
+      return deterministicPlan('bazi_suggestion', 'suggest_bazi_direction');
+    }
+
     if (intent !== 'recommend_plots') return null;
 
-    const folded = this.foldForMemory(message);
-    const latestAssistant = [...history]
-      .reverse()
-      .find((item) => item.role === 'assistant')?.content ?? '';
+    const latestAssistant =
+      [...history].reverse().find((item) => item.role === 'assistant')
+        ?.content ?? '';
     const latestAssistantFolded = this.foldForMemory(latestAssistant);
     const operationalOrProcessRequest =
-      /\b(?:quy trinh|thu tuc|giu cho|dat cho|dat mua|gui yeu cau|tao yeu cau|mua nhu the nao|thanh toan|hop dong|chuyen nhuong|thua ke)\b/.test(
+      /\b(?:quy trinh|thu tuc|giu cho|dat cho|dat mua|gui yeu cau|tao yeu cau|mua nhu the nao|thanh toan|hop dong|chuyen nhuong|thua ke|dat lich|lich hen|hen gap|gap ban quan ly|tham quan|xem thuc te|nhac lich|tuong niem)\b/.test(
         folded,
       );
     if (operationalOrProcessRequest) return null;
@@ -960,6 +1552,46 @@ export class AiAgentOrchestratorService {
     };
   }
 
+  // Kept as a narrow compatibility entry point for the consultation-flow
+  // regression suite and any internal callers that exercise plot planning only.
+  private buildDeterministicPlotConsultationPlan(
+    message: string,
+    intent: string,
+    requirements: AgentRequirements,
+    history: PersistedMessage[],
+  ) {
+    return this.buildDeterministicAgentPlan(
+      message,
+      intent,
+      requirements,
+      history,
+    );
+  }
+
+  /**
+   * Semantic retrieval must understand a short reply in the conversation it
+   * belongs to. Embedding only "cái đó", "lô khác" or "đặt lịch thứ sáu"
+   * throws away the meaning the LLM can see in prior turns. Keep a small,
+   * role-labelled window and the latest message as one contextual query. The
+   * embedding model handles Vietnamese/English semantics; this method performs
+   * no intent keyword matching.
+   */
+  private buildKnowledgeRetrievalQuery(
+    history: PersistedMessage[],
+    userMessage: string,
+  ) {
+    const recent = history
+      .slice(-6)
+      .map((item) => {
+        const content = this.redactSensitiveData(item.content ?? '').trim();
+        if (!content) return '';
+        return `${item.role === 'assistant' ? 'Trợ lý' : 'Khách hàng'}: ${content}`;
+      })
+      .filter(Boolean);
+    recent.push(`Khách hàng hiện tại: ${this.redactSensitiveData(userMessage)}`);
+    return recent.join('\n').slice(-4000);
+  }
+
   private async createAgentPlan(
     history: PersistedMessage[],
     userMessage: string,
@@ -973,6 +1605,8 @@ export class AiAgentOrchestratorService {
         memoryKey: string | null;
         content: string;
       }>;
+      ownedPlots?: OwnedPlotContext[] | null;
+      customerProfile?: CustomerProfileContext | null;
     },
   ) {
     const messages: NvidiaMessage[] = [
@@ -991,6 +1625,10 @@ ${JSON.stringify(
     savedPreferences: bookingContext?.activeUserPreferences ?? [],
     pendingAction: bookingContext?.pendingAction ?? null,
     clientAction: bookingContext?.clientAction ?? null,
+    ownershipLookupStatus:
+      bookingContext?.ownedPlots === null ? 'unavailable' : 'verified',
+    ownedPlots: bookingContext?.ownedPlots ?? null,
+    customerProfileForBazi: bookingContext?.customerProfile ?? null,
   },
   null,
   2,
@@ -1019,9 +1657,9 @@ Today: ${new Date().toISOString().slice(0, 10)}`,
         temperature: 0,
         routingKey,
         maxTokens: 700,
-        timeoutMs: 10_000,
-        totalTimeoutMs: 13_000,
-        preferredProviderId: 'openai-primary',
+        timeoutMs: 5_000,
+        totalTimeoutMs: 12_000,
+        preferredProviderId: 'nvidia',
       },
     );
     const assistant = response.choices[0].message;
@@ -1199,9 +1837,11 @@ Today: ${new Date().toISOString().slice(0, 10)}`,
             (plan.requirements.numberOfPlots ?? 1) > 1,
         };
       case 'get_service_suggestions':
-        return { limit: 6 };
+        return { limit: 5 };
       case 'prepare_plot_request':
       case 'prepare_service_order':
+      case 'prepare_appointment':
+      case 'prepare_memorial_reminder':
       case 'confirm_pending_action':
       case 'cancel_pending_action':
         return {};
@@ -1394,11 +2034,9 @@ Write the final helpful, highly consultative response now.
         totalTimeoutMs: 10_000,
       });
       const content = response.choices[0].message.content?.trim() ?? '';
-      console.log('[composeAgentResponse debug]:', {
-        action: input.plan.action,
-        contentLength: content.length,
-        contentSnippet: content.slice(0, 80),
-      });
+      this.logger.debug(
+        `[compose response] action=${input.plan.action}; contentLength=${content.length}`,
+      );
       const recommendationResult = isRecommendationResult(input.toolOutput)
         ? input.toolOutput
         : null;
@@ -1415,7 +2053,9 @@ Write the final helpful, highly consultative response now.
         return content;
       }
     } catch (err) {
-      console.error('[composeAgentResponse Exception]:', err);
+      this.logger.warn(
+        `[compose response] Provider failed (${err instanceof Error ? err.name : 'unknown error'}); using local response`,
+      );
     }
     return input.fallbackMessage;
   }
@@ -1427,6 +2067,7 @@ Write the final helpful, highly consultative response now.
     baziSuggestion?: BaziSuggestion;
     toolOutput: unknown;
     prefix: string;
+    ownedPlots?: OwnedPlotContext[] | null;
   }) {
     if (input.recommendationResult) {
       return (
@@ -1434,7 +2075,10 @@ Write the final helpful, highly consultative response now.
       );
     }
     if (input.suggestedServices.length) {
-      return this.describeServices(input.suggestedServices);
+      return this.describeServices(
+        input.suggestedServices,
+        input.ownedPlots ?? null,
+      );
     }
     if (input.baziSuggestion) {
       const bazi = input.baziSuggestion;
@@ -1541,6 +2185,50 @@ Bạn có muốn mình tiếp tục tìm các lô nghĩa trang phù hợp với 
 Bạn muốn mình so sánh tiếp lô ${plotCode} với một mã lô cụ thể hay chuẩn bị yêu cầu giữ chỗ/mua?`;
   }
 
+  private describeBasicPlotDetails(toolOutput: unknown, requestedCode: string) {
+    const result = this.asRecord(toolOutput);
+    if (!result) {
+      return `Mình chưa lấy được dữ liệu hiện tại của lô ${requestedCode}. Bạn có thể thử lại sau hoặc kiểm tra mã lô giúp mình.`;
+    }
+    if (result.found !== true) {
+      const code = this.asSafeString(result.plotCode, requestedCode);
+      return `Mình không tìm thấy mã lô ${code || 'này'} trong danh mục hiện tại. Bạn kiểm tra lại mã lô giúp mình nhé.`;
+    }
+
+    const plot = this.asRecord(result.plot) ?? {};
+    const statusLabels: Record<string, string> = {
+      available: 'đang trống',
+      pending: 'đang được xử lý yêu cầu',
+      reserved: 'đã giữ chỗ',
+      sold: 'đã bán',
+      locked: 'đang khóa',
+      maintenance: 'đang bảo trì',
+    };
+    const code = this.asSafeString(plot.plotCode, requestedCode);
+    const status = this.asSafeString(plot.status, 'chưa xác định');
+    const price = Number(plot.listedPrice);
+    const area = Number(plot.areaSqm);
+    const facts = [
+      `trạng thái **${statusLabels[status] ?? status}**`,
+      Number.isFinite(price)
+        ? `giá niêm yết **${price.toLocaleString('vi-VN')} VND**`
+        : '',
+      plot.zoneName ? `thuộc **${this.asSafeString(plot.zoneName, '')}**` : '',
+      plot.plotType ? `loại **${this.asSafeString(plot.plotType, '')}**` : '',
+      Number.isFinite(area) && area > 0
+        ? `diện tích **${area.toLocaleString('vi-VN')} m²**`
+        : '',
+      plot.direction
+        ? `hướng **${this.asSafeString(plot.direction, '')}**`
+        : '',
+    ].filter(Boolean);
+    const nextStep =
+      status === 'available'
+        ? 'Lô đang trống tại thời điểm kiểm tra. Bạn muốn xem trên bản đồ, so sánh với lô khác hay bắt đầu yêu cầu giữ chỗ?'
+        : 'Lô hiện không ở trạng thái có thể chọn mới. Mình có thể tìm các lô đang trống có tiêu chí tương tự cho bạn.';
+    return `**Lô ${code}:** ${facts.join(', ')}.\n\n${nextStep}`;
+  }
+
   private describeCustomerCareOverview(toolOutput: unknown) {
     const result = this.asRecord(toolOutput);
     if (!result) {
@@ -1620,8 +2308,11 @@ Bạn muốn mình đi sâu vào yêu cầu lô, đơn dịch vụ hay lịch ch
     traceId: string;
     fallbackReason: string;
     learningResults: AutonomousLearningResult[];
+    ownedPlots: OwnedPlotContext[] | null;
+    pendingAction?: AgentPendingAction;
   }) {
     let recommendationResult: RecommendationResult | null = null;
+    let suggestedServices: SuggestedService[] = [];
     let resolvedIntent = input.intent;
     // Never expose API/timeout/provider failures to customers. Even when every
     // external model fails, return a useful domain-aware answer from local data
@@ -1632,6 +2323,77 @@ Bạn muốn mình đi sâu vào yêu cầu lô, đơn dịch vụ hay lịch ch
     );
     const socialFallback = this.buildDeterministicSocialTurn(input.message);
     if (socialFallback) assistantMessage = socialFallback.assistantMessage;
+
+    if (
+      input.intent === 'appointment_booking' ||
+      input.intent === 'memorial_reminder' ||
+      input.pendingAction?.kind === 'appointment' ||
+      input.pendingAction?.kind === 'memorial_reminder'
+    ) {
+      const fallbackIntent =
+        input.pendingAction?.kind === 'appointment'
+          ? 'appointment_booking'
+          : input.pendingAction?.kind === 'memorial_reminder'
+            ? 'memorial_reminder'
+            : input.intent === 'appointment_booking'
+              ? 'appointment_booking'
+              : 'memorial_reminder';
+      let fallbackPlan: AgentPlan = {
+        intent: fallbackIntent,
+        action:
+          fallbackIntent === 'appointment_booking'
+            ? 'prepare_appointment'
+            : 'prepare_memorial_reminder',
+        contextMode: 'continue',
+        needsClarification: false,
+        clarificationQuestion: '',
+        requirements: input.requirements,
+      };
+      fallbackPlan = resolvePendingBookingReply(
+        fallbackPlan,
+        input.pendingAction,
+        input.message,
+      );
+      if (
+        input.pendingAction &&
+        /\b(?:huy|khong dong y|dung lai|bo qua)\b/.test(
+          this.foldForMemory(input.message),
+        )
+      ) {
+        fallbackPlan.action = 'cancel_pending_action';
+      }
+      const bookingTurn = await this.booking.handleTurn({
+        conversationId: input.conversation?.id ?? null,
+        userId: input.conversation?.userId ?? null,
+        plan: fallbackPlan,
+        pendingAction: input.pendingAction,
+      });
+      if (bookingTurn) {
+        return this.finish({
+          conversation: input.conversation,
+          sessionId: input.sessionId,
+          userMessageId: input.userMessageId,
+          userMessage: input.message,
+          assistantMessage: bookingTurn.assistantMessage,
+          intent: bookingTurn.intent,
+          requirements: {
+            ...input.requirements,
+            ...(bookingTurn.pendingAction
+              ? { pendingAction: bookingTurn.pendingAction }
+              : {}),
+          },
+          recommendationResult: null,
+          suggestedServices: bookingTurn.suggestedServices,
+          quickReplies: bookingTurn.quickReplies,
+          uiDirective: bookingTurn.uiDirective,
+          ownedPlots: input.ownedPlots,
+          traceId: input.traceId,
+          fallbackUsed: true,
+          fallbackReason: input.fallbackReason,
+          learningResults: input.learningResults,
+        });
+      }
+    }
 
     if (this.asksForSavedPreferences(input.message)) {
       resolvedIntent = 'general_question';
@@ -1729,7 +2491,7 @@ Bạn muốn mình đi sâu vào yêu cầu lô, đơn dịch vụ hay lịch ch
           assistantMessage = this.describeRecommendations(recommendationResult);
         }
       } else {
-        assistantMessage = `${searchRequirements.excludePlotIds?.length ? 'Được, mình bỏ các phương án vừa rồi và đổi sang những lô khác nhé. ' : ''}${this.describeRecommendations(recommendationResult)}`;
+        assistantMessage = `${this.isBereavementContext(input.message) ? 'Mình rất tiếc về mất mát của gia đình bạn. Mình sẽ hỗ trợ từng bước để bạn đỡ phải xử lý quá nhiều thông tin cùng lúc. ' : ''}${searchRequirements.excludePlotIds?.length ? 'Được, mình bỏ các phương án vừa rồi và đổi sang những lô khác nhé. ' : ''}${this.describeRecommendations(recommendationResult)}`;
       }
     } else if (input.intent === 'bazi_suggestion') {
       resolvedIntent = 'bazi_suggestion';
@@ -1765,7 +2527,8 @@ Bạn muốn mình đi sâu vào yêu cầu lô, đơn dịch vụ hay lịch ch
           recommendationResult: null,
           suggestedServices: [],
           baziSuggestion:
-            execution.baziSuggestion ?? (execution.toolOutput as BaziSuggestion),
+            execution.baziSuggestion ??
+            (execution.toolOutput as BaziSuggestion),
           toolOutput: execution.toolOutput,
           prefix: '',
         });
@@ -1774,8 +2537,11 @@ Bạn muốn mình đi sâu vào yêu cầu lô, đơn dịch vụ hay lịch ch
       const process = await this.knowledge.getPurchaseProcess();
       assistantMessage = `${process.title}: ${process.content}`;
     } else if (input.intent === 'service_suggestions') {
-      const services = await this.recommendations.getServiceSuggestions();
-      assistantMessage = this.describeServices(services);
+      suggestedServices = await this.recommendations.getServiceSuggestions();
+      assistantMessage = this.describeServices(
+        suggestedServices,
+        input.ownedPlots,
+      );
     }
 
     return this.finish({
@@ -1787,6 +2553,8 @@ Bạn muốn mình đi sâu vào yêu cầu lô, đơn dịch vụ hay lịch ch
       intent: resolvedIntent,
       requirements: input.requirements,
       recommendationResult,
+      suggestedServices,
+      ownedPlots: input.ownedPlots,
       traceId: input.traceId,
       fallbackUsed: true,
       fallbackReason: input.fallbackReason,
@@ -1818,7 +2586,16 @@ Ví dụ JSON output:
 
     try {
       const response = await this.nvidia.chat(
-        [{ role: 'user', content: prompt }],
+        [
+          {
+            // GPT-OSS on NVIDIA NIM follows this system-prompt control even
+            // when the hosted endpoint does not expose reasoning_effort.
+            role: 'system',
+            content:
+              'Reasoning: low\nTrả lời trực tiếp cho khách hàng, chỉ xuất phần kết luận cuối cùng.',
+          },
+          { role: 'user', content: prompt },
+        ],
         [],
         'auto',
         {
@@ -1827,6 +2604,7 @@ Ví dụ JSON output:
           timeoutMs: 1500,
           totalTimeoutMs: 1800,
           preferredProviderId: 'openai-primary',
+          strictPreferredProvider: true,
         },
       );
       const content = response.choices[0]?.message?.content?.trim() ?? '';
@@ -1856,6 +2634,438 @@ Ví dụ JSON output:
     return [];
   }
 
+  /**
+   * Produces a fresh assessment from exactly the options the customer marked
+   * for comparison. It deliberately does not reuse the deterministic table
+   * formatter: the LLM must weigh the supplied evidence and state uncertainty
+   * when the table does not establish a clear winner.
+   */
+  async generateComparisonAssessment(dto: CompareRecommendationsDto): Promise<{
+    assessment: string | null;
+    followUpPrompt: string | null;
+    actions: ComparisonFollowUpAction[];
+    model: string | null;
+  }> {
+    const providers = [
+      ...(this.decisionComparisonAi?.isConfigured()
+        ? [this.decisionComparisonAi]
+        : []),
+      ...(this.comparisonAi.isConfigured() ? [this.comparisonAi] : []),
+    ];
+    if (providers.length === 0) {
+      return {
+        assessment: null,
+        followUpPrompt: null,
+        actions: [],
+        model: null,
+      };
+    }
+
+    const options = dto.options.map((option) =>
+      this.toComparisonAssessmentEvidence(option),
+    );
+    const prompt = `Bạn là trợ lý tư vấn lô đất của Vĩnh Phúc Viên. Hãy phân tích kỹ các phương án khách đã chọn để giúp họ ra quyết định, không chỉ đọc lại bảng.
+
+Ưu tiên đã biết của khách nằm trong <uu_tien>. Với TỪNG phương án, bắt buộc viết ít nhất 3 câu và phân tích đủ từng nhóm đang có dữ liệu: (1) điểm phù hợp và nguyên nhân tạo chênh lệch, (2) mức giá so với ngân sách, (3) diện tích, (4) hướng và khu vực so với ưu tiên, (5) tính liền kề, khả năng tiếp cận, reasons và tradeOffs. Không được bỏ qua accessSummary, reasons hoặc tradeOffs khi chúng có giá trị. Sau đó so sánh trực tiếp các khác biệt thực sự làm thay đổi lựa chọn và đưa ra kết luận có điều kiện theo ưu tiên của khách. Nếu các lô gần tương đương, nói rõ tiêu chí lựa chọn nào sẽ phá thế cân bằng.
+
+Chỉ được dùng đúng các trường xuất hiện trong <uu_tien> và <bang_so_sanh>. Trường nào không có thì bỏ qua hoàn toàn; không được tự thêm hay yêu cầu khách cung cấp pháp lý, hạ tầng, chi phí phát triển, tiềm năng đầu tư hoặc dữ liệu thị trường. Không suy diễn lợi ích phong thủy chỉ từ tên hướng. Nhắc mã của mọi lô và chỉ gọi là "lô". Phần assessment dài khoảng 180-320 từ, chia một đoạn cho từng phương án và một đoạn kết luận, không emoji, không markdown.
+
+Cuối câu trả lời, hãy tạo đúng 2 hành động hỏi tiếp để khách bấm:
+1. Đi sâu phân tích chính các lô đang chọn theo tiêu chí khách quan tâm.
+2. Bổ sung/đổi tiêu chí hoặc yêu cầu gợi ý lô khác.
+label là cụm từ ngắn hiển thị cho khách: label đầu phải nói rõ phân tích/tư vấn kỹ các lô, label thứ hai phải nói rõ gợi ý/tìm lô khác. message là yêu cầu hoàn chỉnh ở ngôi của khách để hệ thống tự gửi khi bấm, phải bắt đầu tự nhiên bằng "Mình muốn", "Hãy", "Tư vấn", "Phân tích" hoặc "Gợi ý"; tuyệt đối không viết message ở dạng trợ lý hỏi "Bạn muốn...". Hãy cá nhân hóa message bằng mã lô và ưu tiên hiện có. followUpPrompt là một câu dẫn cho hai lựa chọn và phải mời khách nói thêm tiêu chí hoặc vấn đề khác. Không chèn label vào assessment.
+
+Không được dùng các tên field kỹ thuật như accessSummary, reasons hoặc tradeOffs trong câu trả lời; phải diễn đạt bằng tiếng Việt tự nhiên. Hướng là tiêu chí phân loại, không được gọi khác biệt hướng là "nhẹ" hay "nặng".
+
+Chỉ xuất đúng một JSON hợp lệ, không dùng code fence và không thêm chữ bên ngoài. optionAnalyses phải có đúng một phần tử cho mỗi phương án và theo cùng thứ tự đầu vào:
+{"optionAnalyses":[{"plotCodes":["..."],"analysis":"Ít nhất 3 câu phân tích riêng phương án này..."}],"comparison":"So sánh trực tiếp mọi phương án...","conclusion":"Kết luận và đánh đổi...","followUpPrompt":"...","actions":[{"label":"...","message":"..."},{"label":"...","message":"..."}]}
+
+<uu_tien>
+${JSON.stringify(dto.context ?? {})}
+</uu_tien>
+<bang_so_sanh>
+${JSON.stringify(options)}
+</bang_so_sanh>`;
+    const messages: NvidiaMessage[] = [
+      {
+        role: 'system',
+        content:
+          'Toàn bộ nội dung trả về phải là JSON hợp lệ và mọi chuỗi hiển thị cho khách phải là tiếng Việt tự nhiên. Chỉ xuất kết quả cuối cùng; không viết ghi chú, kế hoạch, chỉ dẫn, phân tích nội bộ hoặc nhắc lại yêu cầu.',
+      },
+      { role: 'user', content: prompt },
+    ];
+
+    for (const provider of providers) {
+      try {
+        const response = await provider.chat(messages, [], 'auto', {
+          temperature: 0.2,
+          maxTokens: 1_100,
+          timeoutMs: 6_500,
+          totalTimeoutMs: 14_000,
+          ...(provider.model.includes('nemotron-3')
+            ? { enableThinking: false }
+            : {}),
+        });
+        const rawAssessment = response.choices[0]?.message?.content;
+        let parsed = this.parseComparisonAssessment(
+          rawAssessment,
+          dto.options.map((option) => option.plotCodes),
+        );
+        let responseModel = response.model;
+        if (!parsed) {
+          this.logger.debug(
+            `[comparison assessment] First pass rejected; finish=${response.choices[0]?.finish_reason ?? 'unknown'}; chars=${rawAssessment?.length ?? 0}`,
+          );
+        }
+
+        // Some reasoning-oriented models occasionally place an English planning
+        // trace in `content`. Never expose it. A short, stricter second pass uses
+        // the same dedicated pool and is only attempted for a non-empty invalid
+        // response, so ordinary successful requests do not pay this latency.
+        if (!parsed && rawAssessment?.trim()) {
+          const retry = await provider.chat(
+            [
+              {
+                role: 'system',
+                content:
+                  'Chỉ trả về đúng JSON được yêu cầu. Mọi giá trị chuỗi phải là tiếng Việt có dấu. Không trình bày cách suy nghĩ, không dùng tiếng Anh, không nhắc lại chỉ dẫn.',
+              },
+              {
+                role: 'user',
+                content: `${prompt}\n\nYêu cầu bắt buộc: JSON phải có optionAnalyses cho từng phương án, comparison, conclusion, followUpPrompt và đúng 2 actions gồm label cùng message.`,
+              },
+            ],
+            [],
+            'auto',
+            {
+              temperature: 0.1,
+              maxTokens: 1_100,
+              timeoutMs: 4_500,
+              totalTimeoutMs: 8_000,
+              ...(provider.model.includes('nemotron-3')
+                ? { enableThinking: false }
+                : {}),
+            },
+          );
+          parsed = this.parseComparisonAssessment(
+            retry.choices[0]?.message?.content,
+            dto.options.map((option) => option.plotCodes),
+          );
+          responseModel = retry.model;
+          if (!parsed) {
+            this.logger.debug(
+              `[comparison assessment] Retry rejected; finish=${retry.choices[0]?.finish_reason ?? 'unknown'}; chars=${retry.choices[0]?.message?.content?.length ?? 0}`,
+            );
+          }
+        }
+        if (!parsed) {
+          this.logger.debug(
+            `[comparison assessment] Provider ${provider.model} returned no valid final text`,
+          );
+          continue;
+        }
+        return {
+          assessment: parsed.assessment,
+          followUpPrompt: parsed.followUpPrompt,
+          actions: parsed.actions,
+          model: responseModel ?? provider.model,
+        };
+      } catch (error) {
+        this.logger.debug(
+          `[comparison assessment] Provider ${provider.model} failed: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    }
+
+    return {
+      assessment: null,
+      followUpPrompt: null,
+      actions: [],
+      model: null,
+    };
+  }
+
+  private toComparisonAssessmentEvidence(option: ComparisonOptionDto) {
+    return {
+      plotCodes: option.plotCodes,
+      score: Number((option.score * 100).toFixed(1)),
+      estimatedTotalVnd: option.estimatedTotal,
+      zoneName: option.zoneName,
+      directions: option.directions,
+      totalAreaSqm: option.totalAreaSqm,
+      isAdjacent: option.isAdjacent,
+      accessSummary: option.accessSummary ?? null,
+      reasons: option.reasons ?? [],
+      tradeOffs: option.tradeOffs ?? [],
+    };
+  }
+
+  private parseComparisonAssessment(
+    value?: string | null,
+    requiredPlotGroups: string[][] = [],
+  ): ParsedComparisonAssessment | null {
+    if (!value) return null;
+    const withoutThinking = value
+      .replace(/<think>[\s\S]*?<\/think>/gi, '')
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/\s*```$/i, '')
+      .trim();
+    const jsonStart = withoutThinking.indexOf('{');
+    const jsonEnd = withoutThinking.lastIndexOf('}');
+    if (jsonStart < 0 || jsonEnd <= jsonStart) return null;
+
+    try {
+      const parsed = JSON.parse(
+        withoutThinking.slice(jsonStart, jsonEnd + 1),
+      ) as Record<string, unknown>;
+      const requiredPlotCodes = requiredPlotGroups.flat();
+      const optionAnalyses = Array.isArray(parsed.optionAnalyses)
+        ? parsed.optionAnalyses
+        : [];
+      const structuredOptionAnalyses = requiredPlotGroups.map(
+        (plotCodes, index) => {
+          const item = optionAnalyses[index];
+          if (!item || typeof item !== 'object') return null;
+          const candidate = item as Record<string, unknown>;
+          const declaredCodes = Array.isArray(candidate.plotCodes)
+            ? candidate.plotCodes.filter(
+                (code): code is string => typeof code === 'string',
+              )
+            : [];
+          if (
+            !plotCodes.every((code) =>
+              declaredCodes.some(
+                (declared) => declared.toLowerCase() === code.toLowerCase(),
+              ),
+            )
+          ) {
+            return null;
+          }
+          const analysisText = candidate.analysis;
+          if (typeof analysisText !== 'string') return null;
+          const analysisMentionsCodes = plotCodes.every((code) =>
+            analysisText.toLowerCase().includes(code.toLowerCase()),
+          );
+          const labeledAnalysis = analysisMentionsCodes
+            ? analysisText
+            : `Lô ${plotCodes.join(', ')}: ${analysisText}`;
+          return this.cleanComparisonAssessment(labeledAnalysis, plotCodes);
+        },
+      );
+      const comparison = this.cleanComparisonAssessment(
+        typeof parsed.comparison === 'string' ? parsed.comparison : null,
+      );
+      const conclusion = this.cleanComparisonAssessment(
+        typeof parsed.conclusion === 'string' ? parsed.conclusion : null,
+      );
+      const structuredAssessment =
+        structuredOptionAnalyses.length === requiredPlotGroups.length &&
+        structuredOptionAnalyses.every(Boolean) &&
+        comparison &&
+        conclusion
+          ? [
+              ...(structuredOptionAnalyses as string[]),
+              comparison,
+              conclusion,
+            ].join('\n\n')
+          : null;
+      const assessment =
+        structuredAssessment ??
+        this.cleanComparisonAssessment(
+          typeof parsed.assessment === 'string' ? parsed.assessment : null,
+          requiredPlotCodes,
+        );
+      let followUpPrompt = this.cleanVietnameseCustomerText(
+        typeof parsed.followUpPrompt === 'string'
+          ? parsed.followUpPrompt
+          : null,
+        360,
+      );
+      if (!followUpPrompt) {
+        followUpPrompt =
+          'Bạn muốn tiếp tục theo hướng nào? Nếu có thêm tiêu chí hoặc vấn đề khác, hãy nói với mình.';
+      } else if (
+        !/(?:tiêu chí|vấn đề khác|yêu cầu khác)/i.test(followUpPrompt)
+      ) {
+        followUpPrompt = `${followUpPrompt} Nếu có thêm tiêu chí hoặc vấn đề khác, hãy nói với mình.`;
+      }
+      const rawActions = Array.isArray(parsed.actions)
+        ? parsed.actions.slice(0, 2)
+        : [];
+      const actionIds: ComparisonFollowUpAction['id'][] = [
+        'analyze_selected_plots',
+        'find_other_plots',
+      ];
+      const parsedActions = rawActions
+        .map((item, index): ComparisonFollowUpAction | null => {
+          if (!item || typeof item !== 'object') return null;
+          const candidate = item as Record<string, unknown>;
+          const label = this.cleanVietnameseCustomerText(
+            typeof candidate.label === 'string' ? candidate.label : null,
+            100,
+          );
+          const message = this.cleanVietnameseCustomerText(
+            typeof candidate.message === 'string' ? candidate.message : null,
+            320,
+          );
+          if (!label || !message || !actionIds[index]) return null;
+          const validLabel =
+            index === 0
+              ? /(?:phân tích|tư vấn|so sánh).*(?:kỹ|sâu|chi tiết)|(?:kỹ|sâu|chi tiết).*(?:lô|phương án)/i.test(
+                  label,
+                )
+              : /(?:gợi ý|tìm|đổi).*(?:lô|phương án|tiêu chí)/i.test(label);
+          const normalizedMessage =
+            this.normalizeComparisonActionMessage(message);
+          if (!normalizedMessage) return null;
+          return {
+            id: actionIds[index],
+            label: validLabel
+              ? label
+              : index === 0
+                ? 'Tư vấn kỹ các lô đã chọn'
+                : 'Gợi ý các lô khác',
+            message: normalizedMessage,
+          };
+        })
+        .filter((item): item is ComparisonFollowUpAction => Boolean(item));
+      const actions = actionIds.map(
+        (id, index) =>
+          parsedActions.find((action) => action.id === id) ??
+          this.fallbackComparisonAction(index, requiredPlotCodes),
+      );
+
+      if (!assessment || actions.length !== 2) {
+        this.logger.debug(
+          `[comparison parser] Rejected JSON; keys=${Object.keys(parsed).sort().join(',')}; optionBlocks=${optionAnalyses.length}/${requiredPlotGroups.length}; validOptionBlocks=${structuredOptionAnalyses.filter(Boolean).length}; comparison=${Boolean(comparison)}; conclusion=${Boolean(conclusion)}; legacyAssessment=${typeof parsed.assessment === 'string'}; actions=${actions.length}`,
+        );
+        return null;
+      }
+      return { assessment, followUpPrompt, actions };
+    } catch {
+      return null;
+    }
+  }
+
+  private cleanComparisonAssessment(
+    value?: string | null,
+    requiredPlotCodes: string[] = [],
+  ) {
+    if (!value) return null;
+    const unsupportedClaim =
+      /(?:chi phí phát triển|pháp lý|sổ đỏ|hạ tầng chưa|tiềm năng (?:đầu tư|tăng giá)|sinh lời|thanh khoản)/i;
+    const supportedSentences = value
+      .split(/(?<=[.!?])\s+/)
+      .filter((sentence) => !unsupportedClaim.test(sentence))
+      .join(' ');
+    const assessment = supportedSentences
+      .replace(/<think>[\s\S]*?<\/think>/gi, ' ')
+      .replace(/[`*_#>]/g, '')
+      .replace(/\bplot\b/gi, 'lô')
+      .replace(/\baccessSummary\b/gi, 'khả năng tiếp cận')
+      .replace(/\breasons\b/gi, 'điểm phù hợp')
+      .replace(/\btradeOffs\b/gi, 'điểm cần cân nhắc')
+      .replace(/chênh lệch hướng (?:nhẹ|nặng)/gi, 'khác biệt về hướng')
+      .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '')
+      .replace(/[ \t]+/g, ' ')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim()
+      .slice(0, 1800);
+
+    if (assessment.length < 30) return null;
+
+    const normalized = assessment.toLowerCase();
+    const leaksInternalReasoning =
+      /<\/?think>|\b(?:we need|we should|must mention|must not|the instruction|the user|the table|decision brief|final answer|word count|no emoji|no markdown|only output|do not use)\b/i.test(
+        assessment,
+      );
+    const hasVietnameseWriting =
+      /[ăâđêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ]/i.test(
+        assessment,
+      );
+    const containsEveryPlotCode = requiredPlotCodes.every((code) =>
+      normalized.includes(code.toLowerCase()),
+    );
+    if (
+      leaksInternalReasoning ||
+      !hasVietnameseWriting ||
+      !containsEveryPlotCode
+    ) {
+      return null;
+    }
+
+    return assessment;
+  }
+
+  private normalizeComparisonActionMessage(value: string) {
+    if (
+      /(?:chi phí phát triển|pháp lý|sổ đỏ|tiềm năng (?:đầu tư|tăng giá)|sinh lời|thanh khoản)/i.test(
+        value,
+      )
+    ) {
+      return null;
+    }
+    if (/^(?:mình muốn|hãy|tư vấn|phân tích|gợi ý|so sánh|tìm)/i.test(value)) {
+      return value;
+    }
+    const assistantQuestion = value.match(
+      /^bạn (?:có )?muốn\s+(.+?)(?:\s+không)?[?.!]*$/i,
+    );
+    if (!assistantQuestion?.[1]) return null;
+    const request = assistantQuestion[1].trim();
+    return `Mình muốn ${request.charAt(0).toLocaleLowerCase('vi-VN')}${request.slice(1)}.`;
+  }
+
+  private fallbackComparisonAction(
+    index: number,
+    plotCodes: string[],
+  ): ComparisonFollowUpAction {
+    const codes = plotCodes.join(', ');
+    if (index === 0) {
+      return {
+        id: 'analyze_selected_plots',
+        label: 'Tư vấn kỹ các lô đã chọn',
+        message: codes
+          ? `Phân tích kỹ hơn các lô ${codes} theo điểm phù hợp, ngân sách, diện tích, hướng, khu vực và khả năng tiếp cận.`
+          : 'Phân tích kỹ hơn các lô đã chọn theo những tiêu chí hiện tại của mình.',
+      };
+    }
+    return {
+      id: 'find_other_plots',
+      label: 'Gợi ý các lô khác',
+      message:
+        'Gợi ý cho mình các lô khác theo tiêu chí hiện tại và không lặp lại những lô vừa xem.',
+    };
+  }
+
+  private cleanVietnameseCustomerText(
+    value: string | null | undefined,
+    maxLength: number,
+  ) {
+    if (!value) return null;
+    const text = value
+      .replace(/[`*_#>]/g, '')
+      .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, maxLength);
+    if (text.length < 8) return null;
+    if (
+      /<\/?think>|\b(?:we need|we should|must mention|must not|the instruction|the user|the table|decision brief|final answer|word count|no emoji|no markdown|only output|do not use)\b/i.test(
+        text,
+      )
+    ) {
+      return null;
+    }
+    return /[ăâđêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ]/i.test(
+      text,
+    )
+      ? text
+      : null;
+  }
+
   private async finish(input: {
     conversation: ConversationRow | null;
     sessionId: string;
@@ -1866,11 +3076,15 @@ Ví dụ JSON output:
     requirements: AgentRequirements;
     recommendationResult: RecommendationResult | null;
     suggestedServices?: SuggestedService[];
+    ownedPlots?: OwnedPlotContext[] | null;
     baziSuggestion?: BaziSuggestion;
     quickReplies?: QuickReply[];
+    uiDirective?: AgentUiDirective;
     traceId: string;
     fallbackUsed: boolean;
     fallbackReason?: string;
+    llmModel?: string;
+    skipSuggestedFollowUps?: boolean;
     learningResults?: AutonomousLearningResult[];
   }) {
     const knowledgeVersion = await this.safeKnowledgeVersion();
@@ -1878,8 +3092,14 @@ Ví dụ JSON output:
       input.assistantMessage.trim(),
       input.learningResults ?? [],
     );
+    const localLlmFallback =
+      input.fallbackReason === 'LLM_NOT_CONFIGURED' ||
+      input.fallbackReason === 'LLM_API_UNAVAILABLE' ||
+      input.fallbackReason === 'LLM_AGENT_PLAN_FAILED';
     const metadata = {
-      llmModel: this.nvidia.model,
+      llmModel:
+        input.llmModel ??
+        (localLlmFallback ? 'local-rule-based' : this.nvidia.model),
       rankerVersion:
         input.recommendationResult?.rankerVersion ?? 'rule-based-v1',
       knowledgeVersion,
@@ -1915,6 +3135,14 @@ Ví dụ JSON output:
       [];
     const baziSuggestion =
       input.baziSuggestion ?? input.recommendationResult?.baziSuggestion;
+    const uiDirective =
+      input.uiDirective ??
+      (suggestedServices.length
+        ? ({
+            type: 'OPEN_SERVICE_PANEL',
+            serviceTypeId: suggestedServices[0].id,
+          } satisfies AgentUiDirective)
+        : undefined);
     const quickReplies =
       input.quickReplies ??
       this.buildContextualQuickReplies({
@@ -1922,17 +3150,20 @@ Ví dụ JSON output:
         recommendations,
         suggestedServices,
         baziSuggestion,
+        ownedPlots: input.ownedPlots,
       });
 
-    const suggestedFollowUps = await this.withTimeout(
-      this.generateSuggestedFollowUps(
-        input.userMessage ?? '',
-        assistantMessage,
-      ),
-      1800,
-      [],
-      'suggested_followups',
-    );
+    const suggestedFollowUps = input.skipSuggestedFollowUps
+      ? []
+      : await this.withTimeout(
+          this.generateSuggestedFollowUps(
+            input.userMessage ?? '',
+            assistantMessage,
+          ),
+          1800,
+          [],
+          'suggested_followups',
+        );
 
     const actions = [
       ...recommendations.flatMap((option) => [
@@ -1969,6 +3200,7 @@ Ví dụ JSON output:
             quickReplies,
             suggestedFollowUps,
             actions,
+            uiDirective,
           },
         );
       } catch (error) {
@@ -1991,6 +3223,7 @@ Ví dụ JSON output:
       quickReplies,
       suggestedFollowUps,
       actions,
+      uiDirective,
       metadata,
     };
   }
@@ -2043,6 +3276,128 @@ Ví dụ JSON output:
     return merged.length ? merged : undefined;
   }
 
+  private filterDurableMemoryProposals(
+    proposals: MemoryProposal[] | undefined,
+    sourceMessage: string,
+  ) {
+    const filtered = (proposals ?? []).filter(
+      (proposal) =>
+        proposal.memoryType !== 'user_preference' ||
+        proposal.memoryKey !== 'consultation_topic_preference' ||
+        this.hasDurableConsultationPreferenceCue(sourceMessage),
+    );
+    return filtered.length ? filtered : undefined;
+  }
+
+  private hasDurableConsultationPreferenceCue(message: string) {
+    const folded = this.foldForMemory(message);
+    const topic =
+      /\b(?:phong thuy|feng shui|fengshui|bazi|bat tu|am trach|van hoa|tam linh)\b/.test(
+        folded,
+      );
+    if (!topic) return false;
+
+    const asksToRemember =
+      /\b(?:ghi nho|nho giup|hay nho|luu lai|luu giup|remember)\b/.test(folded);
+    const futureScope =
+      /\b(?:tu gio|sau nay|ve sau|lan sau|nhung lan sau|cac lan sau|moi lan|cac lan tu van|nhung lan tu van|trong tuong lai)\b/.test(
+        folded,
+      );
+    const explicitStylePreference =
+      /^(?:toi|minh|tui|tao|t|em|anh|chi)\b.{0,120}\b(?:thich|uu tien)\b.{0,120}\b(?:tu van|trao doi|giai thich|chu de|goc nhin)\b/.test(
+        folded,
+      );
+    return asksToRemember || futureScope || explicitStylePreference;
+  }
+
+  private buildBaziIntakeTurn(input: {
+    message: string;
+    intent: string;
+    requirements: AgentRequirements;
+    directRequirements: AgentRequirements;
+    customerProfile: CustomerProfileContext | null;
+  }): {
+    assistantMessage: string;
+    requirements: AgentRequirements;
+    quickReplies: QuickReply[];
+  } | null {
+    if (input.intent !== 'bazi_suggestion') return null;
+
+    const requirements = { ...input.requirements };
+    const profileDateUsed = Boolean(
+      input.customerProfile?.dateOfBirth &&
+      requirements.birthDate === input.customerProfile.dateOfBirth &&
+      !input.directRequirements.birthDate,
+    );
+    const profileGenderUsed = Boolean(
+      input.customerProfile?.gender &&
+      requirements.gender === input.customerProfile.gender &&
+      !input.directRequirements.gender,
+    );
+
+    if (!requirements.birthDate) {
+      return {
+        assistantMessage:
+          'Được, mình sẽ xem Bát Tự theo hướng tham khảo văn hóa. Hồ sơ tài khoản hiện chưa có ngày sinh để mình sử dụng, nên bạn cho mình ngày sinh theo dạng ngày/tháng/năm trước nhé.',
+        requirements,
+        quickReplies: [],
+      };
+    }
+
+    if (!requirements.gender) {
+      const dateLead = profileDateUsed
+        ? `Mình đã lấy ngày sinh ${this.formatVietnameseDate(requirements.birthDate)} từ hồ sơ tài khoản nên bạn không cần nhập lại.`
+        : `Mình đã có ngày sinh ${this.formatVietnameseDate(requirements.birthDate)}.`;
+      return {
+        assistantMessage: `${dateLead} Bạn cho mình giới tính và giờ sinh nếu biết, chẳng hạn “nam, khoảng 8 giờ sáng”. Nếu không biết giờ sinh, bạn chỉ cần nói giới tính và ghi “không biết giờ sinh”.`,
+        requirements,
+        quickReplies: [],
+      };
+    }
+
+    const folded = this.foldForMemory(input.message);
+    const skipsBirthTime =
+      /\b(?:khong biet|khong ro|bo qua|khong co)\b.{0,30}\b(?:gio sinh|gio)\b/.test(
+        folded,
+      ) || /\bphan tich\b.{0,30}\bkhong co gio sinh\b/.test(folded);
+    const directlyProvidedCore = Boolean(
+      input.directRequirements.birthDate && input.directRequirements.gender,
+    );
+
+    if (!requirements.birthTime && !skipsBirthTime && !directlyProvidedCore) {
+      const knownParts =
+        profileDateUsed || profileGenderUsed
+          ? `Mình thấy hồ sơ tài khoản có ngày sinh ${this.formatVietnameseDate(requirements.birthDate)} và giới tính ${this.vietnameseGender(requirements.gender)}; bạn không cần nhập lại hai thông tin này.`
+          : `Mình đã có ngày sinh ${this.formatVietnameseDate(requirements.birthDate)} và giới tính ${this.vietnameseGender(requirements.gender)}.`;
+      return {
+        assistantMessage: `${knownParts} Bạn cho mình thêm giờ sinh nếu biết để phần tham khảo đầy đủ hơn. Nếu không biết, bạn có thể chọn “Phân tích không có giờ sinh”. Nếu đang xem cho người khác, hãy gửi ngày sinh và giới tính của người đó thay vì dùng hồ sơ của bạn.`,
+        requirements,
+        quickReplies: [
+          {
+            id: 'bazi-without-birth-time',
+            label: 'Phân tích không có giờ sinh',
+            message:
+              'Mình không biết giờ sinh, hãy phân tích theo ngày sinh và giới tính hiện có.',
+            emphasis: 'strong',
+          },
+        ],
+      };
+    }
+
+    return null;
+  }
+
+  private formatVietnameseDate(value: string) {
+    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return match ? `${match[3]}/${match[2]}/${match[1]}` : value;
+  }
+
+  private vietnameseGender(value: AgentRequirements['gender']) {
+    if (value === 'male') return 'nam';
+    if (value === 'female') return 'nữ';
+    return 'khác';
+  }
+
   /**
    * Captures an explicit customer FAQ submission without relying on the
    * planner. This is intentionally narrow: a normal question containing the
@@ -2054,9 +3409,7 @@ Ví dụ JSON output:
   ): MemoryProposal[] | undefined {
     const folded = this.foldForMemory(message);
     const isFaqSubmission = /\b(?:faq|cau hoi thuong gap)\b/.test(folded);
-    const isContribution = /\b(?:dong gop|de xuat|gui|tao|them)\b/.test(
-      folded,
-    );
+    const isContribution = /\b(?:dong gop|de xuat|gui|tao|them)\b/.test(folded);
     const asksForReview =
       /\b(?:quan tri vien|admin|duyet|kiem tra|xem xet|phe duyet)\b/.test(
         folded,
@@ -2077,9 +3430,7 @@ Ví dụ JSON output:
 
     return [
       {
-        category: concernsCareService
-          ? 'Dịch vụ chăm sóc mộ'
-          : 'FAQ đề xuất',
+        category: concernsCareService ? 'Dịch vụ chăm sóc mộ' : 'FAQ đề xuất',
         title: question || 'Đề xuất FAQ từ khách hàng',
         content: sanitized,
         memoryType: 'faq',
@@ -2124,6 +3475,12 @@ Ví dụ JSON output:
 
     const memoryKey = this.inferReliableMemoryKey(folded);
     if (!memoryKey) return undefined;
+    if (
+      memoryKey === 'consultation_topic_preference' &&
+      !this.hasDurableConsultationPreferenceCue(message)
+    ) {
+      return undefined;
+    }
     return [
       {
         category: 'explicit_user_preference',
@@ -2217,6 +3574,9 @@ Ví dụ JSON output:
       folded.length <= 48 &&
       /^(?:xin chao|chao|hello+|helo+|hi+|hey+|alo+|yo)(?:\s+[a-z0-9-]{1,16}){0,3}$/.test(
         folded,
+      ) &&
+      !/\b(?:lo|mo|khu|gia|dich vu|giu cho|dat cho|mua|quy trinh|phong thuy|bat tu|help|what|how)\b/.test(
+        folded.replace(/^[a-z]+\s*/, ''),
       );
     if (isShortGreeting) {
       return {
@@ -2227,8 +3587,8 @@ Ví dụ JSON output:
     }
 
     const isThanks =
-      folded.length <= 64 &&
-      /^(?:(?:ok|oke|oki)\s+)?(?:cam on|c on|thanks|thank you|tks|thank|thank u)(?:\s+(?:nha|nhe|ban|m|minh))?$/.test(
+      folded.length <= 80 &&
+      /^(?:(?:ok|oke|oki|okay)\s+)?(?:cam on|c on|thanks|thank you|tks|thank|thank u)(?:\s+(?:rat nhieu|nhieu|nha|nhe|ban|m|minh|bro|ad)){0,3}$/.test(
         folded,
       );
     if (isThanks) {
@@ -2253,7 +3613,7 @@ Ví dụ JSON output:
 
     const isGoodbye =
       folded.length <= 64 &&
-      /^(?:bye|goodbye|tam biet|hen gap lai|hen gap|ngu ngon|thoi nha|thoi nhe)(?:\s+.*)?$/.test(
+      /^(?:bye(?:\s+bye)?|goodbye|tam biet|hen gap lai|hen gap|ngu ngon|thoi nha|thoi nhe)(?:\s+(?:nha|nhe|ban|m|minh|bro|ad|a|oi)){0,3}$/.test(
         folded,
       );
     if (isGoodbye) {
@@ -2264,12 +3624,104 @@ Ví dụ JSON output:
       };
     }
 
+    const isAcknowledgement = this.isBareAcknowledgement(message);
+    if (isAcknowledgement) {
+      return {
+        assistantMessage:
+          'Được rồi. Mình sẽ giữ ngữ cảnh đang trao đổi; khi muốn tiếp tục, bạn chỉ cần nói việc cần làm tiếp theo.',
+        quickReplies: this.baseHelpQuickReplies(),
+      };
+    }
+
+    const asksHowAreYou =
+      folded.length <= 80 &&
+      /^(?:(?:chao|hi|hello)\s+)?(?:ban|m|may)\s+(?:co\s+)?khoe\s+khong(?:\s+(?:vay|do|a|ha))?$/.test(
+        folded,
+      );
+    if (asksHowAreYou) {
+      return {
+        assistantMessage:
+          'Mình hoạt động bình thường và sẵn sàng hỗ trợ bạn. Hôm nay bạn muốn xem lô, dịch vụ chăm sóc hay hỏi về quy trình?',
+        quickReplies: this.baseHelpQuickReplies(),
+      };
+    }
+
+    const asksIdentityOrPersonalSmallTalk =
+      folded.length <= 100 &&
+      /\b(?:ten ban la gi|ban ten gi|m ten gi|ban bao nhieu tuoi|ban co nguoi yeu|ban co buon|ban co vui|ban co met|hom nay ban the nao)\b/.test(
+        folded,
+      );
+    if (asksIdentityOrPersonalSmallTalk) {
+      return {
+        assistantMessage:
+          'Mình là trợ lý AI của Vĩnh Phúc Viên nên không có tuổi hay đời sống riêng như con người. Bạn có thể gọi mình là trợ lý Vĩnh Phúc Viên; mình đang hoạt động bình thường và sẵn sàng hỗ trợ bạn.',
+        quickReplies: this.baseHelpQuickReplies(),
+      };
+    }
+
+    const isLightReaction =
+      folded.length <= 24 &&
+      /^(?:haha+|hehe+|hihi+|kk+|okela|hay do|vui vay)$/.test(folded);
+    if (isLightReaction) {
+      return {
+        assistantMessage:
+          'Mình vẫn ở đây. Khi cần tiếp tục, bạn cứ nói thẳng việc muốn xem hoặc kiểm tra nhé.',
+        quickReplies: this.baseHelpQuickReplies(),
+      };
+    }
+
+    const asksForOrientation =
+      folded.length <= 120 &&
+      /\b(?:can giup|can ho tro|chua biet bat dau|khong biet bat dau|bat dau tu dau)\b/.test(
+        folded,
+      ) &&
+      !/\b(?:lo|khu|gia|ngan sach|dich vu|giu cho|dat cho|mua|quy trinh|phong thuy|bat tu|ban do)\b/.test(
+        folded,
+      );
+    if (asksForOrientation) {
+      return {
+        assistantMessage:
+          'Không sao, mình có thể giúp bạn bắt đầu từng bước. Nếu đang chọn nơi an táng, ta có thể xem lô và ngân sách trước; nếu đã có lô, ta có thể xem dịch vụ chăm sóc; hoặc mình giải thích quy trình mua/giữ chỗ trước.',
+        quickReplies: this.baseHelpQuickReplies(),
+      };
+    }
+
+    const apologizes =
+      folded.length <= 64 &&
+      /^(?:xin loi|sorry|sr)(?:\s+(?:nha|nhe|ban|m|minh|vi vay)){0,3}$/.test(
+        folded,
+      );
+    if (apologizes) {
+      return {
+        assistantMessage:
+          'Không sao đâu. Bạn cứ trao đổi tự nhiên; mình sẽ tập trung hỗ trợ đúng việc bạn cần.',
+        quickReplies: this.baseHelpQuickReplies(),
+      };
+    }
+
+    const simpleBereavementStatement =
+      folded.length <= 160 &&
+      /\b(?:nguoi than|bo|ba|me|ong|vo|chong|anh|chi|em|con)\b.{0,50}\b(?:vua|moi)?\s*(?:mat|qua doi)\b/.test(
+        folded,
+      ) &&
+      !/\b(?:lo|khu|gia lo|ngan sach|dich vu|giu cho|dat cho|mua|thu tuc|quy trinh|phong thuy|bat tu|ban do)\b/.test(
+        folded,
+      );
+    if (simpleBereavementStatement) {
+      return {
+        assistantMessage:
+          'Mình rất tiếc về mất mát của gia đình bạn. Bạn không cần trình bày mọi thứ ngay một lúc; nếu cần, mình có thể lần lượt hỗ trợ tìm lô phù hợp, giải thích quy trình hoặc xem các dịch vụ chăm sóc hiện có. Bạn muốn mình giúp việc nào trước?',
+        quickReplies: this.baseHelpQuickReplies(),
+      };
+    }
+
     // Respectful de-escalation. We do not shame the user and we do not infer or
     // persist emotional/psychological attributes; we only respond to the tone of
     // this message and keep the conversation usable.
-    const containsDomainRequest = /\b(?:lo|khu|gia|ngan sach|dich vu|giu cho|dat cho|mua|phong thuy|bat tu|tam linh|hop dong|yeu cau|ban do)\b/.test(
-      folded,
-    );
+    const containsDomainRequest =
+      /\b(?:lo|khu|gia|ngan sach|dich vu|giu cho|dat cho|mua|phong thuy|bat tu|tam linh|hop dong|yeu cau|ban do)\b/.test(
+        folded,
+      );
     const isHostileOrFrustrated =
       folded.length <= 96 &&
       !containsDomainRequest &&
@@ -2289,7 +3741,10 @@ Ví dụ JSON output:
     // same canned paragraph as the preceding "tâm linh" opener. In the normal
     // path the LLM handles these turns semantically.
     const isShortBazi =
-      folded.length <= 72 && /\b(?:bat tu|bazi)\b/.test(folded);
+      folded.length <= 72 &&
+      /^(?:(?:xem|tu van|hoi ve)\s+)?(?:bat tu|bazi)(?:\s+la gi)?$/.test(
+        folded,
+      );
     if (isShortBazi) {
       return {
         assistantMessage:
@@ -2304,14 +3759,18 @@ Ví dụ JSON output:
           {
             id: 'bazi-explain-scope',
             label: 'Bát Tự được dùng thế nào?',
-            message: 'Giải thích giúp mình Bát Tự được dùng như thế nào khi tham khảo hướng mộ.',
+            message:
+              'Giải thích giúp mình Bát Tự được dùng như thế nào khi tham khảo hướng mộ.',
           },
         ],
       };
     }
 
     const isShortFengShui =
-      folded.length <= 72 && /\b(?:phong thuy|am trach)\b/.test(folded);
+      folded.length <= 72 &&
+      /^(?:(?:xem|tu van|hoi ve)\s+)?(?:phong thuy|am trach)(?:\s+la gi)?$/.test(
+        folded,
+      );
     if (isShortFengShui) {
       return {
         assistantMessage:
@@ -2326,14 +3785,16 @@ Ví dụ JSON output:
           {
             id: 'fengshui-plots',
             label: 'Tìm lô theo phong thủy',
-            message: 'Gợi ý lô phù hợp và cân nhắc thêm tiêu chí phong thủy cho mình.',
+            message:
+              'Gợi ý lô phù hợp và cân nhắc thêm tiêu chí phong thủy cho mình.',
           },
         ],
       };
     }
 
     const isShortSpiritual =
-      folded.length <= 72 && /\b(?:tam linh)\b/.test(folded);
+      folded.length <= 72 &&
+      /^(?:(?:xem|tu van|hoi ve)\s+)?tam linh(?:\s+la gi)?$/.test(folded);
     if (isShortSpiritual) {
       return {
         assistantMessage:
@@ -2353,15 +3814,16 @@ Ví dụ JSON output:
           {
             id: 'spiritual-plots',
             label: 'Tìm lô phù hợp',
-            message: 'Gợi ý lô phù hợp và cân nhắc thêm yếu tố phong thủy cho mình.',
+            message:
+              'Gợi ý lô phù hợp và cân nhắc thêm yếu tố phong thủy cho mình.',
           },
         ],
       };
     }
 
     const asksCapabilities =
-      folded.length <= 96 &&
-      /\b(?:ban la ai|m la ai|ban lam duoc gi|co the giup gi|chuc nang|ho tro gi)\b/.test(
+      folded.length <= 120 &&
+      /\b(?:ban la ai|m la ai|ban lam duoc gi|co the giup gi|chuc nang|ho tro gi|what can you help|what can you do|who are you)\b/.test(
         folded,
       );
     if (asksCapabilities) {
@@ -2375,6 +3837,232 @@ Ví dụ JSON output:
     return null;
   }
 
+  private buildAmbiguousDomainTurn(
+    message: string,
+  ): DeterministicSocialTurn | null {
+    const folded = this.foldForMemory(message);
+    const plotTopic =
+      /^(?:lo|lo dat|dat|dat nghia trang)(?:\s+(?:a|ha|nha|nhe|di|ne))?$/.test(
+        folded,
+      );
+    if (plotTopic) {
+      return {
+        assistantMessage:
+          'Bạn đang muốn hỏi về lô đất đúng không? Bạn muốn mình tìm lô đang trống, so sánh phương án hay kiểm tra một mã lô cụ thể?',
+        quickReplies: [
+          {
+            id: 'ambiguous-plot-browse',
+            label: 'Tìm lô đang trống',
+            message: 'Tìm giúp mình các lô đang trống để tham khảo.',
+            emphasis: 'strong',
+          },
+          {
+            id: 'ambiguous-plot-budget',
+            label: 'Tìm theo ngân sách',
+            message: 'Tìm lô phù hợp theo ngân sách của mình.',
+          },
+          {
+            id: 'ambiguous-plot-code',
+            label: 'Kiểm tra mã lô',
+            message: 'Mình muốn kiểm tra thông tin một mã lô cụ thể.',
+          },
+        ],
+      };
+    }
+
+    if (/^(?:gia|gia lo|gia dich vu)(?:\s+(?:a|ha|nha|nhe))?$/.test(folded)) {
+      return {
+        assistantMessage:
+          'Bạn muốn hỏi giá lô đất hay giá dịch vụ chăm sóc? Nếu là một lô cụ thể, bạn gửi mã lô để mình kiểm tra đúng dữ liệu nhé.',
+        quickReplies: [
+          {
+            id: 'ambiguous-price-plots',
+            label: 'Xem giá lô',
+            message: 'Cho mình xem giá các lô đang trống.',
+            emphasis: 'strong',
+          },
+          {
+            id: 'ambiguous-price-services',
+            label: 'Xem giá dịch vụ',
+            message: 'Cho mình xem giá các dịch vụ chăm sóc hiện có.',
+          },
+        ],
+      };
+    }
+
+    if (/^(?:dich vu|cham soc)(?:\s+(?:a|ha|nha|nhe|di))?$/.test(folded)) {
+      return {
+        assistantMessage:
+          'Bạn muốn xem danh sách dịch vụ hiện có hay cần mình tư vấn dịch vụ phù hợp với lô của gia đình?',
+        quickReplies: [
+          {
+            id: 'ambiguous-service-list',
+            label: 'Xem dịch vụ hiện có',
+            message: 'Cho mình xem các dịch vụ chăm sóc hiện có.',
+            emphasis: 'strong',
+          },
+          {
+            id: 'ambiguous-service-advice',
+            label: 'Tư vấn theo lô',
+            message: 'Tư vấn dịch vụ phù hợp với lô đất của gia đình mình.',
+          },
+        ],
+      };
+    }
+
+    if (/^(?:so sanh|doi chieu)(?:\s+(?:a|ha|nha|nhe|di))?$/.test(folded)) {
+      return {
+        assistantMessage:
+          'Bạn muốn so sánh những lô nào? Bạn có thể chọn các lô đã được gợi ý hoặc gửi cho mình hai hay nhiều mã lô cụ thể.',
+        quickReplies: [
+          {
+            id: 'ambiguous-compare-recent',
+            label: 'So sánh lô đã gợi ý',
+            message: 'So sánh các lô vừa được gợi ý cho mình.',
+            emphasis: 'strong',
+          },
+          {
+            id: 'ambiguous-compare-new',
+            label: 'Tìm phương án để so sánh',
+            message: 'Tìm 2 phương án phù hợp rồi so sánh giúp mình.',
+          },
+        ],
+      };
+    }
+
+    if (/^(?:mua|giu cho|dat cho)(?:\s+(?:a|ha|nha|nhe|di))?$/.test(folded)) {
+      return {
+        assistantMessage:
+          'Bạn đang muốn tìm lô để mua, xem quy trình hay tiếp tục gửi yêu cầu cho một lô đã chọn?',
+        quickReplies: [
+          {
+            id: 'ambiguous-purchase-find',
+            label: 'Tìm lô phù hợp',
+            message: 'Tìm giúp mình lô phù hợp để mua.',
+            emphasis: 'strong',
+          },
+          {
+            id: 'ambiguous-purchase-process',
+            label: 'Xem quy trình',
+            message: 'Giải thích giúp mình quy trình mua và giữ chỗ.',
+          },
+        ],
+      };
+    }
+
+    if (
+      /^(?:phong thuy|bat tu|tam linh|huong)(?:\s+(?:a|ha|nha|nhe|di))?$/.test(
+        folded,
+      )
+    ) {
+      return {
+        assistantMessage:
+          'Bạn muốn trao đổi về hướng lô, xem Bát Tự theo ngày sinh hay tìm lô theo một tiêu chí phong thủy cụ thể? Mình sẽ tách rõ phần tham khảo văn hóa với dữ liệu thực tế.',
+        quickReplies: [
+          {
+            id: 'ambiguous-culture-direction',
+            label: 'Xem hướng lô',
+            message: 'Tư vấn giúp mình về hướng lô theo góc nhìn tham khảo.',
+            emphasis: 'strong',
+          },
+          {
+            id: 'ambiguous-culture-bazi',
+            label: 'Xem Bát Tự',
+            message: 'Mình muốn xem Bát Tự theo ngày sinh.',
+          },
+        ],
+      };
+    }
+
+    if (/^(?:ban do|vi tri)(?:\s+(?:a|ha|nha|nhe|di))?$/.test(folded)) {
+      return {
+        assistantMessage:
+          'Bạn muốn mở bản đồ tổng thể hay tìm vị trí của một mã lô cụ thể?',
+        quickReplies: [
+          {
+            id: 'ambiguous-map-overview',
+            label: 'Xem bản đồ tổng thể',
+            message: 'Mở bản đồ tổng thể nghĩa trang cho mình.',
+            emphasis: 'strong',
+          },
+          {
+            id: 'ambiguous-map-plot',
+            label: 'Tìm vị trí lô',
+            message: 'Mình muốn tìm vị trí của một mã lô cụ thể.',
+          },
+        ],
+      };
+    }
+
+    if (/^(?:tu van|ho tro|giup minh|giup tui|can giup)$/.test(folded)) {
+      return {
+        assistantMessage:
+          'Mình sẵn sàng hỗ trợ. Bạn muốn bắt đầu với việc tìm lô, xem dịch vụ chăm sóc hay tìm hiểu quy trình mua và giữ chỗ?',
+        quickReplies: this.baseHelpQuickReplies(),
+      };
+    }
+
+    return null;
+  }
+
+  private buildImmediateSafetyTurn(
+    message: string,
+  ): DeterministicSocialTurn | null {
+    const folded = this.foldForMemory(message);
+    const selfHarmSignal =
+      /\b(?:tu tu|muon chet|muon tu tu|khong muon song|khong con muon song|ket thuc cuoc doi|tu lam hai ban than|lam hai ban than|suicide|kill myself|end my life|self harm)\b/.test(
+        folded,
+      );
+    if (!selfHarmSignal) return null;
+
+    return {
+      assistantMessage:
+        'Mình rất tiếc vì bạn đang phải chịu cảm giác này. Nếu bạn có thể làm hại bản thân ngay lúc này, hãy gọi dịch vụ khẩn cấp tại nơi bạn đang ở hoặc đến cơ sở cấp cứu gần nhất, rời xa những thứ có thể gây hại và nhờ một người bạn tin cậy ở cạnh. Nếu chưa ở nguy hiểm tức thời, hãy liên hệ bác sĩ hoặc chuyên gia sức khỏe tâm thần sớm nhất có thể. Bạn có đang an toàn ngay lúc này không?',
+      quickReplies: [],
+    };
+  }
+
+  private isSensitiveSystemDisclosureRequest(message: string) {
+    const folded = this.foldForMemory(message);
+    const asksToReveal =
+      /\b(?:cho(?:\s+toi|\s+minh|\s+tui)?\s+xem|dua|gui|noi|doc|in|hien|reveal|show|print|tell|leak|lay)\b/.test(
+        folded,
+      );
+    const protectedTarget =
+      /\b(?:api key|secret|mat khau|password|bien moi truong|environment variable|file env|env file|system prompt|prompt he thong|developer message|chi dan noi bo|internal instruction|token truy cap|access token)\b/.test(
+        folded,
+      );
+    return protectedTarget && asksToReveal;
+  }
+
+  private isLowInformationTurn(message: string) {
+    const folded = this.foldForMemory(message);
+    if (!folded) return true;
+    return (
+      folded.length <= 16 &&
+      /^(?:gi|ha|he|a|ua|help|test|thu|sao|roi sao|tiep di|noi di|khong biet)$/.test(
+        folded,
+      )
+    );
+  }
+
+  private isBareAcknowledgement(message: string) {
+    const folded = this.foldForMemory(message);
+    return (
+      folded.length <= 48 &&
+      /^(?:ok|oke|oki|okay|uh|u|um|uhm|duoc|duoc roi|hieu roi|ro roi|biet roi|on roi|vay nha|the nha)$/.test(
+        folded,
+      )
+    );
+  }
+
+  private isBereavementContext(message: string) {
+    const folded = this.foldForMemory(message);
+    return /\b(?:nguoi than|bo|ba|me|ong|vo|chong|anh|chi|em|con)\b.{0,50}\b(?:vua|moi)?\s*(?:mat|qua doi)\b/.test(
+      folded,
+    );
+  }
+
   private quickRepliesForConversationalTurn(
     message: string,
     intent: string,
@@ -2382,7 +4070,9 @@ Ví dụ JSON output:
     const folded = this.foldForMemory(message);
     const greeting =
       folded.length <= 64 &&
-      /^(?:xin chao|chao|hello+|helo+|hi+|hey+|alo+|yo)(?:\s+.*)?$/.test(folded);
+      /^(?:xin chao|chao|hello+|helo+|hi+|hey+|alo+|yo)(?:\s+.*)?$/.test(
+        folded,
+      );
     const hostile =
       /\b(?:dit me|dcm|dm m|dmm|deo|clm|vl|vcl|cc|ngu v|ngu qua|sao ngu|buc minh|uc che|chan that|loi hoai|lam an gi|nhu cc|cai deo gi)\b/.test(
         folded,
@@ -2392,7 +4082,10 @@ Ví dụ JSON output:
         folded,
       );
     if (greeting || hostile || capabilities) return this.baseHelpQuickReplies();
-    if (intent === 'bazi_suggestion' || /\b(?:tam linh|phong thuy|bat tu|bazi|am trach)\b/.test(folded)) {
+    if (
+      intent === 'bazi_suggestion' ||
+      /\b(?:tam linh|phong thuy|bat tu|bazi|am trach)\b/.test(folded)
+    ) {
       return [
         {
           id: 'conversation-bazi',
@@ -2408,7 +4101,8 @@ Ví dụ JSON output:
         {
           id: 'conversation-spiritual-plots',
           label: 'Tìm lô theo tiêu chí phong thủy',
-          message: 'Gợi ý lô phù hợp và cân nhắc thêm tiêu chí phong thủy cho mình.',
+          message:
+            'Gợi ý lô phù hợp và cân nhắc thêm tiêu chí phong thủy cho mình.',
         },
       ];
     }
@@ -2446,18 +4140,29 @@ Ví dụ JSON output:
     recommendations: RecommendationResult['recommendations'];
     suggestedServices: SuggestedService[];
     baziSuggestion?: BaziSuggestion;
+    ownedPlots?: OwnedPlotContext[] | null;
   }): QuickReply[] {
     if (input.recommendations.length) {
       const best = input.recommendations[0];
       const code = best.plotCodes[0];
+      const comparedCodes = input.recommendations
+        .flatMap((option) => option.plotCodes)
+        .slice(0, 4);
+      const comparedLabel = comparedCodes.join(', ');
       const replies: QuickReply[] = [
         {
-          id: `plot-view-${best.optionId}`,
-          label: code ? `Xem lô ${code}` : 'Xem phương án đầu',
-          message: code
-            ? `Cho mình xem chi tiết lô ${code}.`
-            : 'Cho mình xem chi tiết phương án đầu tiên.',
+          id: 'plot-analyze-recommendations',
+          label: 'Tư vấn kỹ các lô được đề xuất',
+          message: comparedLabel
+            ? `Phân tích kỹ hơn các lô ${comparedLabel} theo tiêu chí hiện tại của mình.`
+            : 'Phân tích kỹ hơn các phương án vừa đề xuất theo tiêu chí hiện tại của mình.',
           emphasis: 'strong',
+        },
+        {
+          id: 'plot-find-alternatives',
+          label: 'Gợi ý các lô khác',
+          message:
+            'Gợi ý cho mình các lô khác theo tiêu chí hiện tại và không lặp lại những lô vừa đề xuất.',
         },
         {
           id: `plot-hold-${best.optionId}`,
@@ -2468,19 +4173,12 @@ Ví dụ JSON output:
           emphasis: 'strong',
         },
       ];
-      if (input.recommendations.length > 1) {
-        replies.push({
-          id: 'plot-compare',
-          label: 'So sánh các phương án',
-          message: 'So sánh giúp mình các phương án vừa gợi ý.',
-        });
-      }
       return replies.slice(0, 4);
     }
 
     if (input.suggestedServices.length) {
       const service = input.suggestedServices[0];
-      return [
+      const replies: QuickReply[] = [
         {
           id: `service-detail-${service.id}`,
           label: `Xem ${service.name}`,
@@ -2493,6 +4191,21 @@ Ví dụ JSON output:
           message: `Mình muốn đặt dịch vụ ${service.name}.`,
         },
       ];
+      if (Array.isArray(input.ownedPlots) && input.ownedPlots.length === 0) {
+        replies[1] = {
+          id: 'service-consult-plot-without-ownership',
+          label: 'Tư vấn thêm về lô đất phù hợp',
+          message:
+            'Mình chưa sở hữu lô nào. Hãy tư vấn cho mình các lô đất phù hợp để sau này có thể sử dụng dịch vụ chăm sóc.',
+        };
+      } else if (input.ownedPlots?.length === 1) {
+        replies[1] = {
+          id: `service-book-${service.id}-${input.ownedPlots[0].plotId}`,
+          label: `Đặt cho lô ${input.ownedPlots[0].plotCode}`,
+          message: `Mình muốn đặt dịch vụ ${service.name} cho lô ${input.ownedPlots[0].plotCode}.`,
+        };
+      }
+      return replies;
     }
 
     if (input.baziSuggestion || input.intent === 'bazi_suggestion') {
@@ -2517,14 +4230,56 @@ Ví dụ JSON output:
   private isClearlyOutOfScope(message: string) {
     const folded = this.foldForMemory(message);
     if (!folded) return false;
+    const hasCemeteryContext =
+      /\b(?:nghia trang|vinh phuc vien|lo mo|mo phan|khu mo|an tang|mai tang|giu cho|dat cho|cham soc mo|huong mo|bat tu|am trach)\b/.test(
+        folded,
+      );
+    if (hasCemeteryContext) return false;
+
+    const arithmeticQuestion =
+      /\b\d+\s*(?:cong|tru|nhan|chia)\s*\d+\b/.test(folded) ||
+      /\b(?:mot|hai|ba|bon|nam|sau|bay|tam|chin|muoi)\s+(?:cong|tru|nhan|chia)\s+(?:mot|hai|ba|bon|nam|sau|bay|tam|chin|muoi)\b/.test(
+        folded,
+      ) ||
+      /^\d+\s+\d+\s+(?:bang|la)\s+(?:may|bao nhieu)$/.test(folded);
     // High-precision fail-safe only. The LLM still decides ambiguous cases.
-    return /\b(?:tin tuc|thoi su|chien su|chinh tri|bau cu|quoc hoi|tong thong|iran|israel|ukraine|nga my|my iran|the thao|bong da|nba|world cup|du bao thoi tiet|thoi tiet|lap trinh|code python|javascript|crypto|chung khoan|ty gia|cong thuc nau an|du lich)\b/.test(
+    const translationQuestion = /\bdich\b.{0,50}\b(?:sang|qua)\s+tieng\b/.test(
+      folded,
+    );
+    return (
+      arithmeticQuestion ||
+      translationQuestion ||
+      /\b(?:tin tuc|thoi su|chien su|chinh tri|bau cu|quoc hoi|tong thong|iran|israel|ukraine|nga my|my iran|the thao|bong da|nba|world cup|du bao thoi tiet|thoi tiet|lap trinh|code python|javascript|crypto|bitcoin|chung khoan|ty gia|cong thuc nau an|nau mon|du lich|giai bai tap|bai tap ve nha|giai phuong trinh|toan hoc|dich sang tieng|dich tieng|viet email|chuyen cuoi|phim nao|am nhac|ca si|game nao|tu van benh|thuoc gi|chan doan|tu van phap luat|luat hinh su|luat su|vu kien|kien tung|dan su|mua laptop|mua dien thoai)\b/.test(
+        folded,
+      )
+    );
+  }
+
+  private isBasicPlotDetailsQuestion(
+    message: string,
+    requirements: AgentRequirements,
+  ) {
+    if (!requirements.selectedPlotCode) return false;
+    const folded = this.foldForMemory(message);
+    if (
+      /\b(?:dat lich|lich hen|hen gap|gap ban quan ly|tham quan|xem thuc te|giu cho|dat cho|mua lo|dat dich vu|nhac lich|tuong niem)\b/.test(
+        folded,
+      )
+    ) {
+      return false;
+    }
+    const asksCompetitiveAnalysis =
+      /\b(?:canh tranh|nhieu nguoi quan tam|sap het|hot|de het|co ai dat|bao nhieu yeu cau)\b/.test(
+        folded,
+      );
+    if (asksCompetitiveAnalysis) return false;
+    return /\b(?:gia|bao nhieu|trang thai|con trong|con khong|thong tin|chi tiet|dien tich|huong|thuoc khu|xem lo|kiem tra lo)\b/.test(
       folded,
     );
   }
 
   private outOfScopeResponse(_message: string) {
-    return 'Mình là trợ lý của Vĩnh Phúc Viên nên không hỗ trợ tin tức, thời sự, chính trị hoặc các chủ đề ngoài dịch vụ nghĩa trang. Mình có thể hỗ trợ bạn về lô đất, giá và tình trạng lô, quy trình mua/giữ chỗ, dịch vụ chăm sóc hoặc phong thủy tham khảo.';
+    return 'Nội dung này nằm ngoài phạm vi hỗ trợ của trợ lý Vĩnh Phúc Viên. Mình có thể giúp bạn tra cứu và so sánh lô, xem giá và tình trạng hiện tại, tìm hiểu quy trình mua/giữ chỗ, dịch vụ chăm sóc hoặc phong thủy mang tính tham khảo.';
   }
 
   private isShortConfirmationFollowUp(
@@ -2532,17 +4287,22 @@ Ví dụ JSON output:
     history: PersistedMessage[],
   ) {
     const folded = this.foldForMemory(message);
-    const shortConfirmation = /^(?:sure|really|that chac|chac khong|chac chu|thiet khong|that khong|dung khong|co chac khong|seriously)$/.test(
-      folded,
-    );
+    const shortConfirmation =
+      /^(?:sure|really|that chac|chac khong|chac chu|thiet khong|that khong|dung khong|co chac khong|seriously)$/.test(
+        folded,
+      );
     if (!shortConfirmation) return false;
-    return history.some((item) => item.role === 'assistant' && item.content?.trim());
+    return history.some(
+      (item) => item.role === 'assistant' && item.content?.trim(),
+    );
   }
 
   private buildConfirmationFollowUp(history: PersistedMessage[]) {
-    const lastAssistant = [...history]
-      .reverse()
-      .find((item) => item.role === 'assistant' && item.content?.trim())?.content ?? '';
+    const lastAssistant =
+      [...history]
+        .reverse()
+        .find((item) => item.role === 'assistant' && item.content?.trim())
+        ?.content ?? '';
     const folded = this.foldForMemory(lastAssistant);
     if (/\bchua\b.{0,50}\b(?:ghi nho|so thich|uu tien)\b/.test(folded)) {
       return 'Ừ, mình chắc. Ở lượt ngay trước mình không tìm thấy sở thích dài hạn nào gắn với tài khoản hiện tại, nên mình không nên tự bịa thêm. Nếu bạn đã từng lưu ở một tài khoản hoặc phiên đăng nhập khác, hãy kiểm tra lại đúng tài khoản đang dùng.';
@@ -2555,12 +4315,14 @@ Ví dụ JSON output:
 
   private isReservationHoldDurationQuestion(message: string) {
     const folded = this.foldForMemory(message);
-    const hold = /\b(?:giu cho|dat cho|giu lo|khoa lo|reserved|reservation)\b/.test(
-      folded,
-    );
-    const duration = /\b(?:bao lau|bao nhieu ngay|bao nhieu gio|toi da|thoi gian|het han|thoi han)\b/.test(
-      folded,
-    );
+    const hold =
+      /\b(?:giu cho|dat cho|giu lo|khoa lo|reserved|reservation)\b/.test(
+        folded,
+      );
+    const duration =
+      /\b(?:bao lau|bao nhieu ngay|bao nhieu gio|toi da|thoi gian|het han|thoi han)\b/.test(
+        folded,
+      );
     return hold && duration;
   }
 
@@ -2569,15 +4331,48 @@ Ví dụ JSON output:
     return `Theo backend hiện tại, khi một yêu cầu được gửi và lô chuyển sang trạng thái chờ xử lý, lô chỉ được khóa tạm trong ${policy.temporaryPendingHoldMinutes} phút. Nếu hết thời gian đó mà yêu cầu vẫn ở trạng thái pending/submitted, hệ thống có cơ chế tự hủy yêu cầu và trả lô về trạng thái available. Sau khi quản trị viên duyệt yêu cầu giữ chỗ và lô chuyển sang reserved, source hiện tại không đặt giới hạn tự hết hạn theo số ngày. Vì vậy quy định “Khu A tối đa 7 ngày” không phải là quy tắc vận hành hiện có của backend.`;
   }
 
+  private isReservationProcessQuestion(message: string) {
+    const folded = this.foldForMemory(message);
+    return (
+      /\b(?:quy trinh|thu tuc|cac buoc|lam sao|nhu the nao)\b/.test(folded) &&
+      /\b(?:giu cho|dat cho|giu lo)\b/.test(folded)
+    );
+  }
+
+  private buildReservationProcessAnswer() {
+    const policy = this.knowledge.getReservationHoldPolicy();
+    return `**Quy trình giữ chỗ hiện tại:**
+
+1. Chọn lô đang trống và mở yêu cầu giữ chỗ.
+2. Đăng nhập, kiểm tra đúng mã lô và xác nhận gửi yêu cầu.
+3. Hệ thống kiểm tra lại trạng thái lô để tránh hai khách cùng chọn một lô.
+4. Trong lúc yêu cầu chờ xử lý, lô được khóa tạm ${policy.temporaryPendingHoldMinutes} phút. Nếu hết thời gian mà yêu cầu vẫn chưa được xử lý, yêu cầu có thể tự hủy và lô trở lại trạng thái đang trống.
+5. Quản trị viên kiểm tra và duyệt; khi được duyệt, lô chuyển sang trạng thái đã giữ chỗ. Hiện trạng thái đã giữ chỗ không tự hết hạn theo một số ngày cố định.
+
+Việc gửi yêu cầu chưa đồng nghĩa với thanh toán hoặc hoàn tất giao dịch. Bạn muốn mình gợi ý lô đang trống trước hay kiểm tra một mã lô cụ thể?`;
+  }
+
   private isSystemRuleMutationAttempt(message: string) {
     const folded = this.foldForMemory(message);
-    const mutationVerb = /\b(?:cap nhat|thay doi|sua|dat lai|ghi nho|luu|them|xoa|ap dung)\b/.test(
-      folded,
+    const mutationVerb =
+      /\b(?:cap nhat|thay doi|sua|dat lai|ghi nho|luu|them|xoa|ap dung)\b/.test(
+        folded,
+      );
+    const systemTarget =
+      /\b(?:quy dinh|quy tac|he thong|chinh sach|gia he thong|giam gia|giu cho toi da|thoi gian giu cho|phan tram|quyen|role|admin)\b/.test(
+        folded,
+      );
+    const bulkPriceMutation =
+      /\b(?:gia|giam gia)\b.{0,40}\b(?:tat ca|toan bo|moi)\s+(?:cac\s+)?lo\b/.test(
+        folded,
+      ) ||
+      /\b(?:tat ca|toan bo|moi)\s+(?:cac\s+)?lo\b.{0,40}\b(?:gia|trieu|ty|vnd)\b/.test(
+        folded,
+      );
+    return (
+      (mutationVerb && (systemTarget || bulkPriceMutation)) ||
+      (bulkPriceMutation && /\bdoi\s+gia\b/.test(folded))
     );
-    const systemTarget = /\b(?:quy dinh|quy tac|he thong|chinh sach|gia he thong|giam gia|giu cho toi da|thoi gian giu cho|phan tram|quyen|role|admin)\b/.test(
-      folded,
-    );
-    return mutationVerb && systemTarget;
   }
 
   private buildSystemMutationRefusal(role: string | null) {
@@ -2691,7 +4486,10 @@ Ví dụ JSON output:
             .filter(Boolean),
         ),
       ];
-      if (!humanized.length && this.asksForSavedLocationPreference(userMessage)) {
+      if (
+        !humanized.length &&
+        this.asksForSavedLocationPreference(userMessage)
+      ) {
         return 'Mình chưa có ưu tiên vị trí cụ thể nào của bạn. Nếu bạn thích khu yên tĩnh, gần cổng, một khu nhất định hoặc hướng cụ thể, bạn cứ nói một lần là mình sẽ dùng cho những lần tư vấn sau.';
       }
       return `Mình đang nhớ ${this.joinVietnameseList(humanized)}. Nếu có điều nào đã thay đổi, bạn cứ nói lại để mình cập nhật nhé.`;
@@ -2813,7 +4611,9 @@ Ví dụ JSON output:
     // external LLM failed; that feels robotic and does not answer the user's
     // latest request. Preference lists are shown only when the user asks what
     // we remember about them.
-    if (/\b(?:goi y|de xuat|chon giup|tim giup|coi thu|xem thu)\b/.test(folded)) {
+    if (
+      /\b(?:goi y|de xuat|chon giup|tim giup|coi thu|xem thu)\b/.test(folded)
+    ) {
       return 'Được, mình sẽ tiếp tục đúng nhu cầu bạn đang trao đổi và dùng các tiêu chí đã biết để đưa ra phương án cụ thể, thay vì hỏi lại từ đầu.';
     }
     return 'Mình chưa bắt đúng ý của câu này nên không muốn đoán bừa. Bạn nói lại ngắn hơn một chút hoặc nhắc trực tiếp thứ bạn đang muốn tiếp tục; mình sẽ bám vào cuộc trò chuyện hiện tại thay vì bắt bạn nói lại từ đầu.';
@@ -2971,7 +4771,10 @@ Ví dụ JSON output:
 
   private describeRecommendations(result: RecommendationResult | null) {
     if (!result?.recommendations.length) {
-      return 'Mình đã đối chiếu yêu cầu với quỹ lô đang trống nhưng chưa có phương án đáp ứng đầy đủ các tiêu chí hiện tại. Bạn muốn mình ưu tiên nới ngân sách, đổi khu vực hay bỏ bớt yêu cầu về hướng để tìm lại?';
+      const excludedCount = result?.requirements.excludePlotIds?.length ?? 0;
+      return excludedCount > 0
+        ? `Mình đã loại ${excludedCount} lô từng hiển thị hoặc đã bị bạn từ chối và kiểm tra phần quỹ đất còn lại. Hiện không còn lô mới nào đáp ứng đầy đủ các tiêu chí, nên mình sẽ không lặp lại lô cũ. Bạn muốn nới ngân sách, đổi khu vực hay bỏ bớt yêu cầu về hướng để mình tìm lại?`
+        : 'Mình đã đối chiếu yêu cầu với quỹ lô đang trống nhưng chưa có phương án đáp ứng đầy đủ các tiêu chí hiện tại. Bạn muốn mình ưu tiên nới ngân sách, đổi khu vực hay bỏ bớt yêu cầu về hướng để tìm lại?';
     }
     const best = result.recommendations[0];
     const criteria = [
@@ -2984,7 +4787,7 @@ Ví dụ JSON output:
       result.requirements.preferredDirection
         ? `hướng ${result.requirements.preferredDirection}`
         : '',
-      result.requirements.numberOfPlots
+      (result.requirements.numberOfPlots ?? 0) > 1
         ? `${result.requirements.numberOfPlots} lô`
         : '',
       result.requirements.preferNearEntrance ? 'ưu tiên gần cổng' : '',
@@ -2998,43 +4801,50 @@ Ví dụ JSON output:
     ].filter(Boolean);
     const reasons = best.reasons.slice(0, 3);
     const tradeOffs = best.tradeOffs.slice(0, 2);
-    const comparisons = result.recommendations
-      .slice(0, 3)
-      .map((option, index) => {
-        const priceDelta = option.plotCost - best.plotCost;
-        const areaDelta = option.totalAreaSqm - best.totalAreaSqm;
-        const plotTypes = [
-          ...new Set(option.plots.map((plot) => plot.plotType)),
-        ];
-        const relativePrice =
-          index === 0
-            ? 'mốc so sánh'
-            : priceDelta === 0
-              ? 'cùng tổng giá với phương án ưu tiên'
-              : `${Math.abs(priceDelta).toLocaleString('vi-VN')} VND ${priceDelta < 0 ? 'thấp hơn' : 'cao hơn'} phương án ưu tiên`;
-        const relativeArea =
-          index === 0 || areaDelta === 0
-            ? ''
-            : `${Math.abs(areaDelta).toLocaleString('vi-VN')} m² ${areaDelta < 0 ? 'nhỏ hơn' : 'rộng hơn'}`;
-        const suitability = plotTypes.includes('family')
-          ? 'lô family dành cho gia đình/dòng tộc'
-          : option.isAdjacent
-            ? 'nhóm lô liền kề'
-            : `loại ${plotTypes.join(', ') || 'chưa phân loại'}`;
-        const tradeOff =
-          option.tradeOffs[0] ??
-          'cần kiểm tra trực tiếp vị trí, hướng và kích thước trên bản đồ';
-        const perPlotPrice = Math.round(
-          option.plotCost / Math.max(option.plotIds.length, 1),
-        );
-        return `- **${index + 1}. ${option.plotCodes.join(', ')}:** ${option.zoneName}, tổng ${option.plotCost.toLocaleString('vi-VN')} VND (khoảng ${perPlotPrice.toLocaleString('vi-VN')} VND/lô), ${option.totalAreaSqm.toLocaleString('vi-VN')} m²${option.directions.length ? `, hướng ${option.directions.join(', ')}` : ''}${option.accessSummary ? `, ${option.accessSummary.toLowerCase()}` : ''}; ${suitability}; ${relativePrice}${relativeArea ? `, ${relativeArea}` : ''}. Cân nhắc: ${tradeOff}.`;
-      });
+    const comparisons = result.recommendations.map((option, index) => {
+      const priceDelta = option.plotCost - best.plotCost;
+      const areaDelta = option.totalAreaSqm - best.totalAreaSqm;
+      const plotTypes = [...new Set(option.plots.map((plot) => plot.plotType))];
+      const relativePrice =
+        index === 0
+          ? 'mốc so sánh'
+          : priceDelta === 0
+            ? 'cùng tổng giá với phương án ưu tiên'
+            : `${Math.abs(priceDelta).toLocaleString('vi-VN')} VND ${priceDelta < 0 ? 'thấp hơn' : 'cao hơn'} phương án ưu tiên`;
+      const relativeArea =
+        index === 0 || areaDelta === 0
+          ? ''
+          : `${Math.abs(areaDelta).toLocaleString('vi-VN')} m² ${areaDelta < 0 ? 'nhỏ hơn' : 'rộng hơn'}`;
+      const suitability = plotTypes.includes('family')
+        ? 'lô family dành cho gia đình/dòng tộc'
+        : option.isAdjacent
+          ? 'nhóm lô liền kề'
+          : `loại ${plotTypes.join(', ') || 'chưa phân loại'}`;
+      const tradeOff =
+        option.tradeOffs[0] ??
+        'cần kiểm tra trực tiếp vị trí, hướng và kích thước trên bản đồ';
+      const perPlotPrice = Math.round(
+        option.plotCost / Math.max(option.plotIds.length, 1),
+      );
+      return `- **${index + 1}. ${option.plotCodes.join(', ')}:** ${option.zoneName}, tổng ${option.plotCost.toLocaleString('vi-VN')} VND (khoảng ${perPlotPrice.toLocaleString('vi-VN')} VND/lô), ${option.totalAreaSqm.toLocaleString('vi-VN')} m²${option.directions.length ? `, hướng ${option.directions.join(', ')}` : ''}${option.accessSummary ? `, ${option.accessSummary.toLowerCase()}` : ''}; ${suitability}; ${relativePrice}${relativeArea ? `, ${relativeArea}` : ''}. Cân nhắc: ${tradeOff}.`;
+    });
     const priceContext = result.inventoryPriceContext
       ? `Trong ${result.inventoryPriceContext.candidateCount} lô đang trống khớp bộ lọc hiện tại, giá niêm yết dao động từ ${result.inventoryPriceContext.minimumListedPrice.toLocaleString('vi-VN')} đến ${result.inventoryPriceContext.maximumListedPrice.toLocaleString('vi-VN')} VND/lô, trung vị khoảng ${result.inventoryPriceContext.medianListedPrice.toLocaleString('vi-VN')} VND/lô. Đây là so sánh trong quỹ lô hiện có, không phải định giá thị trường bên ngoài.`
       : '';
+    const excludedCount = result.requirements.excludePlotIds?.length ?? 0;
+    const requestedRecommendationCount =
+      result.requirements.recommendationCount ?? 3;
+    const limitedAvailabilityNote =
+      result.recommendations.length < requestedRecommendationCount
+        ? excludedCount > 0
+          ? `Sau khi loại ${excludedCount} lô đã xem hoặc đã từ chối, hiện chỉ còn ${result.recommendations.length} phương án mới phù hợp. Mình hiển thị đúng số lượng còn lại và không lặp lô cũ.`
+          : `Theo bộ lọc hiện tại, quỹ đất chỉ có ${result.recommendations.length} phương án phù hợp; mình hiển thị toàn bộ số còn lại thay vì bổ sung lô không đạt tiêu chí.`
+        : '';
 
     return [
-      `Mình đã đối chiếu quỹ đất đang trống${criteria.length ? ` theo ${criteria.join(', ')}` : ''} và chọn ra ${result.recommendations.length} phương án để bạn cân nhắc.`,
+      result.requirements.comparisonRequested
+        ? `Mình đã giữ đúng ${result.recommendations.length} phương án theo yêu cầu và đối chiếu trực tiếp${criteria.length ? ` theo ${criteria.join(', ')}` : ''}.`
+        : `Mình đã đối chiếu quỹ đất đang trống${criteria.length ? ` theo ${criteria.join(', ')}` : ''} và chọn ra ${result.recommendations.length} phương án để bạn cân nhắc.`,
       `**Phương án mình ưu tiên:** ${best.plotCodes.join(', ')}, ${facts.join(', ')}. ${best.isAdjacent ? 'Các lô trong phương án nằm liền kề, thuận tiện bố trí không gian gia đình.' : ''}`.trim(),
       reasons.length
         ? `Điểm phù hợp: ${reasons.join('; ')}.`
@@ -3045,14 +4855,20 @@ Ví dụ JSON output:
       comparisons.length > 1
         ? `**So sánh nhanh các phương án:**\n${comparisons.join('\n')}`
         : '',
+      limitedAvailabilityNote,
       priceContext,
-      'Theo các tiêu chí hiện tại, mình ưu tiên phương án 1 vì có điểm phù hợp tổng thể cao nhất. Bạn muốn giữ ưu tiên hiện tại, chuyển sang phương án tiết kiệm hơn hay tạo yêu cầu cho phương án đã chọn?',
+      result.requirements.comparisonRequested
+        ? `Khác biệt quyết định nằm ở mức độ khớp với ưu tiên của bạn, không chỉ ở giá niêm yết. Theo dữ liệu hiện tại mình nghiêng về phương án 1; bạn muốn mình đào sâu thêm về vị trí, hướng hay khả năng tiếp cận của đúng ${result.recommendations.length} phương án này?`
+        : 'Theo các tiêu chí hiện tại, mình ưu tiên phương án 1 vì có điểm phù hợp tổng thể cao nhất. Bạn muốn giữ ưu tiên hiện tại, chuyển sang phương án tiết kiệm hơn hay tạo yêu cầu cho phương án đã chọn?',
     ]
       .filter(Boolean)
       .join('\n\n');
   }
 
-  private describeServices(services: SuggestedService[]) {
+  private describeServices(
+    services: SuggestedService[],
+    ownedPlots: OwnedPlotContext[] | null = null,
+  ) {
     if (!services.length) {
       return 'Hiện chưa có dịch vụ đang hoạt động để đề xuất. Bạn muốn mình kiểm tra lại sau hay chuyển sang tư vấn lô và quy trình chăm sóc phù hợp?';
     }
@@ -3060,6 +4876,19 @@ Ví dụ JSON output:
     const cheapest = [...options].sort(
       (left, right) => left.basePrice - right.basePrice,
     )[0];
+    const ownershipAdvice =
+      ownedPlots === null
+        ? 'Mình chưa thể kiểm tra lô thuộc tài khoản trong lượt này. Khi bạn đăng nhập hoặc khi dữ liệu tài khoản sẵn sàng, mình sẽ đối chiếu đúng lô trước khi tạo đơn dịch vụ.'
+        : ownedPlots.length > 0
+          ? `Tài khoản của bạn hiện có ${ownedPlots.length === 1 ? `lô **${ownedPlots[0].plotCode}**` : `các lô **${ownedPlots.map((plot) => plot.plotCode).join(', ')}**`}. ${ownedPlots
+              .map(
+                (plot) =>
+                  `Lô ${plot.plotCode} thuộc ${plot.zoneName}, loại ${this.plotTypeLabel(plot.plotType)}, diện tích ${plot.areaSqm.toLocaleString('vi-VN')} m²${plot.direction ? `, hướng ${plot.direction}` : ''}`,
+              )
+              .join(
+                '; ',
+              )}. Mình sẽ dùng chính thông tin này để xác định lô áp dụng, phạm vi chăm sóc và phần thông tin còn thiếu trước khi tạo đơn.`
+          : 'Mình chưa thấy tài khoản của bạn sở hữu lô đất nào. Bạn vẫn có thể tham khảo danh mục và chi phí dịch vụ; tuy nhiên hệ thống chỉ tạo đơn chăm sóc sau khi có lô thuộc quyền sử dụng. Bạn có muốn mình tư vấn thêm về lô đất phù hợp không?';
     return [
       `Mình đã đối chiếu danh mục đang hoạt động và chọn ${options.length} dịch vụ để bạn dễ cân nhắc:`,
       options
@@ -3069,14 +4898,27 @@ Ví dụ JSON output:
         )
         .join('\n'),
       `**Gợi ý chọn:** nếu ưu tiên chi phí, **${cheapest.name}** hiện có mức niêm yết thấp nhất trong nhóm trên. Nếu mục tiêu là chăm sóc định kỳ hoặc chuẩn bị cho một dịp tưởng niệm cụ thể, mình sẽ ưu tiên dịch vụ theo tần suất, nội dung thực hiện và ngày bạn mong muốn thay vì chỉ nhìn giá.`,
-      'Khi bạn chọn dịch vụ, mình sẽ đối chiếu lô thuộc tài khoản, hỏi ngày thực hiện còn thiếu, báo lại chi phí và chỉ gửi đơn sau bước xác nhận cuối.',
-      `Bạn muốn mình phân tích kỹ **${options[0].name}**, so sánh hai dịch vụ, hay bắt đầu đặt cho một lô đang sở hữu?`,
+      ownershipAdvice,
+      ownedPlots?.length
+        ? `Bạn muốn mình phân tích kỹ **${options[0].name}**, so sánh hai dịch vụ, hay bắt đầu đặt cho ${ownedPlots.length === 1 ? `lô **${ownedPlots[0].plotCode}**` : 'một trong các lô đang sở hữu'}?`
+        : '',
     ].join('\n\n');
   }
 
-  private getMostRecentRecommendationPlotIds(
+  private plotTypeLabel(value: string) {
+    return (
+      {
+        single: 'lô đơn',
+        double: 'lô đôi',
+        family: 'lô gia đình',
+      }[value] ?? value
+    );
+  }
+
+  private getPreviouslyRecommendedPlotIds(
     history: PersistedMessage[],
   ): number[] {
+    const collected: number[] = [];
     for (const item of [...history].reverse()) {
       if (item.role !== 'assistant' || !item.metadata) continue;
       const metadata = item.metadata as Record<string, unknown>;
@@ -3092,9 +4934,22 @@ Ví dụ JSON output:
               .filter((value) => Number.isInteger(value) && value > 0)
           : [];
       });
-      if (ids.length) return [...new Set(ids)];
+      collected.push(...ids);
+      const extractedData =
+        item.extractedData &&
+        typeof item.extractedData === 'object' &&
+        !Array.isArray(item.extractedData)
+          ? (item.extractedData as Record<string, unknown>)
+          : null;
+      const carriedExclusions = Array.isArray(extractedData?.excludePlotIds)
+        ? extractedData.excludePlotIds
+            .map((value) => Number(value))
+            .filter((value) => Number.isInteger(value) && value > 0)
+        : [];
+      collected.push(...carriedExclusions);
+      if (collected.length >= 100) break;
     }
-    return [];
+    return [...new Set(collected)].slice(0, 100);
   }
 
   private contextualizeClarificationReply(
@@ -3102,18 +4957,19 @@ Ví dụ JSON output:
     history: PersistedMessage[],
     directRequirements: AgentRequirements,
     directIntent: string,
+    baziContextActive = false,
   ) {
-    const lastAssistant = [...history]
-      .reverse()
-      .find((item) => item.role === 'assistant')?.content ?? '';
+    const lastAssistant =
+      [...history].reverse().find((item) => item.role === 'assistant')
+        ?.content ?? '';
     const lastMeaningfulUserIntent = [...history]
       .reverse()
       .filter((item) => item.role === 'user' && item.content)
       .map((item) => this.detectIntent(item.content ?? ''))
       .find((value) => value !== 'general_question');
     const folded = this.foldForMemory(message);
-    const recentRecommendationPlotIds =
-      this.getMostRecentRecommendationPlotIds(history);
+    const previouslyRecommendedPlotIds =
+      this.getPreviouslyRecommendedPlotIds(history);
     const rejectsRecentRecommendation =
       /\b(?:khong thich|hong thich|ko thich|k thich|khong ung|hong ung|doi cai khac|doi lo khac|cai khac|lo khac|phuong an khac|khac di|xem them|co cai nao khac|con cai nao khac|cho cai khac|goi y khac)\b/.test(
         folded,
@@ -3136,10 +4992,14 @@ Ví dụ JSON output:
         affirmativeOrContinuation &&
         (lastMeaningfulUserIntent === 'recommend_plots' ||
           lastAssistantIsPlotConsultation ||
-          recentRecommendationPlotIds.length > 0));
+          previouslyRecommendedPlotIds.length > 0));
 
     let requirements = { ...directRequirements };
     let intent = directIntent;
+
+    if (baziContextActive) {
+      intent = 'bazi_suggestion';
+    }
 
     if (continuesPlotConsultation) {
       intent = 'recommend_plots';
@@ -3147,11 +5007,11 @@ Ví dụ JSON output:
       // keep all existing constraints but exclude the plots just shown so the
       // next tool call actually returns different inventory instead of repeating
       // the same cards. This is session-local context, not a permanent dislike.
-      if (rejectsRecentRecommendation && recentRecommendationPlotIds.length) {
+      if (rejectsRecentRecommendation && previouslyRecommendedPlotIds.length) {
         requirements.excludePlotIds = [
           ...new Set([
             ...(requirements.excludePlotIds ?? []),
-            ...recentRecommendationPlotIds,
+            ...previouslyRecommendedPlotIds,
           ]),
         ];
       }
@@ -3183,6 +5043,78 @@ Ví dụ JSON output:
     }
 
     return { requirements, intent };
+  }
+
+  private isBaziConversationTurn(
+    message: string,
+    history: PersistedMessage[],
+    directIntent: string,
+  ) {
+    if (directIntent === 'bazi_suggestion') return true;
+    if (directIntent !== 'general_question') return false;
+
+    const folded = this.foldForMemory(message);
+    const recent = history
+      .slice(-6)
+      .map((item) => this.foldForMemory(item.content ?? ''));
+    const hasRecentBaziTopic = recent.some((item) =>
+      /\b(?:bat tu|bazi)\b/.test(item),
+    );
+    if (!hasRecentBaziTopic) return false;
+
+    const latestAssistant = [...history]
+      .reverse()
+      .find((item) => item.role === 'assistant');
+    const awaitingBaziInput =
+      /\b(?:ngay sinh|gio sinh|gioi tinh|khong co gio sinh)\b/.test(
+        this.foldForMemory(latestAssistant?.content ?? ''),
+      );
+    const suppliesBaziInput = Boolean(
+      extractBirthDate(message) ||
+      /\b(?:gio sinh|luc|nam|nu|male|female)\b/.test(folded) ||
+      /\b(?:khong biet|khong ro|bo qua|khong co)\b.{0,30}\bgio\b/.test(folded),
+    );
+    return awaitingBaziInput && suppliesBaziInput;
+  }
+
+  private isBaziTopicRefinement(message: string, history: PersistedMessage[]) {
+    const folded = this.foldForMemory(message);
+    if (!/^(?:bat tu|bazi)(?:\s+(?:di|nhe|a|ha))?$/.test(folded)) {
+      return false;
+    }
+    return history
+      .slice(-4)
+      .some((item) =>
+        /\b(?:tam linh|phong thuy|van hoa|huong mo|bat tu|bazi)\b/.test(
+          this.foldForMemory(item.content ?? ''),
+        ),
+      );
+  }
+
+  private requirementsFromCustomerProfile(
+    profile: CustomerProfileContext | null,
+    historyRequirements: AgentRequirements,
+    directRequirements: AgentRequirements,
+    message: string,
+  ): AgentRequirements {
+    if (!profile) return {};
+    const folded = this.foldForMemory(message);
+    const asksForAnotherPerson =
+      /\b(?:cho|cua)\s+(?:me|ba|bo|cha|vo|chong|con|anh|chi|em|nguoi than|nguoi mat|gia chu khac)\b/.test(
+        folded,
+      );
+    if (asksForAnotherPerson) return {};
+
+    const explicitBirthDate =
+      directRequirements.birthDate ?? historyRequirements.birthDate;
+    const profileMatchesSubject =
+      !explicitBirthDate || explicitBirthDate === profile.dateOfBirth;
+    if (!profileMatchesSubject) return {};
+
+    return {
+      birthDate: profile.dateOfBirth ?? undefined,
+      gender: profile.gender ?? undefined,
+    };
   }
 
   private mergeDefinedRequirements(
@@ -3262,7 +5194,11 @@ Ví dụ JSON output:
         key === 'accessibility_priority' ||
         key === 'preferred_plot_location'
       ) {
-        if (/\b(?:gan cong|sat cong|entrance|gate|de di lai|de tiep can)\b/.test(folded)) {
+        if (
+          /\b(?:gan cong|sat cong|entrance|gate|de di lai|de tiep can)\b/.test(
+            folded,
+          )
+        ) {
           requirements.preferNearEntrance = true;
         }
       }
@@ -3297,9 +5233,30 @@ Ví dụ JSON output:
     intent: string,
     requirements: AgentRequirements,
   ): AgentRequirements {
-    if (intent !== 'recommend_plots' || requirements.numberOfPlots) {
+    if (intent !== 'recommend_plots') {
       return requirements;
     }
+
+    const folded = this.foldForMemory(message);
+    const asksForNumberedAlternatives =
+      /\b(?:goi y|de xuat|cho xem|xem thu|dua ra|so sanh|doi chieu)\b.{0,30}\b(?:\d+|mot|hai|ba|bon|nam)\s+(?:lo|phuong an)\b/.test(
+        folded,
+      );
+    const asksToAcquireMultiplePlots =
+      /\b(?:mua|giu cho|dat cho|can mua|muon mua)\b.{0,25}\b(?:\d+|hai|ba|bon|nam)\s+lo\b/.test(
+        folded,
+      ) ||
+      requirements.needAdjacent === true ||
+      requirements.plotType === 'family';
+    if (asksForNumberedAlternatives && !asksToAcquireMultiplePlots) {
+      return {
+        ...requirements,
+        numberOfPlots: 1,
+        needAdjacent: false,
+      };
+    }
+
+    if (requirements.numberOfPlots) return requirements;
 
     // A plot-discovery request should be useful immediately. Unless the user
     // explicitly asks to acquire several plots together, interpret the request
@@ -3318,6 +5275,21 @@ Ví dụ JSON output:
 
   private detectIntent(message: string) {
     const normalized = message.toLowerCase();
+    const folded = this.foldForMemory(message);
+    if (
+      /\b(?:dat lich|lich hen|hen gap|gap ban quan ly|tham quan|xem thuc te)\b/.test(
+        folded,
+      )
+    ) {
+      return 'appointment_booking';
+    }
+    if (
+      /\b(?:nhac lich|nhac nho|tuong niem|ngay gio|gui email nhac)\b/.test(
+        folded,
+      )
+    ) {
+      return 'memorial_reminder';
+    }
     if (
       /(lô|khu|ngân sách|triệu|tỷ|liền nhau|gia đình|dòng họ|dòng tộc|gia tộc|khu mộ họ)/i.test(
         normalized,
@@ -3391,6 +5363,36 @@ Ví dụ JSON output:
       [conversationId, limit],
     );
     return rows.reverse();
+  }
+
+  private async loadCustomerProfile(
+    userId: number,
+  ): Promise<CustomerProfileContext | null> {
+    const row = await this.database.queryOne<{
+      dateOfBirth: string | null;
+      gender: string | null;
+    }>(
+      `SELECT date_of_birth::text AS "dateOfBirth", gender
+       FROM users
+       WHERE user_id = $1
+         AND is_active = TRUE
+         AND is_deleted = FALSE`,
+      [userId],
+    );
+    if (!row) return null;
+    return {
+      dateOfBirth:
+        typeof row.dateOfBirth === 'string' &&
+        /^\d{4}-\d{2}-\d{2}$/.test(row.dateOfBirth)
+          ? row.dateOfBirth
+          : null,
+      gender:
+        row.gender === 'male' ||
+        row.gender === 'female' ||
+        row.gender === 'other'
+          ? row.gender
+          : null,
+    };
   }
 
   private async saveMessage(

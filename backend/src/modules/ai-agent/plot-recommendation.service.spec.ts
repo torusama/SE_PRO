@@ -129,6 +129,9 @@ describe('PlotRecommendationService', () => {
     expect(result.requirements).not.toHaveProperty('budgetMax');
     expect(result.recommendations).toHaveLength(3);
     expect(result.recommendations[0].plotIds).toEqual([1]);
+    expect(
+      new Set(result.recommendations.map((option) => option.score)).size,
+    ).toBeGreaterThan(1);
     expect(result.rankerVersion).toBe('availability-browse-v1');
     expect(
       result.recommendations.every(
@@ -143,6 +146,37 @@ describe('PlotRecommendationService', () => {
         expect.stringContaining('phương án tiết kiệm nhất'),
       ]),
     );
+  });
+
+  it('returns exactly the number of alternatives explicitly requested', async () => {
+    const { service } = createService();
+
+    const result = await service.browseAvailablePlots({
+      numberOfPlots: 1,
+      recommendationCount: 2,
+      comparisonRequested: true,
+    });
+
+    expect(result.recommendations).toHaveLength(2);
+    expect(result.requirements).toMatchObject({
+      recommendationCount: 2,
+      comparisonRequested: true,
+      numberOfPlots: 1,
+    });
+  });
+
+  it('passes every previously rejected plot id through a parameterized exclusion', async () => {
+    const { database, service } = createService();
+
+    await service.recommend({
+      budgetMax: 250_000_000,
+      numberOfPlots: 1,
+      excludePlotIds: [1, 2, 2],
+    });
+
+    const [sql, params] = database.query.mock.calls[0];
+    expect(sql).toContain('NOT (plot_id = ANY(');
+    expect(params).toContainEqual([1, 2]);
   });
 
   it('prioritizes verified entrance access without exposing raw geometry as advice', async () => {

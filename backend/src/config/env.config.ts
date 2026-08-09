@@ -40,13 +40,11 @@ export const envConfig = () => ({
       transientKeyCooldownMs:
         Number(process.env.AI_LLM_TRANSIENT_KEY_COOLDOWN_MS) || 800,
       rotateProviders:
-        (process.env.AI_LLM_ROTATE_PROVIDERS ?? 'true') === 'true',
+        (process.env.AI_LLM_ROTATE_PROVIDERS ?? 'false') === 'true',
     },
     rag: {
       enabled: (process.env.AI_RAG_ENABLED ?? 'true') === 'true',
-      // A dedicated embedding key remains optional. By default RAG reuses the
-      // existing NVIDIA NIM key pool so the project does not need an extra
-      // OpenAI account/key just for embeddings.
+      // Dedicated Llama embedding pool. Mistral reads a separate namespace.
       apiKey: process.env.AI_EMBEDDING_API_KEY,
       apiKeys: process.env.AI_EMBEDDING_API_KEYS,
       baseUrl:
@@ -56,8 +54,7 @@ export const envConfig = () => ({
       // Keep the configured embedding model at 1024 dimensions so it remains
       // compatible with the pgvector column created by the RAG migration.
       model:
-        process.env.AI_EMBEDDING_MODEL ??
-        'nvidia/llama-nemotron-embed-1b-v2',
+        process.env.AI_EMBEDDING_MODEL ?? 'nvidia/llama-nemotron-embed-1b-v2',
       dimension: Number(process.env.AI_EMBEDDING_DIMENSION) || 1024,
       timeoutMs: Number(process.env.AI_EMBEDDING_TIMEOUT_MS) || 1000,
       totalTimeoutMs: Number(process.env.AI_EMBEDDING_TOTAL_TIMEOUT_MS) || 1400,
@@ -67,6 +64,8 @@ export const envConfig = () => ({
         Number(process.env.AI_EMBEDDING_INVALID_KEY_COOLDOWN_MS) || 600000,
       userLimit: Number(process.env.AI_RAG_USER_LIMIT) || 8,
       globalLimit: Number(process.env.AI_RAG_GLOBAL_LIMIT) || 6,
+      maxCosineDistance:
+        Number(process.env.AI_RAG_MAX_COSINE_DISTANCE) || 0.72,
       backfillOnStartup:
         (process.env.AI_RAG_BACKFILL_ON_STARTUP ?? 'true') === 'true',
       backfillBatchSize: Number(process.env.AI_RAG_BACKFILL_BATCH_SIZE) || 5,
@@ -99,21 +98,67 @@ export const envConfig = () => ({
       invalidKeyCooldownMs:
         Number(process.env.OPENAI_SECONDARY_INVALID_KEY_COOLDOWN_MS) || 600000,
     },
-    nvidia: {
-      apiKey: process.env.NVIDIA_API_KEY,
-      apiKeys: process.env.NVIDIA_API_KEYS,
+    emailDraft: {
+      apiKey: process.env.EMAIL_AI_API_KEY,
+      apiKeys: process.env.EMAIL_AI_API_KEYS,
       baseUrl:
-        process.env.NVIDIA_API_BASE_URL ??
+        process.env.EMAIL_AI_API_BASE_URL ??
         'https://integrate.api.nvidia.com/v1',
-      model: process.env.NVIDIA_MODEL ?? 'meta/llama-3.1-70b-instruct',
-      timeoutMs: Number(process.env.NVIDIA_TIMEOUT_MS) || 7000,
-      totalTimeoutMs: Number(process.env.NVIDIA_TOTAL_TIMEOUT_MS) || 12000,
-      maxAttempts: Number(process.env.NVIDIA_MAX_ATTEMPTS) || 10,
-      keyCooldownMs: Number(process.env.NVIDIA_KEY_COOLDOWN_MS) || 60000,
+      model: process.env.EMAIL_AI_MODEL ?? 'openai/gpt-oss-20b',
+      timeoutMs: Number(process.env.EMAIL_AI_TIMEOUT_MS) || 10000,
+      totalTimeoutMs: Number(process.env.EMAIL_AI_TOTAL_TIMEOUT_MS) || 22000,
+      maxAttempts: Number(process.env.EMAIL_AI_MAX_ATTEMPTS) || 3,
+      keyCooldownMs: Number(process.env.EMAIL_AI_KEY_COOLDOWN_MS) || 60000,
       invalidKeyCooldownMs:
-        Number(process.env.NVIDIA_INVALID_KEY_COOLDOWN_MS) || 600000,
-      maxTokens: Number(process.env.NVIDIA_MAX_TOKENS) || 2048,
-      temperature: Number(process.env.NVIDIA_TEMPERATURE) || 0.2,
+        Number(process.env.EMAIL_AI_INVALID_KEY_COOLDOWN_MS) || 600000,
+    },
+    comparison: {
+      apiKey: process.env.COMPARISON_AI_API_KEY,
+      apiKeys: process.env.COMPARISON_AI_API_KEYS,
+      baseUrl:
+        process.env.COMPARISON_AI_API_BASE_URL ??
+        'https://integrate.api.nvidia.com/v1',
+      model:
+        process.env.COMPARISON_AI_MODEL ?? 'nvidia/nemotron-3-nano-30b-a3b',
+      timeoutMs: Number(process.env.COMPARISON_AI_TIMEOUT_MS) || 6500,
+      totalTimeoutMs:
+        Number(process.env.COMPARISON_AI_TOTAL_TIMEOUT_MS) || 14000,
+      maxAttempts: Number(process.env.COMPARISON_AI_MAX_ATTEMPTS) || 10,
+      keyCooldownMs: Number(process.env.COMPARISON_AI_KEY_COOLDOWN_MS) || 60000,
+      invalidKeyCooldownMs:
+        Number(process.env.COMPARISON_AI_INVALID_KEY_COOLDOWN_MS) || 600000,
+    },
+    decisionComparison: {
+      apiKey: process.env.DECISION_AI_API_KEY,
+      apiKeys: process.env.DECISION_AI_API_KEYS,
+      baseUrl:
+        process.env.DECISION_AI_API_BASE_URL ??
+        'https://integrate.api.nvidia.com/v1',
+      model:
+        process.env.DECISION_AI_MODEL ?? 'mistralai/mistral-medium-3.5-128b',
+      timeoutMs: Number(process.env.DECISION_AI_TIMEOUT_MS) || 8000,
+      totalTimeoutMs: Number(process.env.DECISION_AI_TOTAL_TIMEOUT_MS) || 16000,
+      maxAttempts: Number(process.env.DECISION_AI_MAX_ATTEMPTS) || 10,
+      keyCooldownMs: Number(process.env.DECISION_AI_KEY_COOLDOWN_MS) || 60000,
+      invalidKeyCooldownMs:
+        Number(process.env.DECISION_AI_INVALID_KEY_COOLDOWN_MS) || 600000,
+    },
+    mistralAgent: {
+      apiKey: process.env.MISTRAL_AGENT_API_KEY,
+      apiKeys: process.env.MISTRAL_AGENT_API_KEYS,
+      baseUrl:
+        process.env.MISTRAL_AGENT_API_BASE_URL ??
+        'https://integrate.api.nvidia.com/v1',
+      model: process.env.MISTRAL_AGENT_MODEL ?? 'mistralai/mistral-nemotron',
+      timeoutMs: Number(process.env.MISTRAL_AGENT_TIMEOUT_MS) || 2500,
+      totalTimeoutMs:
+        Number(process.env.MISTRAL_AGENT_TOTAL_TIMEOUT_MS) || 10000,
+      maxAttempts: Number(process.env.MISTRAL_AGENT_MAX_ATTEMPTS) || 10,
+      keyCooldownMs: Number(process.env.MISTRAL_AGENT_KEY_COOLDOWN_MS) || 60000,
+      invalidKeyCooldownMs:
+        Number(process.env.MISTRAL_AGENT_INVALID_KEY_COOLDOWN_MS) || 600000,
+      maxTokens: Number(process.env.MISTRAL_AGENT_MAX_TOKENS) || 2048,
+      temperature: Number(process.env.MISTRAL_AGENT_TEMPERATURE) || 0.2,
     },
   },
   ml: {

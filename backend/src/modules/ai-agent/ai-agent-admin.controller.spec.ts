@@ -7,7 +7,9 @@ import { AiAgentAdminController } from './ai-agent-admin.controller';
 describe('AiAgentAdminController knowledge review', () => {
   const knowledge = {
     listKnowledgeForReview: jest.fn().mockResolvedValue([]),
-    getKnowledgeForReview: jest.fn().mockResolvedValue({ knowledgeEntryId: 73 }),
+    getKnowledgeForReview: jest
+      .fn()
+      .mockResolvedValue({ knowledgeEntryId: 73 }),
     reviewKnowledgeProposal: jest.fn().mockResolvedValue({
       knowledgeEntryId: 73,
       status: 'active',
@@ -27,14 +29,14 @@ describe('AiAgentAdminController knowledge review', () => {
     expect(Reflect.getMetadata(ROLES_KEY, AiAgentAdminController)).toEqual([
       'admin',
     ]);
-    expect(Reflect.getMetadata(GUARDS_METADATA, AiAgentAdminController)).toEqual(
-      expect.arrayContaining([JwtAuthGuard, RolesGuard]),
-    );
+    expect(
+      Reflect.getMetadata(GUARDS_METADATA, AiAgentAdminController),
+    ).toEqual(expect.arrayContaining([JwtAuthGuard, RolesGuard]));
   });
 
   it('binds list and detail routes to the knowledge review service', async () => {
-    await controller.listKnowledge('quarantined');
-    await controller.getKnowledge('73');
+    await controller.listKnowledge({ status: 'quarantined' });
+    await controller.getKnowledge(73);
 
     expect(knowledge.listKnowledgeForReview).toHaveBeenCalledWith(
       'quarantined',
@@ -43,16 +45,12 @@ describe('AiAgentAdminController knowledge review', () => {
   });
 
   it('passes authenticated admin identity and notes to approve and reject', async () => {
-    await controller.approveKnowledge(
-      { id: 9 },
-      '73',
-      { reviewNote: 'verified' },
-    );
-    await controller.rejectKnowledge(
-      { id: 9 },
-      '74',
-      { reviewNote: 'incorrect' },
-    );
+    await controller.approveKnowledge({ id: 9 }, 73, {
+      reviewNote: 'verified',
+    });
+    await controller.rejectKnowledge({ id: 9 }, 74, {
+      reviewNote: 'incorrect',
+    });
 
     expect(knowledge.reviewKnowledgeProposal).toHaveBeenNthCalledWith(
       1,

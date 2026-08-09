@@ -29,6 +29,8 @@ export const AGENT_PLANNER_TOOL = {
             'bazi_suggestion',
             'plot_competitiveness',
             'customer_care',
+            'appointment_booking',
+            'memorial_reminder',
             'general_question',
           ],
         },
@@ -46,6 +48,8 @@ export const AGENT_PLANNER_TOOL = {
             'suggest_bazi_direction',
             'analyze_plot_competitiveness',
             'get_customer_care_overview',
+            'prepare_appointment',
+            'prepare_memorial_reminder',
             'none',
           ],
         },
@@ -71,6 +75,18 @@ export const AGENT_PLANNER_TOOL = {
             'The customer total maximum budget in VND. Treat colloquial "củ" as millions.',
         },
         numberOfPlots: { type: 'integer', minimum: 1 },
+        recommendationCount: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 10,
+          description:
+            'Exact number of alternative recommendation options/cards explicitly requested by the customer. This is not the acquisition quantity.',
+        },
+        comparisonRequested: {
+          type: 'boolean',
+          description:
+            'True when the customer explicitly asks to compare or contrast options.',
+        },
         preferredZone: {
           type: 'string',
           description:
@@ -124,6 +140,45 @@ export const AGENT_PLANNER_TOOL = {
           type: 'string',
           description:
             'Requested service date in YYYY-MM-DD format. Resolve relative Vietnamese dates from the current date supplied by the system.',
+        },
+        appointmentDate: {
+          type: 'string',
+          description: 'Requested meeting date in YYYY-MM-DD format.',
+        },
+        appointmentStartTime: {
+          type: 'string',
+          description: 'Requested meeting start time in HH:mm format.',
+        },
+        appointmentEndTime: {
+          type: 'string',
+          description: 'Requested meeting end time in HH:mm format.',
+        },
+        appointmentTopic: { type: 'string', maxLength: 300 },
+        reminderTitle: { type: 'string', maxLength: 200 },
+        reminderDescription: {
+          type: 'string',
+          maxLength: 1800,
+          description:
+            'Respectful Vietnamese memorial email body drafted for the family. Keep it warm, specific and free of invented facts.',
+        },
+        reminderDate: {
+          type: 'string',
+          description: 'One-time reminder date in YYYY-MM-DD format.',
+        },
+        reminderRecurring: { type: 'boolean' },
+        reminderCalendarType: {
+          type: 'string',
+          enum: ['solar', 'lunar'],
+        },
+        reminderNotifyDaysBefore: {
+          type: 'integer',
+          minimum: 0,
+          maximum: 30,
+        },
+        reminderNotifyEmails: {
+          type: 'array',
+          maxItems: 10,
+          items: { type: 'string' },
         },
         note: { type: 'string', maxLength: 1000 },
         memoryProposals: {
@@ -204,6 +259,8 @@ export type AgentPlanIntent =
   | 'bazi_suggestion'
   | 'plot_competitiveness'
   | 'customer_care'
+  | 'appointment_booking'
+  | 'memorial_reminder'
   | 'general_question';
 
 export type AgentPlanAction =
@@ -218,6 +275,8 @@ export type AgentPlanAction =
   | 'suggest_bazi_direction'
   | 'analyze_plot_competitiveness'
   | 'get_customer_care_overview'
+  | 'prepare_appointment'
+  | 'prepare_memorial_reminder'
   | 'none';
 
 export interface AgentPlan {
@@ -240,6 +299,8 @@ const INTENTS = new Set<AgentPlanIntent>([
   'bazi_suggestion',
   'plot_competitiveness',
   'customer_care',
+  'appointment_booking',
+  'memorial_reminder',
   'general_question',
 ]);
 const ACTIONS = new Set<AgentPlanAction>([
@@ -254,6 +315,8 @@ const ACTIONS = new Set<AgentPlanAction>([
   'suggest_bazi_direction',
   'analyze_plot_competitiveness',
   'get_customer_care_overview',
+  'prepare_appointment',
+  'prepare_memorial_reminder',
   'none',
 ]);
 
@@ -349,6 +412,9 @@ export function parseAgentPlan(raw: string): AgentPlan {
   }
 
   const numberOfPlots = optionalPositiveNumber(parsed.numberOfPlots);
+  const recommendationCount = optionalPositiveNumber(
+    parsed.recommendationCount,
+  );
   const preferredZone = optionalString(parsed.preferredZone);
   const requirements: AgentRequirements = {
     budgetMin: optionalPositiveNumber(parsed.budgetMin),
@@ -356,6 +422,16 @@ export function parseAgentPlan(raw: string): AgentPlan {
     numberOfPlots:
       numberOfPlots !== undefined && Number.isInteger(numberOfPlots)
         ? numberOfPlots
+        : undefined,
+    recommendationCount:
+      recommendationCount !== undefined &&
+      Number.isInteger(recommendationCount) &&
+      recommendationCount <= 10
+        ? recommendationCount
+        : undefined,
+    comparisonRequested:
+      typeof parsed.comparisonRequested === 'boolean'
+        ? parsed.comparisonRequested
         : undefined,
     preferredZone:
       preferredZone && /^[a-z]$/i.test(preferredZone)
@@ -398,6 +474,35 @@ export function parseAgentPlan(raw: string): AgentPlan {
         : undefined,
     selectedPlotCode: optionalString(parsed.selectedPlotCode),
     requestedDate: optionalString(parsed.requestedDate),
+    appointmentDate: optionalString(parsed.appointmentDate),
+    appointmentStartTime: optionalString(parsed.appointmentStartTime),
+    appointmentEndTime: optionalString(parsed.appointmentEndTime),
+    appointmentTopic: optionalString(parsed.appointmentTopic),
+    reminderTitle: optionalString(parsed.reminderTitle),
+    reminderDescription: optionalString(parsed.reminderDescription),
+    reminderDate: optionalString(parsed.reminderDate),
+    reminderRecurring:
+      typeof parsed.reminderRecurring === 'boolean'
+        ? parsed.reminderRecurring
+        : undefined,
+    reminderCalendarType:
+      parsed.reminderCalendarType === 'solar' ||
+      parsed.reminderCalendarType === 'lunar'
+        ? parsed.reminderCalendarType
+        : undefined,
+    reminderNotifyDaysBefore:
+      Number.isInteger(Number(parsed.reminderNotifyDaysBefore)) &&
+      Number(parsed.reminderNotifyDaysBefore) >= 0 &&
+      Number(parsed.reminderNotifyDaysBefore) <= 30
+        ? Number(parsed.reminderNotifyDaysBefore)
+        : undefined,
+    reminderNotifyEmails: Array.isArray(parsed.reminderNotifyEmails)
+      ? parsed.reminderNotifyEmails
+          .filter((item): item is string => typeof item === 'string')
+          .map((item) => item.trim().toLowerCase())
+          .filter(Boolean)
+          .slice(0, 10)
+      : undefined,
     note: optionalString(parsed.note),
   };
   if (

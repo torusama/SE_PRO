@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Param,
+  ParseIntPipe,
   Patch,
   Post,
   Query,
@@ -21,6 +22,10 @@ import { AdminAiActivityQueryDto } from './dto/admin-ai-activity-query.dto';
 import { LearningAnalyticsService } from './learning-analytics.service';
 import { KnowledgeService } from './knowledge.service';
 import { ReviewKnowledgeDto } from './dto/review-knowledge.dto';
+import {
+  AdminFeedbackReviewQueryDto,
+  AdminKnowledgeReviewQueryDto,
+} from './dto/admin-review-query.dto';
 
 interface AdminUser {
   id: number;
@@ -48,87 +53,87 @@ export class AiAgentAdminController {
   }
 
   @Get('conversations/:id')
-  async conversationDetail(@Param('id') id: string) {
+  async conversationDetail(@Param('id', ParseIntPipe) id: number) {
     return {
       success: true,
       message: 'AI conversation retrieved',
-      data: await this.conversations.adminGet(Number(id)),
+      data: await this.conversations.adminGet(id),
     };
   }
 
   @Get('feedback')
-  async listFeedback(@Query('status') status?: string) {
+  async listFeedback(@Query() query: AdminFeedbackReviewQueryDto) {
     return {
       success: true,
       message: 'AI feedback retrieved',
-      data: await this.feedback.list(status),
+      data: await this.feedback.list(query.status),
     };
   }
 
   @Get('feedback/:id')
-  async getFeedback(@Param('id') id: string) {
+  async getFeedback(@Param('id', ParseIntPipe) id: number) {
     return {
       success: true,
       message: 'AI feedback retrieved',
-      data: await this.feedback.get(Number(id)),
+      data: await this.feedback.get(id),
     };
   }
 
   @Patch('feedback/:id/approve')
   async approveFeedback(
     @CurrentUser() user: AdminUser,
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
     @Body() dto: ReviewFeedbackDto,
   ) {
     return {
       success: true,
       message: 'AI feedback approved',
-      data: await this.feedback.review(Number(id), user.id, 'approve', dto),
+      data: await this.feedback.review(id, user.id, 'approve', dto),
     };
   }
 
   @Patch('feedback/:id/reject')
   async rejectFeedback(
     @CurrentUser() user: AdminUser,
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
     @Body() dto: ReviewFeedbackDto,
   ) {
     return {
       success: true,
       message: 'AI feedback rejected',
-      data: await this.feedback.review(Number(id), user.id, 'reject', dto),
+      data: await this.feedback.review(id, user.id, 'reject', dto),
     };
   }
 
   @Get('knowledge')
-  async listKnowledge(@Query('status') status?: string) {
+  async listKnowledge(@Query() query: AdminKnowledgeReviewQueryDto) {
     return {
       success: true,
       message: 'AI knowledge proposals retrieved',
-      data: await this.knowledge.listKnowledgeForReview(status),
+      data: await this.knowledge.listKnowledgeForReview(query.status),
     };
   }
 
   @Get('knowledge/:id')
-  async getKnowledge(@Param('id') id: string) {
+  async getKnowledge(@Param('id', ParseIntPipe) id: number) {
     return {
       success: true,
       message: 'AI knowledge proposal retrieved',
-      data: await this.knowledge.getKnowledgeForReview(Number(id)),
+      data: await this.knowledge.getKnowledgeForReview(id),
     };
   }
 
   @Patch('knowledge/:id/approve')
   async approveKnowledge(
     @CurrentUser() user: AdminUser,
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
     @Body() dto: ReviewKnowledgeDto,
   ) {
     return {
       success: true,
       message: 'AI knowledge proposal approved',
       data: await this.knowledge.reviewKnowledgeProposal(
-        Number(id),
+        id,
         user.id,
         'approve',
         dto.reviewNote,
@@ -139,14 +144,14 @@ export class AiAgentAdminController {
   @Patch('knowledge/:id/reject')
   async rejectKnowledge(
     @CurrentUser() user: AdminUser,
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
     @Body() dto: ReviewKnowledgeDto,
   ) {
     return {
       success: true,
       message: 'AI knowledge proposal rejected',
       data: await this.knowledge.reviewKnowledgeProposal(
-        Number(id),
+        id,
         user.id,
         'reject',
         dto.reviewNote,
@@ -182,20 +187,26 @@ export class AiAgentAdminController {
   }
 
   @Post('model-versions/:id/deploy')
-  async deploy(@CurrentUser() user: AdminUser, @Param('id') id: string) {
+  async deploy(
+    @CurrentUser() user: AdminUser,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
     return {
       success: true,
       message: 'Model version deployed',
-      data: await this.training.deploy(Number(id), user.id),
+      data: await this.training.deploy(id, user.id),
     };
   }
 
   @Post('model-versions/:id/rollback')
-  async rollback(@CurrentUser() user: AdminUser, @Param('id') id: string) {
+  async rollback(
+    @CurrentUser() user: AdminUser,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
     return {
       success: true,
       message: 'Model version rolled back',
-      data: await this.training.rollback(Number(id), user.id),
+      data: await this.training.rollback(id, user.id),
     };
   }
 

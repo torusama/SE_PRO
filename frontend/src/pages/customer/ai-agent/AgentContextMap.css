@@ -339,11 +339,11 @@
 .agent-context-route-panel {
   position: absolute;
   z-index: 6;
-  right: 74px;
+  right: 14px;
   bottom: 14px;
   left: 14px;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 16px;
   padding: 12px 13px;
   border: 1px solid rgba(0, 229, 196, 0.28);
@@ -376,28 +376,24 @@
 }
 
 .agent-context-route-panel p {
-  overflow: hidden;
   margin: 3px 0 0;
   color: #94a8b2;
   font-size: 10px;
   line-height: 1.45;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .agent-context-route-panel button {
-  display: inline-flex;
-  min-height: 34px;
+  display: grid;
+  width: 30px;
+  height: 30px;
   flex: 0 0 auto;
-  align-items: center;
-  gap: 5px;
-  padding: 0 11px;
+  place-items: center;
+  padding: 0;
   border: 1px solid rgba(0, 229, 196, 0.26);
   border-radius: 8px;
   color: var(--agent-teal);
   background: rgba(0, 229, 196, 0.08);
-  font-size: 10px;
-  font-weight: 650;
   cursor: pointer;
 }
 
@@ -470,15 +466,10 @@
   }
 
   .agent-context-route-panel {
-    right: 62px;
+    right: 10px;
     bottom: 10px;
     left: 10px;
     align-items: flex-start;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .agent-context-route-panel p {
-    white-space: normal;
+    gap: 10px;
   }
 }

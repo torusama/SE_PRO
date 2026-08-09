@@ -21,6 +21,8 @@ type LlmCallOptions = {
   routingKey?: string;
   timeoutMs?: number;
   totalTimeoutMs?: number;
+  enableThinking?: boolean;
+  reasoningEffort?: 'low' | 'medium' | 'high';
 };
 
 interface KeyCandidate {
@@ -99,12 +101,17 @@ export class OpenAiService {
       messages,
       temperature:
         options.temperature ??
-        this.config.get<number>('ai.nvidia.temperature') ??
+        this.config.get<number>(`${this.configPrefix}.temperature`) ??
         0.2,
       max_tokens:
         options.maxTokens ??
-        this.config.get<number>('ai.nvidia.maxTokens') ??
+        this.config.get<number>(`${this.configPrefix}.maxTokens`) ??
         2048,
+      chat_template_kwargs:
+        options.enableThinking === undefined
+          ? undefined
+          : { enable_thinking: options.enableThinking },
+      reasoning_effort: options.reasoningEffort,
       tools: tools.length > 0 ? tools : undefined,
       tool_choice: tools.length > 0 ? toolChoice : undefined,
     };
@@ -383,5 +390,41 @@ export class OpenAiService {
 export class OpenAiSecondaryService extends OpenAiService {
   protected override get configPrefix(): string {
     return 'ai.openaiSecondary';
+  }
+}
+
+/**
+ * Dedicated content-generation pool for memorial reminder emails and plot
+ * introductions. Keeping one provider instance lets both low-volume tasks
+ * share key rotation, affinity and cooldown state while remaining isolated
+ * from customer chat and suggested follow-ups.
+ */
+@Injectable()
+export class EmailDraftAiService extends OpenAiService {
+  protected override get configPrefix(): string {
+    return 'ai.emailDraft';
+  }
+}
+
+/**
+ * Dedicated, OpenAI-compatible NVIDIA NIM route for comparison insights.
+ * Its key rotation and cooldown state are deliberately isolated from chat.
+ */
+@Injectable()
+export class ComparisonAiService extends OpenAiService {
+  protected override get configPrefix(): string {
+    return 'ai.comparison';
+  }
+}
+
+/**
+ * The deeper decision model has its own keys and rotation state. It is
+ * preferred for comparison analysis, while ComparisonAiService remains the
+ * independent fast fallback pool.
+ */
+@Injectable()
+export class DecisionComparisonAiService extends OpenAiService {
+  protected override get configPrefix(): string {
+    return 'ai.decisionComparison';
   }
 }

@@ -34,15 +34,15 @@ function createService() {
 }
 
 describe('KnowledgeService prompt retrieval', () => {
-  it('retrieves active effective global knowledge and only the current user memory', async () => {
+  it('does not inject unrelated global knowledge when no retrieval query is supplied', async () => {
     const { database, service } = createService();
 
     const context = await service.getUserPromptContext(5);
 
     expect(context).toContain('<PERSISTENT_USER_PREFERENCES>');
     expect(context).toContain('Only user 5 can retrieve this preference.');
-    expect(context).toContain('<VERIFIED_GLOBAL_KNOWLEDGE>');
-    expect(context).toContain('Four plots include one cleaning service.');
+    expect(context).not.toContain('<VERIFIED_GLOBAL_KNOWLEDGE>');
+    expect(context).not.toContain('Four plots include one cleaning service.');
     const userQuery = database.query.mock.calls.find(([sql]) =>
       String(sql).includes("scope = 'user'"),
     );
@@ -71,7 +71,7 @@ describe('KnowledgeService prompt retrieval', () => {
     const context = await service.getUserPromptContext(null);
 
     expect(context).not.toContain('<PERSISTENT_USER_PREFERENCES>');
-    expect(context).toContain('<VERIFIED_GLOBAL_KNOWLEDGE>');
+    expect(context).not.toContain('<VERIFIED_GLOBAL_KNOWLEDGE>');
     expect(
       database.query.mock.calls.some(([sql]) =>
         String(sql).includes("scope = 'user'"),

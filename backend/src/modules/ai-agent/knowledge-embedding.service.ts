@@ -312,18 +312,7 @@ export class KnowledgeEmbeddingService implements OnModuleInit {
         ),
       ]),
     ];
-    if (explicit.length > 0) return explicit;
-
-    // Reuse the project's existing NVIDIA NIM key pool by default. This keeps
-    // RAG on the same provider as the chat models and requires no extra API key.
-    return [
-      ...new Set([
-        ...this.parseKeyList(this.config.get<string>('ai.nvidia.apiKey')),
-        ...this.parseKeyList(
-          this.config.get<string | string[]>('ai.nvidia.apiKeys'),
-        ),
-      ]),
-    ];
+    return explicit;
   }
 
   private parseKeyList(value?: string | string[]) {

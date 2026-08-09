@@ -50,7 +50,8 @@ export class NvidiaNemotronService {
 
   get model() {
     return (
-      this.config.get<string>('ai.nvidia.model') ?? 'mistralai/mistral-nemotron'
+      this.config.get<string>('ai.mistralAgent.model') ??
+      'mistralai/mistral-nemotron'
     );
   }
 
@@ -69,21 +70,21 @@ export class NvidiaNemotronService {
     }
 
     const baseUrl = (
-      this.config.get<string>('ai.nvidia.baseUrl') ??
+      this.config.get<string>('ai.mistralAgent.baseUrl') ??
       'https://integrate.api.nvidia.com/v1'
     ).replace(/\/+$/, '');
     const configuredTimeoutMs = this.positiveConfig(
-      'ai.nvidia.timeoutMs',
-      7_000,
+      'ai.mistralAgent.timeoutMs',
+      2_500,
     );
     const timeoutMs = this.clampTimeout(options.timeoutMs, configuredTimeoutMs);
     const totalTimeoutMs = this.clampTimeout(
       options.totalTimeoutMs,
-      this.positiveConfig('ai.nvidia.totalTimeoutMs', 12_000),
+      this.positiveConfig('ai.mistralAgent.totalTimeoutMs', 10_000),
     );
     const maxAttempts = Math.min(
       apiKeys.length,
-      this.positiveConfig('ai.nvidia.maxAttempts', 10),
+      this.positiveConfig('ai.mistralAgent.maxAttempts', 10),
     );
     const body = {
       model: this.model,
@@ -96,11 +97,11 @@ export class NvidiaNemotronService {
         : {}),
       temperature:
         options.temperature ??
-        this.config.get<number>('ai.nvidia.temperature') ??
+        this.config.get<number>('ai.mistralAgent.temperature') ??
         0.2,
       max_tokens:
         options.maxTokens ??
-        this.config.get<number>('ai.nvidia.maxTokens') ??
+        this.config.get<number>('ai.mistralAgent.maxTokens') ??
         2048,
       stream: false,
     };
@@ -201,8 +202,10 @@ export class NvidiaNemotronService {
   }
 
   private getConfiguredApiKeys() {
-    const multiple = this.config.get<string | string[]>('ai.nvidia.apiKeys');
-    const legacy = this.config.get<string>('ai.nvidia.apiKey');
+    const multiple = this.config.get<string | string[]>(
+      'ai.mistralAgent.apiKeys',
+    );
+    const legacy = this.config.get<string>('ai.mistralAgent.apiKey');
     const values = [
       ...this.parseApiKeyList(multiple),
       ...this.parseApiKeyList(legacy),
@@ -304,11 +307,11 @@ export class NvidiaNemotronService {
 
   private cooldownKey(apiKey: string, error?: NvidiaHttpError) {
     const normalCooldownMs = this.positiveConfig(
-      'ai.nvidia.keyCooldownMs',
+      'ai.mistralAgent.keyCooldownMs',
       60_000,
     );
     const invalidKeyCooldownMs = this.positiveConfig(
-      'ai.nvidia.invalidKeyCooldownMs',
+      'ai.mistralAgent.invalidKeyCooldownMs',
       600_000,
     );
     const transientCooldownMs = this.positiveConfig(

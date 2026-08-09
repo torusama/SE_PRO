@@ -1,23 +1,19 @@
-import {
-  Check,
-  GitCompareArrows,
-  MapPinned,
-  Sparkles,
-} from 'lucide-react'
-import type { AgentRecommendation } from './agent.types'
+import { Check, GitCompareArrows, MapPinned, Sparkles } from "lucide-react";
+import type { AgentRecommendation } from "./agent.types";
 import {
   cleanAgentDisplayText,
+  formatSuitabilityScore,
   formatVnd,
   getRecommendationZoneName,
-} from './agentDisplay'
+} from "./agentDisplay";
 
 interface RecommendationCardProps {
-  option: AgentRecommendation
-  index: number
-  selectedForCompare: boolean
-  onToggleCompare: (option: AgentRecommendation) => void
-  onViewMap: (option: AgentRecommendation) => void
-  onStartRequest: (option: AgentRecommendation) => void
+  option: AgentRecommendation;
+  index: number;
+  selectedForCompare: boolean;
+  onToggleCompare: (option: AgentRecommendation) => void;
+  onViewMap: (option: AgentRecommendation) => void;
+  onStartRequest: (option: AgentRecommendation) => void;
 }
 
 export default function RecommendationCard({
@@ -28,21 +24,21 @@ export default function RecommendationCard({
   onViewMap,
   onStartRequest,
 }: RecommendationCardProps) {
-  const zoneName = getRecommendationZoneName(option)
+  const zoneName = getRecommendationZoneName(option);
   const directions =
-    option.directions.map(cleanAgentDisplayText).filter(Boolean).join(', ') ||
-    'Chưa xác định'
+    option.directions.map(cleanAgentDisplayText).filter(Boolean).join(", ") ||
+    "Chưa xác định";
 
   return (
     <article className="agent-option-card">
       <div className="agent-option-head">
         <div>
           <span className="agent-option-kicker">Phương án {index + 1}</span>
-          <h4>{option.plotCodes.join(' · ')}</h4>
+          <h4>{option.plotCodes.join(" · ")}</h4>
         </div>
         <div className="agent-score">
           <Sparkles size={13} />
-          {Math.round(option.score * 100)}%
+          {formatSuitabilityScore(option.score)}
         </div>
       </div>
 
@@ -84,8 +80,8 @@ export default function RecommendationCard({
 
       {option.tradeOffs.length > 0 && (
         <p className="agent-tradeoff">
-          <strong>Điểm cần cân nhắc:</strong>{' '}
-          {option.tradeOffs.map(cleanAgentDisplayText).join(' · ')}
+          <strong>Điểm cần cân nhắc:</strong>{" "}
+          {option.tradeOffs.map(cleanAgentDisplayText).join(" · ")}
         </p>
       )}
 
@@ -96,11 +92,11 @@ export default function RecommendationCard({
         </button>
         <button
           type="button"
-          className={selectedForCompare ? 'is-selected' : ''}
+          className={selectedForCompare ? "is-selected" : ""}
           onClick={() => onToggleCompare(option)}
         >
           <GitCompareArrows size={15} />
-          {selectedForCompare ? 'Đã chọn' : 'So sánh'}
+          {selectedForCompare ? "Đã chọn" : "So sánh"}
         </button>
         <button
           type="button"
@@ -111,5 +107,5 @@ export default function RecommendationCard({
         </button>
       </div>
     </article>
-  )
+  );
 }

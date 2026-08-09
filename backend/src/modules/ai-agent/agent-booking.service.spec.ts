@@ -42,14 +42,29 @@ function createService() {
     ]),
     createOrder: jest.fn(),
   };
+  const reminders = {
+    create: jest.fn(),
+  };
+  const schedule = {
+    bookAppointment: jest.fn(),
+  };
+  const memorialDrafts = {
+    generate: jest.fn().mockImplementation(({ fallback }) => fallback),
+  };
   return {
     database,
     reservations,
     cemeteryServices,
+    reminders,
+    schedule,
+    memorialDrafts,
     service: new AgentBookingService(
       database as never,
       reservations as never,
       cemeteryServices as never,
+      reminders as never,
+      schedule as never,
+      memorialDrafts as never,
     ),
   };
 }
@@ -246,6 +261,13 @@ describe('AgentBookingService', () => {
 
     expect(result?.assistantMessage).toContain('chưa có lô nào');
     expect(result?.pendingAction).toBeUndefined();
+    expect(result?.quickReplies).toEqual([
+      expect.objectContaining({
+        id: 'service-no-owned-plot-consultation',
+        label: 'Tư vấn thêm về lô đất phù hợp',
+        emphasis: 'strong',
+      }),
+    ]);
   });
 
   it('asks which owned plot to use when the account has multiple plots', async () => {
@@ -385,6 +407,149 @@ describe('AgentBookingService', () => {
       kind: 'service_order',
       quotedPrice: 200_000,
       serviceUnit: 'lần',
+    });
+  });
+
+  it('prepares an appointment and opens the appointment calendar before confirmation', async () => {
+    const { service, schedule } = createService();
+
+    const result = await service.handleTurn({
+      conversationId: 1,
+      userId: 7,
+      plan: plan('prepare_appointment', 'appointment_booking', {
+        appointmentDate: '2099-08-20',
+        appointmentStartTime: '09:00',
+        appointmentTopic: 'Tham quan lô A-01-001',
+        selectedPlotCode: 'A-01-001',
+      }),
+    });
+
+    expect(schedule.bookAppointment).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      intent: 'appointment_booking',
+      uiDirective: {
+        type: 'OPEN_APPOINTMENT_CALENDAR',
+        appointmentDate: '2099-08-20',
+      },
+      pendingAction: {
+        kind: 'appointment',
+        stage: 'awaiting_confirmation',
+        startTime: '09:00',
+        endTime: '10:00',
+      },
+    });
+    expect(result?.assistantMessage.match(/A-01-001/g)).toHaveLength(1);
+  });
+
+  it('books an appointment only after explicit confirmation', async () => {
+    const { service, schedule } = createService();
+    schedule.bookAppointment.mockResolvedValue({ id: 71 });
+    const pending: AgentPendingAction = {
+      kind: 'appointment',
+      stage: 'awaiting_confirmation',
+      appointmentDate: '2099-08-20',
+      startTime: '09:00',
+      endTime: '10:00',
+      topic: 'Tham quan lô A-01-001',
+      selectedPlotCode: 'A-01-001',
+    };
+
+    const result = await service.handleTurn({
+      conversationId: 1,
+      userId: 7,
+      plan: plan('confirm_pending_action', 'appointment_booking'),
+      pendingAction: pending,
+    });
+
+    expect(schedule.bookAppointment).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({
+        appointmentDate: '2099-08-20',
+        startTime: '09:00',
+        endTime: '10:00',
+      }),
+    );
+    expect(result?.uiDirective).toEqual({
+      type: 'OPEN_APPOINTMENT_CALENDAR',
+      appointmentId: 71,
+      appointmentDate: '2099-08-20',
+    });
+  });
+
+  it('drafts a recurring memorial reminder with the account email and waits for confirmation', async () => {
+    const { service, database, reminders } = createService();
+    database.queryOne.mockResolvedValue({
+      fullName: 'An Võ',
+      phone: '0900000000',
+      email: 'an@example.com',
+    });
+
+    const result = await service.handleTurn({
+      conversationId: 1,
+      userId: 7,
+      plan: plan('prepare_memorial_reminder', 'memorial_reminder', {
+        reminderTitle: 'Tưởng niệm ông nội',
+        reminderDescription: 'Kính gửi gia đình, xin nhắc về ngày tưởng niệm sắp tới.',
+        reminderDate: '2099-08-20',
+        reminderRecurring: true,
+        reminderCalendarType: 'solar',
+        reminderNotifyDaysBefore: 3,
+      }),
+    });
+
+    expect(reminders.create).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      intent: 'memorial_reminder',
+      uiDirective: { type: 'OPEN_REMINDER_CALENDAR' },
+      pendingAction: {
+        kind: 'memorial_reminder',
+        stage: 'awaiting_confirmation',
+        remindMonth: 8,
+        remindDay: 20,
+        isRecurring: true,
+        notifyEmails: ['an@example.com'],
+      },
+    });
+  });
+
+  it('creates a memorial reminder only after explicit confirmation', async () => {
+    const { service, reminders } = createService();
+    reminders.create.mockResolvedValue({ id: 72 });
+    const pending: AgentPendingAction = {
+      kind: 'memorial_reminder',
+      stage: 'awaiting_confirmation',
+      title: 'Tưởng niệm ông nội',
+      description: 'Nội dung email tưởng niệm đã được gia đình xem lại.',
+      remindMonth: 8,
+      remindDay: 20,
+      isRecurring: true,
+      calendarType: 'solar',
+      notifyDaysBefore: 3,
+      notifyEmails: ['an@example.com'],
+    };
+
+    const result = await service.handleTurn({
+      conversationId: 1,
+      userId: 7,
+      plan: plan('confirm_pending_action', 'memorial_reminder'),
+      pendingAction: pending,
+    });
+
+    expect(reminders.create).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({
+        title: 'Tưởng niệm ông nội',
+        reminderType: 'memorial',
+        remindMonth: 8,
+        remindDay: 20,
+        notifyEmail: true,
+        notifyEmails: ['an@example.com'],
+      }),
+    );
+    expect(result?.uiDirective).toEqual({
+      type: 'OPEN_REMINDER_CALENDAR',
+      reminderId: 72,
+      reminderDate: undefined,
     });
   });
 });
