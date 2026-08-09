@@ -169,6 +169,12 @@ export class ContractsService {
   }
 
   async updateStatus(id: number, status: string) {
+    void id;
+    void status;
+    throw new BadRequestException(
+      'Không thể đổi trạng thái hợp đồng trực tiếp. Chỉ endpoint kích hoạt quyền sở hữu mới được chuyển hợp đồng sang active.',
+    );
+
     const contract = await this.database.queryOne<any>(
       `UPDATE contracts SET status = $2, updated_at = NOW()
        WHERE contract_id = $1 AND is_deleted = FALSE

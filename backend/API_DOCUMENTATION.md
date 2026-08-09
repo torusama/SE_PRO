@@ -153,6 +153,7 @@ Map item sample:
 | GET    | `/admin/reservations/:id`         | Yes  | admin    |
 | PATCH  | `/admin/reservations/:id/approve` | Yes  | admin    |
 | PATCH  | `/admin/reservations/:id/reject`  | Yes  | admin    |
+| PATCH  | `/admin/reservations/:id/cancel`  | Yes  | admin    |
 
 ### Create reservation
 
@@ -243,6 +244,11 @@ Additional common errors:
 `GET /admin/reservations/:id` returns any reservation request detail for admin review.
 
 Admin approve/reject body: `{ "adminNote": "OK" }`
+
+Admin cancel body: `{ "adminNote": "Khách không còn nhu cầu" }`. Chỉ yêu cầu
+`reserve` đã được duyệt mới có thể hủy theo cách này. Thao tác trả toàn bộ lô
+`reserved` của yêu cầu về `available`, ghi audit và thông báo cho khách hàng.
+Lịch hẹn đang `scheduled` gắn với yêu cầu cũng được chuyển sang `cancelled`.
 
 Approval/rejection are transaction-safe:
 

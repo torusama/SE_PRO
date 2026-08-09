@@ -520,26 +520,10 @@ export class PlotsService {
       context,
       async (client, before) => {
         if (before?.isDeleted) throw new NotFoundException('Plot not found');
-        const current = String(before?.status);
-        const allowed: Record<string, string[]> = {
-          available: ['pending', 'reserved', 'sold', 'locked'],
-          pending: ['available', 'reserved', 'sold', 'locked'],
-          reserved: ['available', 'sold', 'locked'],
-          sold: ['locked'],
-          locked: [],
-        };
-        if (!allowed[current]?.includes(status)) {
-          throw new BadRequestException(
-            'Plot status transition is not allowed',
-          );
-        }
-        const result = await client.query(
-          `UPDATE plots SET status=$2,updated_at=NOW()
-         WHERE plot_id=$1 AND is_deleted=FALSE
-         RETURNING plot_id AS id,plot_code AS "plotCode",status`,
-          [id, status],
+        void status;
+        throw new BadRequestException(
+          'Không thể đổi trạng thái lô trực tiếp. Hãy dùng duyệt/từ chối yêu cầu, kích hoạt quyền sở hữu, hoặc khóa/mở khóa lô.',
         );
-        return result.rows[0];
       },
     );
   }
