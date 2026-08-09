@@ -223,11 +223,30 @@ export class AgentBookingService {
     );
     pending.plotCodes = plots.map((plot) => plot.plotCode);
     if (!pending.requestType) {
+      const primaryCode = pending.plotCodes[0];
       return {
         handled: true,
         intent: 'plot_request',
         pendingAction: pending,
         assistantMessage: `Mình đã ghi nhận phương án **${pending.plotCodes.join(', ')}** và sẽ dùng thông tin có sẵn trong tài khoản của bạn. Bạn muốn **giữ chỗ tạm thời** hay **gửi yêu cầu mua lô**?`,
+        quickReplies: [
+          {
+            id: 'plot-request-reserve',
+            label: 'Giữ chỗ tạm thời',
+            message: primaryCode
+              ? `Mình muốn giữ chỗ tạm thời cho lô ${primaryCode}.`
+              : 'Mình muốn giữ chỗ tạm thời cho phương án này.',
+            emphasis: 'strong',
+          },
+          {
+            id: 'plot-request-purchase',
+            label: 'Gửi yêu cầu mua lô',
+            message: primaryCode
+              ? `Mình muốn gửi yêu cầu mua lô ${primaryCode}.`
+              : 'Mình muốn gửi yêu cầu mua lô cho phương án này.',
+            emphasis: 'strong',
+          },
+        ],
       };
     }
 
@@ -332,10 +351,16 @@ export class AgentBookingService {
         intent: 'service_booking',
         pendingAction: pending,
         assistantMessage: `Tài khoản của bạn đang có nhiều lô: **${ownedPlots.map((plot) => plot.plotCode).join(', ')}**. Bạn muốn đặt dịch vụ **${service.name}** cho lô nào?`,
+        quickReplies: ownedPlots.slice(0, 6).map((plot) => ({
+          id: `service-plot-${plot.plotId}`,
+          label: plot.plotCode,
+          message: `Mình muốn đặt dịch vụ ${service.name} cho lô ${plot.plotCode}.`,
+          emphasis: 'strong' as const,
+        })),
       };
     }
     if (
-      !pending.requestedDate ||
+      pending.requestedDate &&
       !this.isValidFutureDate(pending.requestedDate)
     ) {
       return {
@@ -345,9 +370,7 @@ export class AgentBookingService {
           ...pending,
           requestedDate: undefined,
         },
-        assistantMessage: pending.requestedDate
-          ? `Ngày **${pending.requestedDate}** không hợp lệ hoặc đã qua. Bạn muốn thực hiện dịch vụ **${service.name}** cho lô **${selectedPlot.plotCode}** vào ngày nào?`
-          : `Mình sẽ đặt dịch vụ **${service.name}** cho lô **${selectedPlot.plotCode}**. Bạn muốn thực hiện vào ngày nào?`,
+        assistantMessage: `Ngày **${pending.requestedDate}** không hợp lệ hoặc đã qua. Bạn có thể gửi lại ngày khác, hoặc để trống và chọn ngày trên lịch sau bước thanh toán.`,
       };
     }
 
@@ -361,11 +384,13 @@ export class AgentBookingService {
         'Mình đã chuẩn bị đơn dịch vụ:',
         `- Dịch vụ: **${service.name}**`,
         `- Lô áp dụng: **${selectedPlot.plotCode}**`,
-        `- Ngày mong muốn: **${pending.requestedDate}**`,
+        pending.requestedDate
+          ? `- Ngày mong muốn: **${pending.requestedDate}**`
+          : '- Ngày thực hiện: **chọn trên lịch sau bước thanh toán**',
         `- Chi phí dự kiến: **${service.basePrice.toLocaleString('vi-VN')} VND/${service.unit}**`,
         `- Khách hàng: **${profile.fullName || profile.email}** (lấy từ tài khoản hiện tại)`,
         '',
-        'Bạn xác nhận để mình gửi đơn dịch vụ này không?',
+        'Bạn xác nhận để mình gửi đơn dịch vụ này không? Sau khi đơn được xác nhận và bạn thanh toán, lịch chọn ngày sẽ mở để bạn đặt ngày thực hiện.',
       ].join('\n'),
     };
   }
@@ -733,14 +758,36 @@ export class AgentBookingService {
       return {
         handled: true,
         intent: 'plot_request',
-        assistantMessage: `Đã gửi yêu cầu ${pending.requestType === 'reserve' ? 'giữ chỗ' : 'mua lô'}${id ? ` **#${id}**` : ''} cho **${pending.plotCodes.join(', ')}**. Bạn có thể theo dõi trạng thái trong mục yêu cầu của tài khoản.`,
+        assistantMessage: `Đã gửi yêu cầu ${pending.requestType === 'reserve' ? 'giữ chỗ' : 'mua lô'}${id ? ` **#${id}**` : ''} cho **${pending.plotCodes.join(', ')}**. Bạn có thể theo dõi trạng thái trong mục yêu cầu của tài khoản. Nếu bạn muốn, mình có thể tư vấn thêm lô khác, dịch vụ chăm sóc hoặc giải thích bước tiếp theo ngay bây giờ.`,
+        quickReplies: [
+          {
+            id: 'after-plot-request-other-options',
+            label: 'Tư vấn thêm lô khác',
+            message:
+              'Gợi ý cho mình thêm vài lô khác phù hợp với tiêu chí hiện tại nhé.',
+            emphasis: 'strong',
+          },
+          {
+            id: 'after-plot-request-services',
+            label: 'Xem dịch vụ chăm sóc',
+            message: 'Cho mình xem các dịch vụ chăm sóc hiện có.',
+          },
+          {
+            id: 'after-plot-request-process',
+            label: 'Hỏi bước tiếp theo',
+            message: 'Giải thích giúp mình bước tiếp theo sau khi đã gửi yêu cầu.',
+          },
+        ],
       };
     }
 
-    if (!pending.serviceTypeId || !pending.plotId || !pending.requestedDate) {
+    if (!pending.serviceTypeId || !pending.plotId) {
       throw new BadRequestException('Service order information is incomplete');
     }
-    if (!this.isValidFutureDate(pending.requestedDate)) {
+    if (
+      pending.requestedDate &&
+      !this.isValidFutureDate(pending.requestedDate)
+    ) {
       return {
         handled: true,
         intent: 'service_booking',
@@ -750,7 +797,7 @@ export class AgentBookingService {
           requestedDate: undefined,
         },
         assistantMessage:
-          'Ngày thực hiện đã qua hoặc không còn hợp lệ. Bạn chọn một ngày mới để mình kiểm tra và cập nhật đơn dịch vụ nhé.',
+          'Ngày thực hiện đã qua hoặc không còn hợp lệ. Bạn có thể chọn lại ngay, hoặc để trống và chọn trên lịch sau bước thanh toán.',
       };
     }
     const currentService = await this.resolveServiceType(pending.serviceTypeId);
@@ -779,7 +826,9 @@ export class AgentBookingService {
             ? 'Mình cần bạn xác nhận lại mức giá hiện tại trước khi gửi đơn dịch vụ.'
             : `Giá dịch vụ **${currentService.name}** đã thay đổi từ **${previousPrice.toLocaleString('vi-VN')} VND** thành **${currentService.basePrice.toLocaleString('vi-VN')} VND/${currentService.unit}**.`,
           `- Lô áp dụng: **${pending.plotCode}**`,
-          `- Ngày mong muốn: **${pending.requestedDate}**`,
+          pending.requestedDate
+            ? `- Ngày mong muốn: **${pending.requestedDate}**`
+            : '- Ngày thực hiện: **chọn sau khi thanh toán**',
           '',
           'Bạn có đồng ý với mức giá mới để mình gửi đơn không?',
         ].join('\n'),
@@ -794,14 +843,19 @@ export class AgentBookingService {
         'Đơn dịch vụ được Trợ lý AI thiết lập theo xác nhận của khách hàng',
     });
     const id = this.resultId(result);
+    const dateText = pending.requestedDate
+      ? ` với ngày mong muốn **${pending.requestedDate}**`
+      : '';
     return {
       handled: true,
       intent: 'service_booking',
-      assistantMessage: `${(result as { reused?: boolean }).reused ? 'Đơn này đã được ghi nhận trước đó' : 'Đã gửi đơn dịch vụ'}${id ? ` **#${id}**` : ''} **${pending.serviceName ?? ''}** cho lô **${pending.plotCode}** vào ngày **${pending.requestedDate}**. Bộ phận phụ trách sẽ tiếp nhận và cập nhật trạng thái cho bạn.`,
+      assistantMessage: `${(result as { reused?: boolean }).reused ? 'Đơn này đã được ghi nhận trước đó' : 'Đã gửi đơn dịch vụ'}${id ? ` **#${id}**` : ''} **${pending.serviceName ?? ''}** cho lô **${pending.plotCode}**${dateText}. Phần thanh toán sẽ hiển thị ngay trong cuộc trò chuyện; sau khi thanh toán, lịch chọn ngày thực hiện sẽ mở ở panel bên phải.`,
       uiDirective: {
-        type: 'OPEN_SERVICE_PANEL',
+        type: 'SHOW_INLINE_SERVICE_PAYMENT',
         serviceTypeId: pending.serviceTypeId,
         orderId: id,
+        amount: currentService.basePrice,
+        paymentStatus: 'unpaid',
       },
     };
   }

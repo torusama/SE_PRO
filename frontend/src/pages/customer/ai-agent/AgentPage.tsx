@@ -35,6 +35,27 @@ import type {
 } from "./agent.types";
 import "./AgentPage.css";
 
+type WorkflowDirective = Exclude<
+  NonNullable<AgentResponse["uiDirective"]>,
+  { type: "SHOW_INLINE_SERVICE_PAYMENT" }
+>;
+
+function asWorkflowDirective(
+  directive: AgentResponse["uiDirective"],
+): WorkflowDirective | undefined {
+  if (!directive) return undefined;
+  if (
+    directive.type === "OPEN_SERVICE_SCHEDULE_CALENDAR" ||
+    directive.type === "OPEN_APPOINTMENT_CALENDAR" ||
+    directive.type === "OPEN_REMINDER_CALENDAR"
+  ) {
+    return directive;
+  }
+  // Inline payment is rendered in-chat. Legacy/unknown directives (including
+  // the removed OPEN_SERVICE_PANEL stored in older conversations) are ignored.
+  return undefined;
+}
+
 export interface SuggestedPrompt {
   category: string;
   text: string;
@@ -285,10 +306,7 @@ export default function AgentPage() {
   const [comparisonAssessmentLoading, setComparisonAssessmentLoading] =
     useState(false);
   const [mapOpen, setMapOpen] = useState(false);
-  const [workflowDirective, setWorkflowDirective] = useState<
-    AgentResponse["uiDirective"]
-  >();
-  const [workflowServices, setWorkflowServices] = useState<AgentService[]>([]);
+  const [workflowDirective, setWorkflowDirective] = useState<WorkflowDirective>();
   const [mapRecommendations, setMapRecommendations] = useState<
     AgentRecommendation[]
   >([]);
@@ -297,6 +315,7 @@ export default function AgentPage() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const accountIdRef = useRef(user?.id);
   const requestControllerRef = useRef<AbortController | null>(null);
+  const sendLockRef = useRef(false);
   const comparisonAssessmentControllerRef = useRef<AbortController | null>(
     null,
   );
@@ -374,7 +393,11 @@ export default function AgentPage() {
     const restoredMap = getTourableRecommendations(restoredRecommendations);
     const restoredWorkflow = [...detail.messages]
       .reverse()
-      .find((message) => message.response?.uiDirective)?.response;
+      .find(
+        (message) =>
+          message.response?.uiDirective &&
+          message.response.uiDirective.type !== "SHOW_INLINE_SERVICE_PAYMENT",
+      )?.response;
     setSessionId(detail.sessionId);
     setMessages(
       detail.messages.map((message) => ({
@@ -391,8 +414,7 @@ export default function AgentPage() {
     setMapRecommendations(restoredMap);
     setActiveMapIndex(0);
     setMapOpen(restoredMap.length > 0);
-    setWorkflowDirective(restoredWorkflow?.uiDirective);
-    setWorkflowServices(restoredWorkflow?.suggestedServices ?? []);
+    setWorkflowDirective(asWorkflowDirective(restoredWorkflow?.uiDirective));
     setSidebarOpen(false);
   }, []);
 
@@ -537,7 +559,6 @@ export default function AgentPage() {
       setMapRecommendations([]);
       setActiveMapIndex(0);
       setWorkflowDirective(undefined);
-      setWorkflowServices([]);
       setNotice("");
       setError("");
     }, 0);
@@ -548,6 +569,7 @@ export default function AgentPage() {
     if (!requestControllerRef.current) return;
     requestControllerRef.current.abort();
     requestControllerRef.current = null;
+    sendLockRef.current = false;
     setLoading(false);
     setNotice("Đã dừng phản hồi. Bạn có thể chỉnh câu hỏi hoặc gửi lại.");
   }
@@ -555,6 +577,7 @@ export default function AgentPage() {
   function newChat() {
     requestControllerRef.current?.abort();
     requestControllerRef.current = null;
+    sendLockRef.current = false;
     presentationTimersRef.current.forEach((timer) =>
       window.clearTimeout(timer),
     );
@@ -566,6 +589,7 @@ export default function AgentPage() {
     setMapOpen(false);
     setMapRecommendations([]);
     setActiveMapIndex(0);
+    setWorkflowDirective(undefined);
     setInput("");
     setLoading(false);
     setElapsedMs(0);
@@ -636,7 +660,8 @@ export default function AgentPage() {
     } = {},
   ) {
     const value = text.trim();
-    if (!value || loading) return;
+    if (!value || loading || sendLockRef.current) return;
+    sendLockRef.current = true;
 
     // A comparison is contextual to the current pause in the conversation.
     // Hide it as soon as the customer sends a new message, while preserving
@@ -648,6 +673,7 @@ export default function AgentPage() {
     requestControllerRef.current = controller;
     requestStartedAtRef.current = getTimestamp();
     setElapsedMs(0);
+    const clientRequestId = createLocalId();
 
     const userMessage: ChatMessage = {
       localId: createLocalId(),
@@ -680,6 +706,7 @@ export default function AgentPage() {
         "/ai-agent/chat",
         {
           sessionId: options.startNewConversation ? undefined : sessionId,
+          clientRequestId,
           message: value,
           clientAction: options.clientAction,
         },
@@ -697,14 +724,9 @@ export default function AgentPage() {
         setActiveMapIndex(0);
       }
       setSessionId(data.sessionId);
-      if (data.uiDirective) {
-        setWorkflowDirective(data.uiDirective);
-        setWorkflowServices(data.suggestedServices ?? []);
-        setMapOpen(false);
-      } else {
-        setWorkflowDirective(undefined);
-        setWorkflowServices([]);
-      }
+      const nextWorkflowDirective = asWorkflowDirective(data.uiDirective);
+      setWorkflowDirective(nextWorkflowDirective);
+      if (nextWorkflowDirective) setMapOpen(false);
       setMessages((current) => [
         ...current,
         {
@@ -735,6 +757,7 @@ export default function AgentPage() {
     } finally {
       if (requestControllerRef.current === controller) {
         requestControllerRef.current = null;
+        sendLockRef.current = false;
         setLoading(false);
       }
     }
@@ -861,6 +884,15 @@ export default function AgentPage() {
         },
       },
     );
+  }
+
+  function handleUiDirective(
+    directive: NonNullable<AgentResponse["uiDirective"]>,
+  ) {
+    const nextDirective = asWorkflowDirective(directive);
+    if (!nextDirective) return;
+    setWorkflowDirective(nextDirective);
+    setMapOpen(false);
   }
 
   function startServiceOrder(service: AgentService) {
@@ -1084,6 +1116,7 @@ export default function AgentPage() {
                       !comparisonOpen
                     }
                     onQuickReply={(reply) => void sendMessage(reply)}
+                    onUiDirective={handleUiDirective}
                   />
                 ))}
 
@@ -1230,10 +1263,7 @@ export default function AgentPage() {
           {workflowDirective && (
             <AgentWorkflowPanel
               directive={workflowDirective}
-              services={workflowServices}
-              busy={loading}
               onClose={() => setWorkflowDirective(undefined)}
-              onStartServiceOrder={startServiceOrder}
             />
           )}
         </div>

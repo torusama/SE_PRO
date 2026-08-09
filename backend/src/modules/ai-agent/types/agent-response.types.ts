@@ -46,9 +46,19 @@ export type AgentPendingAction =
 
 export type AgentUiDirective =
   | {
-      type: 'OPEN_SERVICE_PANEL';
+      /** Render the payment/confirmation card inside the chat, not in a side panel. */
+      type: 'SHOW_INLINE_SERVICE_PAYMENT';
       serviceTypeId?: number;
       orderId?: number;
+      amount?: number;
+      paymentStatus?: 'unpaid' | 'awaiting_confirmation' | 'paid';
+    }
+  | {
+      /** Open scheduling only after the payment step and highlight the known date. */
+      type: 'OPEN_SERVICE_SCHEDULE_CALENDAR';
+      orderId: number;
+      requestedDate?: string;
+      scheduledDate?: string;
     }
   | {
       type: 'OPEN_APPOINTMENT_CALENDAR';

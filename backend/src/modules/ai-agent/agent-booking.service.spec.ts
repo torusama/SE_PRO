@@ -325,6 +325,36 @@ describe('AgentBookingService', () => {
     expect(result?.assistantMessage).toContain('2099-08-10');
   });
 
+  it('prepares a service order without forcing a date before payment', async () => {
+    const { service, database } = createService();
+    database.query.mockResolvedValue([
+      { plotId: 10, plotCode: 'A-01-001', zoneName: 'Khu A' },
+    ]);
+    database.queryOne.mockResolvedValue({
+      fullName: 'An Võ',
+      phone: '0900000000',
+      email: 'an@example.com',
+    });
+
+    const result = await service.handleTurn({
+      conversationId: 1,
+      userId: 7,
+      plan: plan('prepare_service_order', 'service_booking', {
+        serviceTypeId: 3,
+      }),
+    });
+
+    expect(result?.pendingAction).toMatchObject({
+      kind: 'service_order',
+      stage: 'awaiting_confirmation',
+      plotId: 10,
+      requestedDate: undefined,
+    });
+    expect(result?.assistantMessage).toContain(
+      'chọn trên lịch sau bước thanh toán',
+    );
+  });
+
   it('rejects an impossible calendar date and asks for a valid one', async () => {
     const { service, database } = createService();
     database.query.mockResolvedValue([
@@ -378,6 +408,49 @@ describe('AgentBookingService', () => {
       }),
     );
     expect(result?.assistantMessage).toContain('#45');
+    expect(result?.uiDirective).toEqual({
+      type: 'SHOW_INLINE_SERVICE_PAYMENT',
+      serviceTypeId: 3,
+      orderId: 45,
+      amount: 200_000,
+      paymentStatus: 'unpaid',
+    });
+  });
+
+  it('creates a service order without a date and returns inline payment', async () => {
+    const { service, cemeteryServices } = createService();
+    cemeteryServices.createOrder.mockResolvedValue({ id: 46 });
+    const pending: AgentPendingAction = {
+      kind: 'service_order',
+      stage: 'awaiting_confirmation',
+      serviceTypeId: 3,
+      serviceName: 'Dọn dẹp mộ',
+      plotId: 10,
+      plotCode: 'A-01-001',
+      quotedPrice: 200_000,
+      serviceUnit: 'lần',
+    };
+
+    const result = await service.handleTurn({
+      conversationId: 1,
+      userId: 7,
+      plan: plan('confirm_pending_action', 'service_booking'),
+      pendingAction: pending,
+    });
+
+    expect(cemeteryServices.createOrder).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({
+        serviceTypeId: 3,
+        plotId: 10,
+        requestedDate: undefined,
+      }),
+    );
+    expect(result?.uiDirective).toMatchObject({
+      type: 'SHOW_INLINE_SERVICE_PAYMENT',
+      orderId: 46,
+      paymentStatus: 'unpaid',
+    });
   });
 
   it('requires confirmation again when the service price changes', async () => {

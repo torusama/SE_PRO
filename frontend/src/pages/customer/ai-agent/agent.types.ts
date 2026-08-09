@@ -89,9 +89,17 @@ export interface AgentResponse {
   }>;
   uiDirective?:
     | {
-        type: "OPEN_SERVICE_PANEL";
+        type: "SHOW_INLINE_SERVICE_PAYMENT";
         serviceTypeId?: number;
         orderId?: number;
+        amount?: number;
+        paymentStatus?: "unpaid" | "awaiting_confirmation" | "paid";
+      }
+    | {
+        type: "OPEN_SERVICE_SCHEDULE_CALENDAR";
+        orderId: number;
+        requestedDate?: string;
+        scheduledDate?: string;
       }
     | {
         type: "OPEN_APPOINTMENT_CALENDAR";

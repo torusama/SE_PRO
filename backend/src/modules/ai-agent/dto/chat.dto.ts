@@ -63,6 +63,12 @@ export class ChatDto {
   @MaxLength(100)
   sessionId?: string;
 
+  /** Stable id generated once by the client for one user send action. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  clientRequestId?: string;
+
   @IsString()
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @MinLength(1)

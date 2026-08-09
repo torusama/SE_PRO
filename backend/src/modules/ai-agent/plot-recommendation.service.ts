@@ -128,7 +128,10 @@ export class PlotRecommendationService {
       fallbackUsed = false;
     }
     recommendations = this.applyComparativeFitScores(
-      recommendations.slice(0, this.resolveRecommendationCount(dto)),
+      this.selectDiverseRecommendationOptions(
+        recommendations,
+        this.resolveRecommendationCount(dto),
+      ),
     )
       .sort((left, right) => this.compareRecommendations(left, right, dto))
       .map((option, index) => ({
@@ -209,14 +212,16 @@ export class PlotRecommendationService {
     );
     const recommendations = this.enrichOptionExplanations(
       this.applyComparativeFitScores(
-        optionGroups
-          .map((plots, index) =>
-            this.toRecommendation(plots, query, index, false),
-          )
-          .sort((left, right) =>
-            this.compareRecommendations(left, right, query),
-          )
-          .slice(0, this.resolveRecommendationCount(requirements)),
+        this.selectDiverseRecommendationOptions(
+          optionGroups
+            .map((plots, index) =>
+              this.toRecommendation(plots, query, index, false),
+            )
+            .sort((left, right) =>
+              this.compareRecommendations(left, right, query),
+            ),
+          this.resolveRecommendationCount(requirements),
+        ),
       )
         .sort((left, right) => this.compareRecommendations(left, right, query))
         .map((option, index) => ({
@@ -786,6 +791,129 @@ export class PlotRecommendationService {
         analysisSummary: `${position} vì ${fitSummary}. Điểm cần cân nhắc: ${tradeOffSummary}.`,
       };
     });
+  }
+
+  /**
+   * Keep alternatives meaningfully different instead of repeatedly returning
+   * neighboring plots with the same price/direction just because their base
+   * scores tie. The first option remains the strongest ranked candidate; later
+   * options balance ranking quality with novelty in direction, price band,
+   * area, access, zone and map row. This is deterministic (no random shuffle),
+   * so the UI remains reproducible while comparisons become more useful.
+   */
+  private selectDiverseRecommendationOptions(
+    options: RecommendationOption[],
+    count: number,
+  ) {
+    const target = Math.min(Math.max(count, 1), options.length);
+    if (target === 0) return [];
+    if (target === 1) return options.slice(0, 1);
+
+    const selected: RecommendationOption[] = [options[0]];
+    const remaining = options.slice(1).map((option, index) => ({
+      option,
+      originalRank: index + 1,
+    }));
+
+    const distanceBucket = (value: number | null) => {
+      if (value === null) return 'unknown';
+      if (value <= NEAR_ENTRANCE_MAX_DISTANCE) return 'near';
+      if (value <= MODERATE_ENTRANCE_MAX_DISTANCE) return 'moderate';
+      return 'far';
+    };
+    const normalizedDifference = (
+      left: number,
+      right: number,
+      meaningfulRatio: number,
+    ) =>
+      Math.min(
+        1,
+        Math.abs(left - right) /
+          Math.max(Math.max(Math.abs(left), Math.abs(right)), 1) /
+          meaningfulRatio,
+      );
+
+    while (selected.length < target && remaining.length) {
+      let bestIndex = 0;
+      let bestScore = Number.NEGATIVE_INFINITY;
+
+      remaining.forEach((entry, index) => {
+        const candidate = entry.option;
+        const rankQuality =
+          options.length <= 1
+            ? 1
+            : 1 - entry.originalRank / Math.max(options.length, 1);
+        const candidateDirections = new Set(
+          candidate.directions.map((value) => value.toLowerCase()),
+        );
+        const selectedDirections = new Set(
+          selected.flatMap((item) =>
+            item.directions.map((value) => value.toLowerCase()),
+          ),
+        );
+        const directionNovelty =
+          candidateDirections.size > 0 &&
+          [...candidateDirections].every(
+            (direction) => !selectedDirections.has(direction),
+          )
+            ? 1
+            : 0;
+        const zoneNovelty = selected.some(
+          (item) => item.zoneName.toLowerCase() === candidate.zoneName.toLowerCase(),
+        )
+          ? 0
+          : 1;
+        const accessNovelty = selected.some(
+          (item) =>
+            distanceBucket(item.entranceDistanceMapUnits) ===
+            distanceBucket(candidate.entranceDistanceMapUnits),
+        )
+          ? 0
+          : 1;
+        const rowKey = candidate.plots
+          .map((plot) => `${plot.zoneId}:${plot.rowNumber ?? 'unknown'}`)
+          .join('|');
+        const rowNovelty = selected.some(
+          (item) =>
+            item.plots
+              .map((plot) => `${plot.zoneId}:${plot.rowNumber ?? 'unknown'}`)
+              .join('|') === rowKey,
+        )
+          ? 0
+          : 1;
+        const priceNovelty = Math.min(
+          ...selected.map((item) =>
+            normalizedDifference(candidate.plotCost, item.plotCost, 0.15),
+          ),
+        );
+        const areaNovelty = Math.min(
+          ...selected.map((item) =>
+            normalizedDifference(
+              candidate.totalAreaSqm,
+              item.totalAreaSqm,
+              0.2,
+            ),
+          ),
+        );
+        const diversityScore =
+          directionNovelty * 0.25 +
+          zoneNovelty * 0.2 +
+          priceNovelty * 0.2 +
+          rowNovelty * 0.15 +
+          accessNovelty * 0.1 +
+          areaNovelty * 0.1;
+        const score = rankQuality * 0.58 + diversityScore * 0.42;
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestIndex = index;
+        }
+      });
+
+      selected.push(remaining.splice(bestIndex, 1)[0].option);
+    }
+
+    return selected;
   }
 
   /**

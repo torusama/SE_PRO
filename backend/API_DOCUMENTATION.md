@@ -425,8 +425,13 @@ Common errors:
 | GET    | `/admin/service-orders/:id`            | Yes  | admin          |
 | PATCH  | `/admin/service-orders/:id/status`     | Yes  | admin          |
 | POST   | `/admin/service-orders/:id/completion` | Yes  | admin          |
+| POST   | `/service-orders/:id/pay`              | Yes  | customer/admin |
+| PATCH  | `/service-orders/:id/requested-date`   | Yes  | customer/admin |
+| POST   | `/admin/service-orders/:id/confirm-payment` | Yes | admin       |
 
-Create body: `{ "serviceTypeId": 1, "plotId": 1, "requestedDate": "2026-07-05", "note": "Don dep va thay hoa" }`
+Create body: `{ "serviceTypeId": 1, "plotId": 1, "requestedDate": "2026-07-05", "note": "Don dep va thay hoa" }`. `requestedDate` is optional in the AI flow and may be selected after the payment step.
+
+After `POST /service-orders/:id/pay`, the response contains `uiDirective.type = "OPEN_SERVICE_SCHEDULE_CALENDAR"`. The customer can then save the selected calendar day with `PATCH /service-orders/:id/requested-date` and body `{ "requestedDate": "YYYY-MM-DD" }`. The calendar response returns `requestedDate`/`scheduledDate` so the frontend can highlight the active day.
 
 ## Notifications
 

@@ -323,7 +323,7 @@ export class CemeteryServicesService {
          FROM service_order_history h
          WHERE h.order_id = $1
            AND (
-             h.action IN ('submitted', 'completed', 'payment_reported', 'payment_confirmed')
+             h.action IN ('submitted', 'completed', 'payment_reported', 'payment_confirmed', 'requested_date_updated')
              OR h.new_status IS DISTINCT FROM h.previous_status
            )
          ORDER BY h.created_at ASC, h.history_id ASC`,
@@ -567,9 +567,9 @@ export class CemeteryServicesService {
     }
   }
 
-  /** Khách hàng bấm "Tôi đã thanh toán" trên đơn đang ở trạng thái 'confirmed'.
-   * Chỉ ghi nhận đơn đang chờ admin duyệt xác nhận đã nhận tiền — KHÔNG tự
-   * đổi status của đơn (status vẫn 'confirmed' cho tới khi admin xác nhận). */
+  /** Khách hàng bấm "Tôi đã thanh toán" ngay trên thẻ thanh toán trong chat.
+   * Cho phép báo thanh toán từ lúc đơn đã được tạo; admin vẫn là người xác nhận
+   * tiền thực nhận và trạng thái xử lý cuối cùng. */
   async markPaid(id: number, userId: number) {
     const changed = await this.database.transaction(async (client) => {
       const currentResult = await client.query<ServiceOrderPaymentRow>(
@@ -587,9 +587,9 @@ export class CemeteryServicesService {
       if (current.user_id !== userId) {
         throw new ForbiddenException('Bạn không có quyền thao tác đơn này');
       }
-      if (current.status !== 'confirmed') {
+      if (!['submitted', 'pending_confirm', 'confirmed'].includes(current.status)) {
         throw new BadRequestException(
-          'Chỉ có thể thanh toán khi đơn đã được xác nhận',
+          'Đơn dịch vụ hiện chưa ở trạng thái cho phép thanh toán',
         );
       }
       if (current.payment_status === 'paid') {
@@ -642,9 +642,85 @@ export class CemeteryServicesService {
     return this.one(id, userId);
   }
 
-  /** Admin bấm "Xác nhận đã nhận thanh toán". Đơn sẽ tự động chuyển từ
-   * 'confirmed' sang 'in_progress' luôn (nếu đơn vẫn đang ở 'confirmed'),
-   * để hiển thị "Đã thanh toán - đang thực hiện" như yêu cầu. */
+  /** Customer selects the execution date from the calendar after reporting payment. */
+  async setRequestedDateAfterPayment(
+    id: number,
+    userId: number,
+    requestedDate: string,
+  ) {
+    const vietnamToday = new Date(Date.now() + 7 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) {
+      throw new BadRequestException('Ngày thực hiện không hợp lệ');
+    }
+    const parsed = new Date(`${requestedDate}T00:00:00Z`);
+    if (
+      Number.isNaN(parsed.getTime()) ||
+      parsed.toISOString().slice(0, 10) !== requestedDate ||
+      requestedDate < vietnamToday
+    ) {
+      throw new BadRequestException(
+        'Ngày thực hiện phải là ngày hợp lệ từ hôm nay trở đi',
+      );
+    }
+
+    await this.database.transaction(async (client) => {
+      const currentResult = await client.query<{
+        user_id: number;
+        status: string;
+        payment_status: string;
+        requested_date: string | null;
+      }>(
+        `SELECT user_id, status, payment_status, requested_date::text
+         FROM service_orders
+         WHERE order_id = $1 AND is_deleted = FALSE
+         FOR UPDATE`,
+        [id],
+      );
+      const current = currentResult.rows[0];
+      if (!current) throw new NotFoundException('Không tìm thấy đơn dịch vụ');
+      if (current.user_id !== userId) {
+        throw new ForbiddenException('Bạn không có quyền thao tác đơn này');
+      }
+      if (!['awaiting_confirmation', 'paid'].includes(current.payment_status)) {
+        throw new BadRequestException(
+          'Bạn chỉ có thể chọn ngày thực hiện sau bước thanh toán',
+        );
+      }
+      if (['cancelled', 'rejected', 'completed'].includes(current.status)) {
+        throw new BadRequestException(
+          'Đơn dịch vụ hiện không còn cho phép thay đổi ngày thực hiện',
+        );
+      }
+
+      await client.query(
+        `UPDATE service_orders
+         SET requested_date = $3::date, updated_at = NOW()
+         WHERE order_id = $1 AND user_id = $2`,
+        [id, userId, requestedDate],
+      );
+      await client.query(
+        `INSERT INTO service_order_history
+           (order_id, changed_by, action, previous_status, new_status, note)
+         VALUES ($1, $2, 'requested_date_updated', $3, $3, $4)`,
+        [
+          id,
+          userId,
+          current.status,
+          `Khách hàng chọn ngày thực hiện ${requestedDate} sau bước thanh toán`,
+        ],
+      );
+    });
+
+    return this.one(id, userId);
+  }
+
+  /** Admin bấm "Xác nhận đã nhận thanh toán".
+   * - submitted/pending_confirm -> confirmed
+   * - confirmed -> in_progress
+   * Như vậy khách có thể thanh toán ngay trong chat nhưng admin vẫn kiểm soát
+   * bước xác nhận tiền và trạng thái xử lý dịch vụ. */
   async confirmPayment(id: number, adminId: number) {
     await this.database.transaction(async (client) => {
       const currentResult = await client.query<ServiceOrderPaymentRow>(
@@ -666,7 +742,11 @@ export class CemeteryServicesService {
       }
 
       const nextStatus: ServiceOrderStatus =
-        current.status === 'confirmed' ? 'in_progress' : current.status;
+        current.status === 'confirmed'
+          ? 'in_progress'
+          : current.status === 'submitted' || current.status === 'pending_confirm'
+            ? 'confirmed'
+            : current.status;
 
       await client.query(
         `UPDATE service_orders

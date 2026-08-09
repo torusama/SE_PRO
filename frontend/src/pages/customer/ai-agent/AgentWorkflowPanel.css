@@ -60,3 +60,80 @@
 @media (max-width: 980px) {
   .agent-workflow-panel { position: absolute; inset: 0 0 0 auto; z-index: 20; width: min(420px, 92vw); box-shadow: -18px 0 48px rgba(0,0,0,.36); }
 }
+
+.agent-workflow-success {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border-left: 2px solid #22b8a9;
+  background: rgba(34, 184, 169, 0.08);
+  color: #8fd5cc;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.agent-workflow-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agent-workflow-order-summary {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid rgba(78, 129, 133, 0.25);
+  border-radius: 12px;
+  background: #091624;
+}
+
+.agent-workflow-order-summary > small { color: #d9b35e; }
+.agent-workflow-order-summary h3 { margin: 0 0 4px; font-size: 15px; }
+.agent-workflow-order-summary > div { display: flex; justify-content: space-between; gap: 12px; font-size: 11px; }
+.agent-workflow-order-summary > div span { color: #718f97; }
+.agent-workflow-order-summary > div strong { color: #d7e6e8; text-align: right; }
+
+.agent-workflow-section-title {
+  margin: 0 0 8px;
+  color: #dce9eb;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.agent-workflow-calendar-head {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 28px;
+  align-items: center;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.agent-workflow-calendar-head > strong { font-size: 13px; }
+.agent-workflow-calendar-head > button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid rgba(81, 136, 140, .24);
+  border-radius: 7px;
+  background: rgba(255,255,255,.02);
+  color: #8eacb2;
+  cursor: pointer;
+}
+
+.agent-workflow-days button {
+  min-height: 30px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #a9c0c4;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.agent-workflow-days button:hover:not(:disabled) { background: rgba(20, 139, 136, .12); color: #dff7f4; }
+.agent-workflow-days button.is-selected { background: #0f7774; color: white; font-weight: 800; box-shadow: 0 0 0 1px rgba(78, 225, 211, .18); }
+.agent-workflow-days button:disabled { color: #40535a; cursor: not-allowed; }
+.agent-workflow-calendar-note { margin: 8px 2px 0; color: #67838a; font-size: 10px; line-height: 1.55; }
+.agent-workflow-primary:disabled { opacity: .55; cursor: not-allowed; }

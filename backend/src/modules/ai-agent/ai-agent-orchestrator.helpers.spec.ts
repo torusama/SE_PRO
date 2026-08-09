@@ -1,5 +1,6 @@
 import { AgentPlan } from './agent-planner';
 import {
+  AiAgentOrchestratorService,
   extractDeterministicRequirements,
   extractRequestedRecommendationCount,
   resolvePendingBookingReply,
@@ -94,6 +95,14 @@ describe('AI Agent deterministic requirement extraction', () => {
       birthDate: undefined,
     });
   });
+
+  it('extracts the requested service name from an explicit booking sentence', () => {
+    expect(
+      extractDeterministicRequirements('Mình muốn đặt dịch vụ Thắp hương.'),
+    ).toMatchObject({
+      serviceQuery: 'Thắp hương',
+    });
+  });
 });
 
 describe('AI Agent pending booking reply resolution', () => {
@@ -174,5 +183,114 @@ describe('AI Agent pending booking reply resolution', () => {
         'chưa gửi yêu cầu',
       ),
     ).toEqual(basePlan());
+  });
+});
+
+
+describe('AI Agent regression routing helpers', () => {
+  const orchestrator = Object.create(
+    AiAgentOrchestratorService.prototype,
+  ) as any;
+
+  it('routes a specific service booking directly to the booking flow', () => {
+    expect(orchestrator.detectIntent('Mình muốn đặt dịch vụ Thắp hương.')).toBe(
+      'service_booking',
+    );
+    const requirements = extractDeterministicRequirements(
+      'Mình muốn đặt dịch vụ Thắp hương.',
+    );
+    expect(
+      orchestrator.buildDeterministicAgentPlan(
+        'Mình muốn đặt dịch vụ Thắp hương.',
+        'service_booking',
+        requirements,
+        [],
+      ),
+    ).toMatchObject({
+      intent: 'service_booking',
+      action: 'prepare_service_order',
+      requirements: { serviceQuery: 'Thắp hương' },
+    });
+  });
+
+  it('routes an exact plot request without pretending it is a new recommendation', () => {
+    const message = 'Mình muốn đặt yêu cầu cho phương án A-02-003.';
+    const requirements = extractDeterministicRequirements(message);
+    expect(orchestrator.detectIntent(message)).toBe('plot_request');
+    expect(
+      orchestrator.buildDeterministicAgentPlan(
+        message,
+        'plot_request',
+        requirements,
+        [],
+      ),
+    ).toMatchObject({
+      intent: 'plot_request',
+      action: 'prepare_plot_request',
+      requirements: { selectedPlotCode: 'A-02-003' },
+    });
+  });
+
+  it('recognizes FAQ editorial feedback even when it mentions plot recommendations', () => {
+    const proposals = orchestrator.recoverExplicitKnowledgeProposal(
+      'Theo tôi FAQ nên ghi rằng người dùng có thể yêu cầu AI so sánh nhiều phương án lô trước khi đặt yêu cầu.',
+    );
+    expect(proposals).toEqual([
+      expect.objectContaining({
+        memoryType: 'faq',
+        requestedScope: 'global',
+      }),
+    ]);
+  });
+
+  it('treats a saved-budget question as memory lookup instead of plot discovery', () => {
+    expect(orchestrator.asksForSavedBudgetPreference('ngân sách t là bao nhiêu?')).toBe(
+      true,
+    );
+    expect(orchestrator.detectIntent('ngân sách t là bao nhiêu?')).toBe(
+      'general_question',
+    );
+  });
+
+  it('accepts a bare birth-time reply inside an active Bazi turn', () => {
+    const result = orchestrator.contextualizeClarificationReply(
+      '11h35p',
+      [
+        { role: 'user', content: 'Tư vấn Bát Tự cho tui' },
+        { role: 'assistant', content: 'Bạn cho mình thêm giờ sinh nếu biết.' },
+      ],
+      { birthDate: '2006-01-16', gender: 'male' },
+      'general_question',
+      true,
+    );
+    expect(result).toMatchObject({
+      intent: 'bazi_suggestion',
+      requirements: { birthTime: '11:35' },
+    });
+  });
+
+  it('rotates previously shown plots when the customer asks for another recommendation', () => {
+    const result = orchestrator.contextualizeClarificationReply(
+      'Gợi ý cho mình thêm vài lô đi',
+      [
+        {
+          role: 'assistant',
+          content: 'Mình có ba phương án phù hợp.',
+          metadata: {
+            recommendations: [
+              { plotIds: [5], plotCodes: ['A-02-005'] },
+              { plotIds: [1], plotCodes: ['A-02-001'] },
+              { plotIds: [3], plotCodes: ['A-02-003'] },
+            ],
+          },
+        },
+      ],
+      {},
+      'recommend_plots',
+      false,
+    );
+    expect(result.requirements.excludePlotIds).toEqual(
+      expect.arrayContaining([1, 3, 5]),
+    );
   });
 });
