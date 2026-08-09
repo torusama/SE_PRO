@@ -117,7 +117,10 @@ describe('AutonomousLearningService', () => {
   it('stores an explicit preference only for the authenticated owner', async () => {
     const { client, service } = setup({ insertedId: 101 });
 
-    const result = await service.processProposal(preference(), context());
+    const result = await service.processProposal(
+      preference({ title: 'preferred plot location' }),
+      context(),
+    );
 
     expect(result).toMatchObject({
       status: 'saved_user_memory',
@@ -127,10 +130,60 @@ describe('AutonomousLearningService', () => {
       String(sql).includes('INSERT INTO ai_knowledge_entries'),
     );
     expect(insert?.[1]).toEqual(
-      expect.arrayContaining([5, 'preferred_plot_location', 'customer']),
+      expect.arrayContaining([
+        'Preferred plot location',
+        5,
+        'preferred_plot_location',
+        'customer',
+      ]),
     );
     expect(String(insert?.[0])).toContain("'user'");
     expect(String(insert?.[0])).toContain("'user_preference'");
+  });
+
+  it('rejects a current Bát Tự request that the planner mislabeled as lasting memory', async () => {
+    const { client, service } = setup({
+      source: 'Mình muốn xem Bát Tự theo ngày sinh.',
+    });
+
+    const result = await service.processProposal(
+      preference({
+        category: 'Chủ đề tư vấn',
+        title: 'Ưu tiên Bát Tự',
+        content: 'Người dùng muốn xem Bát Tự.',
+        memoryKey: 'consultation_topic_preference',
+      }),
+      context(),
+    );
+
+    expect(result.status).toBe('rejected');
+    expect(
+      client.query.mock.calls.some(([sql]) =>
+        String(sql).includes('INSERT INTO ai_knowledge_entries'),
+      ),
+    ).toBe(false);
+  });
+
+  it('stores a Bát Tự consultation preference only when its future scope is explicit', async () => {
+    const { service } = setup({
+      source: 'Từ giờ hãy nhớ ưu tiên góc nhìn Bát Tự khi tư vấn cho mình.',
+      insertedId: 102,
+    });
+
+    const result = await service.processProposal(
+      preference({
+        category: 'Chủ đề tư vấn',
+        title: 'Ưu tiên Bát Tự',
+        content: 'Từ giờ người dùng ưu tiên góc nhìn Bát Tự khi được tư vấn.',
+        memoryKey: 'consultation_topic_preference',
+      }),
+      context(),
+    );
+
+    expect(result).toMatchObject({
+      status: 'saved_user_memory',
+      knowledgeEntryId: 102,
+    });
   });
 
   it('keeps the same preference separate for two users', async () => {

@@ -1,0 +1,62 @@
+.agent-workflow-panel {
+  position: relative;
+  width: min(390px, 34vw);
+  min-width: 330px;
+  height: 100%;
+  overflow-y: auto;
+  border-left: 1px solid rgba(91, 139, 143, 0.24);
+  background: #07111e;
+  color: #dce9eb;
+  padding: 24px 20px;
+}
+
+.agent-workflow-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(109, 156, 161, 0.18);
+  border-radius: 9px;
+  background: #0d1a29;
+  color: #8ba7ad;
+}
+
+.agent-workflow-panel > header { display: flex; gap: 12px; align-items: center; padding: 2px 44px 20px 0; border-bottom: 1px solid rgba(91, 139, 143, 0.2); }
+.agent-workflow-panel > header > span { width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid #127d7b; border-radius: 9px; color: #25d7cb; }
+.agent-workflow-panel header small { color: #6d929b; text-transform: uppercase; letter-spacing: .1em; font-size: 10px; }
+.agent-workflow-panel h2 { margin: 4px 0 0; font-size: 17px; color: #f2f6f6; }
+.agent-workflow-content { display: grid; gap: 16px; padding-top: 18px; }
+.agent-workflow-error, .agent-workflow-loading { margin: 14px 0 0; padding: 10px 12px; border-left: 2px solid #bd9a53; background: rgba(189,154,83,.08); color: #d8c49c; font-size: 12px; line-height: 1.6; }
+.agent-workflow-loading { border-color: #148b88; color: #8fc4c5; }
+.agent-workflow-order { padding: 16px; border: 1px solid rgba(78,129,133,.25); border-radius: 12px; background: #091624; }
+.agent-workflow-order > small { color: #d9b35e; }
+.agent-workflow-order h3 { margin: 6px 0 16px; font-size: 16px; }
+.agent-workflow-order dl { margin: 0; display: grid; gap: 9px; }
+.agent-workflow-order dl div { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; }
+.agent-workflow-order dt { color: #718f97; }
+.agent-workflow-order dd { margin: 0; text-align: right; color: #d7e6e8; }
+.agent-workflow-service-list { display: grid; gap: 9px; }
+.agent-workflow-service-list > button { width: 100%; display: flex; justify-content: space-between; gap: 12px; padding: 13px; text-align: left; border: 1px solid rgba(81,136,140,.26); border-radius: 10px; background: #091624; color: #dce9eb; }
+.agent-workflow-service-list button span { display: grid; gap: 5px; }
+.agent-workflow-service-list button small { color: #78969d; line-height: 1.45; }
+.agent-workflow-service-list button b { color: #e4c276; white-space: nowrap; font-size: 11px; }
+.agent-workflow-primary, .agent-workflow-link { min-height: 40px; border-radius: 9px; border: 1px solid #148b88; background: rgba(17,119,116,.18); color: #42dfd2; font-weight: 700; }
+.agent-workflow-link { background: transparent; border-color: rgba(95,144,149,.28); color: #94b2b8; }
+.agent-workflow-calendar { padding: 14px; border: 1px solid rgba(81,136,140,.24); border-radius: 12px; background: #091624; }
+.agent-workflow-calendar > strong { display: block; margin-bottom: 12px; font-size: 13px; }
+.agent-workflow-weekdays, .agent-workflow-days { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; gap: 4px; }
+.agent-workflow-weekdays span { color: #63858e; font-size: 9px; padding-bottom: 5px; }
+.agent-workflow-days span { min-height: 30px; display: grid; place-items: center; border-radius: 7px; font-size: 11px; color: #a9c0c4; }
+.agent-workflow-days span.is-selected { background: #0f7774; color: white; font-weight: 800; }
+.agent-workflow-schedule { display: grid; gap: 8px; }
+.agent-workflow-schedule > div { display: flex; justify-content: space-between; color: #78969d; font-size: 12px; }
+.agent-workflow-schedule article { display: grid; gap: 4px; padding: 11px 12px; border-left: 2px solid #23424a; background: #091624; font-size: 11px; }
+.agent-workflow-schedule article.is-current { border-left-color: #d9b35e; }
+.agent-workflow-schedule article span, .agent-workflow-schedule article small { color: #79979e; }
+
+@media (max-width: 980px) {
+  .agent-workflow-panel { position: absolute; inset: 0 0 0 auto; z-index: 20; width: min(420px, 92vw); box-shadow: -18px 0 48px rgba(0,0,0,.36); }
+}

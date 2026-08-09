@@ -32,6 +32,17 @@ export class RecommendPlotsDto {
   numberOfPlots!: number;
 
   @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(10)
+  recommendationCount?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  comparisonRequested?: boolean;
+
+  @IsOptional()
   @IsString()
   @MaxLength(100)
   preferredZone?: string;

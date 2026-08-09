@@ -27,6 +27,12 @@ export interface AgentService {
   category: string;
 }
 
+export interface ComparisonFollowUpAction {
+  id: "analyze_selected_plots" | "find_other_plots";
+  label: string;
+  message: string;
+}
+
 export interface AgentResponse {
   sessionId: string;
   messageId: number | null;
@@ -36,6 +42,12 @@ export interface AgentResponse {
   recommendations: AgentRecommendation[];
   suggestedServices: AgentService[];
   suggestedFollowUps?: Array<{ category: string; text: string }>;
+  quickReplies?: Array<{
+    id: string;
+    label: string;
+    message: string;
+    emphasis?: "normal" | "strong";
+  }>;
   baziSuggestion?: {
     preferredDirections: string[];
     alternativeDirections: string[];
@@ -75,6 +87,22 @@ export interface AgentResponse {
     requiresAuthentication?: boolean;
     requiresConfirmation?: boolean;
   }>;
+  uiDirective?:
+    | {
+        type: "OPEN_SERVICE_PANEL";
+        serviceTypeId?: number;
+        orderId?: number;
+      }
+    | {
+        type: "OPEN_APPOINTMENT_CALENDAR";
+        appointmentId?: number;
+        appointmentDate?: string;
+      }
+    | {
+        type: "OPEN_REMINDER_CALENDAR";
+        reminderId?: number;
+        reminderDate?: string;
+      };
   metadata: {
     llmModel: string;
     rankerVersion: string;

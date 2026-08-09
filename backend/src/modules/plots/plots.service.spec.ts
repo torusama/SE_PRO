@@ -145,6 +145,34 @@ describe('PlotsService admin operations', () => {
     expect(client.query).toHaveBeenCalledTimes(1);
   });
 
+  it('blocks direct sale status updates that bypass contract activation', async () => {
+    const client = {
+      query: jest.fn().mockResolvedValue({
+        rows: [{ id: 1, status: 'available', isDeleted: false }],
+      }),
+    };
+    const database = {
+      transaction: jest.fn((callback: (value: typeof client) => unknown) =>
+        Promise.resolve(callback(client)),
+      ),
+    };
+    const service = new PlotsService(
+      database as never,
+      { record: jest.fn() } as never,
+    );
+
+    await expect(
+      service.adminStatus(1, 'sold', {
+        adminId: 9,
+        ipAddress: null,
+        userAgent: null,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(
+      client.query.mock.calls.some(([sql]) => String(sql).includes('UPDATE plots')),
+    ).toBe(false);
+  });
+
   it('keeps fractional map coordinates when creating a plot', async () => {
     const client = {
       query: jest.fn().mockResolvedValue({

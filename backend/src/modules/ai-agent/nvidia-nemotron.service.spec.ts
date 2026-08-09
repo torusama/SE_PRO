@@ -5,17 +5,17 @@ import { NvidiaNemotronService } from './nvidia-nemotron.service';
 describe('NvidiaNemotronService', () => {
   const defaultConfigValues: Record<string, unknown> = {
     'ai.enableLlm': true,
-    'ai.nvidia.apiKey': 'test-key',
-    'ai.nvidia.apiKeys': undefined,
-    'ai.nvidia.baseUrl': 'https://nvidia.test/v1',
-    'ai.nvidia.model': 'mistralai/mistral-nemotron',
-    'ai.nvidia.timeoutMs': 50,
-    'ai.nvidia.totalTimeoutMs': 100,
-    'ai.nvidia.maxAttempts': 3,
-    'ai.nvidia.keyCooldownMs': 60_000,
-    'ai.nvidia.invalidKeyCooldownMs': 600_000,
-    'ai.nvidia.temperature': 0.2,
-    'ai.nvidia.maxTokens': 100,
+    'ai.mistralAgent.apiKey': 'test-key',
+    'ai.mistralAgent.apiKeys': undefined,
+    'ai.mistralAgent.baseUrl': 'https://nvidia.test/v1',
+    'ai.mistralAgent.model': 'mistralai/mistral-nemotron',
+    'ai.mistralAgent.timeoutMs': 50,
+    'ai.mistralAgent.totalTimeoutMs': 100,
+    'ai.mistralAgent.maxAttempts': 3,
+    'ai.mistralAgent.keyCooldownMs': 60_000,
+    'ai.mistralAgent.invalidKeyCooldownMs': 600_000,
+    'ai.mistralAgent.temperature': 0.2,
+    'ai.mistralAgent.maxTokens': 100,
   };
   const messages = [{ role: 'user' as const, content: 'Xin chao' }];
 
@@ -59,6 +59,16 @@ describe('NvidiaNemotronService', () => {
     expect(body).not.toHaveProperty('tool_choice');
   });
 
+  it('does not treat embedding keys as Mistral agent keys', () => {
+    const service = createService({
+      'ai.mistralAgent.apiKey': undefined,
+      'ai.mistralAgent.apiKeys': undefined,
+      'ai.rag.apiKeys': 'embedding-only',
+    });
+
+    expect(service.isConfigured()).toBe(false);
+  });
+
   it('sends a forced named tool choice when requested', async () => {
     const fetchMock = jest
       .spyOn(global, 'fetch')
@@ -82,8 +92,8 @@ describe('NvidiaNemotronService', () => {
       .spyOn(global, 'fetch')
       .mockResolvedValue(new Response('', { status: 400 }));
     const service = createService({
-      'ai.nvidia.apiKey': undefined,
-      'ai.nvidia.apiKeys': 'key-one,key-two',
+      'ai.mistralAgent.apiKey': undefined,
+      'ai.mistralAgent.apiKeys': 'key-one,key-two',
     });
 
     await expect(service.chat(messages)).rejects.toBeInstanceOf(
@@ -97,12 +107,12 @@ describe('NvidiaNemotronService', () => {
       .spyOn(global, 'fetch')
       .mockImplementation(async () => Promise.resolve(okResponse()));
     const service = createService({
-      'ai.nvidia.apiKey': `{
+      'ai.mistralAgent.apiKey': `{
         key-one
         key-two
         key-three
       }`,
-      'ai.nvidia.apiKeys': undefined,
+      'ai.mistralAgent.apiKeys': undefined,
     });
 
     await service.chat(messages);
@@ -128,8 +138,8 @@ describe('NvidiaNemotronService', () => {
       )
       .mockResolvedValueOnce(okResponse());
     const service = createService({
-      'ai.nvidia.apiKey': undefined,
-      'ai.nvidia.apiKeys': 'key-one,key-two',
+      'ai.mistralAgent.apiKey': undefined,
+      'ai.mistralAgent.apiKeys': 'key-one,key-two',
     });
 
     await expect(service.chat(messages)).resolves.toBeDefined();
@@ -144,8 +154,8 @@ describe('NvidiaNemotronService', () => {
       .mockResolvedValueOnce(new Response('', { status: 401 }))
       .mockResolvedValueOnce(okResponse());
     const freshService = createService({
-      'ai.nvidia.apiKey': undefined,
-      'ai.nvidia.apiKeys': 'key-one,key-two',
+      'ai.mistralAgent.apiKey': undefined,
+      'ai.mistralAgent.apiKeys': 'key-one,key-two',
     });
     await expect(freshService.chat(messages)).resolves.toBeDefined();
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -160,8 +170,8 @@ describe('NvidiaNemotronService', () => {
       .mockRejectedValueOnce(timeoutError)
       .mockResolvedValueOnce(okResponse());
     const service = createService({
-      'ai.nvidia.apiKey': undefined,
-      'ai.nvidia.apiKeys': 'key-one,key-two',
+      'ai.mistralAgent.apiKey': undefined,
+      'ai.mistralAgent.apiKeys': 'key-one,key-two',
     });
 
     await expect(service.chat(messages)).resolves.toBeDefined();
@@ -172,8 +182,8 @@ describe('NvidiaNemotronService', () => {
       .mockRejectedValueOnce(new TypeError('fetch failed'))
       .mockResolvedValueOnce(okResponse());
     const networkService = createService({
-      'ai.nvidia.apiKey': undefined,
-      'ai.nvidia.apiKeys': 'key-one,key-two',
+      'ai.mistralAgent.apiKey': undefined,
+      'ai.mistralAgent.apiKeys': 'key-one,key-two',
     });
     await expect(networkService.chat(messages)).resolves.toBeDefined();
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -183,8 +193,8 @@ describe('NvidiaNemotronService', () => {
       .mockResolvedValueOnce(new Response('', { status: 503 }))
       .mockResolvedValueOnce(okResponse());
     const serverErrorService = createService({
-      'ai.nvidia.apiKey': undefined,
-      'ai.nvidia.apiKeys': 'key-one,key-two',
+      'ai.mistralAgent.apiKey': undefined,
+      'ai.mistralAgent.apiKeys': 'key-one,key-two',
     });
     await expect(serverErrorService.chat(messages)).resolves.toBeDefined();
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -205,27 +215,25 @@ describe('NvidiaNemotronService', () => {
   it('gives the first request a usable timeout with a large key pool', async () => {
     jest.useFakeTimers();
     try {
-      const fetchMock = jest
-        .spyOn(global, 'fetch')
-        .mockImplementation(
-          (_url: string | URL | Request, init?: RequestInit) =>
-            new Promise((_resolve, reject) => {
-              init?.signal?.addEventListener('abort', () =>
-                reject(
-                  Object.assign(new Error('timeout'), { name: 'AbortError' }),
-                ),
-              );
-            }),
-        );
+      const fetchMock = jest.spyOn(global, 'fetch').mockImplementation(
+        (_url: string | URL | Request, init?: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () =>
+              reject(
+                Object.assign(new Error('timeout'), { name: 'AbortError' }),
+              ),
+            );
+          }),
+      );
       const service = createService({
-        'ai.nvidia.apiKey': undefined,
-        'ai.nvidia.apiKeys': Array.from(
+        'ai.mistralAgent.apiKey': undefined,
+        'ai.mistralAgent.apiKeys': Array.from(
           { length: 10 },
           (_, index) => `key-${index + 1}`,
         ).join(','),
-        'ai.nvidia.timeoutMs': 6000,
-        'ai.nvidia.totalTimeoutMs': 6000,
-        'ai.nvidia.maxAttempts': 10,
+        'ai.mistralAgent.timeoutMs': 6000,
+        'ai.mistralAgent.totalTimeoutMs': 6000,
+        'ai.mistralAgent.maxAttempts': 10,
       });
 
       const result = service.chat(messages).catch((error: unknown) => error);

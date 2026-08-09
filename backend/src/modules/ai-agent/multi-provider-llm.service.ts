@@ -22,6 +22,8 @@ export interface LlmCallOptions {
   totalTimeoutMs?: number;
   /** Try this route first, then retain normal cross-provider failover. */
   preferredProviderId?: 'openai-primary' | 'openai-secondary' | 'nvidia';
+  /** Keep an auxiliary workload on its dedicated pool and do not borrow chat capacity. */
+  strictPreferredProvider?: boolean;
 }
 
 export interface LlmProvider {
@@ -63,14 +65,27 @@ export class MultiProviderLlmService {
   }
 
   get model(): string {
-    if (this.openAiPrimary.isConfigured()) return this.openAiPrimary.model;
     if (this.openAiSecondary.isConfigured()) return this.openAiSecondary.model;
+    if (this.openAiPrimary.isConfigured()) return this.openAiPrimary.model;
     if (this.nvidia.isConfigured()) return this.nvidia.model;
     return 'none';
   }
 
   getProviders(): LlmProvider[] {
     const providers: LlmProvider[] = [];
+
+    // Main customer chat starts with the deeper 120B model. The 20B pool is
+    // borrowed only when 120B fails; suggested follow-ups still target it
+    // directly with their own short timeout. Mistral remains the final route.
+    if (this.openAiSecondary.isConfigured()) {
+      providers.push({
+        id: 'openai-secondary',
+        name: `OpenAI Secondary (${this.openAiSecondary.model})`,
+        isConfigured: () => this.openAiSecondary.isConfigured(),
+        model: this.openAiSecondary.model,
+        chat: (...args) => this.openAiSecondary.chat(...args),
+      });
+    }
 
     if (this.openAiPrimary.isConfigured()) {
       providers.push({
@@ -89,20 +104,6 @@ export class MultiProviderLlmService {
         isConfigured: () => this.nvidia.isConfigured(),
         model: this.nvidia.model,
         chat: (...args) => this.nvidia.chat(...args),
-      });
-    }
-
-    // The 120B route is deliberately last. Live NIM health checks show that it
-    // can be much slower than the lightweight NVIDIA fallback, so trying it
-    // second can consume the entire request deadline before a healthy route is
-    // reached.
-    if (this.openAiSecondary.isConfigured()) {
-      providers.push({
-        id: 'openai-secondary',
-        name: `OpenAI Secondary (${this.openAiSecondary.model})`,
-        isConfigured: () => this.openAiSecondary.isConfigured(),
-        model: this.openAiSecondary.model,
-        chat: (...args) => this.openAiSecondary.chat(...args),
       });
     }
 
@@ -136,6 +137,7 @@ export class MultiProviderLlmService {
       providers,
       options.routingKey,
       options.preferredProviderId,
+      options.strictPreferredProvider,
     );
     if (!ordered.length) {
       throw new ServiceUnavailableException(
@@ -206,6 +208,7 @@ export class MultiProviderLlmService {
     providers: LlmProvider[],
     routingKey?: string,
     preferredProviderId?: string,
+    strictPreferredProvider = false,
   ): LlmProvider[] {
     this.pruneAffinity();
     const now = Date.now();
@@ -231,9 +234,12 @@ export class MultiProviderLlmService {
     const ordered = providers.map(
       (_, offset) => providers[(startIndex + offset) % providers.length],
     );
-    return ordered.filter(
+    const healthy = ordered.filter(
       (provider) => (this.providerCooldownUntil.get(provider.id) ?? 0) <= now,
     );
+    return strictPreferredProvider && preferredProviderId
+      ? healthy.filter((provider) => provider.id === preferredProviderId)
+      : healthy;
   }
 
   private rememberAffinity(routingKey: string | undefined, providerId: string) {

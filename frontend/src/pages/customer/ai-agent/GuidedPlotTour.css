@@ -42,7 +42,7 @@
 
 .guided-tour-header h2 {
   margin: 8px 0 0;
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: "Playfair Display", Georgia, serif;
   font-size: clamp(28px, 2.5vw, 40px);
   font-weight: 500;
   line-height: 1.16;
@@ -342,6 +342,82 @@
   width: 100%;
   height: 100%;
   display: block;
+}
+
+.guided-map-land {
+  fill: rgba(220, 38, 38, 0.02);
+}
+
+.guided-map-boundary {
+  fill: none;
+  stroke: rgba(220, 38, 38, 0.55);
+  stroke-width: 1.4;
+  stroke-dasharray: 8 5;
+  vector-effect: non-scaling-stroke;
+}
+
+.guided-map-road {
+  fill: rgba(0, 229, 196, 0.06);
+  stroke: none;
+}
+
+.guided-map-spirit-rect {
+  fill: rgba(82, 183, 136, 0.08);
+  stroke: rgba(82, 183, 136, 0.35);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+}
+
+.guided-map-spirit-circle {
+  fill: rgba(82, 183, 136, 0.14);
+  stroke: rgba(82, 183, 136, 0.55);
+  stroke-width: 1.2;
+}
+
+.guided-map-spirit-label,
+.guided-map-gate-label,
+.guided-map-zone-label,
+.guided-map-plot-code {
+  font-family: "Be Vietnam Pro", sans-serif;
+  pointer-events: none;
+}
+
+.guided-map-spirit-label {
+  fill: rgba(178, 226, 202, 0.85);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.guided-map-gate {
+  fill: rgba(240, 192, 96, 0.55);
+}
+
+.guided-map-gate-secondary {
+  fill: rgba(123, 107, 204, 0.55);
+}
+
+.guided-map-gate-label {
+  fill: rgba(0, 229, 196, 0.55);
+  font-size: 8px;
+}
+
+.guided-map-gate-label.is-secondary {
+  fill: rgba(190, 175, 240, 0.85);
+}
+
+.guided-map-zone-label {
+  fill: rgba(255, 255, 255, 0.72);
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: lining-nums;
+  letter-spacing: 0.05em;
+}
+
+.guided-map-plot-code {
+  fill: #d9fff9;
+  font-size: 6.2px;
+  font-weight: 600;
 }
 
 .guided-map-highlight {

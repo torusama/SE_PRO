@@ -19,13 +19,22 @@ import { TrainingService } from './training.service';
 import { ConversationHistoryService } from './conversation-history.service';
 import { ProactiveConciergeService } from './proactive-concierge.service';
 
-import { OpenAiService, OpenAiSecondaryService } from './openai.service';
+import {
+  ComparisonAiService,
+  DecisionComparisonAiService,
+  EmailDraftAiService,
+  OpenAiService,
+  OpenAiSecondaryService,
+} from './openai.service';
 import { MultiProviderLlmService } from './multi-provider-llm.service';
 
 import { AutonomousLearningService } from './autonomous-learning.service';
 import { LearningAnalyticsService } from './learning-analytics.service';
 import { RemindersModule } from '../reminders/reminders.module';
 import { AgentInsightsService } from './agent-insights.service';
+import { ScheduleModule } from '../schedule/schedule.module';
+import { PlotIntroductionService } from './plot-introduction.service';
+import { MemorialEmailDraftService } from './memorial-email-draft.service';
 
 @Module({
   imports: [
@@ -33,6 +42,7 @@ import { AgentInsightsService } from './agent-insights.service';
     ReservationsModule,
     CemeteryServicesModule,
     RemindersModule,
+    ScheduleModule,
   ],
   controllers: [AiAgentController, AiAgentAdminController],
   providers: [
@@ -41,6 +51,9 @@ import { AgentInsightsService } from './agent-insights.service';
     AgentToolRegistryService,
     OpenAiService,
     OpenAiSecondaryService,
+    ComparisonAiService,
+    DecisionComparisonAiService,
+    EmailDraftAiService,
     NvidiaNemotronService,
     MultiProviderLlmService,
     PlotRecommendationService,
@@ -56,6 +69,8 @@ import { AgentInsightsService } from './agent-insights.service';
     AutonomousLearningService,
     LearningAnalyticsService,
     AgentInsightsService,
+    PlotIntroductionService,
+    MemorialEmailDraftService,
   ],
   exports: [AiAgentService, PlotRecommendationService, BaziRuleService],
 })

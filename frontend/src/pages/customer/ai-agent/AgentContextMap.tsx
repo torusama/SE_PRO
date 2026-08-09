@@ -179,132 +179,138 @@ export default function AgentContextMap({
               <strong>{selectedPlot.plotCode}</strong>
               <p>{buildCemeteryDirection(selectedPlot)}</p>
             </div>
-            <button type="button" onClick={() => setRouteOptionId(null)}>
-              <ChevronLeft size={15} />
-              Xem lại thông tin
+            <button
+              type="button"
+              onClick={() => setRouteOptionId(null)}
+              aria-label="Quay lại thông tin lô"
+              title="Quay lại thông tin lô"
+            >
+              <X size={15} />
             </button>
           </div>
         )}
       </div>
 
-      {!routeMode && <section className="agent-context-map-details">
-        {recommendations.length > 1 && (
-          <div className="agent-context-map-switcher">
-            <button
-              type="button"
-              onClick={() => selectOption(safeIndex - 1)}
-              disabled={safeIndex === 0}
-              aria-label="Phương án trước"
-            >
-              <ChevronLeft size={17} />
-            </button>
-            <div>
-              {recommendations.map((option, index) => (
-                <button
-                  type="button"
-                  key={option.optionId}
-                  className={index === safeIndex ? "is-active" : ""}
-                  aria-label={`Xem phương án ${index + 1}`}
-                  aria-pressed={index === safeIndex}
-                  onClick={() => selectOption(index)}
-                >
-                  {index + 1}
-                </button>
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={() => selectOption(safeIndex + 1)}
-              disabled={safeIndex === recommendations.length - 1}
-              aria-label="Phương án tiếp theo"
-            >
-              <ChevronRight size={17} />
-            </button>
-          </div>
-        )}
-
-        <div className="agent-context-plot-stage">
-          {!detailsRevealed && (
-            <div className="agent-context-plot-loading" aria-live="polite">
-              <span aria-hidden="true" />
-              Đang mở thông tin lô…
+      {!routeMode && (
+        <section className="agent-context-map-details">
+          {recommendations.length > 1 && (
+            <div className="agent-context-map-switcher">
+              <button
+                type="button"
+                onClick={() => selectOption(safeIndex - 1)}
+                disabled={safeIndex === 0}
+                aria-label="Phương án trước"
+              >
+                <ChevronLeft size={17} />
+              </button>
+              <div>
+                {recommendations.map((option, index) => (
+                  <button
+                    type="button"
+                    key={option.optionId}
+                    className={index === safeIndex ? "is-active" : ""}
+                    aria-label={`Xem phương án ${index + 1}`}
+                    aria-pressed={index === safeIndex}
+                    onClick={() => selectOption(index)}
+                  >
+                    {index + 1}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => selectOption(safeIndex + 1)}
+                disabled={safeIndex === recommendations.length - 1}
+                aria-label="Phương án tiếp theo"
+              >
+                <ChevronRight size={17} />
+              </button>
             </div>
           )}
-          <article
-            className={`agent-context-plot-card ${detailsRevealed ? "is-revealed" : ""}`}
-            aria-hidden={!detailsRevealed}
-          >
-            <div>
-              <span>LÔ ĐANG CHỌN</span>
-              <h3>{selectedCode}</h3>
-              <p>
-                {active.plotIds.length > 1
-                  ? `Thuộc phương án ${active.plotIds.length} lô liền kề · tổng ${formatVnd(active.plotCost)}`
-                  : "Thông tin đang được đồng bộ từ bản đồ"}
-              </p>
-            </div>
-            <dl>
-              <div>
-                <dt>Khu vực</dt>
-                <dd>{zoneName}</dd>
-              </div>
-              <div>
-                <dt>Hướng</dt>
-                <dd>{direction}</dd>
-              </div>
-              <div>
-                <dt>Diện tích</dt>
-                <dd>{selectedPlot?.area || active.totalAreaSqm || 0} m²</dd>
-              </div>
-              <div>
-                <dt>Giá niêm yết</dt>
-                <dd>{formatVnd(selectedPlot?.price || active.plotCost)}</dd>
-              </div>
-              <div>
-                <dt>Loại lô</dt>
-                <dd>{plotType}</dd>
-              </div>
-              <div>
-                <dt>Vị trí trong khu</dt>
-                <dd>{rowLocation}</dd>
-              </div>
-              <div>
-                <dt>Quy cách</dt>
-                <dd>{selectedPlot?.size || "Chưa xác định"}</dd>
-              </div>
-              <div>
-                <dt>Trạng thái</dt>
-                <dd className="is-status">{status}</dd>
-              </div>
-            </dl>
-            <p className="agent-context-plot-description">{description}</p>
-          </article>
-        </div>
 
-        <div
-          className={`agent-context-map-actions ${detailsRevealed ? "is-revealed" : ""}`}
-        >
-          <button type="button" onClick={() => onOpenFullMap(active)}>
-            <ExternalLink size={14} />
-            Bản đồ đầy đủ
-          </button>
-          <button
-            type="button"
-            onClick={() => setRouteOptionId(active.optionId)}
-            disabled={!selectedPlot}
+          <div className="agent-context-plot-stage">
+            {!detailsRevealed && (
+              <div className="agent-context-plot-loading" aria-live="polite">
+                <span aria-hidden="true" />
+                Đang mở thông tin lô…
+              </div>
+            )}
+            <article
+              className={`agent-context-plot-card ${detailsRevealed ? "is-revealed" : ""}`}
+              aria-hidden={!detailsRevealed}
+            >
+              <div>
+                <span>LÔ ĐANG CHỌN</span>
+                <h3>{selectedCode}</h3>
+                <p>
+                  {active.plotIds.length > 1
+                    ? `Thuộc phương án ${active.plotIds.length} lô liền kề · tổng ${formatVnd(active.plotCost)}`
+                    : "Thông tin đang được đồng bộ từ bản đồ"}
+                </p>
+              </div>
+              <dl>
+                <div>
+                  <dt>Khu vực</dt>
+                  <dd>{zoneName}</dd>
+                </div>
+                <div>
+                  <dt>Hướng</dt>
+                  <dd>{direction}</dd>
+                </div>
+                <div>
+                  <dt>Diện tích</dt>
+                  <dd>{selectedPlot?.area || active.totalAreaSqm || 0} m²</dd>
+                </div>
+                <div>
+                  <dt>Giá niêm yết</dt>
+                  <dd>{formatVnd(selectedPlot?.price || active.plotCost)}</dd>
+                </div>
+                <div>
+                  <dt>Loại lô</dt>
+                  <dd>{plotType}</dd>
+                </div>
+                <div>
+                  <dt>Vị trí trong khu</dt>
+                  <dd>{rowLocation}</dd>
+                </div>
+                <div>
+                  <dt>Quy cách</dt>
+                  <dd>{selectedPlot?.size || "Chưa xác định"}</dd>
+                </div>
+                <div>
+                  <dt>Trạng thái</dt>
+                  <dd className="is-status">{status}</dd>
+                </div>
+              </dl>
+              <p className="agent-context-plot-description">{description}</p>
+            </article>
+          </div>
+
+          <div
+            className={`agent-context-map-actions ${detailsRevealed ? "is-revealed" : ""}`}
           >
-            <Navigation size={14} />
-            Tìm đường
-          </button>
-          <button
-            type="button"
-            className="is-primary"
-            onClick={() => onStartRequest(active)}
-          >
-            Đặt yêu cầu
-          </button>
-        </div>
-      </section>}
+            <button type="button" onClick={() => onOpenFullMap(active)}>
+              <ExternalLink size={14} />
+              Bản đồ đầy đủ
+            </button>
+            <button
+              type="button"
+              onClick={() => setRouteOptionId(active.optionId)}
+              disabled={!selectedPlot}
+            >
+              <Navigation size={14} />
+              Tìm đường
+            </button>
+            <button
+              type="button"
+              className="is-primary"
+              onClick={() => onStartRequest(active)}
+            >
+              Đặt yêu cầu
+            </button>
+          </div>
+        </section>
+      )}
     </aside>
   );
 }

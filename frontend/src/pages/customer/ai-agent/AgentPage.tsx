@@ -20,12 +20,16 @@ import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
 import AgentMessage from "./AgentMessage";
 import AgentContextMap from "./AgentContextMap";
 import ComparisonPanel from "./ComparisonPanel";
+import ComparisonAssessmentMessage from "./ComparisonAssessmentMessage";
+import AgentWorkflowPanel from "./AgentWorkflowPanel";
 import { buildFullMapUrl, getTourableRecommendations } from "./guidedTour";
+import { getRecommendationCompareKey } from "./agentDisplay";
 import type {
   AgentRecommendation,
   AgentResponse,
   AgentService,
   ChatMessage,
+  ComparisonFollowUpAction,
   ConversationDetail,
   ConversationSummary,
 } from "./agent.types";
@@ -56,10 +60,13 @@ export function getContextualPrompts(
     ];
   }
 
-  const backendFollowUps = lastMessage.response?.suggestedFollowUps;
-  if (backendFollowUps && backendFollowUps.length > 0) {
-    return backendFollowUps.slice(0, 3);
-  }
+  const backendFollowUps = (lastMessage.response?.suggestedFollowUps ?? [])
+    .map((item) => ({
+      category: String(item?.category ?? "").trim(),
+      text: String(item?.text ?? "").trim(),
+    }))
+    .filter((item) => item.category && item.text)
+    .slice(0, 3);
 
   const response = lastMessage.response;
   const content = lastMessage.content || "";
@@ -137,13 +144,105 @@ export function getContextualPrompts(
     }
   }
 
-  return prompts.slice(0, 3);
+  const unique = new Map<string, SuggestedPrompt>();
+  for (const item of [...backendFollowUps, ...prompts]) {
+    const key = item.text.toLocaleLowerCase("vi");
+    if (!unique.has(key)) unique.set(key, item);
+  }
+  return [...unique.values()].slice(0, 3);
 }
 
 const createLocalId = () =>
   `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 const getTimestamp = () => Date.now();
+
+const comparisonText = (value: unknown, maxLength: number) =>
+  String(value ?? "")
+    .trim()
+    .slice(0, maxLength);
+
+export function toComparisonAssessmentOption(option: AgentRecommendation) {
+  const plotIds = (Array.isArray(option.plotIds) ? option.plotIds : [])
+    .map(Number)
+    .filter((value) => Number.isInteger(value) && value > 0)
+    .slice(0, 10);
+  const plotCodes = (Array.isArray(option.plotCodes) ? option.plotCodes : [])
+    .map((value) => comparisonText(value, 50))
+    .filter(Boolean)
+    .slice(0, 10);
+  const score = Number(option.score);
+  const estimatedTotal = Number(option.estimatedTotal);
+  const totalAreaSqm = Number(option.totalAreaSqm);
+
+  return {
+    plotIds,
+    plotCodes,
+    score: Number.isFinite(score) ? Math.max(0, Math.min(1, score)) : 0,
+    estimatedTotal: Number.isFinite(estimatedTotal)
+      ? Math.max(0, estimatedTotal)
+      : 0,
+    zoneName: comparisonText(option.zoneName, 120),
+    directions: (Array.isArray(option.directions) ? option.directions : [])
+      .map((value) => comparisonText(value, 50))
+      .filter(Boolean)
+      .slice(0, 4),
+    totalAreaSqm: Number.isFinite(totalAreaSqm) ? Math.max(0, totalAreaSqm) : 0,
+    isAdjacent: Boolean(option.isAdjacent),
+  };
+}
+
+export function toComparisonDecisionContext(
+  messages: ChatMessage[],
+  compared: AgentRecommendation[],
+) {
+  const selectedKeys = new Set(compared.map(getRecommendationCompareKey));
+  const requirements = messages
+    .filter((message) => {
+      if (message.role !== "assistant") return false;
+      return message.response?.recommendations.some((option) =>
+        selectedKeys.has(getRecommendationCompareKey(option)),
+      );
+    })
+    .map((message) => message.response?.requirements ?? {})
+    .reduce<Record<string, unknown>>(
+      (merged, current) => ({ ...merged, ...current }),
+      {},
+    );
+  const context: Record<string, string | number | boolean> = {};
+  const assignNumber = (
+    key: string,
+    min = 0,
+    max = Number.MAX_SAFE_INTEGER,
+  ) => {
+    const value = Number(requirements[key]);
+    if (Number.isFinite(value) && value >= min && value <= max) {
+      context[key] = value;
+    }
+  };
+  const assignText = (key: string, maxLength: number) => {
+    const value = comparisonText(requirements[key], maxLength);
+    if (value) context[key] = value;
+  };
+  const assignBoolean = (key: string) => {
+    if (typeof requirements[key] === "boolean") {
+      context[key] = requirements[key] as boolean;
+    }
+  };
+
+  assignNumber("budgetMin");
+  assignNumber("budgetMax");
+  assignNumber("numberOfPlots", 1, 10);
+  assignNumber("minAreaSqm");
+  assignNumber("maxAreaSqm");
+  assignText("preferredZone", 120);
+  assignText("preferredDirection", 50);
+  assignText("plotType", 20);
+  assignBoolean("needAdjacent");
+  assignBoolean("preferNearEntrance");
+
+  return Object.keys(context).length ? context : undefined;
+}
 
 const formatHistoryDate = (value: string) => {
   const date = new Date(value);
@@ -177,7 +276,19 @@ export default function AgentPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [compared, setCompared] = useState<AgentRecommendation[]>([]);
+  const [comparisonOpen, setComparisonOpen] = useState(false);
+  const [comparisonAssessment, setComparisonAssessment] = useState("");
+  const [comparisonFollowUpPrompt, setComparisonFollowUpPrompt] = useState("");
+  const [comparisonActions, setComparisonActions] = useState<
+    ComparisonFollowUpAction[]
+  >([]);
+  const [comparisonAssessmentLoading, setComparisonAssessmentLoading] =
+    useState(false);
   const [mapOpen, setMapOpen] = useState(false);
+  const [workflowDirective, setWorkflowDirective] = useState<
+    AgentResponse["uiDirective"]
+  >();
+  const [workflowServices, setWorkflowServices] = useState<AgentService[]>([]);
   const [mapRecommendations, setMapRecommendations] = useState<
     AgentRecommendation[]
   >([]);
@@ -186,6 +297,9 @@ export default function AgentPage() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const accountIdRef = useRef(user?.id);
   const requestControllerRef = useRef<AbortController | null>(null);
+  const comparisonAssessmentControllerRef = useRef<AbortController | null>(
+    null,
+  );
   const requestStartedAtRef = useRef(0);
   const presentationTimersRef = useRef<number[]>([]);
   const [isInputFocused, setIsInputFocused] = useState(false);
@@ -258,6 +372,9 @@ export default function AgentPage() {
         .find((message) => message.response?.recommendations?.length)?.response
         ?.recommendations ?? [];
     const restoredMap = getTourableRecommendations(restoredRecommendations);
+    const restoredWorkflow = [...detail.messages]
+      .reverse()
+      .find((message) => message.response?.uiDirective)?.response;
     setSessionId(detail.sessionId);
     setMessages(
       detail.messages.map((message) => ({
@@ -270,9 +387,12 @@ export default function AgentPage() {
       })),
     );
     setCompared([]);
+    setComparisonOpen(false);
     setMapRecommendations(restoredMap);
     setActiveMapIndex(0);
     setMapOpen(restoredMap.length > 0);
+    setWorkflowDirective(restoredWorkflow?.uiDirective);
+    setWorkflowServices(restoredWorkflow?.suggestedServices ?? []);
     setSidebarOpen(false);
   }, []);
 
@@ -303,12 +423,87 @@ export default function AgentPage() {
   useEffect(
     () => () => {
       requestControllerRef.current?.abort();
+      comparisonAssessmentControllerRef.current?.abort();
       presentationTimersRef.current.forEach((timer) =>
         window.clearTimeout(timer),
       );
     },
     [],
   );
+
+  useEffect(() => {
+    comparisonAssessmentControllerRef.current?.abort();
+    comparisonAssessmentControllerRef.current = null;
+
+    if (!comparisonOpen || compared.length < 2) {
+      setComparisonAssessment("");
+      setComparisonFollowUpPrompt("");
+      setComparisonActions([]);
+      setComparisonAssessmentLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    comparisonAssessmentControllerRef.current = controller;
+    setComparisonAssessment("");
+    setComparisonFollowUpPrompt("");
+    setComparisonActions([]);
+    setComparisonAssessmentLoading(true);
+
+    void api
+      .post(
+        "/ai-agent/comparison-assessment",
+        {
+          options: compared.map(toComparisonAssessmentOption),
+          context: toComparisonDecisionContext(messages, compared),
+        },
+        { signal: controller.signal },
+      )
+      .then((response) => {
+        if (controller.signal.aborted) return;
+        const assessment = response.data?.data?.assessment;
+        setComparisonAssessment(
+          typeof assessment === "string" ? assessment.trim() : "",
+        );
+        const followUpPrompt = response.data?.data?.followUpPrompt;
+        setComparisonFollowUpPrompt(
+          typeof followUpPrompt === "string" ? followUpPrompt.trim() : "",
+        );
+        const actions = response.data?.data?.actions;
+        setComparisonActions(
+          Array.isArray(actions)
+            ? actions
+                .filter(
+                  (action: unknown): action is ComparisonFollowUpAction => {
+                    if (!action || typeof action !== "object") return false;
+                    const candidate = action as Record<string, unknown>;
+                    return (
+                      (candidate.id === "analyze_selected_plots" ||
+                        candidate.id === "find_other_plots") &&
+                      typeof candidate.label === "string" &&
+                      typeof candidate.message === "string"
+                    );
+                  },
+                )
+                .slice(0, 2)
+            : [],
+        );
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setComparisonAssessment("");
+          setComparisonFollowUpPrompt("");
+          setComparisonActions([]);
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setComparisonAssessmentLoading(false);
+        }
+      });
+
+    return () => controller.abort();
+  }, [compared, comparisonOpen, messages]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void loadConversations(), 0);
@@ -337,9 +532,12 @@ export default function AgentPage() {
       setSessionId(undefined);
       setMessages([]);
       setCompared([]);
+      setComparisonOpen(false);
       setMapOpen(false);
       setMapRecommendations([]);
       setActiveMapIndex(0);
+      setWorkflowDirective(undefined);
+      setWorkflowServices([]);
       setNotice("");
       setError("");
     }, 0);
@@ -364,6 +562,7 @@ export default function AgentPage() {
     setSessionId(undefined);
     setMessages([]);
     setCompared([]);
+    setComparisonOpen(false);
     setMapOpen(false);
     setMapRecommendations([]);
     setActiveMapIndex(0);
@@ -439,6 +638,11 @@ export default function AgentPage() {
     const value = text.trim();
     if (!value || loading) return;
 
+    // A comparison is contextual to the current pause in the conversation.
+    // Hide it as soon as the customer sends a new message, while preserving
+    // selected plots so old and new recommendations can be compared later.
+    setComparisonOpen(false);
+
     const controller = new AbortController();
     requestControllerRef.current?.abort();
     requestControllerRef.current = controller;
@@ -457,6 +661,7 @@ export default function AgentPage() {
     if (options.startNewConversation) {
       setSessionId(undefined);
       setCompared([]);
+      setComparisonOpen(false);
       setMapOpen(false);
       setMapRecommendations([]);
       setActiveMapIndex(0);
@@ -492,6 +697,14 @@ export default function AgentPage() {
         setActiveMapIndex(0);
       }
       setSessionId(data.sessionId);
+      if (data.uiDirective) {
+        setWorkflowDirective(data.uiDirective);
+        setWorkflowServices(data.suggestedServices ?? []);
+        setMapOpen(false);
+      } else {
+        setWorkflowDirective(undefined);
+        setWorkflowServices([]);
+      }
       setMessages((current) => [
         ...current,
         {
@@ -584,26 +797,28 @@ export default function AgentPage() {
 
   function toggleCompare(option: AgentRecommendation) {
     setCompared((current) => {
-      if (current.some((item) => item.optionId === option.optionId)) {
-        return current.filter((item) => item.optionId !== option.optionId);
-      }
-      if (current.length >= 3) {
-        setNotice("Bạn có thể so sánh tối đa 3 phương án.");
-        return current;
-      }
-      return [...current, option];
+      const key = getRecommendationCompareKey(option);
+      const exists = current.some(
+        (item) => getRecommendationCompareKey(item) === key,
+      );
+      const next = exists
+        ? current.filter((item) => getRecommendationCompareKey(item) !== key)
+        : [...current, option];
+      setComparisonOpen(next.length >= 2);
+      return next;
     });
   }
 
   function focusOnMap(option: AgentRecommendation) {
+    const optionKey = getRecommendationCompareKey(option);
     const source = messages.find((message) =>
       message.response?.recommendations.some(
-        (item) => item.optionId === option.optionId,
+        (item) => getRecommendationCompareKey(item) === optionKey,
       ),
     )?.response?.recommendations ?? [option];
     const valid = getTourableRecommendations(source);
     const nextIndex = valid.findIndex(
-      (item) => item.optionId === option.optionId,
+      (item) => getRecommendationCompareKey(item) === optionKey,
     );
     if (nextIndex < 0) {
       setError(
@@ -672,7 +887,7 @@ export default function AgentPage() {
 
   return (
     <div
-      className={`agent-page ${sidebarOpen ? "sidebar-open" : ""} ${mapOpen ? "map-open" : ""}`}
+      className={`agent-page ${sidebarOpen ? "sidebar-open" : ""} ${mapOpen ? "map-open" : ""} ${workflowDirective ? "workflow-open" : ""}`}
     >
       <section className="agent-shell">
         <aside
@@ -786,7 +1001,7 @@ export default function AgentPage() {
           onClick={() => setSidebarOpen(false)}
         />
 
-        <div className={`agent-workspace ${mapOpen ? "has-context-map" : ""}`}>
+        <div className={`agent-workspace ${mapOpen ? "has-context-map" : ""} ${workflowDirective ? "has-workflow-panel" : ""}`}>
           <main className="agent-chat">
             <header className="agent-topbar">
               <button
@@ -854,7 +1069,7 @@ export default function AgentPage() {
                   <AgentMessage
                     key={message.localId}
                     message={message}
-                    comparedIds={compared.map((item) => item.optionId)}
+                    comparedIds={compared.map(getRecommendationCompareKey)}
                     busy={loading}
                     onToggleCompare={toggleCompare}
                     onViewMap={focusOnMap}
@@ -863,6 +1078,12 @@ export default function AgentPage() {
                     onEditResend={editAndResend}
                     onResend={resendMessage}
                     onPresentationComplete={completeMessagePresentation}
+                    showFollowUps={
+                      message.role === "assistant" &&
+                      message.localId === lastAssistantMessage?.localId &&
+                      !comparisonOpen
+                    }
+                    onQuickReply={(reply) => void sendMessage(reply)}
                   />
                 ))}
 
@@ -889,10 +1110,22 @@ export default function AgentPage() {
                 )}
                 {notice && <div className="agent-alert">{notice}</div>}
 
-                <ComparisonPanel
-                  options={compared}
-                  onClose={() => setCompared([])}
-                />
+                {comparisonOpen && (
+                  <>
+                    <ComparisonPanel
+                      options={compared}
+                      onClose={() => setComparisonOpen(false)}
+                    />
+                    <ComparisonAssessmentMessage
+                      assessment={comparisonAssessment}
+                      followUpPrompt={comparisonFollowUpPrompt}
+                      actions={comparisonActions}
+                      loading={comparisonAssessmentLoading}
+                      disabled={loading}
+                      onAction={(message) => void sendMessage(message)}
+                    />
+                  </>
+                )}
                 <div ref={messageEndRef} />
               </div>
             </div>
@@ -992,6 +1225,15 @@ export default function AgentPage() {
               onClose={() => setMapOpen(false)}
               onStartRequest={startPlotRequest}
               onOpenFullMap={openFullMap}
+            />
+          )}
+          {workflowDirective && (
+            <AgentWorkflowPanel
+              directive={workflowDirective}
+              services={workflowServices}
+              busy={loading}
+              onClose={() => setWorkflowDirective(undefined)}
+              onStartServiceOrder={startServiceOrder}
             />
           )}
         </div>

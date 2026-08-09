@@ -6,45 +6,48 @@ import {
   RotateCcw,
   UserRound,
   X,
-} from 'lucide-react'
-import { useState } from 'react'
-import type { CSSProperties } from 'react'
+} from "lucide-react";
+import { useState } from "react";
+import type { CSSProperties } from "react";
 import type {
   AgentRecommendation,
   AgentService,
   ChatMessage,
-} from './agent.types'
-import MarkdownMessage from './MarkdownMessage'
-import PacedMarkdownMessage from './PacedMarkdownMessage'
-import RecommendationCard from './RecommendationCard'
-import BaziCompassWidget from './BaziCompassWidget'
+} from "./agent.types";
+import MarkdownMessage from "./MarkdownMessage";
+import PacedMarkdownMessage from "./PacedMarkdownMessage";
+import RecommendationCard from "./RecommendationCard";
+import BaziCompassWidget from "./BaziCompassWidget";
+import { getRecommendationCompareKey } from "./agentDisplay";
 
 interface AgentMessageProps {
-  message: ChatMessage
-  comparedIds: string[]
-  busy: boolean
-  onToggleCompare: (option: AgentRecommendation) => void
-  onViewMap: (option: AgentRecommendation) => void
-  onStartRequest: (option: AgentRecommendation) => void
-  onStartServiceOrder: (service: AgentService) => void
-  onEditResend: (message: ChatMessage, content: string) => void
-  onResend: (message: ChatMessage) => void
-  onPresentationComplete?: (message: ChatMessage) => void
+  message: ChatMessage;
+  comparedIds: string[];
+  busy: boolean;
+  onToggleCompare: (option: AgentRecommendation) => void;
+  onViewMap: (option: AgentRecommendation) => void;
+  onStartRequest: (option: AgentRecommendation) => void;
+  onStartServiceOrder: (service: AgentService) => void;
+  onEditResend: (message: ChatMessage, content: string) => void;
+  onResend: (message: ChatMessage) => void;
+  onPresentationComplete?: (message: ChatMessage) => void;
+  showFollowUps?: boolean;
+  onQuickReply?: (message: string) => void;
 }
 
 async function writeClipboard(content: string) {
   if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(content)
-    return
+    await navigator.clipboard.writeText(content);
+    return;
   }
-  const textarea = document.createElement('textarea')
-  textarea.value = content
-  textarea.style.position = 'fixed'
-  textarea.style.opacity = '0'
-  document.body.appendChild(textarea)
-  textarea.select()
-  document.execCommand('copy')
-  textarea.remove()
+  const textarea = document.createElement("textarea");
+  textarea.value = content;
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  textarea.remove();
 }
 
 export default function AgentMessage({
@@ -58,43 +61,54 @@ export default function AgentMessage({
   onEditResend,
   onResend,
   onPresentationComplete,
+  showFollowUps = false,
+  onQuickReply,
 }: AgentMessageProps) {
-  const isAssistant = message.role === 'assistant'
-  const animated = isAssistant && message.animatePresentation === true
-  const [copied, setCopied] = useState(false)
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState(message.content)
-  const [presentationComplete, setPresentationComplete] = useState(!animated)
+  const isAssistant = message.role === "assistant";
+  const animated = isAssistant && message.animatePresentation === true;
+  const [copied, setCopied] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(message.content);
+  const [presentationComplete, setPresentationComplete] = useState(!animated);
+  const markedFollowUps = message.response?.quickReplies?.length
+    ? message.response.quickReplies.slice(0, 2)
+    : (message.response?.suggestedFollowUps ?? [])
+        .slice(0, 2)
+        .map((item, index) => ({
+          id: `generated-follow-up-${index}`,
+          label: item.category,
+          message: item.text,
+        }));
 
   async function copyMessage() {
     try {
-      await writeClipboard(message.content)
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 1600)
+      await writeClipboard(message.content);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
     } catch {
-      setCopied(false)
+      setCopied(false);
     }
   }
 
   function saveEdit() {
-    const value = draft.trim()
-    if (!value || busy) return
-    setEditing(false)
-    onEditResend(message, value)
+    const value = draft.trim();
+    if (!value || busy) return;
+    setEditing(false);
+    onEditResend(message, value);
   }
 
   function cancelEdit() {
-    setDraft(message.content)
-    setEditing(false)
+    setDraft(message.content);
+    setEditing(false);
   }
 
   function completePresentation() {
-    setPresentationComplete(true)
-    onPresentationComplete?.(message)
+    setPresentationComplete(true);
+    onPresentationComplete?.(message);
   }
 
   return (
-    <article className={`agent-message ${isAssistant ? 'assistant' : 'user'}`}>
+    <article className={`agent-message ${isAssistant ? "assistant" : "user"}`}>
       <div className="agent-message-avatar">
         {isAssistant ? <Bot size={18} /> : <UserRound size={18} />}
       </div>
@@ -207,14 +221,16 @@ export default function AgentMessage({
                 className="agent-option-reveal"
                 style={
                   {
-                    '--agent-option-delay': `${index * 120}ms`,
+                    "--agent-option-delay": `${index * 120}ms`,
                   } as CSSProperties
                 }
               >
                 <RecommendationCard
                   option={option}
                   index={index}
-                  selectedForCompare={comparedIds.includes(option.optionId)}
+                  selectedForCompare={comparedIds.includes(
+                    getRecommendationCompareKey(option),
+                  )}
                   onToggleCompare={onToggleCompare}
                   onViewMap={onViewMap}
                   onStartRequest={onStartRequest}
@@ -225,8 +241,7 @@ export default function AgentMessage({
         ) : null}
 
         {/* Service Cards — clean text-only design */}
-        {message.response?.suggestedServices?.length &&
-        presentationComplete ? (
+        {message.response?.suggestedServices?.length && presentationComplete ? (
           <div className="agent-service-options">
             {message.response.suggestedServices.map((service) => (
               <article key={service.id} className="agent-service-card">
@@ -243,7 +258,7 @@ export default function AgentMessage({
                 </div>
                 <div className="agent-service-card-action">
                   <span className="agent-service-card-price">
-                    {service.basePrice.toLocaleString('vi-VN')} VND
+                    {service.basePrice.toLocaleString("vi-VN")} VND
                     <small>/{service.unit}</small>
                   </span>
                   <button
@@ -259,21 +274,45 @@ export default function AgentMessage({
           </div>
         ) : null}
 
+        {isAssistant &&
+        showFollowUps &&
+        presentationComplete &&
+        markedFollowUps.length > 0 ? (
+          <div className="agent-message-followups">
+            <p className="agent-message-followup-sentence">
+              Bạn muốn mình{" "}
+              {markedFollowUps.map((reply, index) => (
+                <span key={reply.id}>
+                  {index > 0 ? " hay " : ""}
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => onQuickReply?.(reply.message)}
+                  >
+                    “{reply.label}”
+                  </button>
+                </span>
+              ))}
+              ? Nếu có thêm tiêu chí hoặc vấn đề khác, hãy nói với mình.
+            </p>
+          </div>
+        ) : null}
+
         {/* Footer */}
         <div className="agent-message-foot">
           <time>
-            {message.createdAt.toLocaleTimeString('vi-VN', {
-              hour: '2-digit',
-              minute: '2-digit',
+            {message.createdAt.toLocaleTimeString("vi-VN", {
+              hour: "2-digit",
+              minute: "2-digit",
             })}
             {isAssistant && message.responseTimeMs !== undefined && (
               <span>
-                {' '}
-                · Phản hồi trong{' '}
-                {(message.responseTimeMs / 1000).toLocaleString('vi-VN', {
+                {" "}
+                · Phản hồi trong{" "}
+                {(message.responseTimeMs / 1000).toLocaleString("vi-VN", {
                   maximumFractionDigits: 1,
                   minimumFractionDigits: 1,
-                })}{' '}
+                })}{" "}
                 giây
               </span>
             )}
@@ -282,7 +321,7 @@ export default function AgentMessage({
             <button
               type="button"
               title="Sao chép"
-              aria-label={copied ? 'Đã sao chép' : 'Sao chép tin nhắn'}
+              aria-label={copied ? "Đã sao chép" : "Sao chép tin nhắn"}
               onClick={() => void copyMessage()}
             >
               {copied ? <Check size={14} /> : <Copy size={14} />}
@@ -313,5 +352,5 @@ export default function AgentMessage({
         </div>
       </div>
     </article>
-  )
+  );
 }

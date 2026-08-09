@@ -589,6 +589,35 @@ export default function RequestsPage() {
       setBusy("");
     }
   }
+  async function cancelApprovedReserve() {
+    if (!current || current.type !== "reserve" || current.status !== "approved")
+      return;
+    const reason = window.prompt(
+      "Nhập lý do hủy giữ chỗ. Các lô sẽ trở về trạng thái còn trống:",
+    );
+    if (reason === null) return;
+    if (!reason.trim()) {
+      setError("Vui lòng nhập lý do hủy giữ chỗ.");
+      return;
+    }
+    resetFeedback();
+    setBusy("cancel-reserve");
+    try {
+      await api.patch(`/admin/reservations/${current.id}/cancel`, {
+        adminNote: reason.trim(),
+      });
+      setMessage("Đã hủy giữ chỗ và trả các lô về trạng thái còn trống.");
+      await load();
+      const response = await api.get<{ data: RequestItem }>(
+        `/admin/reservations/${current.id}`,
+      );
+      setDetail(response.data.data);
+    } catch (caught) {
+      setError(getError(caught));
+    } finally {
+      setBusy("");
+    }
+  }
   async function createAppointment() {
     if (!current) return;
     if (
@@ -946,6 +975,20 @@ export default function RequestsPage() {
                     </span>
                   </div>
                   <RequestReviewInfo request={current} />
+                  {current.type === "reserve" &&
+                    current.status === "approved" && (
+                      <div className="step-actions">
+                        <button
+                          className="danger-button"
+                          disabled={!!busy}
+                          onClick={() => void cancelApprovedReserve()}
+                        >
+                          {busy === "cancel-reserve"
+                            ? "Đang hủy giữ chỗ..."
+                            : "Hủy giữ chỗ"}
+                        </button>
+                      </div>
+                    )}
                 </CompletedStep>
               )}
               {!decisionDone && (

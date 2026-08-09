@@ -32,6 +32,7 @@ interface TimelineRow extends QueryResultRow {
   knowledgeUpdates: number | string;
   signals: number | string;
   recommendations: number | string;
+  aiAccesses: number | string;
 }
 
 interface RecentUpdateRow extends QueryResultRow {
@@ -93,6 +94,7 @@ export interface LearningAnalyticsDashboard {
     knowledgeUpdates: number;
     signals: number;
     recommendations: number;
+    aiAccesses: number;
   }>;
   recentUpdates: Array<{
     versionId: number;
@@ -302,17 +304,26 @@ export class LearningAnalyticsService {
            FROM ai_recommendation_runs
            WHERE created_at >= CURRENT_DATE - ($1::int - 1)
            GROUP BY created_at::date
+         ),
+         ai_access_events AS (
+           SELECT created_at::date AS day, COUNT(*)::int AS accesses
+           FROM ai_messages
+           WHERE role = 'user'
+             AND created_at >= CURRENT_DATE - ($1::int - 1)
+           GROUP BY created_at::date
          )
          SELECT
            TO_CHAR(d.day, 'YYYY-MM-DD') AS date,
            COALESCE(v.memory_updates, 0)::int AS "memoryUpdates",
            COALESCE(v.knowledge_updates, 0)::int AS "knowledgeUpdates",
            COALESCE(s.signals, 0)::int AS signals,
-           COALESCE(r.recommendations, 0)::int AS recommendations
+           COALESCE(r.recommendations, 0)::int AS recommendations,
+           COALESCE(a.accesses, 0)::int AS "aiAccesses"
          FROM reporting_days d
          LEFT JOIN version_events v ON v.day = d.day
          LEFT JOIN signal_events s ON s.day = d.day
          LEFT JOIN recommendation_events r ON r.day = d.day
+         LEFT JOIN ai_access_events a ON a.day = d.day
          ORDER BY d.day`,
         [days],
       ),
@@ -477,6 +488,7 @@ export class LearningAnalyticsService {
         knowledgeUpdates: this.number(row.knowledgeUpdates),
         signals: this.number(row.signals),
         recommendations: this.number(row.recommendations),
+        aiAccesses: this.number(row.aiAccesses),
       })),
       recentUpdates: recentUpdates.map((row) => ({
         versionId: this.number(row.versionId),

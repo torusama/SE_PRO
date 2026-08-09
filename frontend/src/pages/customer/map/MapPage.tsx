@@ -47,7 +47,7 @@ import {
   getHeadingLabel,
 } from "@/lib/cemeteryMapVisuals";
 import { useAuthStore } from "@/store/authStore";
-import { HelpCircle } from "lucide-react";
+import { Bot, HelpCircle } from "lucide-react";
 import GuidePopup, { type GuideStep } from "@/components/guide/GuidePopup";
 import "./MapPage.css";
 
@@ -55,6 +55,10 @@ type PlotStatus = "available" | "pending" | "reserved" | "sold" | "locked";
 type StatusFilter = "all" | PlotStatus;
 type SelectionMode = "single" | "cluster";
 type ReservationType = "reserve" | "purchase";
+type PlotIntroductionView = {
+  status: "loading" | "ai" | "fallback";
+  text: string;
+};
 type CustomerReservationStatus =
   "draft" | "submitted" | "pending" | "approved" | "rejected" | "cancelled";
 
@@ -653,6 +657,12 @@ export default function MapPage() {
   const [rotation, setRotation] = useState(0);
   const [selectionMode, setSelectionMode] = useState<SelectionMode>("single");
   const [selectedPlot, setSelectedPlot] = useState<MapPlot | null>(null);
+  const plotIntroductionCacheRef = useRef<Record<string, PlotIntroductionView>>(
+    {},
+  );
+  const [plotIntroductions, setPlotIntroductions] = useState<
+    Record<string, PlotIntroductionView>
+  >({});
   const [routePlotId, setRoutePlotId] = useState<string | null>(null);
   const [clusterPlots, setClusterPlots] = useState<MapPlot[]>([]);
 
@@ -965,11 +975,69 @@ export default function MapPage() {
     );
   }, [filteredPlots, selectedPlot]);
 
+  useEffect(() => {
+    if (!selectedPlot || selectedPlot.isPlaceholder) return;
+    const selectedId = selectedPlot.id;
+    if (plotIntroductionCacheRef.current[selectedId]) return;
+    const plotId = Number(selectedPlot.id);
+    const remember = (view: PlotIntroductionView) => {
+      plotIntroductionCacheRef.current[selectedId] = view;
+      setPlotIntroductions((current) => ({ ...current, [selectedId]: view }));
+    };
+    if (!Number.isInteger(plotId) || plotId <= 0) {
+      remember({ status: "fallback", text: selectedPlot.description });
+      return;
+    }
+    remember({ status: "loading", text: "" });
+    const controller = new AbortController();
+    void api
+      .post(
+        "/ai-agent/plot-introduction",
+        { plotId },
+        { signal: controller.signal },
+      )
+      .then((response) => {
+        const introduction = response.data?.data?.introduction;
+        const source = response.data?.data?.source;
+        if (
+          source === "ai" &&
+          typeof introduction === "string" &&
+          introduction.trim()
+        ) {
+          remember({ status: "ai", text: introduction.trim() });
+          return;
+        }
+        remember({
+          status: "fallback",
+          text:
+            selectedPlot.description ||
+            (typeof introduction === "string" ? introduction.trim() : ""),
+        });
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        remember({ status: "fallback", text: selectedPlot.description });
+      });
+    return () => controller.abort();
+  }, [selectedPlot]);
+
   const clusterTotalPrice = useMemo(
     () => clusterPlots.reduce((sum, p) => sum + p.price, 0),
     [clusterPlots],
   );
   const selectedColor = selectedPlot ? STATUS_COLOR[selectedPlot.status] : null;
+  const selectedIntroductionView = selectedPlot
+    ? plotIntroductions[selectedPlot.id]
+    : undefined;
+  const selectedIntroductionLoading = Boolean(
+    selectedPlot &&
+      !selectedPlot.isPlaceholder &&
+      (!selectedIntroductionView || selectedIntroductionView.status === "loading"),
+  );
+  const selectedIntroduction = selectedPlot
+    ? selectedIntroductionView?.text ||
+      (selectedPlot.isPlaceholder ? selectedPlot.description : "")
+    : "";
   const selectedIsAvailable =
     selectedPlot?.status === "available" && !selectedPlot.isPlaceholder;
   const routePlot =
@@ -1987,11 +2055,29 @@ export default function MapPage() {
 
               <div className="description-box">
                 <div className="box-label">{T.description}</div>
-                <ul className="description-list">
-                  {descriptionLines(selectedPlot.description).map((line) => (
-                    <li key={line}>{line}</li>
-                  ))}
-                </ul>
+                {selectedIntroductionLoading ? (
+                  <div
+                    className="plot-ai-thinking"
+                    role="status"
+                    aria-label="AI đang soạn phần giới thiệu lô đất"
+                  >
+                    <span className="plot-ai-thinking-icon" aria-hidden="true">
+                      <Bot size={17} />
+                    </span>
+                    <span>AI đang soạn phần giới thiệu</span>
+                    <span className="plot-ai-thinking-dots" aria-hidden="true">
+                      <i />
+                      <i />
+                      <i />
+                    </span>
+                  </div>
+                ) : (
+                  <ul className="description-list">
+                    {descriptionLines(selectedIntroduction).map((line) => (
+                      <li key={line}>{line}</li>
+                    ))}
+                  </ul>
+                )}
               </div>
 
               {submitError && (

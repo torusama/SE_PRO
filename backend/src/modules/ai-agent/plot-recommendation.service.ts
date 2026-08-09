@@ -127,10 +127,14 @@ export class PlotRecommendationService {
       rankerVersion = rankerAttempt.prediction.modelVersion;
       fallbackUsed = false;
     }
-    recommendations = recommendations.slice(0, 3).map((option, index) => ({
-      ...option,
-      optionId: `OPT-${String(index + 1).padStart(3, '0')}`,
-    }));
+    recommendations = this.applyComparativeFitScores(
+      recommendations.slice(0, this.resolveRecommendationCount(dto)),
+    )
+      .sort((left, right) => this.compareRecommendations(left, right, dto))
+      .map((option, index) => ({
+        ...option,
+        optionId: `OPT-${String(index + 1).padStart(3, '0')}`,
+      }));
     recommendations = this.enrichOptionExplanations(recommendations, dto);
     const finalFeatureSnapshot = Object.fromEntries(
       recommendations.map((option) => [
@@ -204,12 +208,17 @@ export class PlotRecommendationService {
       Number.MAX_SAFE_INTEGER,
     );
     const recommendations = this.enrichOptionExplanations(
-      optionGroups
-        .map((plots, index) =>
-          this.toRecommendation(plots, query, index, false),
-        )
+      this.applyComparativeFitScores(
+        optionGroups
+          .map((plots, index) =>
+            this.toRecommendation(plots, query, index, false),
+          )
+          .sort((left, right) =>
+            this.compareRecommendations(left, right, query),
+          )
+          .slice(0, this.resolveRecommendationCount(requirements)),
+      )
         .sort((left, right) => this.compareRecommendations(left, right, query))
-        .slice(0, 3)
         .map((option, index) => ({
           ...option,
           optionId: `OPT-${String(index + 1).padStart(3, '0')}`,
@@ -304,6 +313,15 @@ export class PlotRecommendationService {
       params,
     );
     return rows.map((row) => this.normalizePlot(row));
+  }
+
+  private resolveRecommendationCount(
+    requirements: Pick<AgentRequirements, 'recommendationCount'>,
+  ) {
+    const count = requirements.recommendationCount;
+    return Number.isInteger(count) && count !== undefined
+      ? Math.min(10, Math.max(1, count))
+      : 3;
   }
 
   async getServiceSuggestions(limit = 6) {
@@ -554,7 +572,7 @@ export class PlotRecommendationService {
         direction.toLowerCase().includes(dto.preferredDirection!.toLowerCase()),
       );
     const budgetScore = budgetSpecified
-      ? Math.min(1, plotCost / dto.budgetMax)
+      ? Math.max(0, 1 - Math.min(1, plotCost / dto.budgetMax) * 0.35)
       : 0.8;
     const baseScore =
       budgetScore * 0.3 +
@@ -766,6 +784,78 @@ export class PlotRecommendationService {
         reasons: uniqueReasons,
         tradeOffs: uniqueTradeOffs,
         analysisSummary: `${position} vì ${fitSummary}. Điểm cần cân nhắc: ${tradeOffSummary}.`,
+      };
+    });
+  }
+
+  /**
+   * Add a small, evidence-based comparative signal to the absolute rule score.
+   * This prevents visually identical percentages when options differ in price,
+   * area or verified entrance access, without inventing a preference that the
+   * customer never stated. Tiny metric spreads intentionally have less impact.
+   */
+  private applyComparativeFitScores(options: RecommendationOption[]) {
+    if (options.length < 2) return options;
+
+    const prices = options.map((option) => option.plotCost);
+    const areas = options.map((option) => option.totalAreaSqm);
+    const distances = options
+      .map((option) => option.entranceDistanceMapUnits)
+      .filter((value): value is number => value !== null);
+    const minPrice = Math.min(...prices);
+    const maxPrice = Math.max(...prices);
+    const minArea = Math.min(...areas);
+    const maxArea = Math.max(...areas);
+    const minDistance = distances.length ? Math.min(...distances) : 0;
+    const maxDistance = distances.length ? Math.max(...distances) : 0;
+
+    const normalized = (value: number, min: number, max: number) =>
+      max === min ? 0.5 : (value - min) / (max - min);
+    const spreadStrength = (min: number, max: number, multiplier: number) =>
+      max === min
+        ? 0
+        : Math.min(
+            1,
+            (Math.abs(max - min) / Math.max(Math.abs(max), 1)) * multiplier,
+          );
+
+    const priceStrength = spreadStrength(minPrice, maxPrice, 8);
+    const areaStrength = spreadStrength(minArea, maxArea, 4);
+    const accessStrength =
+      distances.length > 1
+        ? Math.min(1, Math.abs(maxDistance - minDistance) / 700)
+        : 0;
+
+    return options.map((option) => {
+      const affordability =
+        0.5 +
+        (0.5 - normalized(option.plotCost, minPrice, maxPrice)) * priceStrength;
+      const areaValue =
+        0.5 +
+        (normalized(option.totalAreaSqm, minArea, maxArea) - 0.5) *
+          areaStrength;
+      const accessValue =
+        option.entranceDistanceMapUnits === null
+          ? 0.5
+          : 0.5 +
+            (0.5 -
+              normalized(
+                option.entranceDistanceMapUnits,
+                minDistance,
+                maxDistance,
+              )) *
+              accessStrength;
+      const comparativeSignal =
+        affordability * 0.5 + areaValue * 0.2 + accessValue * 0.3;
+      const comparativeTarget = 0.55 + comparativeSignal * 0.35;
+      return {
+        ...option,
+        score: Number(
+          Math.max(
+            0,
+            Math.min(0.98, option.score * 0.76 + comparativeTarget * 0.24),
+          ).toFixed(4),
+        ),
       };
     });
   }

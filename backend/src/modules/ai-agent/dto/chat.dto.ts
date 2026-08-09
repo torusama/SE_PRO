@@ -64,6 +64,7 @@ export class ChatDto {
   sessionId?: string;
 
   @IsString()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @MinLength(1)
   @MaxLength(2000)
   message!: string;

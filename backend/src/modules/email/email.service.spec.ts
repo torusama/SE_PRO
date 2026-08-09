@@ -85,4 +85,28 @@ describe('EmailService', () => {
       await unlink(filePath);
     }
   });
+
+  it('keeps a long AI reminder and the footer inside the extended artwork', async () => {
+    const { service, send } = createService();
+
+    await service.sendReminderEmail(
+      'customer@example.com',
+      'Ngày tưởng niệm người thân',
+      [
+        'Kính gửi gia đình Nguyễn Văn A,',
+        '',
+        'Nhân ngày tưởng niệm sắp tới, Vĩnh Phúc Viên xin gửi lời nhắc để gia đình chủ động chuẩn bị chu đáo. Nội dung này đủ dài để kiểm tra việc xuống dòng trong thẻ nội dung mà không làm phần chân thư tràn khỏi nền trang trí.',
+        '',
+        'Trân trọng,',
+        'Vĩnh Phúc Viên',
+      ].join('\n'),
+    );
+
+    const html = send.mock.calls[0][0].html ?? '';
+    expect(html).toContain('height="930"');
+    expect(html).toContain('background-size:600px 930px');
+    expect(html).not.toContain('Kính gửi gia đình Nguyễn Văn A');
+    expect(html).not.toContain('Trân trọng,<br/>Vĩnh Phúc Viên');
+    expect(html).toContain('Gìn giữ an yên, trọn vẹn tưởng nhớ.');
+  });
 });

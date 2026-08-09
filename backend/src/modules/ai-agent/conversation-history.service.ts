@@ -223,6 +223,7 @@ export class ConversationHistoryService {
             quickReplies: persisted.quickReplies ?? [],
             suggestedFollowUps: persisted.suggestedFollowUps ?? [],
             actions: persisted.actions ?? [],
+            uiDirective: persisted.uiDirective,
             metadata: agentMetadata,
           },
         };

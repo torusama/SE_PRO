@@ -18,6 +18,7 @@ describe('AiAgentOrchestrator consultation continuity', () => {
         ]),
       } as never,
       {} as never,
+      {} as never,
     );
 
   it('defaults a normal plot-discovery request to one plot per alternative', () => {
@@ -27,6 +28,53 @@ describe('AiAgentOrchestrator consultation continuity', () => {
         budgetMax: 200_000_000,
       }),
     ).toMatchObject({ budgetMax: 200_000_000, numberOfPlots: 1 });
+  });
+
+  it('treats “gợi ý 3 lô” as three alternatives, not one three-plot purchase', () => {
+    const service = createService() as any;
+    expect(
+      service.applyNaturalRecommendationDefaults(
+        'Gợi ý cho mình 3 lô dưới 35 triệu',
+        'recommend_plots',
+        { budgetMax: 35_000_000, numberOfPlots: 3 },
+      ),
+    ).toMatchObject({
+      budgetMax: 35_000_000,
+      numberOfPlots: 1,
+      needAdjacent: false,
+    });
+  });
+
+  it('treats “so sánh 2 lô” as two alternatives, not a two-plot purchase', () => {
+    const service = createService() as any;
+    expect(
+      service.applyNaturalRecommendationDefaults(
+        'So sánh 2 lô phù hợp ngân sách 300 triệu',
+        'recommend_plots',
+        {
+          budgetMax: 300_000_000,
+          numberOfPlots: 2,
+          recommendationCount: 2,
+          comparisonRequested: true,
+        },
+      ),
+    ).toMatchObject({
+      numberOfPlots: 1,
+      recommendationCount: 2,
+      comparisonRequested: true,
+      needAdjacent: false,
+    });
+  });
+
+  it('keeps an explicit request to acquire three adjacent plots as a group', () => {
+    const service = createService() as any;
+    expect(
+      service.applyNaturalRecommendationDefaults(
+        'Mình cần mua 3 lô liền nhau',
+        'recommend_plots',
+        { numberOfPlots: 3, needAdjacent: true },
+      ),
+    ).toMatchObject({ numberOfPlots: 3, needAdjacent: true });
   });
 
   it('continues plot consultation for a colloquial follow-up', () => {
@@ -61,7 +109,8 @@ describe('AiAgentOrchestrator consultation continuity', () => {
         {
           id: 1,
           role: 'assistant',
-          content: 'Mình đang tư vấn lô và phương án phù hợp ngân sách của bạn.',
+          content:
+            'Mình đang tư vấn lô và phương án phù hợp ngân sách của bạn.',
         },
       ],
     );

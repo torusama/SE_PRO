@@ -26,6 +26,7 @@ import { ContractsService } from './contracts.service';
 import { UpdateInheritanceDto } from './dto/update-inheritance.dto';
 import { AdminContractQueryDto } from './dto/admin-contract-query.dto';
 import { RecordPaymentDto } from './dto/record-payment.dto';
+import { UpdateContractStatusDto } from './dto/update-contract-status.dto';
 import {
   CurrentAdminContext,
   type AdminRequestContext,
@@ -155,11 +156,14 @@ export class ContractsController {
 
   @Patch('admin/contracts/:id/status')
   @Roles('admin')
-  async updateStatus(@Param('id') id: string, @Body('status') status: string) {
+  async updateStatus(
+    @Param('id') id: string,
+    @Body() dto: UpdateContractStatusDto,
+  ) {
     return {
       success: true,
       message: 'Contract status updated',
-      data: await this.contractsService.updateStatus(Number(id), status),
+      data: await this.contractsService.updateStatus(Number(id), dto.status),
     };
   }
 

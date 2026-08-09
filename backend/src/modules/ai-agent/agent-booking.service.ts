@@ -6,17 +6,24 @@ import {
 import { DatabaseService } from '../../database/database.service';
 import { CemeteryServicesService } from '../cemetery-services/cemetery-services.service';
 import { ReservationsService } from '../reservations/reservations.service';
+import { RemindersService } from '../reminders/reminders.service';
+import { ScheduleService } from '../schedule/schedule.service';
+import { MemorialEmailDraftService } from './memorial-email-draft.service';
 import { AgentPlan } from './agent-planner';
 import { AgentClientActionDto } from './dto/chat.dto';
 import {
   AgentPendingAction,
+  AgentUiDirective,
   RecommendationOption,
 } from './types/agent-response.types';
 
-interface OwnedPlot {
+export interface OwnedPlotContext {
   plotId: number;
   plotCode: string;
   zoneName: string;
+  direction: string | null;
+  areaSqm: number;
+  plotType: string;
 }
 
 interface ServiceType {
@@ -41,10 +48,21 @@ interface PlotSelection {
 
 export interface AgentBookingTurn {
   handled: true;
-  intent: 'plot_request' | 'service_booking';
+  intent:
+    | 'plot_request'
+    | 'service_booking'
+    | 'appointment_booking'
+    | 'memorial_reminder';
   assistantMessage: string;
   pendingAction?: AgentPendingAction;
   suggestedServices?: ServiceType[];
+  quickReplies?: Array<{
+    id: string;
+    label: string;
+    message: string;
+    emphasis?: 'normal' | 'strong';
+  }>;
+  uiDirective?: AgentUiDirective;
 }
 
 @Injectable()
@@ -53,6 +71,9 @@ export class AgentBookingService {
     private readonly database: DatabaseService,
     private readonly reservations: ReservationsService,
     private readonly cemeteryServices: CemeteryServicesService,
+    private readonly reminders: RemindersService,
+    private readonly schedule: ScheduleService,
+    private readonly memorialDrafts: MemorialEmailDraftService,
   ) {}
 
   async loadPendingAction(
@@ -87,6 +108,8 @@ export class AgentBookingService {
       [
         'prepare_plot_request',
         'prepare_service_order',
+        'prepare_appointment',
+        'prepare_memorial_reminder',
         'confirm_pending_action',
         'cancel_pending_action',
       ].includes(input.plan.action);
@@ -96,6 +119,13 @@ export class AgentBookingService {
       return {
         handled: true,
         intent:
+          input.pendingAction?.kind === 'appointment' ||
+          input.plan.intent === 'appointment_booking'
+            ? 'appointment_booking'
+            : input.pendingAction?.kind === 'memorial_reminder' ||
+                input.plan.intent === 'memorial_reminder'
+              ? 'memorial_reminder'
+              :
           input.clientAction?.type === 'START_SERVICE_ORDER' ||
           input.pendingAction?.kind === 'service_order' ||
           input.plan.intent === 'service_booking'
@@ -111,17 +141,35 @@ export class AgentBookingService {
       return {
         handled: true,
         intent:
-          input.pendingAction?.kind === 'service_order'
+          input.pendingAction?.kind === 'appointment'
+            ? 'appointment_booking'
+            : input.pendingAction?.kind === 'memorial_reminder'
+              ? 'memorial_reminder'
+              : input.pendingAction?.kind === 'service_order'
             ? 'service_booking'
             : 'plot_request',
         assistantMessage: input.pendingAction
-          ? 'Mình đã hủy yêu cầu đang chuẩn bị. Chưa có dữ liệu đặt lô hoặc đơn dịch vụ nào được tạo.'
+          ? 'Mình đã hủy yêu cầu đang chuẩn bị. Chưa có đơn, lịch hẹn hoặc lịch nhắc nào được tạo.'
           : 'Hiện không có yêu cầu nào đang chờ xác nhận để hủy.',
       };
     }
 
     if (input.plan.action === 'confirm_pending_action') {
       return this.confirm(authenticatedInput.userId, input.pendingAction);
+    }
+
+    if (
+      input.pendingAction?.kind === 'appointment' ||
+      input.plan.action === 'prepare_appointment'
+    ) {
+      return this.prepareAppointment(authenticatedInput);
+    }
+
+    if (
+      input.pendingAction?.kind === 'memorial_reminder' ||
+      input.plan.action === 'prepare_memorial_reminder'
+    ) {
+      return this.prepareMemorialReminder(authenticatedInput);
     }
 
     if (
@@ -225,7 +273,7 @@ export class AgentBookingService {
         input.plan.requirements.serviceQuery ??
         existing?.serviceName,
     );
-    const ownedPlots = await this.ownedPlots(input.userId);
+    const ownedPlots = await this.getOwnedPlots(input.userId);
 
     if (!ownedPlots.length) {
       return {
@@ -233,6 +281,15 @@ export class AgentBookingService {
         intent: 'service_booking',
         assistantMessage:
           'Tài khoản của bạn hiện chưa có lô nào thuộc quyền sử dụng nên mình chưa thể tạo đơn dịch vụ gắn với phần mộ. Nếu bạn muốn, mình có thể tư vấn một lô phù hợp trước hoặc giới thiệu quy trình mua lô.',
+        quickReplies: [
+          {
+            id: 'service-no-owned-plot-consultation',
+            label: 'Tư vấn thêm về lô đất phù hợp',
+            message:
+              'Mình chưa sở hữu lô nào. Hãy tư vấn cho mình các lô đất phù hợp để sau này có thể sử dụng dịch vụ chăm sóc.',
+            emphasis: 'strong',
+          },
+        ],
       };
     }
 
@@ -313,6 +370,216 @@ export class AgentBookingService {
     };
   }
 
+  private async prepareAppointment(input: {
+    userId: number;
+    plan: AgentPlan;
+    pendingAction?: AgentPendingAction;
+  }): Promise<AgentBookingTurn> {
+    const existing =
+      input.pendingAction?.kind === 'appointment'
+        ? input.pendingAction
+        : undefined;
+    const startTime =
+      input.plan.requirements.appointmentStartTime ?? existing?.startTime;
+    const pending: AgentPendingAction = {
+      kind: 'appointment',
+      stage: 'collecting',
+      appointmentDate:
+        input.plan.requirements.appointmentDate ?? existing?.appointmentDate,
+      startTime,
+      endTime:
+        input.plan.requirements.appointmentEndTime ??
+        existing?.endTime ??
+        (startTime ? this.addMinutes(startTime, 60) : undefined),
+      topic:
+        input.plan.requirements.appointmentTopic ??
+        existing?.topic ??
+        'Tham quan và tư vấn lô đất',
+      note: input.plan.requirements.note ?? existing?.note,
+      selectedPlotCode:
+        input.plan.requirements.selectedPlotCode ?? existing?.selectedPlotCode,
+    };
+
+    if (!pending.appointmentDate || !this.isValidFutureDate(pending.appointmentDate)) {
+      pending.appointmentDate = undefined;
+      return {
+        handled: true,
+        intent: 'appointment_booking',
+        pendingAction: pending,
+        uiDirective: { type: 'OPEN_APPOINTMENT_CALENDAR' },
+        assistantMessage:
+          'Bạn muốn gặp ban quản lý vào ngày nào? Mình sẽ mở lịch để bạn chọn ngày phù hợp.',
+      };
+    }
+    if (!pending.startTime || !/^([01]\d|2[0-3]):[0-5]\d$/.test(pending.startTime)) {
+      pending.startTime = undefined;
+      pending.endTime = undefined;
+      return {
+        handled: true,
+        intent: 'appointment_booking',
+        pendingAction: pending,
+        uiDirective: {
+          type: 'OPEN_APPOINTMENT_CALENDAR',
+          appointmentDate: pending.appointmentDate,
+        },
+        assistantMessage: `Bạn muốn gặp ban quản lý lúc mấy giờ ngày **${pending.appointmentDate}**?`,
+      };
+    }
+    if (
+      !pending.endTime ||
+      !/^([01]\d|2[0-3]):[0-5]\d$/.test(pending.endTime) ||
+      pending.endTime <= pending.startTime
+    ) {
+      pending.endTime = this.addMinutes(pending.startTime, 60);
+    }
+    pending.stage = 'awaiting_confirmation';
+    const subject =
+      pending.selectedPlotCode &&
+      !this.normalize(pending.topic ?? '').includes(
+        this.normalize(pending.selectedPlotCode),
+      )
+        ? `${pending.topic} · Lô ${pending.selectedPlotCode}`
+        : pending.topic;
+    return {
+      handled: true,
+      intent: 'appointment_booking',
+      pendingAction: pending,
+      uiDirective: {
+        type: 'OPEN_APPOINTMENT_CALENDAR',
+        appointmentDate: pending.appointmentDate,
+      },
+      assistantMessage: [
+        'Mình đã chuẩn bị lịch hẹn với ban quản lý:',
+        `- Ngày: **${pending.appointmentDate}**`,
+        `- Thời gian: **${pending.startTime}–${pending.endTime}**`,
+        `- Nội dung: **${subject}**`,
+        '',
+        'Bạn xác nhận để mình gửi yêu cầu đặt lịch này không?',
+      ].join('\n'),
+    };
+  }
+
+  private async prepareMemorialReminder(input: {
+    userId: number;
+    plan: AgentPlan;
+    pendingAction?: AgentPendingAction;
+  }): Promise<AgentBookingTurn> {
+    const existing =
+      input.pendingAction?.kind === 'memorial_reminder'
+        ? input.pendingAction
+        : undefined;
+    const profile = await this.profile(input.userId);
+    const reminderDate = input.plan.requirements.reminderDate;
+    const parsedDate = reminderDate ? this.parseIsoDate(reminderDate) : null;
+    const notifyEmails = [
+      ...(input.plan.requirements.reminderNotifyEmails ?? []),
+      ...(existing?.notifyEmails ?? []),
+      ...(profile.email ? [profile.email] : []),
+    ]
+      .map((email) => email.trim().toLowerCase())
+      .filter((email, index, values) =>
+        /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) &&
+        values.indexOf(email) === index,
+      )
+      .slice(0, 10);
+    const recurring =
+      input.plan.requirements.reminderRecurring ?? existing?.isRecurring ?? true;
+    const title =
+      input.plan.requirements.reminderTitle ??
+      existing?.title ??
+      'Ngày tưởng niệm người thân';
+    const calendarType =
+      input.plan.requirements.reminderCalendarType ??
+      existing?.calendarType ??
+      'solar';
+    const dateLabel = recurring
+      ? parsedDate
+        ? `${parsedDate.day}/${parsedDate.month} hằng năm (${calendarType === 'lunar' ? 'âm lịch' : 'dương lịch'})`
+        : 'chưa xác định'
+      : reminderDate ?? existing?.specificDate ?? 'chưa xác định';
+    const fallbackDescription = this.defaultMemorialMessage(
+      profile.fullName,
+      title,
+      dateLabel,
+    );
+    const description =
+      input.plan.requirements.reminderDescription ??
+      existing?.description ??
+      (parsedDate
+        ? await this.memorialDrafts.generate({
+            customerName: profile.fullName,
+            title,
+            dateLabel,
+            fallback: fallbackDescription,
+          })
+        : fallbackDescription);
+    const pending: AgentPendingAction = {
+      kind: 'memorial_reminder',
+      stage: 'collecting',
+      title,
+      description,
+      specificDate: recurring ? undefined : reminderDate ?? existing?.specificDate,
+      remindMonth: parsedDate?.month ?? existing?.remindMonth,
+      remindDay: parsedDate?.day ?? existing?.remindDay,
+      isRecurring: recurring,
+      calendarType,
+      notifyDaysBefore:
+        input.plan.requirements.reminderNotifyDaysBefore ??
+        existing?.notifyDaysBefore ??
+        3,
+      notifyEmails,
+    };
+
+    if (
+      (!pending.isRecurring &&
+        (!pending.specificDate || !this.isValidFutureDate(pending.specificDate))) ||
+      (pending.isRecurring && (!pending.remindMonth || !pending.remindDay))
+    ) {
+      return {
+        handled: true,
+        intent: 'memorial_reminder',
+        pendingAction: pending,
+        uiDirective: { type: 'OPEN_REMINDER_CALENDAR' },
+        assistantMessage:
+          'Bạn muốn nhắc vào ngày nào? Bạn có thể nói rõ ngày dương lịch hoặc âm lịch và đây là lịch hằng năm hay chỉ nhắc một lần.',
+      };
+    }
+    if (!pending.notifyEmails.length) {
+      return {
+        handled: true,
+        intent: 'memorial_reminder',
+        pendingAction: pending,
+        uiDirective: { type: 'OPEN_REMINDER_CALENDAR' },
+        assistantMessage:
+          'Bạn muốn gửi lời nhắc tưởng niệm tới địa chỉ email nào?',
+      };
+    }
+    pending.stage = 'awaiting_confirmation';
+    const confirmedDateLabel = pending.isRecurring
+      ? `${pending.remindDay}/${pending.remindMonth} hằng năm (${pending.calendarType === 'lunar' ? 'âm lịch' : 'dương lịch'})`
+      : pending.specificDate;
+    return {
+      handled: true,
+      intent: 'memorial_reminder',
+      pendingAction: pending,
+      uiDirective: {
+        type: 'OPEN_REMINDER_CALENDAR',
+        reminderDate: pending.specificDate,
+      },
+      assistantMessage: [
+        'Mình đã soạn lịch nhắc tưởng niệm:',
+        `- Sự kiện: **${pending.title}**`,
+        `- Ngày nhắc: **${confirmedDateLabel}**`,
+        `- Gửi trước: **${pending.notifyDaysBefore} ngày**`,
+        `- Người nhận: **${pending.notifyEmails.join(', ')}**`,
+        '',
+        pending.description ?? '',
+        '',
+        'Bạn xác nhận để mình lưu lịch và dùng nội dung trên cho email nhắc không?',
+      ].join('\n'),
+    };
+  }
+
   private async confirm(
     userId: number,
     pending?: AgentPendingAction,
@@ -321,12 +588,99 @@ export class AgentBookingService {
       return {
         handled: true,
         intent:
-          pending?.kind === 'service_order'
-            ? 'service_booking'
-            : 'plot_request',
+          pending?.kind === 'appointment'
+            ? 'appointment_booking'
+            : pending?.kind === 'memorial_reminder'
+              ? 'memorial_reminder'
+              : pending?.kind === 'service_order'
+                ? 'service_booking'
+                : 'plot_request',
         pendingAction: pending,
         assistantMessage:
           'Yêu cầu vẫn còn thiếu thông tin nên mình chưa thể gửi. Bạn trả lời câu hỏi gần nhất để mình hoàn tất trước nhé.',
+      };
+    }
+
+    if (pending.kind === 'appointment') {
+      if (
+        !pending.appointmentDate ||
+        !pending.startTime ||
+        !pending.endTime ||
+        !this.isValidFutureDate(pending.appointmentDate)
+      ) {
+        throw new BadRequestException('Thông tin lịch hẹn chưa đầy đủ');
+      }
+      const baseTopic = pending.topic ?? 'Tham quan và tư vấn lô đất';
+      const topic =
+        pending.selectedPlotCode &&
+        !this.normalize(baseTopic).includes(
+          this.normalize(pending.selectedPlotCode),
+        )
+          ? `${baseTopic} · Lô ${pending.selectedPlotCode}`
+          : baseTopic;
+      const result = await this.schedule.bookAppointment(userId, {
+        appointmentDate: pending.appointmentDate,
+        startTime: pending.startTime,
+        endTime: pending.endTime,
+        note: [topic, pending.note].filter(Boolean).join(' — '),
+      });
+      const id = this.resultId(result);
+      return {
+        handled: true,
+        intent: 'appointment_booking',
+        assistantMessage: `Đã gửi yêu cầu đặt lịch${id ? ` **#${id}**` : ''} với ban quản lý vào **${pending.startTime}–${pending.endTime}, ngày ${pending.appointmentDate}**. Lịch đang chờ ban quản lý xác nhận.`,
+        uiDirective: {
+          type: 'OPEN_APPOINTMENT_CALENDAR',
+          appointmentId: id,
+          appointmentDate: pending.appointmentDate,
+        },
+      };
+    }
+
+    if (pending.kind === 'memorial_reminder') {
+      if (
+        !pending.title ||
+        !pending.description ||
+        !pending.notifyEmails.length ||
+        (pending.isRecurring && (!pending.remindMonth || !pending.remindDay)) ||
+        (!pending.isRecurring && !pending.specificDate)
+      ) {
+        throw new BadRequestException('Thông tin lịch nhắc chưa đầy đủ');
+      }
+      const result = await this.reminders.create(userId, {
+        title: pending.title,
+        description: pending.description,
+        reminderType: 'memorial',
+        isRecurring: pending.isRecurring,
+        calendarType: pending.calendarType,
+        remindMonth: pending.isRecurring ? pending.remindMonth : undefined,
+        remindDay: pending.isRecurring ? pending.remindDay : undefined,
+        lunarMonth:
+          pending.isRecurring && pending.calendarType === 'lunar'
+            ? pending.remindMonth
+            : undefined,
+        lunarDay:
+          pending.isRecurring && pending.calendarType === 'lunar'
+            ? pending.remindDay
+            : undefined,
+        specificDate: pending.isRecurring ? undefined : pending.specificDate,
+        notifyDaysBefore: pending.notifyDaysBefore,
+        notifyEmail: true,
+        notifyEmails: pending.notifyEmails,
+      });
+      const id = this.resultId(result);
+      const reminderDate = pending.isRecurring
+        ? undefined
+        : pending.specificDate;
+      return {
+        handled: true,
+        intent: 'memorial_reminder',
+        assistantMessage: `Đã lưu lịch nhắc${id ? ` **#${id}**` : ''} **${pending.title}**. Hệ thống sẽ gửi thông báo và email tới **${pending.notifyEmails.join(', ')}** trước ${pending.notifyDaysBefore} ngày.`,
+        uiDirective: {
+          type: 'OPEN_REMINDER_CALENDAR',
+          reminderId: id,
+          reminderDate,
+        },
       };
     }
 
@@ -444,6 +798,11 @@ export class AgentBookingService {
       handled: true,
       intent: 'service_booking',
       assistantMessage: `${(result as { reused?: boolean }).reused ? 'Đơn này đã được ghi nhận trước đó' : 'Đã gửi đơn dịch vụ'}${id ? ` **#${id}**` : ''} **${pending.serviceName ?? ''}** cho lô **${pending.plotCode}** vào ngày **${pending.requestedDate}**. Bộ phận phụ trách sẽ tiếp nhận và cập nhật trạng thái cho bạn.`,
+      uiDirective: {
+        type: 'OPEN_SERVICE_PANEL',
+        serviceTypeId: pending.serviceTypeId,
+        orderId: id,
+      },
     };
   }
 
@@ -640,10 +999,12 @@ export class AgentBookingService {
     }));
   }
 
-  private ownedPlots(userId: number): Promise<OwnedPlot[]> {
-    return this.database.query<OwnedPlot>(
+  getOwnedPlots(userId: number | null): Promise<OwnedPlotContext[]> {
+    if (!userId) return Promise.resolve([]);
+    return this.database.query<OwnedPlotContext>(
       `SELECT DISTINCT p.plot_id AS "plotId", p.plot_code AS "plotCode",
-              z.zone_name AS "zoneName"
+              z.zone_name AS "zoneName", p.direction,
+              p.area_sqm::float AS "areaSqm", p.plot_type AS "plotType"
        FROM ownership_records o
        JOIN plots p ON p.plot_id = o.plot_id AND p.is_deleted = FALSE
        JOIN cemetery_zones z ON z.zone_id = p.zone_id
@@ -683,6 +1044,43 @@ export class AgentBookingService {
     return date >= today;
   }
 
+  private parseIsoDate(value: string) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (!match) return null;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    const date = new Date(`${value}T00:00:00`);
+    if (
+      Number.isNaN(date.getTime()) ||
+      date.getFullYear() !== year ||
+      date.getMonth() + 1 !== month ||
+      date.getDate() !== day
+    ) {
+      return null;
+    }
+    return { year, month, day };
+  }
+
+  private addMinutes(value: string, minutes: number) {
+    const match = /^(\d{2}):(\d{2})$/.exec(value);
+    if (!match) return undefined;
+    const total = Number(match[1]) * 60 + Number(match[2]) + minutes;
+    if (total >= 24 * 60) return '23:59';
+    return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+  }
+
+  private defaultMemorialMessage(
+    customerName: string | null,
+    title: string,
+    dateLabel: string,
+  ) {
+    const greeting = customerName?.trim()
+      ? `Kính gửi gia đình ${customerName.trim()},`
+      : 'Kính gửi gia đình,';
+    return `${greeting}\n\nVĩnh Phúc Viên trân trọng gửi lời nhắc về sự kiện “${title}” vào ${dateLabel}. Mong gia đình có đủ thời gian sắp xếp việc thăm viếng, chuẩn bị những nội dung phù hợp và cùng nhau gìn giữ những ký ức quý giá về người thân.\n\nNếu cần hỗ trợ chăm sóc phần mộ hoặc chuẩn bị cho ngày tưởng niệm, gia đình có thể liên hệ với chúng tôi.`;
+  }
+
   private normalize(value: string) {
     return value
       .normalize('NFD')
@@ -704,7 +1102,10 @@ export class AgentBookingService {
     if (!value || typeof value !== 'object') return false;
     const action = value as { kind?: unknown; stage?: unknown };
     return (
-      (action.kind === 'plot_request' || action.kind === 'service_order') &&
+      (action.kind === 'plot_request' ||
+        action.kind === 'service_order' ||
+        action.kind === 'appointment' ||
+        action.kind === 'memorial_reminder') &&
       (action.stage === 'collecting' ||
         action.stage === 'awaiting_confirmation')
     );

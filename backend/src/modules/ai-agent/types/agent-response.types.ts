@@ -19,11 +19,55 @@ export type AgentPendingAction =
       quotedPrice?: number;
       serviceUnit?: string;
       note?: string;
+    }
+  | {
+      kind: 'appointment';
+      stage: 'collecting' | 'awaiting_confirmation';
+      appointmentDate?: string;
+      startTime?: string;
+      endTime?: string;
+      topic?: string;
+      note?: string;
+      selectedPlotCode?: string;
+    }
+  | {
+      kind: 'memorial_reminder';
+      stage: 'collecting' | 'awaiting_confirmation';
+      title?: string;
+      description?: string;
+      specificDate?: string;
+      remindMonth?: number;
+      remindDay?: number;
+      isRecurring: boolean;
+      calendarType: 'solar' | 'lunar';
+      notifyDaysBefore: number;
+      notifyEmails: string[];
+    };
+
+export type AgentUiDirective =
+  | {
+      type: 'OPEN_SERVICE_PANEL';
+      serviceTypeId?: number;
+      orderId?: number;
+    }
+  | {
+      type: 'OPEN_APPOINTMENT_CALENDAR';
+      appointmentId?: number;
+      appointmentDate?: string;
+    }
+  | {
+      type: 'OPEN_REMINDER_CALENDAR';
+      reminderId?: number;
+      reminderDate?: string;
     };
 
 export interface AgentRequirements {
   budgetMin?: number;
   budgetMax?: number;
+  /** Number of alternative recommendation options the customer wants to see. */
+  recommendationCount?: number;
+  /** True when the customer explicitly asks for a comparison-led response. */
+  comparisonRequested?: boolean;
   numberOfPlots?: number;
   preferredZone?: string;
   preferredDirection?: string;
@@ -42,6 +86,17 @@ export interface AgentRequirements {
   serviceTypeId?: number;
   selectedPlotCode?: string;
   requestedDate?: string;
+  appointmentDate?: string;
+  appointmentStartTime?: string;
+  appointmentEndTime?: string;
+  appointmentTopic?: string;
+  reminderTitle?: string;
+  reminderDescription?: string;
+  reminderDate?: string;
+  reminderRecurring?: boolean;
+  reminderCalendarType?: 'solar' | 'lunar';
+  reminderNotifyDaysBefore?: number;
+  reminderNotifyEmails?: string[];
   note?: string;
   pendingAction?: AgentPendingAction;
 }

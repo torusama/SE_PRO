@@ -23,6 +23,10 @@ const labels: Record<string, string> = {
   preferred_direction: "Hướng ưu tiên",
   preferred_plot_type: "Loại lô ưu tiên",
   preferred_service: "Dịch vụ ưu tiên",
+  preferred_zone: "Khu vực ưu tiên",
+  service_interest: "Dịch vụ quan tâm",
+  consultation_topic_preference: "Chủ đề tư vấn ưu tiên",
+  accessibility_priority: "Ưu tiên khả năng tiếp cận",
   response_detail_preference: "Mức chi tiết câu trả lời",
   created: "Đã tạo",
   updated: "Đã cập nhật",
@@ -33,41 +37,47 @@ const labels: Record<string, string> = {
   restored: "Đã khôi phục",
   signal_recorded: "Đã ghi nhận tín hiệu",
   fallback: "Dùng xếp hạng quy tắc",
-  ml_ranked: "PlotRanker đã xếp hạng",
+  ml_ranked: "Bộ xếp hạng AI đã xử lý",
   rule_ranked: "Xếp hạng theo quy tắc",
   active: "Đang hoạt động",
   training_ready: "Đủ dữ liệu phân tích",
   analytics_only: "Chỉ dùng thống kê",
-  ranker_enabled: "PlotRanker được bật",
+  ranker_enabled: "Bộ xếp hạng AI được bật",
   rule_based: "Quy tắc xác định",
   admin: "Quản trị viên",
   system: "Hệ thống",
-  disabled: "PlotRanker đang tắt",
+  disabled: "Bộ xếp hạng AI đang tắt",
   no_active_model: "Chưa có phiên bản hoạt động",
-  service_unavailable: "Dịch vụ ML không khả dụng",
-  invalid_response: "Kết quả ML không hợp lệ",
-  incomplete_response: "Kết quả ML chưa đầy đủ",
-  request_failed: "Yêu cầu ML thất bại",
+  service_unavailable: "Dịch vụ xếp hạng AI không khả dụng",
+  invalid_response: "Kết quả xếp hạng không hợp lệ",
+  incomplete_response: "Kết quả xếp hạng chưa đầy đủ",
+  request_failed: "Yêu cầu xếp hạng thất bại",
+  "Purchase process": "Quy trình mua lô",
+  "Verified admin update.": "Nội dung đã được quản trị viên xác minh.",
+  "Complete recommendation context.": "Ngữ cảnh đề xuất đã đầy đủ.",
+  "plot-ranker-v2": "Bộ xếp hạng lô phiên bản 2",
+  "rule-based-v1": "Bộ quy tắc xếp hạng phiên bản 1",
 };
 
 const label = (value: string) =>
-  labels[value] ??
-  value
-    .replaceAll("_", " ")
-    .replace(/\b\w/g, (character) => character.toUpperCase());
+  labels[value] ?? (/^[a-z0-9_]+$/i.test(value) ? "Mục hệ thống khác" : value);
 
-const formatDate = (value: string) =>
-  new Intl.DateTimeFormat("vi-VN", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(new Date(value));
+const formatDate = (value: string) => {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "—"
+    : new Intl.DateTimeFormat("vi-VN", {
+        dateStyle: "short",
+        timeStyle: "short",
+      }).format(date);
+};
 
 const eventDescription = (event: LearningAnalytics["recentEvents"][number]) => {
   switch (event.eventType) {
     case "user_memory":
       return "Một khóa ghi nhớ cá nhân đã được cập nhật và vẫn được cô lập theo đúng tài khoản.";
     case "global_knowledge":
-      return "Knowledge Base toàn hệ thống đã ghi nhận một thay đổi có phiên bản và trạng thái kiểm duyệt.";
+      return "Kho tri thức dùng chung đã ghi nhận một thay đổi có phiên bản và trạng thái kiểm duyệt.";
     case "recommendation_signal":
       return "Hệ thống đã lưu một tín hiệu để đánh giá chất lượng đề xuất; tín hiệu này không phải tri thức sự thật.";
     case "ranking_run":
@@ -100,10 +110,11 @@ export default function LearningJournalPanel({
     <div className="learning-journal">
       <header className="learning-journal__header">
         <div>
-          <h2>AI Agent đã ghi nhận và thay đổi những gì?</h2>
+          <h2>Trợ lý AI đã ghi nhận và thay đổi những gì?</h2>
           <p>
             Đây là nhật ký của cơ chế học ở tầng ứng dụng, không phải lịch sử
-            chat của từng người. Mỗi sự kiện đến từ dữ liệu đã lưu trên server.
+            trò chuyện của từng người. Mỗi sự kiện đến từ dữ liệu đã lưu trên
+            máy chủ.
           </p>
         </div>
         <div
@@ -126,12 +137,14 @@ export default function LearningJournalPanel({
 
       <section className="learning-journal__policy">
         <strong>
-          Nhật ký lưu metadata học tập, không lưu lại nội dung chat tại đây.
+          Nhật ký lưu thông tin mô tả hoạt động học tập, không lưu lại nội dung
+          trò chuyện tại đây.
         </strong>
         <p>
-          Bộ nhớ cá nhân chỉ hiện tên khóa; tri thức global hiện trạng thái kiểm
-          duyệt; signal và lượt xếp hạng chỉ hiện thông tin kỹ thuật cần cho
-          audit. Foundation LLM luôn giữ nguyên trọng số.
+          Bộ nhớ cá nhân chỉ hiện loại thông tin; tri thức dùng chung hiện trạng
+          thái kiểm duyệt; phản hồi và lượt xếp hạng chỉ hiện dữ liệu cần cho
+          việc kiểm tra. Mô hình hội thoại không bị huấn luyện lại tại trang
+          này.
         </p>
       </section>
 
@@ -144,7 +157,7 @@ export default function LearningJournalPanel({
           <strong>{numberFormat.format(events.length)}</strong>
         </article>
         <article>
-          <span>Thay đổi memory</span>
+          <span>Thay đổi ghi nhớ cá nhân</span>
           <strong>{numberFormat.format(countByType("user_memory"))}</strong>
         </article>
         <article>
@@ -154,7 +167,7 @@ export default function LearningJournalPanel({
           </strong>
         </article>
         <article>
-          <span>Signal và ranking</span>
+          <span>Phản hồi và lượt xếp hạng</span>
           <strong>
             {numberFormat.format(
               countByType("recommendation_signal") + countByType("ranking_run"),
@@ -171,7 +184,7 @@ export default function LearningJournalPanel({
           <div>
             <h3>Dòng thay đổi gần nhất</h3>
             <p>
-              Sắp xếp theo thời gian server, mới nhất trước. Hiển thị tối đa 30
+              Sắp xếp theo thời gian máy chủ, mới nhất trước. Hiển thị tối đa 30
               sự kiện trong kỳ đã chọn.
             </p>
           </div>
@@ -213,7 +226,11 @@ export default function LearningJournalPanel({
                 </div>
                 <div>
                   <dt>Phiên bản</dt>
-                  <dd>{event.modelVersion || "Không áp dụng"}</dd>
+                  <dd>
+                    {event.modelVersion
+                      ? label(event.modelVersion)
+                      : "Không áp dụng"}
+                  </dd>
                 </div>
               </dl>
             </article>

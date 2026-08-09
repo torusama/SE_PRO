@@ -1101,6 +1101,56 @@
   background: var(--teal-glow);
   box-shadow: 0 0 8px rgba(0, 229, 196, 0.55);
 }
+.map-page .plot-ai-thinking {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 10px;
+  color: #88a0aa;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.map-page .plot-ai-thinking-icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgba(0, 229, 196, 0.25);
+  border-radius: 9px;
+  color: var(--teal-glow);
+  background: rgba(0, 229, 196, 0.08);
+}
+.map-page .plot-ai-thinking-dots {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.map-page .plot-ai-thinking-dots i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #6c818c;
+  animation: map-plot-ai-pulse 1.15s infinite ease-in-out;
+}
+.map-page .plot-ai-thinking-dots i:nth-child(2) {
+  animation-delay: 140ms;
+}
+.map-page .plot-ai-thinking-dots i:nth-child(3) {
+  animation-delay: 280ms;
+}
+@keyframes map-plot-ai-pulse {
+  0%,
+  70%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  35% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
 .map-page .box-label {
   font-size: 10px;
   text-transform: uppercase;

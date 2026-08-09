@@ -1,10 +1,16 @@
-import { IsBoolean, IsOptional, IsString, MaxLength } from 'class-validator';
+import {
+  IsBoolean,
+  IsOptional,
+  IsString,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 
 export class ReviewFeedbackDto {
-  @IsOptional()
   @IsString()
+  @MinLength(5)
   @MaxLength(1000)
-  reviewNote?: string;
+  reviewNote: string;
 
   @IsOptional()
   @IsBoolean()

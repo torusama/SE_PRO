@@ -154,6 +154,14 @@ export class AgentToolRegistryService {
               args.numberOfPlots === undefined
                 ? 1
                 : this.integer(args.numberOfPlots, 'numberOfPlots'),
+            recommendationCount:
+              args.recommendationCount === undefined
+                ? undefined
+                : this.integer(args.recommendationCount, 'recommendationCount'),
+            comparisonRequested:
+              typeof args.comparisonRequested === 'boolean'
+                ? args.comparisonRequested
+                : undefined,
             preferredZone: this.optionalString(args.preferredZone),
             preferredDirection: this.optionalString(args.preferredDirection),
             plotType:
@@ -172,6 +180,10 @@ export class AgentToolRegistryService {
               typeof args.preferNearEntrance === 'boolean'
                 ? args.preferNearEntrance
                 : undefined,
+            excludePlotIds: this.optionalIntegerArray(
+              args.excludePlotIds,
+              'excludePlotIds',
+            ),
           },
           {
             userId: context.userId ?? null,
@@ -224,6 +236,14 @@ export class AgentToolRegistryService {
     return {
       budgetMax,
       numberOfPlots,
+      recommendationCount:
+        args.recommendationCount === undefined
+          ? undefined
+          : this.integer(args.recommendationCount, 'recommendationCount'),
+      comparisonRequested:
+        typeof args.comparisonRequested === 'boolean'
+          ? args.comparisonRequested
+          : undefined,
       budgetMin: this.optionalNumber(args.budgetMin),
       preferredZone: this.optionalString(args.preferredZone),
       preferredDirection: this.optionalString(args.preferredDirection),
@@ -243,6 +263,10 @@ export class AgentToolRegistryService {
         typeof args.preferNearEntrance === 'boolean'
           ? args.preferNearEntrance
           : undefined,
+      excludePlotIds: this.optionalIntegerArray(
+        args.excludePlotIds,
+        'excludePlotIds',
+      ),
     };
   }
 
@@ -281,6 +305,21 @@ export class AgentToolRegistryService {
       throw new BadRequestException(`${name} contains an invalid ID`);
     }
     return [...new Set(values)];
+  }
+
+  private optionalIntegerArray(value: unknown, name: string) {
+    if (value === undefined || value === null) return undefined;
+    if (!Array.isArray(value) || value.length > 100) {
+      throw new BadRequestException(
+        `${name} must be an array of at most 100 IDs`,
+      );
+    }
+    const values = value.map(Number);
+    if (values.some((item) => !Number.isInteger(item) || item <= 0)) {
+      throw new BadRequestException(`${name} contains an invalid ID`);
+    }
+    const unique = [...new Set(values)];
+    return unique.length ? unique : undefined;
   }
 
   private serviceItems(value: unknown) {

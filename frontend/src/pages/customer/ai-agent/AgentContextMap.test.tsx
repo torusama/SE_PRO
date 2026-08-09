@@ -58,14 +58,16 @@ vi.mock("./GuidedTourMap", async () => {
       React.useEffect(() => {
         onFocusedPlotsChange?.(plots);
       }, [onFocusedPlotsChange]);
-      return <>
-        <span data-testid="route-plot">
-          {routePlot?.plotCode ?? "no-route"}
-        </span>
-        <button type="button" onClick={() => onPlotSelect?.(plots[1])}>
-          Chọn lô thứ hai
-        </button>
-      </>;
+      return (
+        <>
+          <span data-testid="route-plot">
+            {routePlot?.plotCode ?? "no-route"}
+          </span>
+          <button type="button" onClick={() => onPlotSelect?.(plots[1])}>
+            Chọn lô thứ hai
+          </button>
+        </>
+      );
     },
   };
 });
@@ -125,11 +127,11 @@ describe("AgentContextMap selected plot card", () => {
     expect(screen.getByTestId("route-plot")).toHaveTextContent("A-02-001");
     expect(screen.queryByText("Hàng 02 · ô 1")).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Xem lại thông tin" }),
+      screen.getByRole("button", { name: "Quay lại thông tin lô" }),
     ).toBeInTheDocument();
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Xem lại thông tin" }),
+      screen.getByRole("button", { name: "Quay lại thông tin lô" }),
     );
     expect(screen.getByText("Hàng 02 · ô 1")).toBeInTheDocument();
 

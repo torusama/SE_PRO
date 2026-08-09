@@ -59,6 +59,7 @@ function setup(withData = true) {
             knowledgeUpdates: 1,
             signals: 3,
             recommendations: 4,
+            aiAccesses: 6,
           },
           {
             date: '2026-07-29',
@@ -66,6 +67,7 @@ function setup(withData = true) {
             knowledgeUpdates: 3,
             signals: 3,
             recommendations: 16,
+            aiAccesses: 9,
           },
         ];
       }
@@ -147,6 +149,12 @@ describe('LearningAnalyticsService', () => {
       count: 8,
     });
     expect(result.timeline).toHaveLength(2);
+    expect(result.timeline.map((item) => item.aiAccesses)).toEqual([6, 9]);
+    const timelineQuery = database.query.mock.calls.find(([sql]) =>
+      String(sql).includes('WITH reporting_days'),
+    )?.[0];
+    expect(timelineQuery).toContain('FROM ai_messages');
+    expect(timelineQuery).toContain("role = 'user'");
     expect(result.recentUpdates[0]).toMatchObject({
       versionId: 91,
       actionType: 'activated',

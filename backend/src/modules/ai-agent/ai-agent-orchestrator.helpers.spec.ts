@@ -1,6 +1,7 @@
 import { AgentPlan } from './agent-planner';
 import {
   extractDeterministicRequirements,
+  extractRequestedRecommendationCount,
   resolvePendingBookingReply,
 } from './ai-agent-orchestrator.service';
 import { AgentPendingAction } from './types/agent-response.types';
@@ -39,6 +40,58 @@ describe('AI Agent deterministic requirement extraction', () => {
       ),
     ).toMatchObject({
       preferNearEntrance: true,
+    });
+  });
+
+  it.each([
+    ['So sánh 2 phương án đất nghĩa trang phù hợp ngân sách 300 triệu', 2],
+    ['Gợi ý cho mình ba lô đang trống', 3],
+    ['Cho xem 4 lựa chọn ở khu A', 4],
+  ])('extracts the requested alternative count from "%s"', (message, count) => {
+    expect(extractRequestedRecommendationCount(message)).toBe(count);
+  });
+
+  it('keeps comparison count separate from acquisition quantity', () => {
+    expect(
+      extractDeterministicRequirements(
+        'So sánh 2 phương án đất nghĩa trang phù hợp ngân sách 300 triệu',
+      ),
+    ).toMatchObject({
+      budgetMax: 300_000_000,
+      recommendationCount: 2,
+      comparisonRequested: true,
+    });
+    expect(
+      extractRequestedRecommendationCount('Mình cần mua 2 lô liền kề'),
+    ).toBeUndefined();
+  });
+
+  it('extracts appointment data without mistaking the date for a birth profile', () => {
+    expect(
+      extractDeterministicRequirements(
+        'Đặt lịch gặp ban quản lý để xem lô A-01-001 ngày 20/08/2026 lúc 09:00.',
+      ),
+    ).toMatchObject({
+      selectedPlotCode: 'A-01-001',
+      appointmentDate: '2026-08-20',
+      appointmentStartTime: '09:00',
+      appointmentTopic: 'Tham quan và tư vấn lô A-01-001',
+      birthDate: undefined,
+    });
+  });
+
+  it('extracts a memorial subject, recurrence and recipients for safe fallback', () => {
+    expect(
+      extractDeterministicRequirements(
+        'Tạo lịch nhắc tưởng niệm ông nội ngày 20/08/2026 hằng năm gửi email Family@Example.com.',
+      ),
+    ).toMatchObject({
+      reminderTitle: 'Tưởng niệm ông nội',
+      reminderDate: '2026-08-20',
+      reminderRecurring: true,
+      reminderCalendarType: 'solar',
+      reminderNotifyEmails: ['family@example.com'],
+      birthDate: undefined,
     });
   });
 });
