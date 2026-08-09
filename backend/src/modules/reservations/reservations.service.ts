@@ -294,7 +294,10 @@ export class ReservationsService implements OnModuleInit {
 
   async cancel(userId: number, id: number) {
     return this.database.transaction(async (client) => {
-      await this.getOwnedRequest(client, userId, id);
+      const request = await this.getOwnedRequest(client, userId, id);
+      if (!['draft', 'pending', 'submitted'].includes(request.status)) {
+        throw new BadRequestException('Chỉ có thể hủy yêu cầu đang chờ xử lý');
+      }
       await client.query(
         `UPDATE plots SET status = 'available', reserved_until = NULL, updated_at = NOW()
          WHERE plot_id IN (SELECT plot_id FROM request_plots WHERE request_id = $1)

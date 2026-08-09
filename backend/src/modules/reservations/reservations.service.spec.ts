@@ -41,6 +41,27 @@ function createService(handler?: QueryHandler, adjacency?: any, audit?: any) {
 }
 
 describe('ReservationsService', () => {
+  it.each(['approved', 'rejected', 'cancelled'])(
+    'does not allow a customer to cancel a %s request',
+    async (status) => {
+      const { client, service } = createService((sql) => {
+        if (sql.includes('FROM reservation_requests') && sql.includes('FOR UPDATE')) {
+          return result([{ request_id: 10, user_id: 7, status }]);
+        }
+        return result();
+      });
+
+      await expect(service.cancel(7, 10)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      expect(
+        client.query.mock.calls.some(([sql]) =>
+          String(sql).includes("SET status = 'cancelled'"),
+        ),
+      ).toBe(false);
+    },
+  );
+
   it('paginates and filters admin requests by status, type and AI source', async () => {
     const { database, service } = createService();
     database.queryOne.mockResolvedValue({ total: '1' });

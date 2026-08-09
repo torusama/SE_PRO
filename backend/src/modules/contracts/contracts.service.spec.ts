@@ -33,6 +33,15 @@ function setup(handler?: (sql: string, params?: unknown[]) => any) {
 }
 
 describe('ContractsService admin operations', () => {
+  it('blocks direct activation through the generic status endpoint', async () => {
+    const { database, service } = setup();
+
+    await expect(service.updateStatus(1, 'active')).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(database.queryOne).not.toHaveBeenCalled();
+  });
+
   it('allows an unsigned legacy active contract to adopt the new inheritance template', async () => {
     const legacyBase =
       'ĐIỀU 1. ĐỐI TƯỢNG\nNội dung\n\nĐIỀU 3. QUYỀN VÀ NGHĨA VỤ\nGiữ nguyên\n\nĐIỀU 6. THÔNG TIN CŨ\n[ĐỂ TRỐNG - CHỈ ADMIN CẬP NHẬT]';
