@@ -6,6 +6,7 @@ import { api } from '@/lib/api'
 import { useAuthStore } from '@/store/authStore'
 import { ROUTES } from '@/constants/routes'
 import { nextLunarOccurrence } from '@/lib/lunarCalendar'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import './RemindersPage.css'
 
 interface ApiResponse<T> {
@@ -183,8 +184,8 @@ export default function RemindersPage() {
   const [formError, setFormError] = useState('')
   const [formOk, setFormOk] = useState('')
 
-  async function loadAll() {
-    setLoading(true)
+  async function loadAll(silent = false) {
+    if (!silent) setLoading(true)
     setError('')
     try {
       if (!isAuthenticated) {
@@ -212,7 +213,7 @@ export default function RemindersPage() {
     } catch (err) {
       setError(getErrorMessage(err))
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
@@ -220,6 +221,10 @@ export default function RemindersPage() {
     void loadAll()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated])
+
+  useRealtimeRefresh(['reminders', 'contracts', 'ownership'], () =>
+    loadAll(true),
+  )
 
   // daysUntil "hiệu lực": ưu tiên giá trị backend trả về, nhưng với nhắc lịch
   // âm lịch thì luôn tính lại phía client để chắc chắn đúng năm hiện tại.

@@ -7,6 +7,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { api } from "@/lib/api";
+import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
 import {
   CEMETERY_ZONES,
   CEMETERY_ZONE_LAYOUT,
@@ -293,13 +294,12 @@ export default function MapManagementPage() {
   }, []);
 
   useEffect(() => {
-    const initialLoad = window.setTimeout(() => void loadData(), 0);
-    const interval = window.setInterval(() => void loadData(true), 30000);
-    return () => {
-      window.clearTimeout(initialLoad);
-      window.clearInterval(interval);
-    };
+    queueMicrotask(() => void loadData());
   }, [loadData]);
+
+  useRealtimeRefresh(["plots", "reservations", "ownership"], () =>
+    loadData(true),
+  );
 
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
@@ -594,11 +594,6 @@ export default function MapManagementPage() {
       <header className="admin-map-page-header">
         <div>
           <h1>Bản đồ 2D quản trị</h1>
-        </div>
-        <div className="admin-map-header-actions">
-          <button onClick={() => void loadData()} disabled={loading}>
-            ↻ Làm mới
-          </button>
         </div>
       </header>
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../../../lib/api";
+import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
 import LearningAnalyticsPanel, {
   type LearningAnalytics,
 } from "./LearningAnalyticsPanel";
@@ -101,8 +102,8 @@ export default function AgentAdminPage() {
   const [busy, setBusy] = useState<string>();
   const [error, setError] = useState<string>();
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  const loadData = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     setError(undefined);
     const results = await Promise.allSettled([
       api.get("/admin/ai-agent/feedback"),
@@ -147,12 +148,14 @@ export default function AgentAdminPage() {
         `Không tải được: ${failed.join(", ")}. Các phần còn lại vẫn sử dụng bình thường.`,
       );
     }
-    setLoading(false);
+    if (!silent) setLoading(false);
   }, [analyticsDays]);
 
   useEffect(() => {
-    void loadData();
+    queueMicrotask(() => void loadData());
   }, [loadData]);
+
+  useRealtimeRefresh(["ai"], () => loadData(true));
 
   const reviewFeedback = async (
     item: Feedback,

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import DemoPaymentPanel from "@/components/payment/DemoPaymentPanel";
+import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
 import "./ServiceManagementPage.css";
 
 type OrderStatus =
@@ -219,6 +220,11 @@ export default function ServiceManagementPage() {
     window.setTimeout(() => setNotice(""), 3500);
   }
 
+  useRealtimeRefresh(["services", "users"], async () => {
+    await loadOrders(true);
+    if (selected) await openDetail(selected.id);
+  });
+
   return (
     <div className="service-admin">
       <header className="service-admin__header">
@@ -229,13 +235,6 @@ export default function ServiceManagementPage() {
             Theo dõi, phân công và lưu lại toàn bộ quá trình phục vụ khách hàng.
           </p>
         </div>
-        <button
-          className="service-admin__refresh"
-          onClick={() => void loadOrders()}
-          disabled={loading}
-        >
-          {loading ? "Đang làm mới…" : "Làm mới danh sách"}
-        </button>
       </header>
 
       {notice && (

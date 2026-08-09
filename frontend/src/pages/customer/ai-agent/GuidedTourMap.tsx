@@ -10,6 +10,7 @@ import {
   type WheelEvent as ReactWheelEvent,
 } from 'react'
 import { API_BASE_URL } from '@/lib/api'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import { getCemeteryRoutePoints } from '@/lib/cemeteryMapRoute'
 import {
   CLUSTER_GROUP_BACKDROPS,
@@ -116,6 +117,8 @@ function GuidedTourMap({
       })
     return () => controller.abort()
   }, [reloadKey])
+
+  useRealtimeRefresh(['plots'], () => setReloadKey((current) => current + 1))
 
   const activeIds = useMemo(
     () => new Set(activeStep.plotIds),

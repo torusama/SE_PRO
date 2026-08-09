@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
+import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
 import {
   composeContractDocument,
   createContractPdfBlob,
@@ -425,8 +426,8 @@ export default function RequestsPage() {
   const [files, setFiles] = useState<File[]>([]);
   const [evidenceError, setEvidenceError] = useState("");
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     setError("");
     try {
       const [requestResponse, appointmentResponse, contractResponse] =
@@ -447,7 +448,7 @@ export default function RequestsPage() {
     } catch (caught) {
       setError(getError(caught));
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -491,16 +492,27 @@ export default function RequestsPage() {
       setSelectedId(target.id);
     });
   }, [requestedRequestId, requests]);
+  const loadDetail = useCallback(async (id: number) => {
+    try {
+      const response =
+        await api.get<{ data: RequestItem }>(`/admin/reservations/${id}`);
+      setDetail(response.data.data);
+      setAdminNote(response.data.data.adminNote ?? "");
+    } catch (caught) {
+      setError(getError(caught));
+    }
+  }, []);
   useEffect(() => {
-    if (!selectedId) return;
-    void api
-      .get<{ data: RequestItem }>(`/admin/reservations/${selectedId}`)
-      .then((response) => {
-        setDetail(response.data.data);
-        setAdminNote(response.data.data.adminNote ?? "");
-      })
-      .catch((caught) => setError(getError(caught)));
-  }, [selectedId]);
+    if (selectedId) queueMicrotask(() => void loadDetail(selectedId));
+  }, [loadDetail, selectedId]);
+
+  useRealtimeRefresh(
+    ["reservations", "appointments", "contracts", "ownership", "plots"],
+    async () => {
+      await load(true);
+      if (selectedId) await loadDetail(selectedId);
+    },
+  );
 
   const current = detail?.id === selectedId ? detail : undefined;
   const requestAppointments = appointments
@@ -822,13 +834,6 @@ export default function RequestsPage() {
             và quyền sở hữu.
           </p>
         </div>
-        <button
-          className="secondary-button"
-          onClick={() => void load()}
-          disabled={loading}
-        >
-          Làm mới
-        </button>
       </header>
       <div className="request-type-tabs">
         <button

@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -13,6 +14,7 @@ import { EmailService } from '../email/email.service';
 import { SessionsService } from '../sessions/sessions.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { RealtimeService } from '../realtime/realtime.service';
 
 interface RequestInfo {
   ip?: string;
@@ -33,6 +35,7 @@ export class AuthService {
     private readonly config: ConfigService,
     private readonly sessionsService: SessionsService,
     private readonly emailService: EmailService,
+    @Optional() private readonly realtime?: RealtimeService,
   ) {}
 
   async sendRegistrationOtp(rawEmail: string) {
@@ -370,6 +373,7 @@ export class AuthService {
 
     // Đăng xuất khỏi mọi phiên hiện tại để đảm bảo an toàn sau khi đổi mật khẩu.
     await this.sessionsService.revokeOtherSessions(row.user_id, null);
+    await this.realtime?.disconnectInvalidUserSockets(row.user_id);
 
     return { reset: true };
   }
@@ -409,6 +413,7 @@ export class AuthService {
       expiresIn: (this.config.get<string>('jwtExpiresIn') ?? '1d') as any,
     });
     await this.sessionsService.createSession(user.user_id, jti, requestInfo);
+    this.realtime?.publishToUser(user.user_id, ['sessions']);
 
     const isProfileComplete = Boolean(
       user.full_name &&

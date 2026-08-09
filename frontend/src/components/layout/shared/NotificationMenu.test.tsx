@@ -15,8 +15,18 @@ const apiMocks = vi.hoisted(() => ({
   patch: vi.fn(),
   delete: vi.fn(),
 }));
+const realtimeMock = vi.hoisted(() => ({
+  topics: [] as string[],
+  refresh: undefined as undefined | (() => void | Promise<void>),
+}));
 
 vi.mock("@/lib/api", () => ({ api: apiMocks }));
+vi.mock("@/hooks/useRealtimeRefresh", () => ({
+  useRealtimeRefresh: (topics: string[], refresh: () => void | Promise<void>) => {
+    realtimeMock.topics = topics;
+    realtimeMock.refresh = refresh;
+  },
+}));
 
 const notifications = [
   {
@@ -41,6 +51,8 @@ const notifications = [
 
 describe("NotificationMenu", () => {
   beforeEach(() => {
+    realtimeMock.topics = [];
+    realtimeMock.refresh = undefined;
     apiMocks.get.mockResolvedValue({
       data: { success: true, data: notifications },
     });
@@ -132,17 +144,10 @@ describe("NotificationMenu", () => {
     ).toBeInTheDocument();
   });
 
-  it("refreshes from the real API every second without overlapping requests", async () => {
-    vi.useFakeTimers();
-    let resolveRefresh: ((value: unknown) => void) | undefined;
+  it("refreshes from the API when the realtime notifications topic changes", async () => {
     apiMocks.get
       .mockResolvedValueOnce({ data: { success: true, data: notifications } })
-      .mockImplementation(
-        () =>
-          new Promise((resolve) => {
-            resolveRefresh = resolve;
-          }),
-      );
+      .mockResolvedValueOnce({ data: { success: true, data: [] } });
 
     render(
       <MemoryRouter>
@@ -150,24 +155,12 @@ describe("NotificationMenu", () => {
       </MemoryRouter>,
     );
 
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(0);
-    });
-    expect(apiMocks.get).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(apiMocks.get).toHaveBeenCalledTimes(1));
+    expect(realtimeMock.topics).toEqual(["notifications"]);
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(1_000);
+      await realtimeMock.refresh?.();
     });
     expect(apiMocks.get).toHaveBeenCalledTimes(2);
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1_000);
-    });
-    expect(apiMocks.get).toHaveBeenCalledTimes(2);
-
-    await act(async () => {
-      resolveRefresh?.({ data: { success: true, data: notifications } });
-      await Promise.resolve();
-    });
   });
 });

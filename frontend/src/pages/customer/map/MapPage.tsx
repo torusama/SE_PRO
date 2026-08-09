@@ -1,5 +1,6 @@
 // src/pages/customer/map/MapPage.tsx
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -10,6 +11,7 @@ import {
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ROUTES } from "@/constants/routes";
 import { API_BASE_URL, api } from "@/lib/api";
+import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
 import {
   buildCemeteryDirection,
   getCemeteryRoutePoints,
@@ -669,6 +671,8 @@ export default function MapPage() {
   const [myReservations, setMyReservations] = useState<CustomerReservation[]>(
     [],
   );
+  const mapRequestRef = useRef<AbortController | null>(null);
+  const reservationRequestRef = useRef(0);
 
   // Khai báo trước khi được dùng trong các useEffect bên dưới (tránh lỗi
   // "used before declared" của react-hooks/immutability).
@@ -816,75 +820,80 @@ export default function MapPage() {
     }
   }
 
-  useEffect(() => {
-    let cancelled = false;
+  const loadMap = useCallback(async () => {
+    mapRequestRef.current?.abort();
     const controller = new AbortController();
+    mapRequestRef.current = controller;
+    setLoadError("");
 
-    const refreshMap = () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/plots/map`, {
+        signal: controller.signal,
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = (await response.json()) as
+        | BackendMapPlot[]
+        | { data?: BackendMapPlot[] };
+      if (controller.signal.aborted) return;
+      const raw = Array.isArray(data) ? data : data.data;
+      const fullMap = buildFullMapPlots((raw || []).map(mapBackendPlot));
+      setPlots(fullMap);
+      setSelectedPlot(
+        (current) =>
+          (current && fullMap.find((plot) => plot.id === current.id)) || null,
+      );
+    } catch {
+      if (controller.signal.aborted) return;
+      setPlots(INITIAL_PLANNED_PLOTS);
+      setSelectedPlot((current) => current || null);
       setLoadError("");
-      fetch(`${API_BASE_URL}/plots/map`, { signal: controller.signal })
-        .then((response) => {
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          return response.json() as Promise<
-            BackendMapPlot[] | { data?: BackendMapPlot[] }
-          >;
-        })
-        .then((data) => {
-          if (cancelled) return;
-          const raw = Array.isArray(data) ? data : data.data;
-          const mapped = (raw || []).map(mapBackendPlot);
-          const fullMap = buildFullMapPlots(mapped);
-          setPlots(fullMap);
-          setSelectedPlot(
-            (current) =>
-              (current && fullMap.find((plot) => plot.id === current.id)) ||
-              null,
-          );
-        })
-        .catch((error: Error) => {
-          if (cancelled || error.name === "AbortError") return;
-          setPlots(INITIAL_PLANNED_PLOTS);
-          setSelectedPlot((current) => current || null);
-          setLoadError("");
-        })
-        .finally(() => {
-          if (!cancelled) setIsLoading(false);
-        });
-    };
-
-    refreshMap();
-    const interval = window.setInterval(refreshMap, 30000);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-      controller.abort();
-    };
+    } finally {
+      if (!controller.signal.aborted) setIsLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
+    const initialLoad = window.setTimeout(() => void loadMap(), 0);
+    return () => {
+      window.clearTimeout(initialLoad);
+      mapRequestRef.current?.abort();
+    };
+  }, [loadMap]);
+
+  useRealtimeRefresh(["plots"], loadMap);
+
+  const loadMyReservations = useCallback(async () => {
+    const requestId = ++reservationRequestRef.current;
     if (!token) {
       // Đồng bộ với nguồn dữ liệu ngoài (token đăng nhập): khi người dùng
       // đăng xuất / mất token thì danh sách yêu cầu của khách phải được xoá.
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- reset state to sync with auth token going away
       setMyReservations([]);
       return;
     }
 
-    api
-      .get<{ data?: CustomerReservation[] }>("/my/reservations")
-      .then((response) => {
-        if (!cancelled) setMyReservations(response.data.data ?? []);
-      })
-      .catch(() => {
-        if (!cancelled) setMyReservations([]);
-      });
-
-    return () => {
-      cancelled = true;
-    };
+    try {
+      const response =
+        await api.get<{ data?: CustomerReservation[] }>("/my/reservations");
+      if (requestId === reservationRequestRef.current) {
+        setMyReservations(response.data.data ?? []);
+      }
+    } catch {
+      if (requestId === reservationRequestRef.current) setMyReservations([]);
+    }
   }, [token]);
+
+  useEffect(() => {
+    const initialLoad = window.setTimeout(
+      () => void loadMyReservations(),
+      0,
+    );
+    return () => {
+      window.clearTimeout(initialLoad);
+      reservationRequestRef.current += 1;
+    };
+  }, [loadMyReservations]);
+
+  useRealtimeRefresh(["reservations"], loadMyReservations);
 
   const zones = useMemo(() => {
     return ZONES.filter((zone) => zone.mode === selectionMode).map((zone) => ({

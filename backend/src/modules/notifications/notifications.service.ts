@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { PoolClient } from 'pg';
 import { DatabaseService } from '../../database/database.service';
@@ -12,12 +13,14 @@ import {
 import { paginate } from '../../common/interfaces/paginated-response.interface';
 import { AdminAuditService } from '../admin-audit/admin-audit.service';
 import type { AdminRequestContext } from '../../common/decorators/admin-request-context.decorator';
+import { RealtimeService } from '../realtime/realtime.service';
 
 @Injectable()
 export class NotificationsService {
   constructor(
     private readonly database: DatabaseService,
     private readonly audit?: AdminAuditService,
+    @Optional() private readonly realtime?: RealtimeService,
   ) {}
 
   list(userId: number) {
@@ -87,7 +90,7 @@ export class NotificationsService {
     relatedEntityType?: string,
     relatedEntityId?: number,
   ) {
-    return this.database.queryOne(
+    const notification = await this.database.queryOne(
       `INSERT INTO notifications (user_id, type, title, message, related_entity_type, related_entity_id)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING notification_id AS id, type, title, message`,
@@ -100,6 +103,8 @@ export class NotificationsService {
         relatedEntityId ?? null,
       ],
     );
+    this.realtime?.publishToUser(userId, ['notifications']);
+    return notification;
   }
 
   async createInAppWithClient(

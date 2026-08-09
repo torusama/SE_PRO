@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
+import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
 import "../AdminCorePages.css";
 import "./DeceasedProfilesAdminPage.css";
 
@@ -56,15 +57,15 @@ export default function DeceasedProfilesAdminPage() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
-  const load = useCallback(async () => {
-    setLoading(true); setError("");
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true); setError("");
     try {
       const response = await api.get("/admin/deceased", { params: { page: 1, pageSize: 100 } });
       const rows: Profile[] = response.data.data?.items ?? [];
       setProfiles(rows);
       setSelectedId((current) => rows.some((item) => item.id === (requestedId ?? current)) ? (requestedId ?? current) : rows[0]?.id);
     } catch (caught) { setError(errorMessage(caught)); }
-    finally { setLoading(false); }
+    finally { if (!silent) setLoading(false); }
   }, [requestedId]);
   useEffect(() => { queueMicrotask(() => void load()); }, [load]);
   useEffect(() => {
@@ -77,6 +78,13 @@ export default function DeceasedProfilesAdminPage() {
         .finally(() => setBusy(""));
     });
   }, [selectedId]);
+  useRealtimeRefresh(["deceased", "plots"], async () => {
+    await load(true);
+    if (selectedId) {
+      const response = await api.get(`/deceased/${selectedId}`);
+      setDetail(response.data.data);
+    }
+  });
 
   const filtered = useMemo(() => {
     const keyword = search.trim().toLocaleLowerCase("vi");
@@ -129,7 +137,6 @@ export default function DeceasedProfilesAdminPage() {
         <h1>Hồ sơ người đã khuất</h1>
         <p>Kho lưu trữ và kiểm duyệt hồ sơ người đã khuất, tra cứu theo lô đất và trạng thái xác minh.</p>
       </div>
-      <button className="admin-secondary-button" onClick={() => void load()} disabled={loading}>Làm mới</button>
     </header>
 
     {error && <div className="admin-error-banner">{error}</div>}

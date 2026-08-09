@@ -7,6 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { ROUTES } from "@/constants/routes";
 import { notificationTargetRoute } from "@/components/layout/shared/notification-menu-utils";
+import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
 import "./NotificationPage.css";
 
 interface ApiResponse<T> {
@@ -241,17 +242,10 @@ export default function NotificationPage() {
   }
 
   useEffect(() => {
-    const initialLoadId = window.setTimeout(() => void load(), 0);
-    const refreshId = window.setInterval(() => void load(true), 1_000);
-    const handleFocus = () => void load(true);
-    window.addEventListener("focus", handleFocus);
-
-    return () => {
-      window.clearTimeout(initialLoadId);
-      window.clearInterval(refreshId);
-      window.removeEventListener("focus", handleFocus);
-    };
+    queueMicrotask(() => void load());
   }, []);
+
+  useRealtimeRefresh(["notifications"], () => load(true));
 
   const unreadCount = useMemo(
     () => items.filter((n) => !n.isRead).length,

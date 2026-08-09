@@ -32,7 +32,6 @@
   font-size: 13px;
 }
 
-.service-admin__refresh,
 .service-primary {
   display: inline-flex;
   align-items: center;
@@ -49,7 +48,6 @@
   cursor: pointer;
 }
 
-.service-admin__refresh:disabled,
 .service-primary:disabled {
   cursor: wait;
   opacity: 0.65;

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import { composeContractDocument, downloadContractPdf } from "@/lib/contractPdf";
+import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
 import "../AdminCorePages.css";
 import "./ContractsPage.css";
 
@@ -42,15 +43,15 @@ export default function ContractsPage() {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
 
-  const load = useCallback(async () => {
-    setLoading(true); setError("");
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true); setError("");
     try {
       const response = await api.get("/admin/contracts", { params: { page: 1, pageSize: 100 } });
       const rows: Contract[] = response.data.data?.items ?? [];
       setContracts(rows);
       setSelectedId((current) => rows.some((item) => item.id === (requestedId ?? current)) ? (requestedId ?? current) : rows[0]?.id);
     } catch (caught) { setError(errorMessage(caught)); }
-    finally { setLoading(false); }
+    finally { if (!silent) setLoading(false); }
   }, [requestedId]);
   useEffect(() => { queueMicrotask(() => void load()); }, [load]);
   useEffect(() => {
@@ -60,6 +61,13 @@ export default function ContractsPage() {
       void api.get(`/admin/contracts/${selectedId}`).then((response) => setDetail(response.data.data)).catch((caught) => setError(errorMessage(caught))).finally(() => setBusy(""));
     });
   }, [selectedId]);
+  useRealtimeRefresh(["contracts", "ownership", "transfers"], async () => {
+    await load(true);
+    if (selectedId) {
+      const response = await api.get(`/admin/contracts/${selectedId}`);
+      setDetail(response.data.data);
+    }
+  });
 
   const filtered = useMemo(() => {
     const keyword = search.trim().toLocaleLowerCase("vi");
@@ -90,7 +98,7 @@ export default function ContractsPage() {
   }
 
   return <div className="admin-page contracts-archive" style={{ display: "grid", gap: 18 }}>
-    <header className="admin-page-header"><div><h1>Hợp đồng & Sở hữu</h1><p>Kho lưu trữ và tra cứu hợp đồng, chứng từ thanh toán, bản ký offline và lịch sử sở hữu.</p></div><button className="admin-secondary-button" onClick={() => void load()} disabled={loading}>Làm mới</button></header>
+    <header className="admin-page-header"><div><h1>Hợp đồng & Sở hữu</h1><p>Kho lưu trữ và tra cứu hợp đồng, chứng từ thanh toán, bản ký offline và lịch sử sở hữu.</p></div></header>
     {error && <div className="admin-error-banner">{error}</div>}
     <div style={{ display: "grid", gridTemplateColumns: "340px minmax(0, 1fr)", gap: 16 }}>
       <aside className="admin-panel" style={{ padding: 12, alignSelf: "start" }}>

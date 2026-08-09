@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { formatCalendarDate } from "@/lib/utils";
+import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
 import "./AppointmentManagementPage.css";
 
 type Appointment = { id: number; hostName: string; requesterName: string; appointmentDate: string; startTime: string; endTime: string; status: string; note: string | null };
@@ -10,6 +11,7 @@ export default function AppointmentManagementPage() {
   const [items,setItems]=useState<Appointment[]>([]); const [loading,setLoading]=useState(true); const [error,setError]=useState("");
   const load=useCallback(async()=>{ try{setError("");const r=await api.get("/schedule/admin/appointments");setItems(r.data.data??[])}catch{setError("Không thể tải danh sách lịch hẹn.")}finally{setLoading(false)} },[]);
   useEffect(()=>{void load()},[load]);
+  useRealtimeRefresh(["appointments"],load);
   async function update(id:number,status:"confirmed"|"cancelled"|"completed"){try{await api.patch(`/schedule/appointments/${id}/status`,{status});await load()}catch{setError("Không thể cập nhật lịch hẹn.")}}
   const pending=items.filter(x=>x.status==="pending").length;
   return <main className="appointment-admin"><header><div><p>QUẢN LÝ CUỘC HẸN</p><h1>Phê duyệt lịch hẹn</h1></div><div className="pending-count"><b>{pending}</b><span>đang chờ</span></div></header>

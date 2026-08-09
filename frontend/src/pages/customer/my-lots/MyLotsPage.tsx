@@ -6,6 +6,7 @@ import {
 } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
+import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
 
 type ReservationType = "reserve" | "purchase";
 type ReservationStatus =
@@ -359,8 +360,8 @@ export default function MyLotsPage() {
     };
   }, [nextAppointment, overview]);
 
-  async function loadData() {
-    setLoading(true);
+  async function loadData(silent = false) {
+    if (!silent) setLoading(true);
     setError("");
 
     try {
@@ -380,13 +381,18 @@ export default function MyLotsPage() {
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }
 
   useEffect(() => {
     queueMicrotask(() => void loadData());
   }, []);
+
+  useRealtimeRefresh(
+    ["reservations", "appointments", "contracts", "ownership", "services", "transfers"],
+    () => loadData(true),
+  );
 
   useEffect(() => {
     if (loading || !targetAppointmentId) return;
@@ -509,23 +515,15 @@ export default function MyLotsPage() {
             </p>
           </div>
 
-          <div className="lots-refresh-area">
+          <div className="lots-sync-status" aria-live="polite">
             <span>
               {lastUpdated
-                ? `Cập nhật lúc ${new Intl.DateTimeFormat("vi-VN", {
+                ? `Tự động đồng bộ lúc ${new Intl.DateTimeFormat("vi-VN", {
                     hour: "2-digit",
                     minute: "2-digit",
                   }).format(lastUpdated)}`
-                : "Chưa cập nhật dữ liệu"}
+                : "Đang đồng bộ dữ liệu"}
             </span>
-            <button
-              type="button"
-              className="lots-refresh-button"
-              onClick={() => void loadData()}
-              disabled={loading}
-            >
-              {loading ? "Đang cập nhật" : "Làm mới dữ liệu"}
-            </button>
           </div>
         </header>
 
@@ -1146,7 +1144,7 @@ const pageStyles = `
     line-height: 1.75;
   }
 
-  .lots-refresh-area {
+  .lots-sync-status {
     display: flex;
     min-width: 192px;
     flex-direction: column;
@@ -1154,40 +1152,16 @@ const pageStyles = `
     gap: 10px;
   }
 
-  .lots-refresh-area > span {
+  .lots-sync-status > span {
     color: #6f8580;
     font-size: 12px;
   }
 
-  .lots-refresh-button,
   .lots-error button,
   .lots-document-button {
     font: inherit;
   }
 
-  .lots-refresh-button {
-    min-height: 42px;
-    padding: 0 16px;
-    border: 1px solid rgba(202, 170, 100, 0.34);
-    border-radius: 9px;
-    color: #e8d49e;
-    background: rgba(202, 170, 100, 0.06);
-    font-size: 13px;
-    font-weight: 700;
-    cursor: pointer;
-    transition:
-      transform 180ms ease,
-      border-color 180ms ease,
-      background-color 180ms ease;
-  }
-
-  .lots-refresh-button:hover:not(:disabled) {
-    transform: translateY(-1px);
-    border-color: rgba(202, 170, 100, 0.58);
-    background: rgba(202, 170, 100, 0.1);
-  }
-
-  .lots-refresh-button:disabled,
   .lots-document-button:disabled {
     opacity: 0.58;
     cursor: wait;
@@ -1871,12 +1845,12 @@ const pageStyles = `
       flex-direction: column;
     }
 
-    .lots-refresh-area {
+    .lots-sync-status {
       width: 100%;
       align-items: stretch;
     }
 
-    .lots-refresh-area > span {
+    .lots-sync-status > span {
       text-align: left;
     }
 

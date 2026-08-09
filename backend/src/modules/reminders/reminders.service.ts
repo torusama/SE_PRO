@@ -3,6 +3,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { DatabaseService } from '../../database/database.service';
@@ -12,6 +13,7 @@ import { EmailService } from '../email/email.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateReminderDto } from './dto/create-reminder.dto';
 import { UpdateReminderDto } from './dto/update-reminder.dto';
+import { RealtimeService } from '../realtime/realtime.service';
 
 interface ReminderRow {
   id: number;
@@ -61,6 +63,7 @@ export class RemindersService {
     private readonly database: DatabaseService,
     private readonly notificationsService: NotificationsService,
     private readonly emailService: EmailService,
+    @Optional() private readonly realtime?: RealtimeService,
   ) {}
 
   async create(userId: number, dto: CreateReminderDto) {
@@ -512,6 +515,10 @@ export class RemindersService {
         `UPDATE reminders SET last_sent_at = NOW(), last_sent_year = $2
          WHERE reminder_id = $1`,
         [row.id, currentYear],
+      );
+      this.realtime?.publish(
+        ['reminders'],
+        [`user:${row.userId}`, 'admin'],
       );
       sent += 1;
     }

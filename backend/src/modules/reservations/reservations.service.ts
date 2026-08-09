@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
   OnModuleInit,
+  Optional,
 } from '@nestjs/common';
 import { PoolClient, QueryResultRow } from 'pg';
 import { ConfigService } from '@nestjs/config';
@@ -20,6 +21,7 @@ import { paginate } from '../../common/interfaces/paginated-response.interface';
 import type { AdminRequestContext } from '../../common/decorators/admin-request-context.decorator';
 import { AdminAuditService } from '../admin-audit/admin-audit.service';
 import { composeContractContent } from '../contracts/contract-content';
+import { RealtimeService } from '../realtime/realtime.service';
 
 type ReservationStatus = 'pending' | 'submitted' | 'approved' | 'rejected';
 
@@ -97,6 +99,7 @@ export class ReservationsService implements OnModuleInit {
     private readonly plotAdjacency?: PlotAdjacencyService,
     private readonly config?: ConfigService,
     private readonly audit?: AdminAuditService,
+    @Optional() private readonly realtime?: RealtimeService,
   ) {}
 
   async onModuleInit() {
@@ -107,7 +110,7 @@ export class ReservationsService implements OnModuleInit {
     name: 'release-expired-plot-reservations',
   })
   async releaseExpiredReservations() {
-    return this.database.transaction(async (client) => {
+    const result = await this.database.transaction(async (client) => {
       const cancelled = await client.query<{ id: number }>(
         `UPDATE reservation_requests rr
          SET status = 'cancelled',
@@ -148,6 +151,13 @@ export class ReservationsService implements OnModuleInit {
         plotsReleased: released.rowCount ?? released.rows.length,
       };
     });
+    if (result.requestsCancelled > 0 || result.plotsReleased > 0) {
+      this.realtime?.publish(
+        ['reservations', 'plots', 'dashboard'],
+        ['authenticated'],
+      );
+    }
+    return result;
   }
 
   async create(

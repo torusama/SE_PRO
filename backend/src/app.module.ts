@@ -20,6 +20,7 @@ import { AuthorizedPersonsModule } from './modules/authorized-persons/authorized
 import { AdminAuditModule } from './modules/admin-audit/admin-audit.module';
 import { TransfersModule } from './modules/transfers/transfers.module';
 import { DeceasedModule } from './modules/deceased/deceased.module';
+import { RealtimeModule } from './modules/realtime/realtime.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { DeceasedModule } from './modules/deceased/deceased.module';
     // "ScheduleModule" (lịch hẹn/lịch rảnh), không liên quan đến cron.
     NestScheduleModule.forRoot(),
     DatabaseModule,
+    RealtimeModule,
     AuthModule,
     UsersModule,
     PlotsModule,

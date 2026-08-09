@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ROUTES } from "@/constants/routes";
 import { api } from "@/lib/api";
+import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
 import "../AdminCorePages.css";
 
 type Summary = {
@@ -36,29 +37,37 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    let active = true;
-    Promise.all([
-      api.get<{ data: Summary }>("/admin/dashboard/summary"),
-      api.get<{ data: Revenue[] }>("/admin/dashboard/revenue", {
-        params: { period: "month" },
-      }),
-      api.get<{ data: { items: AuditEvent[] } }>("/admin/audit-logs", {
-        params: { page: 1, pageSize: 5 },
-      }),
-    ])
-      .then(([summaryResult, revenueResult, activityResult]) => {
-        if (!active) return;
-        setSummary(summaryResult.data.data);
-        setRevenue(revenueResult.data.data ?? []);
-        setActivity(activityResult.data.data?.items ?? []);
-      })
-      .catch(() => active && setError("Không thể tải dữ liệu tổng quan."))
-      .finally(() => active && setLoading(false));
-    return () => {
-      active = false;
-    };
+  const loadData = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    setError("");
+    try {
+      const [summaryResult, revenueResult, activityResult] = await Promise.all([
+        api.get<{ data: Summary }>("/admin/dashboard/summary"),
+        api.get<{ data: Revenue[] }>("/admin/dashboard/revenue", {
+          params: { period: "month" },
+        }),
+        api.get<{ data: { items: AuditEvent[] } }>("/admin/audit-logs", {
+          params: { page: 1, pageSize: 5 },
+        }),
+      ]);
+      setSummary(summaryResult.data.data);
+      setRevenue(revenueResult.data.data ?? []);
+      setActivity(activityResult.data.data?.items ?? []);
+    } catch {
+      setError("Không thể tải dữ liệu tổng quan.");
+    } finally {
+      if (!silent) setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    queueMicrotask(() => void loadData());
+  }, [loadData]);
+
+  useRealtimeRefresh(
+    ["dashboard", "audit", "plots", "reservations", "contracts", "services", "transfers"],
+    () => loadData(true),
+  );
 
   const statuses = useMemo(
     () => [

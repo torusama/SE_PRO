@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
 import "../AdminCorePages.css";
 
 type EventType = "Hợp đồng" | "Dịch vụ" | "Thanh toán" | "Hệ thống";
@@ -125,30 +126,27 @@ export default function ActivityPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    let active = true;
-    queueMicrotask(() => {
-      if (!active) return;
-      setLoading(true);
-      setError("");
-      api
-        .get<ApiResponse<Page<AuditRow>>>("/admin/audit-logs", {
-          params: { page: 1, pageSize: 100, from: fromDate(range) },
-        })
-        .then((response) => {
-          if (active) setRows(response.data.data?.items ?? []);
-        })
-        .catch(() => {
-          if (active) setError("Không thể tải lịch sử hoạt động.");
-        })
-        .finally(() => {
-          if (active) setLoading(false);
-        });
-    });
-    return () => {
-      active = false;
-    };
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    setError("");
+    try {
+      const response = await api.get<ApiResponse<Page<AuditRow>>>(
+        "/admin/audit-logs",
+        { params: { page: 1, pageSize: 100, from: fromDate(range) } },
+      );
+      setRows(response.data.data?.items ?? []);
+    } catch {
+      setError("Không thể tải lịch sử hoạt động.");
+    } finally {
+      if (!silent) setLoading(false);
+    }
   }, [range]);
+
+  useEffect(() => {
+    queueMicrotask(() => void load());
+  }, [load]);
+
+  useRealtimeRefresh(["audit"], () => load(true));
 
   const filtered = useMemo(
     () =>

@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { basename, join } from 'path';
 import { randomUUID } from 'crypto';
@@ -19,6 +20,8 @@ import {
   ServiceOrderStatus,
   UpdateServiceOrderDto,
 } from './dto/update-service-order.dto';
+import { RealtimeService } from '../realtime/realtime.service';
+import type { RealtimeTopic } from '../realtime/realtime.types';
 
 const SERVICE_STATUS_LABEL: Record<ServiceOrderStatus, string> = {
   submitted: 'đã được ghi nhận, đang chờ xác nhận',
@@ -65,6 +68,7 @@ export class CemeteryServicesService {
   constructor(
     private readonly database: DatabaseService,
     private readonly emailService: EmailService,
+    @Optional() private readonly realtime?: RealtimeService,
   ) {}
 
   serviceTypes() {
@@ -200,6 +204,8 @@ export class CemeteryServicesService {
     // là đơn trùng được tái sử dụng). Gửi sau khi transaction đã commit và
     // không để lỗi gửi mail làm hỏng luồng đặt dịch vụ của khách.
     if (!order.reused) {
+      this.publishRealtime(['services', 'notifications', 'dashboard']);
+
       void this.sendOrderConfirmationEmail(userId, {
         serviceName: type.name,
         plotCode: dto.plotId ? await this.plotCodeOf(dto.plotId) : null,
@@ -450,6 +456,8 @@ export class CemeteryServicesService {
       }
     });
 
+    this.publishRealtime(['services', 'notifications', 'dashboard']);
+
     return this.one(id);
   }
 
@@ -517,6 +525,7 @@ export class CemeteryServicesService {
     // Gửi email cho khách hàng kèm ảnh + nội dung hoàn thành, sau khi
     // transaction đã commit. Không throw khi lỗi gửi mail (SMTP chưa cấu
     // hình, v.v.) để không làm hỏng thao tác hoàn thành đơn của admin.
+    this.publishRealtime(['services', 'notifications', 'dashboard']);
     void this.sendCompletionEmail(id, files);
 
     return this.one(id);
@@ -562,7 +571,7 @@ export class CemeteryServicesService {
    * Chỉ ghi nhận đơn đang chờ admin duyệt xác nhận đã nhận tiền — KHÔNG tự
    * đổi status của đơn (status vẫn 'confirmed' cho tới khi admin xác nhận). */
   async markPaid(id: number, userId: number) {
-    const result = await this.database.transaction(async (client) => {
+    const changed = await this.database.transaction(async (client) => {
       const currentResult = await client.query<ServiceOrderPaymentRow>(
         `SELECT so.order_id, so.user_id, so.status, so.payment_status,
                 so.payment_code, so.amount::text AS amount,
@@ -589,7 +598,7 @@ export class CemeteryServicesService {
       // Đã báo thanh toán trước đó rồi (đang chờ admin duyệt) -> idempotent,
       // không tạo thêm lịch sử/thông báo trùng lặp.
       if (current.payment_status === 'awaiting_confirmation') {
-        return current;
+        return false;
       }
 
       const paymentCode =
@@ -623,8 +632,12 @@ export class CemeteryServicesService {
         [id, current.service_name],
       );
 
-      return { ...current, payment_status: 'awaiting_confirmation' as const };
+      return true;
     });
+
+    if (changed) {
+      this.publishRealtime(['services', 'notifications', 'dashboard']);
+    }
 
     return this.one(id, userId);
   }
@@ -680,6 +693,8 @@ export class CemeteryServicesService {
         [current.user_id, id, current.service_name],
       );
     });
+
+    this.publishRealtime(['services', 'notifications', 'dashboard']);
 
     return this.one(id);
   }
@@ -788,6 +803,16 @@ export class CemeteryServicesService {
         orderId,
       ],
     );
+  }
+
+  private publishRealtime(topics: readonly RealtimeTopic[]) {
+    try {
+      this.realtime?.publish(topics, ['authenticated']);
+    } catch (error) {
+      this.logger.warn(
+        `Realtime service-order publication failed: ${(error as Error).message}`,
+      );
+    }
   }
 
   private orders(suffix: string, params: unknown[] = [], admin = false) {

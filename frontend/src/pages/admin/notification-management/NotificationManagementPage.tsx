@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { ROUTES } from "@/constants/routes";
+import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
 import "../AdminCorePages.css";
 import "./NotificationManagementPage.css";
 
@@ -326,12 +327,7 @@ export default function NotificationManagementPage() {
   }, []);
 
   useEffect(() => {
-    const initialLoadId = window.setTimeout(() => void loadFeed(), 0);
-    const refreshId = window.setInterval(() => void loadFeed(true), 5_000);
-    return () => {
-      window.clearTimeout(initialLoadId);
-      window.clearInterval(refreshId);
-    };
+    queueMicrotask(() => void loadFeed());
   }, [loadFeed]);
 
   const unreadCount = useMemo(
@@ -510,6 +506,11 @@ export default function NotificationManagementPage() {
   useEffect(() => {
     if (view === "broadcast") queueMicrotask(() => void loadBroadcastHistory());
   }, [view, loadBroadcastHistory]);
+
+  useRealtimeRefresh(["notifications"], async () => {
+    await loadFeed(true);
+    if (view === "broadcast") await loadBroadcastHistory();
+  });
 
   async function send() {
     if (!title.trim() || !content.trim()) {

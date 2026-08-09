@@ -7,6 +7,7 @@ import {
 } from "react";
 import { api } from "@/lib/api";
 import { formatCalendarDate } from "@/lib/utils";
+import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
 import "./AppointmentsPage.css";
 
 type AppointmentStatus = "pending" | "confirmed" | "cancelled" | "completed";
@@ -123,6 +124,8 @@ export default function AppointmentsPage() {
       })
       .finally(() => setLoading(false));
   }, [loadAppointments]);
+
+  useRealtimeRefresh(["appointments"], loadAppointments);
 
   useEffect(() => {
     const nodes = document.querySelectorAll<HTMLElement>(

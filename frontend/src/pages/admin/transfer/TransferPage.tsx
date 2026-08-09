@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '@/lib/api'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import './TransferPage.css'
 
 type SearchMode = 'customer' | 'plot'
@@ -68,6 +69,11 @@ export default function TransferPage() {
   }
 
   useEffect(() => { void loadRecent() }, [])
+
+  useRealtimeRefresh(['transfers', 'ownership', 'contracts', 'plots'], async () => {
+    await loadRecent()
+    if (query.trim().length >= 2 && results.length > 0) await search()
+  })
 
   function changeMode(next: SearchMode) {
     setMode(next)

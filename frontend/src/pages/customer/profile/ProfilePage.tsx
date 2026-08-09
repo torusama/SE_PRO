@@ -12,6 +12,7 @@ import { ROUTES } from "@/constants/routes";
 import { API_BASE_URL, api } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
 import AlertModal from "@/components/ui/AlertModal";
+import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
 import "./ProfilePage.css";
 
 const T = {
@@ -735,6 +736,56 @@ export default function ProfilePage() {
     loadSessions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
+
+  useRealtimeRefresh(["users"], async () => {
+    const [profileResult, statsResult] = await Promise.allSettled([
+      api.get("/users/me"),
+      api.get("/users/me/stats"),
+    ]);
+    if (profileResult.status === "fulfilled") {
+      applyProfile(profileResult.value.data.data);
+      setProfileError(null);
+    }
+    if (statsResult.status === "fulfilled") {
+      setStats(statsResult.value.data.data);
+    }
+  });
+
+  useRealtimeRefresh(["sessions"], () => {
+    if (activeTab === "security") loadSessions();
+  });
+
+  useRealtimeRefresh(["authorized-persons"], async () => {
+    if (activeTab !== "lots") return;
+    const response = await api.get("/users/me/authorized-persons");
+    setAuthorizedPersons(response.data.data);
+    setAuthorizedError(null);
+  });
+
+  useRealtimeRefresh(
+    ["contracts", "ownership", "services", "transfers"],
+    async () => {
+      const requests: Promise<unknown>[] = [
+        api.get("/users/me/stats").then((response) => setStats(response.data.data)),
+      ];
+      if (activeTab === "lots") {
+        requests.push(
+          api.get("/my/contracts").then((response) => {
+            setLots(response.data.data);
+            setLotsError(null);
+          }),
+        );
+        if (activeLot !== null) {
+          requests.push(
+            api.get(`/my/contracts/${activeLot}`).then((response) =>
+              setLotDetail(response.data.data),
+            ),
+          );
+        }
+      }
+      await Promise.all(requests);
+    },
+  );
 
   async function handleRevokeSession(id: number) {
     setSessionActionBusy(id);

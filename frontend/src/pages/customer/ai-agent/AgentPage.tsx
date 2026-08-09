@@ -16,6 +16,7 @@ import { useNavigate } from "react-router-dom";
 import { ROUTES } from "@/constants/routes";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
+import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
 import AgentMessage from "./AgentMessage";
 import AgentContextMap from "./AgentContextMap";
 import ComparisonPanel from "./ComparisonPanel";
@@ -247,6 +248,8 @@ export default function AgentPage() {
       setHistoryLoading(false);
     }
   }, [canPersistConversations]);
+
+  useRealtimeRefresh(["ai"], loadConversations);
 
   const restoreConversation = useCallback((detail: ConversationDetail) => {
     const restoredRecommendations =

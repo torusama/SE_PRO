@@ -1,6 +1,7 @@
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
+import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
 
 function buildInitials(fullName: string) {
   const parts = fullName.trim().split(/\s+/);
@@ -22,41 +23,33 @@ export default function AuthUserSync() {
     (state) => state.setProfileComplete,
   );
 
-  useEffect(() => {
+  const syncUser = useCallback(async () => {
     if (!token) return;
+    try {
+      const response = await api.get("/users/me");
+      const profile = response.data?.data ?? response.data;
+      const fullName =
+        profile?.fullName ?? profile?.full_name ?? profile?.name ?? "";
+      if (!fullName || !profile?.email) return;
 
-    let cancelled = false;
-
-    api
-      .get("/users/me")
-      .then((response) => {
-        if (cancelled) return;
-
-        const profile = response.data?.data ?? response.data;
-        const fullName =
-          profile?.fullName ?? profile?.full_name ?? profile?.name ?? "";
-
-        if (!fullName || !profile?.email) return;
-
-        setUser({
-          id: String(profile.id ?? profile.user_id),
-          name: fullName,
-          initials: buildInitials(fullName),
-          email: profile.email,
-        });
-        setProfileComplete(
-          role === "admin" || Boolean(profile.isProfileComplete),
-        );
-      })
-      .catch(() => {
-        // The global API interceptor handles an expired/revoked session.
-        // For transient errors, keep the existing session and retry next load.
+      setUser({
+        id: String(profile.id ?? profile.user_id),
+        name: fullName,
+        initials: buildInitials(fullName),
+        email: profile.email,
       });
-
-    return () => {
-      cancelled = true;
-    };
+      setProfileComplete(role === "admin" || Boolean(profile.isProfileComplete));
+    } catch {
+      // The global API interceptor handles an expired/revoked session.
+      // For transient errors, keep the existing session and retry on reconnect.
+    }
   }, [role, setProfileComplete, setUser, token]);
+
+  useEffect(() => {
+    void syncUser();
+  }, [syncUser]);
+
+  useRealtimeRefresh(["users"], syncUser);
 
   return null;
 }

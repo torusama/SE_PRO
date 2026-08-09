@@ -1,8 +1,9 @@
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useState, type CSSProperties } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ROUTES } from '@/constants/routes'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/store/authStore'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 
 interface PlotDetail {
   id: number
@@ -44,30 +45,26 @@ export default function BookingPage() {
   const [reservation, setReservation] = useState<ReservationResult | null>(null)
   const [requestType, setRequestType] = useState<ReservationType>('reserve')
 
-  useEffect(() => {
-    let cancelled = false
-
-    async function loadPlot() {
-      if (!lotId) return
-      setLoading(true)
-      setError('')
-      try {
-        const { data } = await api.get(`/plots/${lotId}`)
-        if (!cancelled) setPlot(data.data ?? data)
-      } catch (err: any) {
-        if (!cancelled) {
-          setError(err?.response?.data?.message ?? 'Không tải được thông tin lô.')
-        }
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-
-    loadPlot()
-    return () => {
-      cancelled = true
+  const loadPlot = useCallback(async (silent = false) => {
+    if (!lotId) return
+    if (!silent) setLoading(true)
+    setError('')
+    try {
+      const { data } = await api.get(`/plots/${lotId}`)
+      setPlot(data.data ?? data)
+    } catch (caught) {
+      const error = caught as { response?: { data?: { message?: string } } }
+      setError(error.response?.data?.message ?? 'Không tải được thông tin lô.')
+    } finally {
+      if (!silent) setLoading(false)
     }
   }, [lotId])
+
+  useEffect(() => {
+    queueMicrotask(() => void loadPlot())
+  }, [loadPlot])
+
+  useRealtimeRefresh(['plots', 'reservations'], () => loadPlot(true))
 
   async function confirmReservation() {
     if (!plot || !token) return

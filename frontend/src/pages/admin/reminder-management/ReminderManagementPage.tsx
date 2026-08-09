@@ -12,6 +12,7 @@
 // Nếu backend đặt tên khác, chỉ cần sửa 2 dòng gọi api bên dưới.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api } from '@/lib/api'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import './ReminderManagementPage.css'
 
 type ReminderType = 'death_anniversary' | 'memorial' | 'maintenance' | 'other'
@@ -79,8 +80,8 @@ export default function ReminderManagementPage() {
   const [notifyingId, setNotifyingId] = useState<number | null>(null)
   const [toast, setToast] = useState('')
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true)
     setError('')
     try {
       const res = await api.get<{ success: boolean; data: { items: AdminReminder[] } }>('/admin/reminders', {
@@ -90,13 +91,15 @@ export default function ReminderManagementPage() {
     } catch (err) {
       setError(getErrorMessage(err))
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    void load()
+    queueMicrotask(() => void load())
   }, [load])
+
+  useRealtimeRefresh(['reminders'], () => load(true))
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()

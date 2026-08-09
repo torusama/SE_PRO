@@ -249,7 +249,7 @@
   letter-spacing: 0.08em;
 }
 
-.admin-theme :is(.service-admin__refresh, .service-primary) {
+.admin-theme .service-primary {
   border: 1px solid var(--admin-ink);
   border-radius: 7px;
   background: var(--admin-ink);
@@ -488,8 +488,7 @@
   }
 }
 
-.admin-theme
-  :is(.admin-map-header-actions button, .admin-map-management-actions button) {
+.admin-theme .admin-map-management-actions button {
   border-color: var(--admin-line-strong);
   border-radius: 7px;
   background: var(--admin-paper);
@@ -500,11 +499,7 @@
     transform 140ms ease;
 }
 
-.admin-theme
-  :is(
-    .admin-map-header-actions button,
-    .admin-map-management-actions button
-  ):hover:not(:disabled) {
+.admin-theme .admin-map-management-actions button:hover:not(:disabled) {
   border-color: var(--admin-accent-2);
   box-shadow: 0 8px 18px -12px var(--admin-glow);
   color: var(--admin-accent-2);

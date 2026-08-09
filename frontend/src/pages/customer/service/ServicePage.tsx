@@ -18,6 +18,7 @@ import { useAuthStore } from '@/store/authStore'
 import { ROUTES } from '@/constants/routes'
 import DemoPaymentPanel from '@/components/payment/DemoPaymentPanel'
 import GuidePopup, { type GuideStep } from '@/components/guide/GuidePopup'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import './ServicePage.css'
 
 type Tab = 'catalogue' | 'book' | 'track'
@@ -316,8 +317,8 @@ export default function ServicePage() {
     if (opening) void loadOrderDetail(orderId)
   }
 
-  async function loadAll() {
-    setLoading(true)
+  async function loadAll(silent = false) {
+    if (!silent) setLoading(true)
     setError('')
     try {
       if (!isAuthenticated) {
@@ -358,7 +359,7 @@ export default function ServicePage() {
     } catch (err) {
       setError(getErrorMessage(err))
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
@@ -368,6 +369,11 @@ export default function ServicePage() {
     void loadAll()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated])
+
+  useRealtimeRefresh(['services', 'contracts', 'ownership'], async () => {
+    await loadAll(true)
+    if (expandedId) await loadOrderDetail(expandedId)
+  })
 
   useEffect(() => {
     // Chỉ tự động hiện hướng dẫn nếu người dùng chưa tick "Không hiển thị lại".
@@ -633,7 +639,6 @@ export default function ServicePage() {
             orderDetails={orderDetails}
             detailLoadingId={detailLoadingId}
             detailError={detailError}
-            onRefresh={() => void loadAll()}
             onOpenNotifications={() => navigate(ROUTES.NOTIFICATION)}
             page={page}
             pageCount={pageCount}
@@ -992,7 +997,6 @@ function TrackTab(props: {
   orderDetails: Record<number, ServiceOrder>
   detailLoadingId: number | null
   detailError: string
-  onRefresh: () => void
   onOpenNotifications: () => void
   page: number
   pageCount: number
@@ -1012,7 +1016,6 @@ function TrackTab(props: {
     orderDetails,
     detailLoadingId,
     detailError,
-    onRefresh,
     onOpenNotifications,
     page,
     pageCount,
@@ -1029,7 +1032,6 @@ function TrackTab(props: {
           <p>Kiểm tra lịch thực hiện, người phụ trách, thanh toán và kết quả nghiệm thu của từng yêu cầu.</p>
         </div>
         <div className="tracking-heading-actions">
-          <button className="btn-outline compact" onClick={onRefresh}><RotateCcw className="inline-icon" /> Cập nhật</button>
           <button className="btn-text bordered" onClick={onOpenNotifications}><Bell className="inline-icon" /> Thông báo</button>
         </div>
       </div>

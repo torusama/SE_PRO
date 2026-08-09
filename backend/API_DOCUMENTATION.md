@@ -21,6 +21,35 @@ Errors follow:
 
 Use `Authorization: Bearer <accessToken>` for protected endpoints.
 
+## Real-time invalidation
+
+Socket.IO uses the same host as the API with namespace `/realtime` and
+WebSocket transport. Pass the access token in the handshake when available:
+
+```ts
+io('http://localhost:3001/realtime', {
+  transports: ['websocket'],
+  auth: { token: accessToken },
+})
+```
+
+Anonymous sockets only receive public plot invalidations. Authenticated sockets
+are authorized again against `users` and `user_sessions`; they are disconnected
+when the JWT expires, the durable session is revoked, or the account is locked.
+
+The server emits `realtime:update` after a successful committed mutation:
+
+```json
+{
+  "topics": ["plots", "reservations"],
+  "occurredAt": "2026-08-09T12:00:00.000Z"
+}
+```
+
+The payload is an invalidation hint, not business data. Clients reload only the
+mounted REST resource matching a topic and must resynchronize after reconnect.
+Session revocation is emitted separately as `realtime:session-revoked`.
+
 ## Auth
 
 | Method | Endpoint         | Auth | Role           | Body                                                                                                       |

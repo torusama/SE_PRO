@@ -8,6 +8,7 @@ import RequireAuth from "@/components/auth/RequireAuth";
 import RequireAdmin from "@/components/auth/RequireAdmin";
 import RequireCompleteProfile from "@/components/auth/RequireCompleteProfile";
 import AuthUserSync from "@/components/auth/AuthUserSync";
+import RealtimeConnection from "@/components/realtime/RealtimeConnection";
 
 // Customer pages
 import HomePage from "@/pages/customer/home/HomePage";
@@ -118,6 +119,7 @@ const router = createBrowserRouter([
 export default function AppRouter() {
   return (
     <>
+      <RealtimeConnection />
       <AuthUserSync />
       <RouterProvider router={router} />
     </>

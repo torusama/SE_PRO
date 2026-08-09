@@ -3,6 +3,7 @@ import { Bell, CheckCheck, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { ROUTES } from "@/constants/routes";
 import { api } from "@/lib/api";
+import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
 import {
   formatNotificationTime,
   notificationTargetRoute,
@@ -61,17 +62,10 @@ export default function NotificationMenu({
   }
 
   useEffect(() => {
-    const initialLoadId = window.setTimeout(() => void load(), 0);
-    const refreshId = window.setInterval(() => void load(true), 1_000);
-    const handleFocus = () => void load(true);
-    window.addEventListener("focus", handleFocus);
-
-    return () => {
-      window.clearTimeout(initialLoadId);
-      window.clearInterval(refreshId);
-      window.removeEventListener("focus", handleFocus);
-    };
+    queueMicrotask(() => void load());
   }, []);
+
+  useRealtimeRefresh(["notifications"], () => load(true));
 
   useEffect(() => {
     if (!open) return;

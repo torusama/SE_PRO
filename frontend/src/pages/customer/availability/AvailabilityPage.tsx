@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { api } from "@/lib/api";
+import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
 import "./AvailabilityPage.css";
 
 interface AvailabilitySlot {
@@ -40,6 +41,7 @@ export default function AvailabilityPage() {
   }, []);
 
   useEffect(() => { void loadSlots(); }, [loadSlots]);
+  useRealtimeRefresh(["appointments"], loadSlots);
 
   async function submit(event: FormEvent) {
     event.preventDefault();

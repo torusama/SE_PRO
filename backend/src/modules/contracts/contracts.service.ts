@@ -1,7 +1,9 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { DatabaseService } from '../../database/database.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -15,6 +17,8 @@ import {
   extractContractBaseContent,
   upgradePurchaseContractBase,
 } from './contract-content';
+import { RealtimeService } from '../realtime/realtime.service';
+import type { RealtimeTopic } from '../realtime/realtime.types';
 
 const money = new Intl.NumberFormat('vi-VN', {
   style: 'currency',
@@ -32,10 +36,13 @@ const CONTRACT_STATUS_LABEL: Record<string, string> = {
 
 @Injectable()
 export class ContractsService {
+  private readonly logger = new Logger(ContractsService.name);
+
   constructor(
     private readonly database: DatabaseService,
     private readonly notificationsService: NotificationsService,
     private readonly audit?: AdminAuditService,
+    @Optional() private readonly realtime?: RealtimeService,
   ) {}
 
   async adminList(query: AdminContractQueryDto = new AdminContractQueryDto()) {
@@ -177,6 +184,14 @@ export class ContractsService {
     );
     if (!contract) throw new NotFoundException('Contract not found');
 
+    this.publishRealtime([
+      'contracts',
+      'ownership',
+      'plots',
+      'reservations',
+      'dashboard',
+    ]);
+
     const label = CONTRACT_STATUS_LABEL[status] ?? status;
     await this.notificationsService.createInApp(
       contract.userId,
@@ -191,7 +206,7 @@ export class ContractsService {
   }
 
   async updateInheritance(id: number, content: string, adminId: number) {
-    return this.database.transaction(async (client) => {
+    const contract = await this.database.transaction(async (client) => {
       const locked = await client.query<any>(
         `SELECT contract_id AS id, contract_code AS "contractCode",
                 user_id AS "userId", status, contract_content AS "contractContent",
@@ -270,6 +285,9 @@ export class ContractsService {
       });
       return contract;
     });
+
+    this.publishRealtime(['contracts', 'reservations', 'notifications']);
+    return contract;
   }
 
   async markPdfGenerated(
@@ -277,7 +295,7 @@ export class ContractsService {
     adminId: number,
     context?: AdminRequestContext,
   ) {
-    return this.database.transaction(async (client) => {
+    const contract = await this.database.transaction(async (client) => {
       const updated = await client.query<{
         id: number;
         contractCode: string;
@@ -311,6 +329,9 @@ export class ContractsService {
       });
       return contract;
     });
+
+    this.publishRealtime(['contracts', 'reservations']);
+    return contract;
   }
 
   async saveSignedEvidence(
@@ -326,7 +347,7 @@ export class ContractsService {
     if (!files.length) {
       throw new BadRequestException('At least one signed contract document is required');
     }
-    return this.database.transaction(async (client) => {
+    const saved = await this.database.transaction(async (client) => {
       const contract = await client.query<{
         id: number;
         status: string;
@@ -390,6 +411,9 @@ export class ContractsService {
       });
       return saved;
     });
+
+    this.publishRealtime(['contracts', 'reservations']);
+    return saved;
   }
 
   async getSignedEvidence(id: number, filename: string) {
@@ -411,7 +435,7 @@ export class ContractsService {
     adminId: number,
     context?: AdminRequestContext,
   ) {
-    return this.database.transaction(async (client) => {
+    const result = await this.database.transaction(async (client) => {
       const locked = await client.query<{
         id: number;
         contractCode: string;
@@ -543,6 +567,16 @@ export class ContractsService {
         plotCodes: plots.rows.map((plot) => plot.code),
       };
     });
+
+    this.publishRealtime([
+      'contracts',
+      'ownership',
+      'plots',
+      'reservations',
+      'notifications',
+      'dashboard',
+    ]);
+    return result;
   }
 
   async addPayment(
@@ -642,7 +676,23 @@ export class ContractsService {
       return { payment: payment.rows[0], contract: contract.rows[0] };
     });
 
+    this.publishRealtime([
+      'contracts',
+      'reservations',
+      'notifications',
+      'dashboard',
+    ]);
     return result.payment;
+  }
+
+  private publishRealtime(topics: readonly RealtimeTopic[]) {
+    try {
+      this.realtime?.publish(topics, ['authenticated']);
+    } catch (error) {
+      this.logger.warn(
+        `Realtime contract publication failed: ${(error as Error).message}`,
+      );
+    }
   }
 
   private baseQuery(suffix: string) {
