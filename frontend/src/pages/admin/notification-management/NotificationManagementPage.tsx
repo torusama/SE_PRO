@@ -38,6 +38,51 @@ const FEED_TABS = [
   { value: "unread", label: "Chưa đọc" },
 ] as const;
 
+type FeedSectionValue =
+  | "all"
+  | "requests"
+  | "services"
+  | "appointments"
+  | "reminders"
+  | "other";
+
+const FEED_SECTIONS: Array<{
+  value: FeedSectionValue;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "all",
+    label: "Tổng quan",
+    description: "Toàn bộ công việc mới",
+  },
+  {
+    value: "requests",
+    label: "Yêu cầu lô & hợp đồng",
+    description: "Mua, giữ chỗ, thanh toán",
+  },
+  {
+    value: "services",
+    label: "Dịch vụ",
+    description: "Đơn mới và thanh toán",
+  },
+  {
+    value: "appointments",
+    label: "Lịch hẹn",
+    description: "Phản hồi lịch ký, làm việc",
+  },
+  {
+    value: "reminders",
+    label: "Nhắc lịch",
+    description: "Ngày giỗ, tưởng niệm, bảo trì",
+  },
+  {
+    value: "other",
+    label: "Khác",
+    description: "Hồ sơ, tài khoản và hệ thống",
+  },
+];
+
 const TYPE_LABELS: Record<string, string> = {
   request_submitted: "Yêu cầu duyệt lô",
   request_approved: "Yêu cầu đã duyệt",
@@ -45,7 +90,34 @@ const TYPE_LABELS: Record<string, string> = {
   request_cancelled: "Yêu cầu đã hủy",
   appointment_response: "Phản hồi lịch hẹn",
   service_submitted: "Đặt dịch vụ mới",
+  service_payment_reported: "Khách báo đã thanh toán",
+  reminder_created: "Nhắc lịch mới",
 };
+
+function notificationSection(item: FeedNotification): FeedSectionValue {
+  const type = item.type.toLowerCase();
+  const entity = item.relatedEntityType?.toLowerCase() ?? "";
+
+  if (
+    entity === "reservation_request" ||
+    ["contract", "payment", "ownership", "transfer"].some((value) =>
+      entity.includes(value),
+    ) ||
+    /^(request|reservation|contract|payment|ownership|transfer)_/.test(type)
+  ) {
+    return "requests";
+  }
+  if (entity === "service_order" || type.startsWith("service_")) {
+    return "services";
+  }
+  if (entity.includes("appointment") || type.startsWith("appointment_")) {
+    return "appointments";
+  }
+  if (entity === "reminder" || type.startsWith("reminder_")) {
+    return "reminders";
+  }
+  return "other";
+}
 
 function typeLabel(type: string) {
   if (TYPE_LABELS[type]) return TYPE_LABELS[type];
@@ -161,12 +233,60 @@ function actionRoute(
   }
 }
 
+function notificationActionRoute(
+  item?: FeedNotification | null,
+): { label: string; to: string } | null {
+  if (!item?.relatedEntityType) return null;
+  const entity = item.relatedEntityType.toLowerCase();
+  const id = item.relatedEntityId;
+
+  if (entity === "reservation_request") {
+    return {
+      label: "Đi tới Xử lý yêu cầu",
+      to: id ? `${ROUTES.ADMIN_REQUESTS}?request=${id}` : ROUTES.ADMIN_REQUESTS,
+    };
+  }
+  if (entity === "service_order") {
+    return {
+      label: "Đi tới Quản lý dịch vụ",
+      to: id ? `${ROUTES.ADMIN_SERVICES}?order=${id}` : ROUTES.ADMIN_SERVICES,
+    };
+  }
+  if (entity.includes("appointment")) {
+    return {
+      label: "Đi tới Quản lý lịch hẹn",
+      to:
+        entity === "offline_appointment" && id
+          ? `${ROUTES.ADMIN_REQUESTS}?appointment=${id}`
+          : ROUTES.ADMIN_APPOINTMENTS,
+    };
+  }
+  if (entity === "reminder") {
+    return {
+      label: "Đi tới Quản lý nhắc lịch",
+      to: ROUTES.ADMIN_REMINDERS,
+    };
+  }
+  if (entity.includes("contract")) {
+    return { label: "Đi tới Hợp đồng", to: ROUTES.ADMIN_CONTRACTS };
+  }
+  if (entity.includes("transfer") || entity.includes("ownership")) {
+    return { label: "Đi tới Chuyển nhượng", to: ROUTES.ADMIN_TRANSFER };
+  }
+  if (entity === "deceased_profile") {
+    return { label: "Đi tới Hồ sơ người đã khuất", to: ROUTES.ADMIN_DECEASED };
+  }
+  return null;
+}
+
 export default function NotificationManagementPage() {
   const navigate = useNavigate();
   const [view, setView] = useState<"feed" | "broadcast">("feed");
 
   // --- Feed thực (thông báo cá nhân của admin) ---
   const [items, setItems] = useState<FeedNotification[]>([]);
+  const [feedSection, setFeedSection] =
+    useState<FeedSectionValue>("all");
   const [feedTab, setFeedTab] =
     useState<(typeof FEED_TABS)[number]["value"]>("all");
   const [feedLoading, setFeedLoading] = useState(true);
@@ -218,10 +338,56 @@ export default function NotificationManagementPage() {
     () => items.filter((item) => !item.isRead).length,
     [items],
   );
-  const visible = useMemo(
-    () => (feedTab === "unread" ? items.filter((item) => !item.isRead) : items),
-    [items, feedTab],
+
+  const sectionStats = useMemo(() => {
+    const stats = Object.fromEntries(
+      FEED_SECTIONS.map((section) => [
+        section.value,
+        { total: 0, unread: 0 },
+      ]),
+    ) as Record<FeedSectionValue, { total: number; unread: number }>;
+
+    for (const item of items) {
+      const section = notificationSection(item);
+      stats.all.total += 1;
+      stats[section].total += 1;
+      if (!item.isRead) {
+        stats.all.unread += 1;
+        stats[section].unread += 1;
+      }
+    }
+    return stats;
+  }, [items]);
+
+  const selectedSection = useMemo(
+    () =>
+      FEED_SECTIONS.find((section) => section.value === feedSection) ??
+      FEED_SECTIONS[0],
+    [feedSection],
   );
+
+  const sectionItems = useMemo(
+    () =>
+      feedSection === "all"
+        ? items
+        : items.filter((item) => notificationSection(item) === feedSection),
+    [items, feedSection],
+  );
+
+  const visible = useMemo(
+    () =>
+      feedTab === "unread"
+        ? sectionItems.filter((item) => !item.isRead)
+        : sectionItems,
+    [sectionItems, feedTab],
+  );
+
+  function selectFeedSection(section: FeedSectionValue) {
+    setFeedSection(section);
+    setActiveNotification(null);
+    setDetail({ kind: "none" });
+    setDetailError("");
+  }
 
   async function markRead(item: FeedNotification) {
     if (item.isRead) return;
@@ -311,10 +477,11 @@ export default function NotificationManagementPage() {
   }
 
   function goToProcessing() {
-    const route = actionRoute(detail);
-    if (!route) return;
+    const target =
+      actionRoute(detail) ?? notificationActionRoute(activeNotification);
+    if (!target) return;
     closeDetail();
-    navigate(route.to);
+    navigate(target.to);
   }
 
   // --- Soạn / gửi thông báo hàng loạt (tính năng sẵn có, giữ nguyên) ---
@@ -369,7 +536,8 @@ export default function NotificationManagementPage() {
     }
   }
 
-  const route = actionRoute(detail);
+  const route =
+    actionRoute(detail) ?? notificationActionRoute(activeNotification);
 
   return (
     <div className="admin-page admin-core-page admin-notification-page">
@@ -389,7 +557,7 @@ export default function NotificationManagementPage() {
           className={view === "feed" ? "is-active" : ""}
           onClick={() => setView("feed")}
         >
-          Thông báo của bạn
+          Việc cần xử lý
           {unreadCount > 0 && (
             <span className="admin-notification-view-tabs__badge">
               {unreadCount}
@@ -401,13 +569,55 @@ export default function NotificationManagementPage() {
           className={view === "broadcast" ? "is-active" : ""}
           onClick={() => setView("broadcast")}
         >
-          Gửi thông báo cho khách hàng
+          Gửi tới khách hàng
         </button>
       </div>
+
+      {view === "feed" && (
+        <section
+          className="admin-notification-section-grid"
+          aria-label="Nhóm thông báo theo nghiệp vụ"
+        >
+          {FEED_SECTIONS.map((section) => {
+            const stats = sectionStats[section.value];
+            const isActive = feedSection === section.value;
+            return (
+              <button
+                type="button"
+                key={section.value}
+                className={isActive ? "is-active" : ""}
+                aria-pressed={isActive}
+                onClick={() => selectFeedSection(section.value)}
+              >
+                <span className="admin-notification-section-card__head">
+                  <strong>{section.label}</strong>
+                  <b>{stats.total}</b>
+                </span>
+                <small>{section.description}</small>
+                <span className="admin-notification-section-card__status">
+                  {stats.unread > 0
+                    ? `${stats.unread} chưa đọc`
+                    : "Không có mục mới"}
+                </span>
+              </button>
+            );
+          })}
+        </section>
+      )}
 
       {view === "feed" ? (
         <div className="admin-notification-feed-layout">
           <section className="admin-core-panel">
+            <header className="admin-notification-section-heading">
+              <div>
+                <p>Nhóm đang xem</p>
+                <h2>{selectedSection.label}</h2>
+              </div>
+              <span>
+                {sectionStats[feedSection].total} thông báo ·{" "}
+                {sectionStats[feedSection].unread} chưa đọc
+              </span>
+            </header>
             <div
               className="admin-core-tabs"
               role="tablist"
@@ -442,7 +652,9 @@ export default function NotificationManagementPage() {
                 <div className="admin-core-empty">Đang tải...</div>
               ) : visible.length === 0 ? (
                 <div className="admin-core-empty">
-                  Chưa có thông báo nào cần xử lý.
+                  {feedTab === "unread"
+                    ? `Không có thông báo chưa đọc trong nhóm ${selectedSection.label.toLowerCase()}.`
+                    : `Chưa có thông báo trong nhóm ${selectedSection.label.toLowerCase()}.`}
                 </div>
               ) : (
                 visible.map((item) => (
