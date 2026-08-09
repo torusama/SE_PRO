@@ -5,6 +5,7 @@ import {
   type CSSProperties,
 } from "react";
 import { useSearchParams } from "react-router-dom";
+import { CalendarDays, Clock3, MapPin, UserRound } from "lucide-react";
 import { api } from "@/lib/api";
 import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
 
@@ -655,35 +656,59 @@ export default function MyLotsPage() {
                     </div>
 
                     {appointment ? (
-                      <div className="lots-next-step">
-                        <div className="lots-step-marker" aria-hidden="true" />
-                        <div className="lots-step-copy">
-                          <span>Lịch hẹn ký hợp đồng</span>
-                          <strong>
+                      <div className="lots-next-step lots-appointment-card">
+                        <section className="lots-appointment-summary">
+                          <div className="lots-appointment-kicker">
+                            <CalendarDays size={16} strokeWidth={1.8} aria-hidden="true" />
+                            <span>Lịch hẹn ký hợp đồng</span>
+                          </div>
+                          <strong className="lots-appointment-range">
                             {formatAppointmentDate(appointment.scheduledAt)} – {formatAppointmentDate(appointment.scheduledEndAt)}
                           </strong>
-                          <p>{appointment.location}</p>
-                        </div>
-                        <div className="lots-step-meta">
-                          <span>
+                          <div className="lots-appointment-detail">
+                            <MapPin size={15} strokeWidth={1.8} aria-hidden="true" />
+                            <span>{appointment.location}</span>
+                          </div>
+                          <div className="lots-appointment-detail">
+                            <UserRound size={15} strokeWidth={1.8} aria-hidden="true" />
+                            <span>
+                              Phụ trách: {appointment.assignedStaffName || "Chưa phân công"}
+                            </span>
+                          </div>
+                          <div
+                            className={`lots-appointment-state is-${appointment.customerStatus}`}
+                          >
                             {appointment.customerStatus === "pending"
-                              ? "Cần bạn xác nhận"
+                              ? "Đang chờ bạn chọn lịch"
                               : appointment.customerStatus === "confirmed"
-                                ? "Bạn đã xác nhận"
-                                : "Bạn đã từ chối"}
-                          </span>
-                          <strong>
-                            {appointment.assignedStaffName || "Chưa phân công"}
-                          </strong>
+                                ? "Lịch đã được bạn xác nhận"
+                                : "Bạn đã từ chối lịch hẹn"}
+                          </div>
+                        </section>
+
+                        <section className="lots-appointment-booking">
+                          <div className="lots-appointment-booking-head">
+                            <div>
+                              <span>Thời gian gặp mặt</span>
+                              <strong>
+                                {appointment.customerStatus === "pending"
+                                  ? "Chọn ngày và giờ phù hợp"
+                                  : "Thông tin lịch của bạn"}
+                              </strong>
+                            </div>
+                            <Clock3 size={18} strokeWidth={1.8} aria-hidden="true" />
+                          </div>
+
                           {appointment.customerSelectedAt ? (
                             <p className="lots-selected-time">
-                              Gặp lúc: {formatDate(appointment.customerSelectedAt)}
+                              Thời gian đã chọn: {formatDate(appointment.customerSelectedAt)}
                             </p>
                           ) : null}
+
                           {appointment.customerStatus === "pending" ? (
                             <>
                               <label className="lots-appointment-picker">
-                                <span>Chọn ngày và giờ gặp mặt</span>
+                                <span>Ngày và giờ</span>
                                 <input
                                   type="datetime-local"
                                   step="60"
@@ -698,7 +723,7 @@ export default function MyLotsPage() {
                                   }
                                 />
                                 <small>
-                                  Trong khoảng {formatAppointmentDate(appointment.scheduledAt)} – {formatAppointmentDate(appointment.scheduledEndAt)}
+                                  Có thể chọn trong khoảng {formatAppointmentDate(appointment.scheduledAt)} – {formatAppointmentDate(appointment.scheduledEndAt)}.
                                 </small>
                               </label>
                               <div className="lots-appointment-actions">
@@ -707,7 +732,7 @@ export default function MyLotsPage() {
                                   onClick={() => void respondAppointment(appointment, "declined")}
                                   disabled={respondingAppointmentId === appointment.id}
                                 >
-                                  Từ chối
+                                  Từ chối lịch
                                 </button>
                                 <button
                                   type="button"
@@ -718,12 +743,12 @@ export default function MyLotsPage() {
                                     !selectedAppointmentTimes[appointment.id]
                                   }
                                 >
-                                  Xác nhận
+                                  Xác nhận lịch hẹn
                                 </button>
                               </div>
                             </>
                           ) : null}
-                        </div>
+                        </section>
                       </div>
                     ) : request.status === "approved" ? (
                       <div className="lots-next-step lots-next-step-muted">
@@ -1023,62 +1048,207 @@ function LoadingList({ columns = 1 }: { columns?: 1 | 2 }) {
 }
 
 const pageStyles = `
-  .lots-appointment-picker {
+  .lots-appointment-card {
     display: grid;
-    gap: 7px;
-    margin-top: 14px;
+    grid-template-columns: minmax(0, 1.05fr) minmax(330px, 0.95fr);
+    gap: 0;
+    align-items: stretch;
+    margin: 0 18px 18px;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid rgba(208, 182, 111, 0.16);
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(18, 28, 38, 0.94), rgba(11, 20, 30, 0.92));
   }
 
+  .lots-appointment-summary,
+  .lots-appointment-booking {
+    min-width: 0;
+    padding: 22px 24px;
+  }
+
+  .lots-appointment-summary {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .lots-appointment-booking {
+    border-left: 1px solid rgba(155, 187, 177, 0.11);
+    background: rgba(7, 15, 24, 0.48);
+  }
+
+  .lots-appointment-kicker,
+  .lots-appointment-booking-head {
+    display: flex;
+    align-items: center;
+  }
+
+  .lots-appointment-kicker {
+    gap: 8px;
+    color: #b89d59;
+  }
+
+  .lots-appointment-kicker span,
+  .lots-appointment-booking-head span,
   .lots-appointment-picker > span {
-    color: #dce9e5;
+    color: #79918a;
+    font-size: 10px;
+    font-weight: 750;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+  }
+
+  .lots-appointment-range {
+    display: block;
+    margin-top: 13px;
+    color: #f1e6c9;
+    font-size: 18px;
+    font-weight: 720;
+    letter-spacing: -0.01em;
+  }
+
+  .lots-appointment-detail {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 11px;
+    color: #8ea29c;
     font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .lots-appointment-detail svg {
+    flex: 0 0 auto;
+    color: #69867d;
+  }
+
+  .lots-appointment-state {
+    align-self: flex-start;
+    margin-top: 18px;
+    padding: 7px 10px;
+    border: 1px solid rgba(105, 199, 173, 0.17);
+    border-radius: 999px;
+    color: #86d6bf;
+    background: rgba(105, 199, 173, 0.07);
+    font-size: 10px;
     font-weight: 700;
+  }
+
+  .lots-appointment-state.is-declined {
+    border-color: rgba(190, 111, 111, 0.2);
+    color: #d39595;
+    background: rgba(190, 111, 111, 0.06);
+  }
+
+  .lots-appointment-booking-head {
+    justify-content: space-between;
+    gap: 18px;
+  }
+
+  .lots-appointment-booking-head > div {
+    display: grid;
+    gap: 6px;
+  }
+
+  .lots-appointment-booking-head strong {
+    color: #e8f0ed;
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  .lots-appointment-booking-head svg {
+    color: #9b8450;
+  }
+
+  .lots-appointment-picker {
+    display: grid;
+    gap: 8px;
+    margin-top: 18px;
   }
 
   .lots-appointment-picker input {
     width: 100%;
-    min-width: 225px;
-    border: 1px solid rgba(105, 199, 173, 0.35);
-    border-radius: 7px;
-    background: rgba(255, 255, 255, 0.06);
+    min-height: 44px;
+    border: 1px solid rgba(105, 199, 173, 0.24);
+    border-radius: 9px;
+    outline: none;
+    background: rgba(255, 255, 255, 0.045);
     color: #f0f7f5;
-    padding: 9px 10px;
+    padding: 10px 12px;
     font: inherit;
     color-scheme: dark;
+    transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+  }
+
+  .lots-appointment-picker input:hover {
+    border-color: rgba(105, 199, 173, 0.42);
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .lots-appointment-picker input:focus {
+    border-color: rgba(0, 229, 196, 0.52);
+    box-shadow: 0 0 0 3px rgba(0, 229, 196, 0.08);
   }
 
   .lots-appointment-picker small {
-    color: #9aacb4;
+    color: #758b84;
+    font-size: 11px;
     line-height: 1.5;
   }
 
   .lots-selected-time {
-    margin: 9px 0 0;
-    color: #69c7ad;
-    font-size: 13px;
-    font-weight: 700;
+    margin: 17px 0 0;
+    padding: 10px 12px;
+    border: 1px solid rgba(105, 199, 173, 0.14);
+    border-radius: 8px;
+    color: #8bd8c2;
+    background: rgba(105, 199, 173, 0.045);
+    font-size: 12px;
+    font-weight: 650;
   }
 
   .lots-appointment-actions {
     display: flex;
-    gap: 8px;
-    margin-top: 10px;
+    justify-content: flex-end;
+    gap: 9px;
+    margin-top: 16px;
   }
 
   .lots-appointment-actions button {
-    border: 1px solid #c9d2d0;
-    border-radius: 7px;
-    background: #fff;
-    color: #4a4a4a;
-    padding: 7px 11px;
+    min-height: 39px;
+    border: 1px solid rgba(155, 187, 177, 0.17);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.035);
+    color: #bac8c4;
+    padding: 8px 13px;
+    font-size: 12px;
     font-weight: 700;
     cursor: pointer;
+    transition: transform 150ms ease, border-color 150ms ease, background 150ms ease, color 150ms ease;
+  }
+
+  .lots-appointment-actions button:hover:not(:disabled) {
+    transform: translateY(-1px);
+    border-color: rgba(155, 187, 177, 0.32);
+    color: #eef5f2;
+    background: rgba(255, 255, 255, 0.06);
   }
 
   .lots-appointment-actions button.confirm {
-    border-color: #008573;
-    background: #008573;
+    border-color: rgba(0, 178, 153, 0.5);
+    background: #008b78;
     color: #fff;
+  }
+
+  .lots-appointment-actions button.confirm:hover:not(:disabled) {
+    border-color: rgba(0, 229, 196, 0.7);
+    background: #009c87;
+  }
+
+  .lots-appointment-actions button:disabled {
+    opacity: 0.46;
+    cursor: not-allowed;
   }
 
   .lots-page {
@@ -1418,7 +1588,7 @@ const pageStyles = `
   .lots-request-list,
   .lots-loading-list {
     display: grid;
-    gap: 12px;
+    gap: 18px;
   }
 
   .lots-request-card {
@@ -1539,18 +1709,19 @@ const pageStyles = `
     color: #e4c879;
   }
 
-  .lots-next-step {
+  .lots-next-step:not(.lots-appointment-card) {
     display: grid;
-    grid-template-columns: 18px minmax(0, 1fr) minmax(160px, 0.42fr);
+    grid-template-columns: 18px minmax(0, 1fr);
     gap: 14px;
     align-items: center;
-    padding: 16px 20px;
-    border-top: 1px solid rgba(202, 170, 100, 0.14);
-    background: rgba(202, 170, 100, 0.045);
+    margin: 0 18px 18px;
+    padding: 16px 18px;
+    border: 1px solid rgba(155, 187, 177, 0.1);
+    border-radius: 10px;
+    background: rgba(125, 164, 152, 0.035);
   }
 
   .lots-next-step-muted {
-    grid-template-columns: 18px minmax(0, 1fr);
     border-color: rgba(155, 187, 177, 0.11);
     background: rgba(125, 164, 152, 0.035);
   }
@@ -1979,6 +2150,38 @@ const pageStyles = `
     [data-lots-reveal] {
       opacity: 1;
       transform: none;
+    }
+  }
+
+  @media (max-width: 900px) {
+    .lots-appointment-card {
+      grid-template-columns: 1fr;
+    }
+
+    .lots-appointment-booking {
+      border-top: 1px solid rgba(155, 187, 177, 0.11);
+      border-left: 0;
+    }
+  }
+
+  @media (max-width: 620px) {
+    .lots-appointment-card,
+    .lots-next-step:not(.lots-appointment-card) {
+      margin-right: 12px;
+      margin-left: 12px;
+    }
+
+    .lots-appointment-summary,
+    .lots-appointment-booking {
+      padding: 18px;
+    }
+
+    .lots-appointment-actions {
+      flex-direction: column-reverse;
+    }
+
+    .lots-appointment-actions button {
+      width: 100%;
     }
   }
 `;

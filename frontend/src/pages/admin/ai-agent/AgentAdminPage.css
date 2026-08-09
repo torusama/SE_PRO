@@ -348,6 +348,12 @@
   border-radius: 12px;
 }
 
+.learning-analytics__timeline-card {
+  position: relative;
+  z-index: 2;
+  overflow: visible;
+}
+
 .learning-analytics__timeline-card > header,
 .learning-analytics__distribution > header,
 .learning-journal__events > header,
@@ -434,7 +440,7 @@
 
 .learning-analytics__timeline-body {
   width: 100%;
-  overflow: hidden;
+  overflow: visible;
   padding: 20px 22px 16px;
 }
 
@@ -501,6 +507,7 @@
   width: 100%;
   min-width: 0;
   min-height: 175px;
+  overflow: visible;
   gap: clamp(1px, 0.35vw, 5px);
   padding: 8px 2px 0;
   border-bottom: 1px solid var(--ai-line);
@@ -513,11 +520,34 @@
 }
 
 .learning-analytics__day {
+  position: relative;
   display: grid;
   grid-template-rows: 125px 17px 18px;
   gap: 3px;
   min-width: 0;
+  outline: none;
   text-align: center;
+  cursor: crosshair;
+}
+
+.learning-analytics__day::before {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  right: -2px;
+  bottom: 39px;
+  left: -2px;
+  border-radius: 5px;
+  background: rgba(34, 77, 148, 0.045);
+  opacity: 0;
+  content: "";
+  pointer-events: none;
+  transition: opacity 140ms ease;
+}
+
+.learning-analytics__day:hover::before,
+.learning-analytics__day:focus-visible::before {
+  opacity: 1;
 }
 
 .learning-analytics__day-bar {
@@ -583,6 +613,133 @@
 
 .learning-analytics__day time.is-hidden {
   visibility: hidden;
+}
+
+.learning-analytics__chart-tooltip {
+  position: absolute;
+  z-index: 20;
+  bottom: calc(100% - 108px);
+  left: 50%;
+  width: 210px;
+  padding: 12px;
+  border: 1px solid rgba(53, 78, 111, 0.18);
+  border-radius: 10px;
+  color: var(--ai-text);
+  background: rgba(255, 253, 249, 0.98);
+  box-shadow: 0 14px 34px rgba(43, 58, 78, 0.16);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -8px);
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.learning-analytics__day.tooltip-left .learning-analytics__chart-tooltip {
+  left: -2px;
+  transform: translate(0, -8px);
+}
+
+.learning-analytics__day.tooltip-right .learning-analytics__chart-tooltip {
+  right: -2px;
+  left: auto;
+  transform: translate(0, -8px);
+}
+
+.learning-analytics__day:hover .learning-analytics__chart-tooltip,
+.learning-analytics__day:focus-visible .learning-analytics__chart-tooltip {
+  opacity: 1;
+  transform: translate(-50%, -14px);
+}
+
+.learning-analytics__day.tooltip-left:hover .learning-analytics__chart-tooltip,
+.learning-analytics__day.tooltip-left:focus-visible .learning-analytics__chart-tooltip,
+.learning-analytics__day.tooltip-right:hover .learning-analytics__chart-tooltip,
+.learning-analytics__day.tooltip-right:focus-visible .learning-analytics__chart-tooltip {
+  transform: translate(0, -14px);
+}
+
+.learning-analytics__chart-tooltip::after {
+  position: absolute;
+  bottom: -5px;
+  left: 50%;
+  width: 9px;
+  height: 9px;
+  border-right: 1px solid rgba(53, 78, 111, 0.18);
+  border-bottom: 1px solid rgba(53, 78, 111, 0.18);
+  background: rgba(255, 253, 249, 0.98);
+  content: "";
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.learning-analytics__day.tooltip-left .learning-analytics__chart-tooltip::after {
+  left: 16px;
+  transform: rotate(45deg);
+}
+
+.learning-analytics__day.tooltip-right .learning-analytics__chart-tooltip::after {
+  right: 16px;
+  left: auto;
+  transform: rotate(45deg);
+}
+
+.learning-analytics__chart-tooltip-head {
+  display: grid;
+  gap: 3px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid rgba(53, 78, 111, 0.1);
+  text-align: left;
+}
+
+.learning-analytics__chart-tooltip-head span {
+  color: var(--ai-muted);
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.learning-analytics__chart-tooltip-head strong {
+  color: var(--ai-text);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.learning-analytics__chart-tooltip dl {
+  display: grid;
+  gap: 6px;
+  margin: 9px 0 0;
+}
+
+.learning-analytics__chart-tooltip dl > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.learning-analytics__chart-tooltip dt,
+.learning-analytics__chart-tooltip dd {
+  margin: 0;
+  font-size: 10px;
+}
+
+.learning-analytics__chart-tooltip dt {
+  color: var(--ai-muted);
+}
+
+.learning-analytics__chart-tooltip dd {
+  color: var(--ai-text);
+  font-weight: 750;
+}
+
+.learning-analytics__chart-tooltip .is-access {
+  margin-top: 2px;
+  padding-top: 7px;
+  border-top: 1px solid rgba(154, 106, 47, 0.12);
+}
+
+.learning-analytics__chart-tooltip .is-access dt,
+.learning-analytics__chart-tooltip .is-access dd {
+  color: var(--ai-gold);
 }
 
 .learning-analytics__distribution-grid {
