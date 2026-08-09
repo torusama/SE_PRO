@@ -53,6 +53,7 @@ const adminRoutes: Array<{
   { method: 'get', path: `/admin/reservations/${missingId}` },
   { method: 'patch', path: `/admin/reservations/${missingId}/approve` },
   { method: 'patch', path: `/admin/reservations/${missingId}/reject` },
+  { method: 'patch', path: `/admin/reservations/${missingId}/cancel` },
   { method: 'get', path: '/admin/contracts' },
   { method: 'get', path: `/admin/contracts/${missingId}` },
   { method: 'post', path: `/admin/contracts/${missingId}/payments` },

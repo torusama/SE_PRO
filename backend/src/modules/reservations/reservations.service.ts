@@ -687,6 +687,88 @@ Thời hạn và thời điểm có hiệu lực được ghi tại phần ký k
     });
   }
 
+  async cancelApprovedReserve(
+    adminId: number,
+    id: number,
+    adminNote?: string,
+    context?: AdminRequestContext,
+  ) {
+    const reason = adminNote?.trim();
+    if (!reason) {
+      throw new BadRequestException('Vui lòng nhập lý do hủy giữ chỗ');
+    }
+    return this.database.transaction(async (client) => {
+      const request = await this.lockRequest(client, id);
+      if (request.request_type !== 'reserve') {
+        throw new BadRequestException(
+          'Yêu cầu mua lô phải được xử lý qua quy trình hủy hợp đồng',
+        );
+      }
+      if (request.status !== 'approved') {
+        throw new BadRequestException(
+          'Chỉ có thể hủy giữ chỗ đối với yêu cầu đã được duyệt',
+        );
+      }
+
+      const plots = await this.lockRequestPlots(client, id);
+      if (plots.some((plot) => plot.status !== 'reserved')) {
+        throw new BadRequestException(
+          'Các lô trong yêu cầu không còn ở trạng thái đã giữ chỗ',
+        );
+      }
+      const plotIds = plots.map((plot) => plot.id);
+      const released = await client.query(
+        `UPDATE plots
+         SET status = 'available', reserved_until = NULL, updated_at = NOW()
+         WHERE plot_id = ANY($1::int[]) AND status = 'reserved'`,
+        [plotIds],
+      );
+      if (released.rowCount !== plotIds.length) {
+        throw new BadRequestException('Không thể trả toàn bộ lô về trạng thái còn trống');
+      }
+
+      await client.query(
+        `UPDATE reservation_requests
+         SET status = 'cancelled', admin_id = $2,
+             admin_note = COALESCE(NULLIF(admin_note, '') || E'\n', '') || $3,
+             reviewed_at = NOW(), updated_at = NOW()
+         WHERE request_id = $1`,
+        [id, adminId, `Hủy giữ chỗ: ${reason}`],
+      );
+      await client.query(
+        `UPDATE offline_appointments
+         SET status = 'cancelled', status_note = $2, cancelled_at = NOW(),
+             updated_by = $3, updated_at = NOW()
+         WHERE request_id = $1 AND status = 'scheduled' AND is_deleted = FALSE`,
+        [id, `Hủy giữ chỗ: ${reason}`, adminId],
+      );
+      await this.notify(
+        client,
+        request.user_id,
+        'reservation_cancelled_by_admin',
+        'Yêu cầu giữ chỗ đã được hủy',
+        `Admin đã hủy giữ chỗ. Lý do: ${reason}`,
+        id,
+      );
+      await this.audit?.record(client, {
+        action: 'reservation.cancel_approved_reserve',
+        entityType: 'reservation_request',
+        entityId: id,
+        before: { status: request.status, plotStatus: 'reserved' },
+        after: { status: 'cancelled', plotStatus: 'available', reason },
+        context: context ?? { adminId, ipAddress: null, userAgent: null },
+      });
+
+      return {
+        id,
+        status: 'cancelled',
+        plotStatus: 'available',
+        releasedPlotIds: plotIds,
+        notificationCreated: true,
+      };
+    });
+  }
+
   private assertUniquePlotIds(plotIds: number[]) {
     if (new Set(plotIds).size !== plotIds.length) {
       throw new BadRequestException(
