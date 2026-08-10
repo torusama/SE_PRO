@@ -1133,15 +1133,6 @@ export default function ProfilePage() {
                 {T.navContact}
               </button>
               <button
-                className={`side-nav-item ${activeTab === "lots" ? "active" : ""}`}
-                onClick={() => switchTab("lots")}
-              >
-                <span className="icon">
-                  <ProfileIcon name="pin" />
-                </span>
-                {T.navLots}
-              </button>
-              <button
                 className={`side-nav-item ${activeTab === "security" ? "active" : ""}`}
                 onClick={() => switchTab("security")}
               >
