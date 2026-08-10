@@ -1816,9 +1816,6 @@ export class AiAgentOrchestratorService {
     const asksForServiceCatalog =
       intent === 'service_suggestions' &&
       /\b(?:dich vu|cham soc|don dep|thap huong)\b/.test(folded) &&
-      /\b(?:nao|nhung gi|hien co|danh sach|cho xem|xem cac|co nhung)\b/.test(
-        folded,
-      ) &&
       !/\b(?:dat dich vu|gui yeu cau|xac nhan|thanh toan)\b/.test(folded);
     if (asksForServiceCatalog) {
       return deterministicPlan(
@@ -4315,7 +4312,7 @@ ${JSON.stringify(options)}
       };
     }
 
-    if (/^(?:dich vu|cham soc)(?:\s+(?:a|ha|nha|nhe|di))?$/.test(folded)) {
+    if (/^(?:cham soc)(?:\s+(?:a|ha|nha|nhe|di))?$/.test(folded)) {
       return {
         assistantMessage:
           'Bạn muốn xem danh sách dịch vụ hiện có hay cần mình tư vấn dịch vụ phù hợp với lô của gia đình?',
