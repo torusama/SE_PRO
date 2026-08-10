@@ -180,10 +180,6 @@ export default function RegisterPage() {
               <br />
               <em>vượt thời gian.</em>
             </p>
-            <p className="left-sub">
-              Hệ thống quản lý nghĩa trang thế hệ mới — trang trọng, thông minh,
-              và đầy tâm.
-            </p>
           </div>
         </div>
       </div>

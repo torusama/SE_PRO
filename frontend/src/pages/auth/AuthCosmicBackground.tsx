@@ -3,28 +3,39 @@ import { useMemo } from "react";
 /**
  * Full-viewport animated cosmic backdrop shared by Login & Register.
  * - starry night sky (twinkling), spread across the full width
- * - a "V · P · Y" constellation (Vĩnh Phúc Viên) drawn like a star chart
+ * - the Lyra constellation (chòm sao Thiên Cầm), drawn like a real star
+ *   chart: a small hook of stars beside Vega, the brightest point, feeding
+ *   down into the four-star parallelogram — same line-glow / star-node
+ *   technique as before, just a different shape and a touch smaller
  * - shooting stars
- * - three small grave-hill silhouettes (upright + leaning headstones)
- *   scattered across the full width, with fireflies drifting above them
+ * - a one-line, no-fill grave scene: headstones scattered over flat
+ *   ground, a couple of them cresting a small hill, a Vietnamese-style
+ *   tomb (mound + small roofed headstone) and a coffin silhouette,
+ *   each drawn as a single continuous outline — with fireflies drifting
+ *   just above them
  * - a slowly shifting teal / blue / violet nebula glow for continuous motion
  */
 export default function AuthCosmicBackground() {
   const fireflies = useMemo(() => {
-    // Cluster fireflies around the three grave-hill silhouettes so they
-    // actually read as "fireflies near the graves" instead of floating
-    // randomly in the middle of the sky.
-    const clusterCenters = [20, 58, 89]; // % across the full width
+    // Cluster fireflies around the three grave groups (flat headstones,
+    // the hill + Vietnamese tomb, the coffin + small hill) so they read
+    // as "fireflies near the graves" instead of floating randomly.
+    const clusterCenters = [15, 47, 85]; // % across the full width
     return clusterCenters.flatMap((cx, ci) =>
-      Array.from({ length: 9 }, (_, i) => ({
-        id: ci * 9 + i,
-        left: Math.min(97, Math.max(2, cx + (Math.random() - 0.5) * 22)),
-        top: 78 + Math.random() * 17,
-        size: 2.6 + Math.random() * 2.8,
-        duration: 5.5 + Math.random() * 6,
-        delay: -Math.random() * 10,
-        drift: 10 + Math.random() * 20,
-      })),
+      Array.from({ length: 9 }, (_, i) => {
+        const id = ci * 9 + i;
+        return {
+          id,
+          left: Math.min(97, Math.max(2, cx + (Math.random() - 0.5) * 20)),
+          top: 58 + Math.random() * 20,
+          size: 2.6 + Math.random() * 2.8,
+          duration: 5.5 + Math.random() * 6,
+          delay: -Math.random() * 10,
+          drift: 10 + Math.random() * 20,
+          // sprinkle a few teal fireflies in among the yellow swarm
+          teal: id % 6 === 0,
+        };
+      }),
     );
   }, []);
 
@@ -194,129 +205,67 @@ export default function AuthCosmicBackground() {
         </g>
 
         {/* =====================================================
-             "V · P · Y" constellation (Vĩnh Phúc Viên)
-             — big, drawn like a real star chart: each edge is 3
-               stars that aren't quite collinear, each letter leans
-               a little. Shifted right + down from the original spot.
+             Lyra constellation (chòm sao Thiên Cầm) — traced directly
+             from the reference star-chart: a standing parallelogram
+             (β·γ·δ·ζ Lyrae) leaning right, sharing its top-right star
+             with a triangle (Vega + ε Lyrae) whose angle there sits
+             vertically opposite the parallelogram's corner — same
+             glowing-line / glowing-node technique as the rest of the sky.
+             Shifted further right and tilted a touch more to the right
+             so it sits fully inside the open sky area, with a slightly
+             brighter glow overall.
         ===================================================== */}
-        <g className="auth-constellation" transform="translate(170,46)">
-          {/* ---- V (tilts slightly left) ---- */}
-          <g transform="rotate(-7 194 270)">
-            <g
-              stroke="#8fe9ff"
-              strokeWidth="1"
-              strokeLinecap="round"
-              opacity="0.6"
-              filter="url(#authLineGlow)"
-            >
-              <polyline points="110,180 140,290 195,410" fill="none" />
-              <polyline points="195,410 245,295 280,175" fill="none" />
-            </g>
-            <g fill="#f2fbff">
-              {[
-                [110, 180, 2.6, 0],
-                [140, 290, 2.2, 0.5],
-                [195, 410, 3, 1.1],
-                [245, 295, 2.2, 1.6],
-                [280, 175, 2.6, 0.3],
-              ].map(([cx, cy, r, d], i) => (
-                <circle
-                  key={`v-${i}`}
-                  className="auth-twinkle auth-star-node"
-                  cx={cx}
-                  cy={cy}
-                  r={r}
-                  filter="url(#authNodeGlow)"
-                  style={{ animationDelay: `${d}s` }}
-                />
-              ))}
-            </g>
+        <g
+          className="auth-constellation"
+          transform="translate(462,168) translate(90,160) rotate(40) scale(1.1) translate(-90,-160)"
+        >
+          <g
+            stroke="#8fe9ff"
+            strokeWidth="1"
+            strokeLinecap="round"
+            opacity="0.72"
+            filter="url(#authLineGlow)"
+          >
+            {/* triangle: joint star — top star — Vega — back to joint */}
+            <polyline
+              points="132.5,96.1 135.4,0 208.9,44 132.5,96.1"
+              fill="none"
+            />
+            {/* standing parallelogram, leaning right, sharing the joint star */}
+            <polyline
+              points="132.5,96.1 42.2,129 0,320 88.5,296.8 132.5,96.1"
+              fill="none"
+            />
           </g>
-
-          {/* ---- P (tilts slightly right) ---- */}
-          <g transform="rotate(6 354 261)">
-            <g
-              stroke="#8fe9ff"
-              strokeWidth="1"
-              strokeLinecap="round"
-              opacity="0.6"
-              filter="url(#authLineGlow)"
-            >
-              <polyline points="310,420 306,300 314,178" fill="none" />
-              <polyline
-                points="314,178 390,170 420,222 385,275 306,300"
-                fill="none"
+          <g fill="#f2fbff">
+            {[
+              [135.4, 0, 2.7, 0.4],
+              [208.9, 44, 4.0, 0.2],
+              [132.5, 96.1, 2.9, 1.6],
+              [42.2, 129, 2.7, 0.7],
+              [0, 320, 2.9, 1.3],
+              [88.5, 296.8, 2.7, 0.5],
+            ].map(([cx, cy, r, d], i) => (
+              <circle
+                key={`lyra-${i}`}
+                className="auth-twinkle auth-star-node"
+                cx={cx}
+                cy={cy}
+                r={r}
+                filter="url(#authNodeGlow)"
+                style={{ animationDelay: `${d}s` }}
               />
-            </g>
-            <g fill="#f2fbff">
-              {[
-                [310, 420, 3, 0.8],
-                [306, 300, 2.2, 1.4],
-                [314, 178, 2.6, 0.2],
-                [390, 170, 2.2, 1.9],
-                [420, 222, 2.4, 0.6],
-                [385, 275, 2.2, 1.1],
-              ].map(([cx, cy, r, d], i) => (
-                <circle
-                  key={`p-${i}`}
-                  className="auth-twinkle auth-star-node"
-                  cx={cx}
-                  cy={cy}
-                  r={r}
-                  filter="url(#authNodeGlow)"
-                  style={{ animationDelay: `${d}s` }}
-                />
-              ))}
-            </g>
+            ))}
           </g>
 
-          {/* ---- Y (tilts slightly right) ---- */}
-          <g transform="rotate(4 574 281)">
-            <g
-              stroke="#8fe9ff"
-              strokeWidth="1"
-              strokeLinecap="round"
-              opacity="0.6"
-              filter="url(#authLineGlow)"
-            >
-              <polyline points="500,175 535,245 575,315" fill="none" />
-              <polyline points="640,168 618,240 575,315" fill="none" />
-              <polyline points="575,315 570,385 578,438" fill="none" />
-            </g>
-            <g fill="#f2fbff">
-              {[
-                [500, 175, 2.6, 0.4],
-                [535, 245, 2.2, 1.7],
-                [575, 315, 3, 0.9],
-                [618, 240, 2.2, 0.1],
-                [640, 168, 2.6, 1.3],
-                [570, 385, 2.2, 1.8],
-                [578, 438, 2.6, 0.6],
-              ].map(([cx, cy, r, d], i) => (
-                <circle
-                  key={`y-${i}`}
-                  className="auth-twinkle auth-star-node"
-                  cx={cx}
-                  cy={cy}
-                  r={r}
-                  filter="url(#authNodeGlow)"
-                  style={{ animationDelay: `${d}s` }}
-                />
-              ))}
-            </g>
-          </g>
-
-          {/* a few loose, unconnected stars around the letters so the
-              constellation blends into the surrounding sky naturally */}
+          {/* a few loose, unconnected stars around Lyra so it blends
+              into the surrounding sky naturally */}
           <g fill="#e8fbff">
             {[
-              [60, 230, 1.1, 0.55, 1.2],
-              [155, 130, 1, 0.4, 0.4],
-              [255, 400, 1.2, 0.45, 1.9],
-              [340, 130, 1, 0.4, 0.9],
-              [460, 400, 1.1, 0.45, 1.5],
-              [660, 300, 1, 0.4, 0.2],
-              [220, 350, 1, 0.35, 1.6],
+              [-125, 16.8, 1.3, 0.55, 1.2],
+              [-144, 64.2, 1.2, 0.45, 0.4],
+              [316, 6.4, 1.2, 0.45, 1.9],
+              [-11, 360.4, 1, 0.4, 0.9],
             ].map(([cx, cy, r, o, d], i) => (
               <circle
                 key={`amb-${i}`}
@@ -331,8 +280,13 @@ export default function AuthCosmicBackground() {
           </g>
         </g>
 
-        {/* Shooting stars */}
-        <g className="auth-shooting-star auth-shooting-star--1">
+        {/* Shooting stars — a small scattered swarm around the
+            constellation's new spot, reusing the same two animated
+            streak styles at different positions/delays */}
+        <g
+          className="auth-shooting-star auth-shooting-star--1"
+          transform="translate(360,120)"
+        >
           <line
             x1="0"
             y1="0"
@@ -342,7 +296,10 @@ export default function AuthCosmicBackground() {
             strokeWidth="1.4"
           />
         </g>
-        <g className="auth-shooting-star auth-shooting-star--2">
+        <g
+          className="auth-shooting-star auth-shooting-star--2"
+          transform="translate(700,90)"
+        >
           <line
             x1="0"
             y1="0"
@@ -352,46 +309,235 @@ export default function AuthCosmicBackground() {
             strokeWidth="1.2"
           />
         </g>
-
-        {/* =====================================================
-             Grave-hill silhouettes — minimalist one-line style.
-             No fill: a single flowing contour rises out of the
-             gently rolling ground into each headstone (upright,
-             rounded, leaning) and settles back down, echoing the
-             single-continuous-line illustration style.
-        ===================================================== */}
-        {[0, 560, 1080].map((offset, gi) => (
-          <path
-            key={`grave-${gi}`}
-            transform={`translate(${offset},0)`}
-            d="M-20 882
-               C 30 866 70 856 112 862
-               L 118 862 L 118 820
-               Q 118 802 136 802
-               Q 154 802 154 820
-               L 154 862
-               C 170 858 184 866 200 862
-               L 206 862 L 206 828
-               Q 206 812 223 812
-               Q 240 812 240 828
-               L 240 862
-               C 254 858 268 868 282 860
-               L 286 858 L 295 818
-               Q 299 802 315 806
-               Q 322 810 318 820
-               L 318 858
-               C 340 850 375 864 410 854
-               C 450 843 495 858 540 850
-               C 585 843 630 856 675 848
-               C 700 844 715 850 700 862"
-            fill="none"
+        <g
+          className="auth-shooting-star auth-shooting-star--1"
+          style={{ animationDelay: "1.6s" }}
+          transform="translate(620,260)"
+        >
+          <line
+            x1="0"
+            y1="0"
+            x2="60"
+            y2="30"
+            stroke="#e8fbff"
+            strokeWidth="1.2"
+          />
+        </g>
+        <g
+          className="auth-shooting-star auth-shooting-star--2"
+          style={{ animationDelay: "2.4s" }}
+          transform="translate(420,430)"
+        >
+          <line
+            x1="0"
+            y1="0"
+            x2="48"
+            y2="22"
             stroke="#8fe9ff"
             strokeWidth="1.1"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            opacity="0.45"
           />
-        ))}
+        </g>
+        <g
+          className="auth-shooting-star auth-shooting-star--1"
+          style={{ animationDelay: "3.2s" }}
+          transform="translate(780,340)"
+        >
+          <line
+            x1="0"
+            y1="0"
+            x2="52"
+            y2="24"
+            stroke="#c8f241"
+            strokeWidth="1.1"
+          />
+        </g>
+
+        {/* =====================================================
+             Depth layers behind the grave line — same technique as
+             the reference mountain art: the same ground silhouette,
+             closed down to the bottom edge and filled, repeated 3x
+             at increasing offsets and fading opacity, sitting behind
+             the crisp foreground line drawn further below.
+        ===================================================== */}
+        <g className="auth-graves-shadow">
+          <path
+            transform="translate(6,-14)"
+            fill="#0d1a4a"
+            opacity="0.22"
+            d="M-60,712
+               C20,706 60,709 95,708
+               L95,708 L95,655 Q95,645 105,645 Q115,645 115,655 L115,708
+               C130,703 150,708 165,707
+               L180,706 L180,660 L192,650 L204,660 L204,706
+               C215,702 225,699 235,698 L235,698 L235,670 Q235,662 243,662 Q251,662 251,670 L251,698 C265,699 285,702 310,705
+               L330,705 L330,668 Q330,659 339,659 Q348,659 348,668 L348,705
+               C365,703 375,706 390,704
+               C420,700 460,694 500,689
+               C515,687 530,686 545,686
+               L545,686 L545,668 Q545,661 552,661 Q559,661 559,668 L559,686
+               C575,687 600,691 620,694
+               C640,697 660,699 680,700
+               C690,692 705,689 725,688
+               L725,688 L725,678 L741,666 L757,678 L757,688
+               C775,689 790,692 800,700
+               C820,704 850,706 880,705
+               L880,705 L883,665 L895,653 L907,665 L910,705
+               C920,704 930,705 940,704
+               C970,703 1000,700 1030,690
+               C1060,676 1090,650 1120,626
+               C1128,620 1132,616 1135,612
+               L1135,612 L1135,572 Q1135,563 1144,563 Q1153,563 1153,572 L1153,612
+               C1165,618 1178,632 1190,650
+               C1200,664 1206,676 1210,686
+               L1210,686 L1210,674 Q1212,664 1224,664 L1270,664 Q1282,664 1284,674 L1284,690
+               C1300,696 1320,700 1340,702
+               L1340,702 L1343,662 L1355,650 L1367,662 L1370,702
+               C1390,701 1405,699 1415,698 L1415,698 L1415,674 Q1415,667 1422,667 Q1429,667 1429,674 L1429,698 C1440,700 1460,703 1500,706
+               L1500,900 L-60,900 Z"
+          />
+          <path
+            transform="translate(13,-30)"
+            fill="#0a1436"
+            opacity="0.32"
+            d="M-60,712
+               C20,706 60,709 95,708
+               L95,708 L95,655 Q95,645 105,645 Q115,645 115,655 L115,708
+               C130,703 150,708 165,707
+               L180,706 L180,660 L192,650 L204,660 L204,706
+               C215,702 225,699 235,698 L235,698 L235,670 Q235,662 243,662 Q251,662 251,670 L251,698 C265,699 285,702 310,705
+               L330,705 L330,668 Q330,659 339,659 Q348,659 348,668 L348,705
+               C365,703 375,706 390,704
+               C420,700 460,694 500,689
+               C515,687 530,686 545,686
+               L545,686 L545,668 Q545,661 552,661 Q559,661 559,668 L559,686
+               C575,687 600,691 620,694
+               C640,697 660,699 680,700
+               C690,692 705,689 725,688
+               L725,688 L725,678 L741,666 L757,678 L757,688
+               C775,689 790,692 800,700
+               C820,704 850,706 880,705
+               L880,705 L883,665 L895,653 L907,665 L910,705
+               C920,704 930,705 940,704
+               C970,703 1000,700 1030,690
+               C1060,676 1090,650 1120,626
+               C1128,620 1132,616 1135,612
+               L1135,612 L1135,572 Q1135,563 1144,563 Q1153,563 1153,572 L1153,612
+               C1165,618 1178,632 1190,650
+               C1200,664 1206,676 1210,686
+               L1210,686 L1210,674 Q1212,664 1224,664 L1270,664 Q1282,664 1284,674 L1284,690
+               C1300,696 1320,700 1340,702
+               L1340,702 L1343,662 L1355,650 L1367,662 L1370,702
+               C1390,701 1405,699 1415,698 L1415,698 L1415,674 Q1415,667 1422,667 Q1429,667 1429,674 L1429,698 C1440,700 1460,703 1500,706
+               L1500,900 L-60,900 Z"
+          />
+          <path
+            transform="translate(20,-48)"
+            fill="#060c26"
+            opacity="0.45"
+            d="M-60,712
+               C20,706 60,709 95,708
+               L95,708 L95,655 Q95,645 105,645 Q115,645 115,655 L115,708
+               C130,703 150,708 165,707
+               L180,706 L180,660 L192,650 L204,660 L204,706
+               C215,702 225,699 235,698 L235,698 L235,670 Q235,662 243,662 Q251,662 251,670 L251,698 C265,699 285,702 310,705
+               L330,705 L330,668 Q330,659 339,659 Q348,659 348,668 L348,705
+               C365,703 375,706 390,704
+               C420,700 460,694 500,689
+               C515,687 530,686 545,686
+               L545,686 L545,668 Q545,661 552,661 Q559,661 559,668 L559,686
+               C575,687 600,691 620,694
+               C640,697 660,699 680,700
+               C690,692 705,689 725,688
+               L725,688 L725,678 L741,666 L757,678 L757,688
+               C775,689 790,692 800,700
+               C820,704 850,706 880,705
+               L880,705 L883,665 L895,653 L907,665 L910,705
+               C920,704 930,705 940,704
+               C970,703 1000,700 1030,690
+               C1060,676 1090,650 1120,626
+               C1128,620 1132,616 1135,612
+               L1135,612 L1135,572 Q1135,563 1144,563 Q1153,563 1153,572 L1153,612
+               C1165,618 1178,632 1190,650
+               C1200,664 1206,676 1210,686
+               L1210,686 L1210,674 Q1212,664 1224,664 L1270,664 Q1282,664 1284,674 L1284,690
+               C1300,696 1320,700 1340,702
+               L1340,702 L1343,662 L1355,650 L1367,662 L1370,702
+               C1390,701 1405,699 1415,698 L1415,698 L1415,674 Q1415,667 1422,667 Q1429,667 1429,674 L1429,698 C1440,700 1460,703 1500,706
+               L1500,900 L-60,900 Z"
+          />
+        </g>
+
+        {/* =====================================================
+             Grave scene — genuinely one-line style: the ground and
+             every headstone / hill / tomb / coffin sitting on it are
+             fused into a single unbroken stroke per zone (the pen
+             never lifts), the same way each figure in a continuous
+             line drawing is one uninterrupted contour. Three zones,
+             each its own single path, sit across the width — and are
+             kept well clear of the very top/bottom edges so they never
+             get cropped by the background's cover-scaling on wide
+             screens. No fill anywhere.
+        ===================================================== */}
+        <g
+          className="auth-graves"
+          fill="none"
+          stroke="#dff4ff"
+          strokeWidth="1"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          opacity="0.75"
+          filter="url(#authLineGlow)"
+        >
+          {/* Zone 1 — flat ground, three headstones scattered along it */}
+          <path
+            d="M-60,712
+               C20,706 60,709 95,708
+               L95,708 L95,655 Q95,645 105,645 Q115,645 115,655 L115,708
+               C130,703 150,708 165,707
+               L180,706 L180,660 L192,650 L204,660 L204,706
+               C215,702 225,699 235,698 L235,698 L235,670 Q235,662 243,662 Q251,662 251,670 L251,698 C265,699 285,702 310,705
+               L330,705 L330,668 Q330,659 339,659 Q348,659 348,668 L348,705
+               C365,703 375,706 390,704"
+          />
+
+          {/* Zone 2 — ground rising into the main hill (headstone on top),
+              easing into a Vietnamese-style tomb (low mound with a small
+              roofed headstone rising from its centre — kept short and
+              close to the ground so it doesn't climb into the quote
+              text above), then one more leaning headstone before the
+              ground flattens out again */}
+          <path
+            d="M390,704
+               C420,700 460,694 500,689
+               C515,687 530,686 545,686
+               L545,686 L545,668 Q545,661 552,661 Q559,661 559,668 L559,686
+               C575,687 600,691 620,694
+               C640,697 660,699 680,700
+               C690,692 705,689 725,688
+               L725,688 L725,678 L741,666 L757,678 L757,688
+               C775,689 790,692 800,700
+               C820,704 850,706 880,705
+               L880,705 L883,665 L895,653 L907,665 L910,705
+               C920,704 930,705 940,704"
+          />
+
+          {/* Zone 3 — flat ground rising into a small hill (headstone on
+              top), a coffin resting low on the ground, and a final
+              leaning headstone */}
+          <path
+            d="M940,704
+               C970,703 1000,700 1030,690
+               C1060,676 1090,650 1120,626
+               C1128,620 1132,616 1135,612
+               L1135,612 L1135,572 Q1135,563 1144,563 Q1153,563 1153,572 L1153,612
+               C1165,618 1178,632 1190,650
+               C1200,664 1206,676 1210,686
+               L1210,686 L1210,674 Q1212,664 1224,664 L1270,664 Q1282,664 1284,674 L1284,690
+               C1300,696 1320,700 1340,702
+               L1340,702 L1343,662 L1355,650 L1367,662 L1370,702
+               C1390,701 1405,699 1415,698 L1415,698 L1415,674 Q1415,667 1422,667 Q1429,667 1429,674 L1429,698 C1440,700 1460,703 1500,706"
+          />
+        </g>
       </svg>
 
       {/* Fireflies — drifting above the grave clusters */}
@@ -399,7 +545,7 @@ export default function AuthCosmicBackground() {
         {fireflies.map((f) => (
           <span
             key={f.id}
-            className="auth-firefly"
+            className={`auth-firefly${f.teal ? " auth-firefly--teal" : ""}`}
             style={
               {
                 left: `${f.left}%`,
@@ -409,6 +555,12 @@ export default function AuthCosmicBackground() {
                 animationDuration: `${f.duration}s`,
                 animationDelay: `${f.delay}s`,
                 "--drift": `${f.drift}px`,
+                ...(f.teal
+                  ? {
+                      backgroundColor: "#0affd4",
+                      boxShadow: "0 0 6px 2px rgba(10,255,212,0.85)",
+                    }
+                  : {}),
               } as React.CSSProperties
             }
           />

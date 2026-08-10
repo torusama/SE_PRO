@@ -62,10 +62,6 @@ export default function ForgotPasswordPage() {
               <br />
               <em>liên kết xác thực.</em>
             </p>
-            <p className="left-sub">
-              Khôi phục quyền truy cập an toàn để tiếp tục sử dụng hệ thống Vĩnh
-              Phúc Viên.
-            </p>
           </div>
         </div>
       </div>
