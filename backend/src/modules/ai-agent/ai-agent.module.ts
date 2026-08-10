@@ -17,6 +17,7 @@ import { PlotRankerClient } from './plot-ranker.client';
 import { FeedbackService } from './feedback.service';
 import { TrainingService } from './training.service';
 import { ConversationHistoryService } from './conversation-history.service';
+import { ConversationMemoryService } from './conversation-memory.service';
 import { ProactiveConciergeService } from './proactive-concierge.service';
 
 import {
@@ -64,6 +65,7 @@ import { MemorialEmailDraftService } from './memorial-email-draft.service';
     FeedbackService,
     TrainingService,
     ConversationHistoryService,
+    ConversationMemoryService,
     AgentBookingService,
     ProactiveConciergeService,
     AutonomousLearningService,

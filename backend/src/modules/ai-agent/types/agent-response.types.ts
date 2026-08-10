@@ -46,9 +46,19 @@ export type AgentPendingAction =
 
 export type AgentUiDirective =
   | {
-      type: 'OPEN_SERVICE_PANEL';
+      /** Legacy directive name retained for stored conversations; frontend opens the service checkout side panel. */
+      type: 'SHOW_INLINE_SERVICE_PAYMENT';
       serviceTypeId?: number;
       orderId?: number;
+      amount?: number;
+      paymentStatus?: 'unpaid' | 'awaiting_confirmation' | 'paid';
+    }
+  | {
+      /** Open scheduling only after the payment step and highlight the known date. */
+      type: 'OPEN_SERVICE_SCHEDULE_CALENDAR';
+      orderId: number;
+      requestedDate?: string;
+      scheduledDate?: string;
     }
   | {
       type: 'OPEN_APPOINTMENT_CALENDAR';

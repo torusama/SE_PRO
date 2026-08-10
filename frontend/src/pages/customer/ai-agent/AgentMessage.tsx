@@ -70,8 +70,9 @@ export default function AgentMessage({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(message.content);
   const [presentationComplete, setPresentationComplete] = useState(!animated);
-  const markedFollowUps = message.response?.quickReplies?.length
-    ? message.response.quickReplies.slice(0, 2)
+  const quickReplyChips = (message.response?.quickReplies ?? []).slice(0, 6);
+  const markedFollowUps = quickReplyChips.length
+    ? quickReplyChips.slice(0, 2)
     : (message.response?.suggestedFollowUps ?? [])
         .slice(0, 2)
         .map((item, index) => ({
@@ -185,24 +186,166 @@ export default function AgentMessage({
               }
             />
 
+            <div className="agent-bazi-grid">
+              {message.response.baziSuggestion.yearPillar && (
+                <div className="agent-bazi-badge-item">
+                  <small>Can Chi năm sinh</small>
+                  <strong>{message.response.baziSuggestion.yearPillar}</strong>
+                </div>
+              )}
+              {message.response.baziSuggestion.napAmName && (
+                <div className="agent-bazi-badge-item">
+                  <small>Nạp âm</small>
+                  <strong>{message.response.baziSuggestion.napAmName}</strong>
+                </div>
+              )}
+              {message.response.baziSuggestion.cungMenh && (
+                <div className="agent-bazi-badge-item">
+                  <small>Cung mệnh</small>
+                  <strong>{message.response.baziSuggestion.cungMenh}</strong>
+                </div>
+              )}
+              {message.response.baziSuggestion.tuMenh && (
+                <div className="agent-bazi-badge-item">
+                  <small>Nhóm mệnh</small>
+                  <strong>{message.response.baziSuggestion.tuMenh}</strong>
+                </div>
+              )}
+              {message.response.baziSuggestion.birthHourBranch && (
+                <div className="agent-bazi-badge-item">
+                  <small>Giờ sinh quy đổi</small>
+                  <strong>
+                    {message.response.baziSuggestion.birthHourBranch}
+                  </strong>
+                </div>
+              )}
+            </div>
+
+            <div className="agent-bazi-analysis">
+              <p>
+                {message.response.baziSuggestion.detailedAnalysis ||
+                  message.response.baziSuggestion.explanation}
+              </p>
+            </div>
+
+            {(message.response.baziSuggestion.goodDirections?.length ||
+              message.response.baziSuggestion.badDirections?.length) && (
+              <div className="agent-bazi-directions-section">
+                {!!message.response.baziSuggestion.goodDirections?.length && (
+                  <div className="agent-bazi-dir-group">
+                    <span className="agent-bazi-dir-label good">
+                      Hướng nên ưu tiên
+                    </span>
+                    <div className="agent-bazi-dir-tags">
+                      {message.response.baziSuggestion.goodDirections.map(
+                        (item) => (
+                          <div
+                            key={`${item.direction}-${item.star}`}
+                            className="agent-bazi-tag good"
+                          >
+                            <span className="agent-bazi-tag-dir">
+                              {item.direction}
+                            </span>
+                            <span className="agent-bazi-tag-star">
+                              {item.star}
+                            </span>
+                            <span className="agent-bazi-tag-desc">
+                              {item.meaning}
+                            </span>
+                          </div>
+                        ),
+                      )}
+                    </div>
+                  </div>
+                )}
+                {!!message.response.baziSuggestion.badDirections?.length && (
+                  <div className="agent-bazi-dir-group">
+                    <span className="agent-bazi-dir-label bad">
+                      Hướng nên hạn chế
+                    </span>
+                    <div className="agent-bazi-dir-tags">
+                      {message.response.baziSuggestion.badDirections.map(
+                        (item) => (
+                          <div
+                            key={`${item.direction}-${item.star}`}
+                            className="agent-bazi-tag bad"
+                          >
+                            <span className="agent-bazi-tag-dir">
+                              {item.direction}
+                            </span>
+                            <span className="agent-bazi-tag-star">
+                              {item.star}
+                            </span>
+                            <span className="agent-bazi-tag-desc">
+                              {item.meaning}
+                            </span>
+                          </div>
+                        ),
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {message.response.baziSuggestion.elementRelations && (
+              <div className="agent-bazi-relations">
+                <span>
+                  <strong>Tương sinh:</strong>{" "}
+                  {message.response.baziSuggestion.elementRelations.supporting}
+                </span>
+                <span>
+                  <strong>Yếu tố nên cân nhắc:</strong>{" "}
+                  {message.response.baziSuggestion.elementRelations.weakening}
+                </span>
+              </div>
+            )}
+
             {/* Clean CTA — no icons */}
             <div className="agent-bazi-followup">
               <p className="agent-bazi-followup-title">
                 Bạn muốn trợ lý hỗ trợ thêm nội dung nào?
               </p>
               <div className="agent-bazi-followup-grid">
-                <div className="agent-bazi-followup-item">
-                  <strong>Tìm lô phù hợp</strong>
-                  <span>Đề xuất các lô có hướng hợp tuổi gia chủ</span>
-                </div>
-                <div className="agent-bazi-followup-item">
-                  <strong>Ngày giờ tốt</strong>
-                  <span>Tư vấn ngày lành tháng tốt để khởi công</span>
-                </div>
-                <div className="agent-bazi-followup-item">
-                  <strong>Dịch vụ lễ cúng</strong>
-                  <span>Chăm sóc mộ phần, hoa tươi & nghi lễ</span>
-                </div>
+                <button
+                  type="button"
+                  className="agent-bazi-followup-item"
+                  disabled={busy}
+                  onClick={() =>
+                    onQuickReply?.(
+                      "Có, hãy lọc lô theo các hướng ưu tiên vừa phân tích cho mình.",
+                    )
+                  }
+                >
+                  <strong>Tìm lô theo hướng</strong>
+                  <span>Chỉ bắt đầu lọc lô khi bạn chủ động chọn bước này</span>
+                </button>
+                <button
+                  type="button"
+                  className="agent-bazi-followup-item"
+                  disabled={busy}
+                  onClick={() =>
+                    onQuickReply?.(
+                      "Giải thích kỹ hơn ý nghĩa từng hướng tốt và hướng nên hạn chế trong kết quả vừa rồi.",
+                    )
+                  }
+                >
+                  <strong>Giải thích từng hướng</strong>
+                  <span>Phân tích rõ sao, ý nghĩa và cách dùng khi cân nhắc lô</span>
+                </button>
+                <button
+                  type="button"
+                  className="agent-bazi-followup-item"
+                  disabled={busy}
+                  onClick={() =>
+                    onQuickReply?.(
+                      "Không dùng phong thủy lúc này. Quay lại tư vấn theo ngân sách, vị trí và nhu cầu thực tế của mình.",
+                    )
+                  }
+                >
+                  <strong>Ưu tiên tiêu chí thực tế</strong>
+                  <span>Quay về ngân sách, vị trí, diện tích và nhu cầu gia đình</span>
+                </button>
               </div>
             </div>
 
@@ -277,13 +420,17 @@ export default function AgentMessage({
         {isAssistant &&
         showFollowUps &&
         presentationComplete &&
-        markedFollowUps.length > 0 ? (
+        (quickReplyChips.length > 0 || markedFollowUps.length > 0) ? (
           <div className="agent-message-followups">
             <p className="agent-message-followup-sentence">
               Bạn muốn mình{" "}
               {markedFollowUps.map((reply, index) => (
                 <span key={reply.id}>
-                  {index > 0 ? " hay " : ""}
+                  {index > 0
+                    ? index === markedFollowUps.length - 1
+                      ? " hay "
+                      : ", "
+                    : ""}
                   <button
                     type="button"
                     disabled={busy}

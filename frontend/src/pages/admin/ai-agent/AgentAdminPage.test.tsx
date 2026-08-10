@@ -165,7 +165,7 @@ describe("AgentAdminPage learning analytics", () => {
     expect(screen.getByText("Dịch vụ quan tâm")).toBeInTheDocument();
     expect(screen.queryByText("Mục hệ thống khác")).not.toBeInTheDocument();
     expect(screen.getByText("Lượt truy cập AI")).toBeInTheDocument();
-    expect(screen.getByText("Truy cập AI")).toBeInTheDocument();
+    expect(screen.getAllByText("Truy cập AI")[0]).toBeInTheDocument();
     expect(screen.getByText("Đủ dữ liệu để đánh giá")).toBeInTheDocument();
     expect(screen.getByText("Bộ xếp hạng AI đang tắt")).toBeInTheDocument();
     expect(screen.getByText(/phạm vi quản trị/i)).toBeInTheDocument();

@@ -507,7 +507,9 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  transition: opacity 0.2s ease, border-color 0.2s ease;
+  transition:
+    opacity 0.2s ease,
+    border-color 0.2s ease;
 }
 .home-map-preview__legend i {
   width: 6px;
@@ -529,12 +531,14 @@ body {
 
 /* ===== FEATURES GRID ===== */
 .features-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 16px;
   margin-top: 40px;
 }
 .feature-card {
+  flex: 0 1 calc((100% - 32px) / 3);
   min-height: 176px;
   border: 1px solid rgba(232, 244, 240, 0.08);
   border-radius: 16px;
@@ -1333,7 +1337,11 @@ body {
     min-height: 270px;
   }
   .features-grid {
-    grid-template-columns: 1fr;
+    flex-direction: column;
+  }
+  .feature-card {
+    flex-basis: 100%;
+    width: 100%;
   }
   .stats-row {
     grid-template-columns: 1fr 1fr;

@@ -1,5 +1,6 @@
 import { Bot } from "lucide-react";
 import type { ComparisonFollowUpAction } from "./agent.types";
+import MarkdownMessage from "./MarkdownMessage";
 
 interface ComparisonAssessmentMessageProps {
   assessment: string;
@@ -23,6 +24,48 @@ function isSafeVietnameseAssessment(value: string) {
   return /[ăâđêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ]/i.test(
     value,
   );
+}
+
+export function formatComparisonAssessmentMarkdown(text: string): string {
+  if (!text || !text.trim()) return text;
+
+  // If text already has markdown paragraphs or bullet lists, keep as-is
+  if (text.includes("\n\n") || text.includes("\n-") || text.includes("\n*")) {
+    return text;
+  }
+
+  // Split wall of text by structural paragraph triggers (e.g. Lô A-..., Hai lô..., Nếu...)
+  const splitPattern =
+    /(?=\b(?:Lô\s+[A-Z0-9-]+|Hai lô|Cả hai lô|Nhìn chung|Về mặt|Nếu\s+|Tuy nhiên,?\s+|Do đó|Tóm lại|Ưu điểm|Nhược điểm)\b)/g;
+
+  const sections = text
+    .split(splitPattern)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  if (sections.length > 1) {
+    return sections
+      .map((sec) => {
+        if (/^Lô\s+[A-Z0-9-]+/i.test(sec)) {
+          return sec.replace(/^(Lô\s+[A-Z0-9-]+)/i, "**$1**");
+        }
+        if (/^(Hai lô|Cả hai lô)/i.test(sec)) {
+          return sec.replace(/^(Hai lô|Cả hai lô)/i, "**$1**");
+        }
+        return sec;
+      })
+      .join("\n\n");
+  }
+
+  // Fallback: split long single paragraph after period if over 200 chars
+  if (text.length > 200) {
+    return text.replace(
+      /(\. )\s*(?=[A-ZĐÀÁẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬÊẾỀỂỄỆÔỐỒỔỖỘƠỚỜỞỠỢƯỨỪỬỮỰYÝỲỶỸỴ])/g,
+      "$1\n\n",
+    );
+  }
+
+  return text;
 }
 
 export default function ComparisonAssessmentMessage({
@@ -51,6 +94,8 @@ export default function ComparisonAssessmentMessage({
     : safeAssessment ||
       "Mình chưa tạo được nhận xét cho các phương án này. Bạn vẫn có thể xem các tiêu chí trong bảng hoặc thử chọn lại lô cần so sánh.";
 
+  const formattedContent = formatComparisonAssessmentMarkdown(content);
+
   return (
     <article
       className="agent-message assistant agent-comparison-assessment-message"
@@ -64,7 +109,18 @@ export default function ComparisonAssessmentMessage({
           className="agent-message-bubble"
           role={loading ? "status" : undefined}
         >
-          <p className="agent-comparison-assessment-copy">{content}</p>
+          <div className={`agent-comparison-status ${loading ? "is-loading" : ""}`}>
+            <div className="agent-comparison-assessment-copy">
+              <MarkdownMessage content={formattedContent} />
+            </div>
+            {loading ? (
+              <div className="agent-comparison-dots" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </div>
+            ) : null}
+          </div>
           {!loading &&
             safeAssessment &&
             safeFollowUpPrompt &&
@@ -93,3 +149,4 @@ export default function ComparisonAssessmentMessage({
     </article>
   );
 }
+

@@ -774,7 +774,15 @@ export class BaziRuleService {
 
     const explanation = `Gia chủ tuổi ${yearPillar} (${year}${hourText}), Mệnh Nạp Âm ${napAm.name} (${napAm.meaning}, thuộc hành ${napAm.element}). Cung mệnh ${batTrach.cung} (${batTrach.group}, giới tính ${genderText}).`;
 
-    const detailedAnalysis = `Theo thuyết Âm Trạch Bát Trạch, gia chủ mệnh ${napAm.name} (${napAm.element}) thuộc ${batTrach.group} (Cung ${batTrach.cung}). Hướng mộ ưu tiên nhất là ${batTrach.good[0].direction} (Sao ${batTrach.good[0].star} - ${batTrach.good[0].meaning}), kết hợp hỗ trợ ngũ hành: ${elementRel.supporting}. Cần lưu ý tránh các hướng đại kỵ: ${batTrach.bad[0].direction} (${batTrach.bad[0].star}) và ${batTrach.bad[1].direction} (${batTrach.bad[1].star}).`;
+    const detailedAnalysis = [
+      `Theo hệ quy tắc Bát Trạch đang dùng, gia chủ mệnh ${napAm.name} (${napAm.element}) thuộc ${batTrach.group}, Cung ${batTrach.cung}.`,
+      `Nhóm hướng thuận gồm ${batTrach.good.map((item) => `${item.direction} (${item.star})`).join(', ')}; trong đó ${batTrach.good[0].direction} được xếp ưu tiên cao nhất theo bảng cung hiện tại.`,
+      `Nhóm hướng cần hạn chế gồm ${batTrach.bad.map((item) => `${item.direction} (${item.star})`).join(', ')}.`,
+      `Về ngũ hành, yếu tố hỗ trợ được mô tả là: ${elementRel.supporting}; yếu tố làm suy yếu/xung khắc cần cân nhắc là: ${elementRel.weakening}.`,
+      birthHourBranch
+        ? `Giờ sinh quy về chi ${birthHourBranch}; hệ thống chỉ dùng dữ liệu này như tín hiệu bổ sung, không tự suy ra đầy đủ Tứ Trụ.`
+        : 'Không có giờ sinh nên hệ thống không suy đoán phần giờ.',
+    ].join(' ');
 
     return {
       preferredDirections,

@@ -25,6 +25,7 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { AdminServiceOrderQueryDto } from './dto/admin-service-order-query.dto';
 import { CemeteryServicesService } from './cemetery-services.service';
 import { CreateServiceOrderDto } from './dto/create-service-order.dto';
+import { SetServiceOrderRequestedDateDto } from './dto/set-service-order-requested-date.dto';
 import {
   CompleteServiceOrderDto,
   UpdateServiceOrderDto,
@@ -180,10 +181,53 @@ export class CemeteryServicesController {
   @Post('service-orders/:id/pay')
   @UseGuards(JwtAuthGuard)
   async pay(@CurrentUser() user: { id: number }, @Param('id') id: string) {
+    const orderId = Number(id);
+    const data = await this.service.markPaid(orderId, user.id);
     return {
       success: true,
       message: 'Đã ghi nhận thanh toán, đang chờ xác nhận từ ban quản lý',
-      data: await this.service.markPaid(Number(id), user.id),
+      data,
+      uiDirective: {
+        type: 'OPEN_SERVICE_SCHEDULE_CALENDAR' as const,
+        orderId,
+        requestedDate:
+          typeof (data as Record<string, unknown>).requestedDate === 'string'
+            ? ((data as Record<string, unknown>).requestedDate as string)
+            : undefined,
+        scheduledDate:
+          typeof (data as Record<string, unknown>).scheduledDate === 'string'
+            ? ((data as Record<string, unknown>).scheduledDate as string)
+            : undefined,
+      },
+    };
+  }
+
+  @Patch('service-orders/:id/requested-date')
+  @UseGuards(JwtAuthGuard)
+  async setRequestedDate(
+    @CurrentUser() user: { id: number },
+    @Param('id') id: string,
+    @Body() dto: SetServiceOrderRequestedDateDto,
+  ) {
+    const orderId = Number(id);
+    const data = await this.service.setRequestedDateAfterPayment(
+      orderId,
+      user.id,
+      dto.requestedDate,
+    );
+    return {
+      success: true,
+      message: 'Đã cập nhật ngày thực hiện dịch vụ',
+      data,
+      uiDirective: {
+        type: 'OPEN_SERVICE_SCHEDULE_CALENDAR' as const,
+        orderId,
+        requestedDate: dto.requestedDate,
+        scheduledDate:
+          typeof (data as Record<string, unknown>).scheduledDate === 'string'
+            ? ((data as Record<string, unknown>).scheduledDate as string)
+            : undefined,
+      },
     };
   }
 

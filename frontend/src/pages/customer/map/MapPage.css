@@ -17,8 +17,8 @@
   --ink-deep: #080d1a;
   --teal-glow: #00e5c4;
   --teal-soft: #00b89e;
-  --gold: #c9a84c;
-  --gold-bright: #f0c060;
+  --gold: #0affd4;
+  --gold-bright: #7dffe8;
   --amber: #f5a623;
   --red: #e84a4a;
   --purple: #7b6bcc;
@@ -26,14 +26,27 @@
   --text-muted: #7a9a90;
   --border-dim: rgba(0, 229, 196, 0.12);
   --border-soft: rgba(0, 229, 196, 0.25);
-  --border-gold: rgba(201, 168, 76, 0.25);
+  --border-gold: rgba(10, 255, 212, 0.25);
 
   position: relative;
-  background: var(--ink-void);
+  background:
+    radial-gradient(
+      ellipse 900px 600px at 12% -8%,
+      rgba(20, 58, 110, 0.22),
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse 800px 700px at 92% 108%,
+      rgba(12, 40, 82, 0.24),
+      transparent 60%
+    ),
+    var(--ink-void);
   color: var(--text-main);
   font-family: "Be Vietnam Pro", sans-serif;
-  min-height: 100vh;
-  overflow-x: hidden;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 /* ---------- animated background ---------- */
@@ -53,14 +66,18 @@
 .map-page .glow-orb-gold {
   width: 600px;
   height: 600px;
-  background: radial-gradient(circle, rgba(201, 168, 76, 0.1), transparent 70%);
+  background: radial-gradient(circle, rgba(30, 80, 160, 0.16), transparent 70%);
   top: -100px;
   right: -80px;
 }
 .map-page .glow-orb-teal {
   width: 500px;
   height: 500px;
-  background: radial-gradient(circle, rgba(0, 229, 196, 0.07), transparent 70%);
+  background: radial-gradient(
+    circle,
+    rgba(10, 255, 212, 0.07),
+    transparent 70%
+  );
   bottom: 0;
   left: -80px;
   animation-delay: -5s;
@@ -107,6 +124,7 @@
 .map-page .breadcrumb {
   position: relative;
   z-index: 10;
+  flex-shrink: 0;
   padding: 16px 48px;
   display: flex;
   align-items: center;
@@ -138,7 +156,10 @@
   background: transparent;
   color: var(--teal-glow);
   cursor: pointer;
-  transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    border-color 160ms ease;
 }
 .map-page .map-help-btn:hover {
   background: rgba(10, 255, 212, 0.1);
@@ -152,42 +173,57 @@
   z-index: 10;
   display: grid;
   grid-template-columns: 280px minmax(480px, 1fr) 320px;
-  height: calc(100vh - 110px);
+  gap: 14px;
+  flex: 1;
+  min-height: 0;
+  padding: 0 20px 16px;
   overflow: hidden;
 }
 
 /* ---------- sidebar left ---------- */
 .map-page .sidebar-left {
-  border-right: 0.5px solid var(--border-dim);
-  background: rgba(8, 13, 26, 0.6);
-  backdrop-filter: blur(8px);
+  border: 0.5px solid var(--border-dim);
+  border-radius: 18px;
+  background: rgba(9, 14, 28, 0.5);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.22);
   display: flex;
   flex-direction: column;
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: thin;
-  scrollbar-color: rgba(0, 229, 196, 0.3) transparent;
+  scrollbar-color: rgba(0, 229, 196, 0.35) transparent;
 }
 
-.map-page .sidebar-left::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+.map-page .sidebar-left::-webkit-scrollbar,
+.map-page .panel-right::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }
 
-.map-page .sidebar-left::-webkit-scrollbar-track {
+.map-page .sidebar-left::-webkit-scrollbar-track,
+.map-page .panel-right::-webkit-scrollbar-track {
   background: transparent;
+  margin-block: 12px;
 }
 
-.map-page .sidebar-left::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.18);
-  border-radius: 10px;
+.map-page .sidebar-left::-webkit-scrollbar-thumb,
+.map-page .panel-right::-webkit-scrollbar-thumb {
+  background: rgba(0, 229, 196, 0.4);
+  border-radius: 999px;
+  border: 1.5px solid transparent;
+  background-clip: padding-box;
 }
 
-.map-page .sidebar-left::-webkit-scrollbar-thumb:hover {
+.map-page .sidebar-left::-webkit-scrollbar-thumb:hover,
+.map-page .panel-right::-webkit-scrollbar-thumb:hover {
   background: var(--teal-soft);
+  background-clip: padding-box;
 }
 
-.map-page .sidebar-left::-webkit-scrollbar-button {
+.map-page .sidebar-left::-webkit-scrollbar-button,
+.map-page .panel-right::-webkit-scrollbar-button {
   display: none;
   width: 0;
   height: 0;
@@ -231,7 +267,9 @@
   border-radius: 8px;
   padding: 8px 12px;
   margin-bottom: 12px;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
 }
 .map-page .search-box:focus-within {
   border-color: var(--teal-soft);
@@ -416,7 +454,10 @@
 }
 .map-page .stat-num {
   display: block;
-  font-family: "Be Vietnam Pro", -apple-system, sans-serif;
+  font-family:
+    "Be Vietnam Pro",
+    -apple-system,
+    sans-serif;
   font-size: 22px;
   font-weight: 800;
   color: var(--teal-glow);
@@ -436,7 +477,7 @@
   color: #f5a623;
 }
 .map-page .stat-num.yellow {
-  color: #c9a84c;
+  color: #0affd4;
 }
 .map-page .stat-num.red {
   color: #e84a4a;
@@ -456,25 +497,31 @@
 
 /* ---------- map area ---------- */
 .map-page .map-area {
+  position: relative;
   display: flex;
   flex-direction: column;
   background: rgba(4, 6, 14, 0.4);
-  min-height: 560px;
+  border: 0.5px solid var(--border-dim);
+  border-radius: 18px;
+  min-height: 0;
   overflow: hidden;
 }
 
-/* toolbar — normal flow, sits ABOVE the SVG */
+/* toolbar — floats OVER the map instead of taking its own row, so the
+   map viewport underneath gets the full height of the map area. */
 .map-page .map-toolbar {
+  position: absolute;
+  top: 14px;
+  left: 16px;
+  z-index: 20;
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
   align-items: center;
-  padding: 12px 16px;
-  border-bottom: 0.5px solid var(--border-dim);
-  background: rgba(8, 13, 26, 0.5);
-  backdrop-filter: blur(8px);
-  z-index: 20;
-  flex-shrink: 0;
+  pointer-events: none;
+}
+.map-page .map-toolbar > * {
+  pointer-events: auto;
 }
 
 /* map viewport — the bounded map-viewing area. Overlay controls (compass,
@@ -517,10 +564,6 @@
 .map-page .mode-switch {
   display: flex;
   gap: 0;
-  background: rgba(8, 13, 26, 0.85);
-  border: 0.5px solid var(--border-dim);
-  border-radius: 8px;
-  overflow: hidden;
 }
 
 .map-page .mode-btn {
@@ -534,6 +577,7 @@
   transition: all 0.2s;
   white-space: nowrap;
   position: relative;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.75);
 }
 .map-page .mode-btn:not(:last-child)::after {
   content: "";
@@ -546,11 +590,19 @@
 }
 .map-page .mode-btn:hover {
   color: var(--text-main);
-  background: rgba(0, 229, 196, 0.03);
 }
 .map-page .mode-btn.active {
   color: var(--teal-glow);
-  background: rgba(0, 229, 196, 0.08);
+}
+.map-page .mode-btn.active::before {
+  content: "";
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--teal-glow);
 }
 
 .map-page .map-btn {
@@ -705,7 +757,7 @@
   filter: drop-shadow(0 0 7px rgba(0, 229, 196, 0.7));
 }
 .map-page .plot-cell.selected .lot-rect {
-  filter: brightness(1.25) drop-shadow(0 0 5px rgba(240, 192, 96, 0.55));
+  filter: brightness(1.25) drop-shadow(0 0 5px rgba(125, 255, 232, 0.55));
 }
 .map-page .plot-cell.cluster-selected .lot-rect {
   filter: brightness(1.3) drop-shadow(0 0 6px rgba(0, 229, 196, 0.55));
@@ -752,7 +804,7 @@
   vector-effect: non-scaling-stroke;
 }
 .map-page .map-gate-marker {
-  fill: rgba(240, 192, 96, 0.55);
+  fill: rgba(125, 255, 232, 0.55);
 }
 .map-page .map-gate-secondary {
   fill: rgba(123, 107, 204, 0.55);
@@ -812,7 +864,13 @@
   fill: rgba(190, 175, 240, 0.85);
 }
 .map-page .zone-label {
-  font-family: "Be Vietnam Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family:
+    "Be Vietnam Pro",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
   font-size: 13px;
   font-weight: 700;
   font-variant-numeric: lining-nums;
@@ -820,7 +878,7 @@
   letter-spacing: 0.05em;
 }
 .map-page .row-label {
-  fill: rgba(240, 192, 96, 0.46);
+  fill: rgba(125, 255, 232, 0.46);
   font-size: 8px;
   font-family: "Be Vietnam Pro", sans-serif;
 }
@@ -837,12 +895,12 @@
 }
 .map-page .route-line {
   fill: none;
-  stroke: rgba(240, 192, 96, 0.72);
+  stroke: rgba(125, 255, 232, 0.72);
   stroke-width: 3;
   stroke-linejoin: round;
   stroke-linecap: round;
   stroke-dasharray: 8 6;
-  filter: drop-shadow(0 0 4px rgba(240, 192, 96, 0.45));
+  filter: drop-shadow(0 0 4px rgba(125, 255, 232, 0.45));
   pointer-events: none;
 }
 .map-page .compass {
@@ -863,21 +921,17 @@
 
 /* ---------- panel right ---------- */
 .map-page .panel-right {
-  border-left: 0.5px solid var(--border-dim);
-  background: rgba(8, 13, 26, 0.6);
-  backdrop-filter: blur(8px);
+  border: 0.5px solid var(--border-dim);
+  border-radius: 18px;
+  background: rgba(9, 14, 28, 0.5);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.22);
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 229, 196, 0.35) transparent;
   display: flex;
   flex-direction: column;
-}
-
-.map-page .panel-right::-webkit-scrollbar,
-.map-page .sidebar-left::-webkit-scrollbar {
-  width: 4px;
-}
-.map-page .panel-right::-webkit-scrollbar-thumb,
-.map-page .sidebar-left::-webkit-scrollbar-thumb {
-  background: var(--border-dim);
 }
 
 /* detail empty */
@@ -991,7 +1045,7 @@
   color: #ffdca0;
 }
 .map-page .status-badge.reserved {
-  background: rgba(201, 168, 76, 0.1);
+  background: rgba(10, 255, 212, 0.1);
   border: 0.5px solid var(--gold);
   color: var(--gold-bright);
 }
@@ -1050,9 +1104,9 @@
   color: var(--text-main);
 }
 .map-page .direction-box {
-  background: rgba(201, 168, 76, 0.05);
+  background: rgba(10, 255, 212, 0.05);
   border: 0.5px solid var(--border-gold);
-  color: #eadcb5;
+  color: #7dffe8;
 }
 .map-page .my-plot-box {
   background: rgba(0, 229, 196, 0.07);
@@ -1229,7 +1283,7 @@
 
 .map-page .request-type-btn.active {
   border-color: var(--border-gold);
-  background: rgba(201, 168, 76, 0.12);
+  background: rgba(10, 255, 212, 0.12);
   color: var(--gold-bright);
 }
 
@@ -1239,7 +1293,7 @@
   border-radius: 8px;
   background: linear-gradient(
     135deg,
-    rgba(201, 168, 76, 0.15),
+    rgba(10, 255, 212, 0.15),
     rgba(0, 229, 196, 0.1)
   );
   border: 0.5px solid var(--border-gold);
@@ -1252,7 +1306,7 @@
   letter-spacing: 0.02em;
 }
 .map-page .btn-primary:hover {
-  background: rgba(201, 168, 76, 0.22);
+  background: rgba(10, 255, 212, 0.22);
   color: var(--gold-bright);
 }
 
@@ -1413,17 +1467,18 @@
 
 /* tablet: detail panel drops below */
 @media (max-width: 1180px) {
+  .map-page {
+    height: auto;
+    overflow: visible auto;
+  }
   .map-page .app-body {
     grid-template-columns: 260px minmax(420px, 1fr);
     grid-template-rows: minmax(560px, 1fr) auto;
     height: auto;
-    min-height: calc(100vh - 110px);
     overflow: visible;
   }
   .map-page .panel-right {
     grid-column: 1 / -1;
-    border-left: none;
-    border-top: 0.5px solid var(--border-dim);
   }
 }
 
@@ -1439,8 +1494,6 @@
     overflow: visible;
   }
   .map-page .sidebar-left {
-    border-right: none;
-    border-bottom: 0.5px solid var(--border-dim);
     max-height: none;
   }
   .map-page .map-area {
@@ -1454,11 +1507,8 @@
     height: 1120px;
   }
   .map-page .map-toolbar {
-    padding: 10px 12px;
-  }
-  .map-page .panel-right {
-    border-left: none;
-    border-top: 0.5px solid var(--border-dim);
+    top: 10px;
+    left: 12px;
   }
   .map-page .detail-panel {
     padding: 20px;

@@ -23,6 +23,31 @@ describe('ConversationHistoryService', () => {
     );
   });
 
+  it('hides near-simultaneous exact duplicate conversation summaries', async () => {
+    database.query.mockResolvedValue([
+      {
+        sessionId: 'SES-newer',
+        title: 'Theo tôi FAQ nên ghi rằng người dùng ...',
+        preview: 'Cảm ơn bạn đã góp ý.',
+        messageCount: 2,
+        createdAt: new Date('2026-08-09T13:36:10Z'),
+        updatedAt: new Date('2026-08-09T13:36:12Z'),
+      },
+      {
+        sessionId: 'SES-older-duplicate',
+        title: 'Theo tôi FAQ nên ghi rằng người dùng ...',
+        preview: 'Cảm ơn bạn đã góp ý.',
+        messageCount: 2,
+        createdAt: new Date('2026-08-09T13:36:04Z'),
+        updatedAt: new Date('2026-08-09T13:36:06Z'),
+      },
+    ]);
+
+    await expect(service.list(42)).resolves.toEqual([
+      expect.objectContaining({ sessionId: 'SES-newer' }),
+    ]);
+  });
+
   it('restores persisted assistant cards and metadata', async () => {
     database.queryOne.mockResolvedValue({
       conversationId: 7,

@@ -112,6 +112,18 @@ const formatDate = (value: string) => {
       }).format(date);
 };
 
+const formatTimelineDate = (value: string) => {
+  const date = new Date(`${value}T00:00:00`);
+  return Number.isNaN(date.getTime())
+    ? value
+    : new Intl.DateTimeFormat("vi-VN", {
+        weekday: "short",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      }).format(date);
+};
+
 function MetricCard({
   label: metricLabel,
   value,
@@ -313,10 +325,15 @@ function ActivityTimeline({ analytics }: { analytics: LearningAnalytics }) {
               return (
                 <div
                   aria-label={ariaLabel}
-                  className="learning-analytics__day"
+                  className={`learning-analytics__day${
+                    index < 2
+                      ? " tooltip-left"
+                      : index >= analytics.timeline.length - 2
+                        ? " tooltip-right"
+                        : ""
+                  }`}
                   key={item.date}
-                  role="img"
-                  title={ariaLabel}
+                  tabIndex={0}
                 >
                   <div className="learning-analytics__day-bar">
                     {total > 0 && (
@@ -344,6 +361,39 @@ function ActivityTimeline({ analytics }: { analytics: LearningAnalytics }) {
                       />
                     )}
                   </div>
+
+                  <div
+                    className="learning-analytics__chart-tooltip"
+                    role="tooltip"
+                  >
+                    <div className="learning-analytics__chart-tooltip-head">
+                      <span>{formatTimelineDate(item.date)}</span>
+                      <strong>{numberFormat.format(total)} hoạt động</strong>
+                    </div>
+                    <dl>
+                      <div>
+                        <dt>Ghi nhớ</dt>
+                        <dd>{numberFormat.format(item.memoryUpdates)}</dd>
+                      </div>
+                      <div>
+                        <dt>Tri thức</dt>
+                        <dd>{numberFormat.format(item.knowledgeUpdates)}</dd>
+                      </div>
+                      <div>
+                        <dt>Phản hồi</dt>
+                        <dd>{numberFormat.format(item.signals)}</dd>
+                      </div>
+                      <div>
+                        <dt>Đề xuất</dt>
+                        <dd>{numberFormat.format(item.recommendations)}</dd>
+                      </div>
+                      <div className="is-access">
+                        <dt>Truy cập AI</dt>
+                        <dd>{numberFormat.format(item.aiAccesses ?? 0)}</dd>
+                      </div>
+                    </dl>
+                  </div>
+
                   <strong>{total > 0 ? total : ""}</strong>
                   <time className={showDate ? "" : "is-hidden"}>
                     {item.date.slice(5).replace("-", "/")}

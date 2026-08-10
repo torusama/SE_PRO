@@ -1849,28 +1849,10 @@ export default function HomePage() {
               style={{ cursor: "pointer" }}
             >
               <div className="feature-num">01</div>
-              <div className="feature-name">Bản đồ 2D tương tác</div>
+              <div className="feature-name">Xem bản đồ & Giữ chỗ</div>
               <div className="feature-desc">
-                Sơ đồ nghĩa trang đầy đủ, màu sắc phân biệt trạng thái lô, click
-                để xem chi tiết.
-              </div>
-            </div>
-            <div
-              className="feature-card"
-              data-reveal
-              role="button"
-              tabIndex={0}
-              onClick={() => navigate(ROUTES.MAP)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") navigate(ROUTES.MAP);
-              }}
-              style={{ cursor: "pointer" }}
-            >
-              <div className="feature-num">02</div>
-              <div className="feature-name">Giữ chỗ & Mua lô</div>
-              <div className="feature-desc">
-                Gửi yêu cầu giữ chỗ đơn lẻ hoặc nhiều lô liền kề cho gia đình,
-                dòng họ.
+                Xem sơ đồ nghĩa trang, gửi yêu cầu giữ chỗ đơn lẻ hoặc nhiều lô
+                liền kề cho gia đình, dòng họ.
               </div>
             </div>
             <div
@@ -1885,7 +1867,7 @@ export default function HomePage() {
               }}
               style={{ cursor: "pointer" }}
             >
-              <div className="feature-num">03</div>
+              <div className="feature-num">02</div>
               <div className="feature-name">Đặt & theo dõi dịch vụ</div>
               <div className="feature-desc">
                 Chăm sóc mộ, thay hoa, thắp hương, mai táng — đặt dịch vụ và
@@ -1912,7 +1894,7 @@ export default function HomePage() {
               }}
               style={{ cursor: "pointer" }}
             >
-              <div className="feature-num">04</div>
+              <div className="feature-num">03</div>
               <div className="feature-name">Nhắc lịch ngày giỗ</div>
               <div className="feature-desc">
                 Thiết lập nhắc lịch ngày giỗ, lễ tưởng niệm — hệ thống tự động
@@ -1931,8 +1913,8 @@ export default function HomePage() {
               }}
               style={{ cursor: "pointer" }}
             >
-              <div className="feature-num">05</div>
-              <div className="feature-name">Hợp đồng & Sở hữu</div>
+              <div className="feature-num">04</div>
+              <div className="feature-name">Hồ sơ lô đất của tôi</div>
               <div className="feature-desc">
                 Xem hợp đồng điện tử, hồ sơ sở hữu và lịch sử thanh toán của lô
                 đất bạn đang sở hữu.

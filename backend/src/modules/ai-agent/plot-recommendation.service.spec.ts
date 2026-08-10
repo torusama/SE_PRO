@@ -148,6 +148,24 @@ describe('PlotRecommendationService', () => {
     );
   });
 
+  it('diversifies alternatives instead of returning only near-identical neighboring plots', async () => {
+    const { service } = createService();
+
+    const result = await service.recommend({
+      budgetMax: 250_000_000,
+      numberOfPlots: 1,
+      recommendationCount: 2,
+      comparisonRequested: true,
+    });
+
+    expect(result.recommendations).toHaveLength(2);
+    expect(result.recommendations[0].plotIds).toEqual([1]);
+    expect(result.recommendations.map((option) => option.plotIds[0])).toContain(3);
+    expect(
+      new Set(result.recommendations.flatMap((option) => option.directions)).size,
+    ).toBeGreaterThan(1);
+  });
+
   it('returns exactly the number of alternatives explicitly requested', async () => {
     const { service } = createService();
 

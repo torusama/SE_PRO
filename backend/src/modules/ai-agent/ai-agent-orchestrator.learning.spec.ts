@@ -798,6 +798,63 @@ describe('AiAgentOrchestratorService application-level learning', () => {
     expect(nvidia.chat).not.toHaveBeenCalled();
   });
 
+  it('keeps a service date reply inside the active order instead of saving it as a preference', async () => {
+    const { service, booking, nvidia, tools } = setup();
+    const pendingAction = {
+      kind: 'service_order' as const,
+      stage: 'collecting' as const,
+      serviceTypeId: 4,
+      serviceName: 'Thắp hương',
+      plotId: 12,
+      plotCode: 'A-01-002',
+      quotedPrice: 200_000,
+      serviceUnit: 'lần',
+    };
+    booking.loadPendingAction.mockResolvedValue(pendingAction);
+    booking.handleTurn.mockResolvedValue({
+      handled: true,
+      intent: 'service_booking',
+      pendingAction: {
+        ...pendingAction,
+        stage: 'awaiting_confirmation',
+        requestedDate: '2026-08-11',
+      },
+      assistantMessage:
+        'Mình đã chuẩn bị đơn dịch vụ Thắp hương cho ngày 2026-08-11. Bạn xác nhận đặt dịch vụ này không?',
+    });
+    nvidia.chat.mockReset();
+    tools.execute.mockClear();
+
+    const result = await service.chat(
+      {
+        sessionId: 'SES-1',
+        message: 'Mình muốn thực hiện dịch vụ vào ngày mai.',
+      },
+      { id: 7, role: 'customer' },
+    );
+
+    expect(nvidia.chat).not.toHaveBeenCalled();
+    expect(tools.execute).not.toHaveBeenCalledWith(
+      'propose_knowledge_update',
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(booking.handleTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pendingAction,
+        plan: expect.objectContaining({
+          intent: 'service_booking',
+          action: 'prepare_service_order',
+          requirements: expect.objectContaining({
+            requestedDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+          }),
+        }),
+      }),
+    );
+    expect(result.assistantMessage).toContain('chuẩn bị đơn dịch vụ');
+    expect(result.assistantMessage).not.toContain('ghi nhớ');
+  });
+
   it('does not swallow “ok” when a booking is awaiting final confirmation', async () => {
     const { service, booking } = setup();
     const pendingAction = {

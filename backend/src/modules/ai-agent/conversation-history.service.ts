@@ -133,8 +133,8 @@ export class ConversationHistoryService {
     return { ...conversation, messages, toolCalls, feedback };
   }
 
-  list(userId: number) {
-    return this.database.query<ConversationSummaryRow>(
+  async list(userId: number) {
+    const rows = await this.database.query<ConversationSummaryRow>(
       `SELECT c.session_id AS "sessionId",
               COALESCE(
                 NULLIF(LEFT(first_message.content, 72), ''),
@@ -169,6 +169,27 @@ export class ConversationHistoryService {
        LIMIT 100`,
       [userId],
     );
+
+    // A double click / retry on the very first message can create two sessions
+    // before the frontend has received and reused the returned sessionId. Hide
+    // only near-simultaneous exact copies; normal conversations remain intact.
+    const deduped: ConversationSummaryRow[] = [];
+    for (const row of rows) {
+      const rowCreatedAt = new Date(row.createdAt).getTime();
+      const isNearExactDuplicate = deduped.some((existing) => {
+        const existingCreatedAt = new Date(existing.createdAt).getTime();
+        return (
+          existing.title === row.title &&
+          existing.preview === row.preview &&
+          existing.messageCount === row.messageCount &&
+          Number.isFinite(rowCreatedAt) &&
+          Number.isFinite(existingCreatedAt) &&
+          Math.abs(existingCreatedAt - rowCreatedAt) <= 30_000
+        );
+      });
+      if (!isNearExactDuplicate) deduped.push(row);
+    }
+    return deduped;
   }
 
   async get(userId: number, sessionId: string) {

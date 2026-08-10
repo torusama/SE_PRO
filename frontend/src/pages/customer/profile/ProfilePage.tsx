@@ -13,6 +13,12 @@ import { API_BASE_URL, api } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
 import AlertModal from "@/components/ui/AlertModal";
 import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
+import NavyStarfield from "@/components/decor/NavyStarfield";
+import {
+  getEmailError,
+  getPhoneNumberError,
+  getPostalCodeError,
+} from "@/utils/validators";
 import "./ProfilePage.css";
 
 const T = {
@@ -766,7 +772,9 @@ export default function ProfilePage() {
     ["contracts", "ownership", "services", "transfers"],
     async () => {
       const requests: Promise<unknown>[] = [
-        api.get("/users/me/stats").then((response) => setStats(response.data.data)),
+        api
+          .get("/users/me/stats")
+          .then((response) => setStats(response.data.data)),
       ];
       if (activeTab === "lots") {
         requests.push(
@@ -777,9 +785,9 @@ export default function ProfilePage() {
         );
         if (activeLot !== null) {
           requests.push(
-            api.get(`/my/contracts/${activeLot}`).then((response) =>
-              setLotDetail(response.data.data),
-            ),
+            api
+              .get(`/my/contracts/${activeLot}`)
+              .then((response) => setLotDetail(response.data.data)),
           );
         }
       }
@@ -862,6 +870,28 @@ export default function ProfilePage() {
     }
     if (getMissingInfoFields().length > 0) {
       showToast("Vui lòng điền đầy đủ các trường có dấu *.");
+      return;
+    }
+    // Kiểm định dạng số điện thoại (10 hoặc 11 số), mã bưu chính và email —
+    // báo lỗi rõ ràng bằng pop-up bên góc dưới phải nếu khách điền sai.
+    const phoneError = getPhoneNumberError(phone);
+    if (phoneError) {
+      showToast(phoneError);
+      return;
+    }
+    const emergencyPhoneError = getPhoneNumberError(emergencyContact.phone);
+    if (emergencyPhoneError) {
+      showToast(`Số điện thoại liên hệ khẩn cấp: ${emergencyPhoneError}`);
+      return;
+    }
+    const postalCodeError = getPostalCodeError(postalCode);
+    if (postalCodeError) {
+      showToast(postalCodeError);
+      return;
+    }
+    const emergencyEmailError = getEmailError(emergencyContact.email);
+    if (emergencyEmailError) {
+      showToast(`Email liên hệ khẩn cấp: ${emergencyEmailError}`);
       return;
     }
     setSaving(true);
@@ -1012,6 +1042,7 @@ export default function ProfilePage() {
 
   return (
     <div className="profile-page">
+      <NavyStarfield />
       <div className="breadcrumb">
         <Link to={ROUTES.HOME}>{T.home}</Link>
         <span className="sep">›</span>
@@ -1087,28 +1118,36 @@ export default function ProfilePage() {
                 className={`side-nav-item ${activeTab === "info" ? "active" : ""}`}
                 onClick={() => switchTab("info")}
               >
-                <span className="icon"><ProfileIcon name="user" /></span>
+                <span className="icon">
+                  <ProfileIcon name="user" />
+                </span>
                 {T.navInfo}
               </button>
               <button
                 className={`side-nav-item ${activeTab === "contact" ? "active" : ""}`}
                 onClick={() => switchTab("contact")}
               >
-                <span className="icon"><ProfileIcon name="phone" /></span>
+                <span className="icon">
+                  <ProfileIcon name="phone" />
+                </span>
                 {T.navContact}
               </button>
               <button
                 className={`side-nav-item ${activeTab === "lots" ? "active" : ""}`}
                 onClick={() => switchTab("lots")}
               >
-                <span className="icon"><ProfileIcon name="pin" /></span>
+                <span className="icon">
+                  <ProfileIcon name="pin" />
+                </span>
                 {T.navLots}
               </button>
               <button
                 className={`side-nav-item ${activeTab === "security" ? "active" : ""}`}
                 onClick={() => switchTab("security")}
               >
-                <span className="icon"><ProfileIcon name="lock" /></span>
+                <span className="icon">
+                  <ProfileIcon name="lock" />
+                </span>
                 {T.navSecurity}
                 <span className="badge-dot" />
               </button>
@@ -1177,7 +1216,7 @@ export default function ProfilePage() {
                       onChange={(e) => setPhone(e.target.value)}
                       placeholder="09xx xxx xxx"
                       className={
-                        attemptedSaveInfo && !phone.trim()
+                        attemptedSaveInfo && getPhoneNumberError(phone)
                           ? "field-invalid"
                           : undefined
                       }
@@ -1346,6 +1385,12 @@ export default function ProfilePage() {
                       type="text"
                       value={postalCode}
                       onChange={(e) => setPostalCode(e.target.value)}
+                      placeholder="Vd: 700000"
+                      className={
+                        attemptedSaveInfo && getPostalCodeError(postalCode)
+                          ? "field-invalid"
+                          : undefined
+                      }
                     />
                   </div>
                 </div>
@@ -1405,7 +1450,8 @@ export default function ProfilePage() {
                       }))
                     }
                     className={
-                      attemptedSaveInfo && !emergencyContact.phone.trim()
+                      attemptedSaveInfo &&
+                      getPhoneNumberError(emergencyContact.phone)
                         ? "field-invalid"
                         : undefined
                     }
@@ -1421,6 +1467,12 @@ export default function ProfilePage() {
                         ...v,
                         email: e.target.value,
                       }))
+                    }
+                    placeholder="ten@gmail.com"
+                    className={
+                      attemptedSaveInfo && getEmailError(emergencyContact.email)
+                        ? "field-invalid"
+                        : undefined
                     }
                   />
                 </div>
@@ -1458,14 +1510,18 @@ export default function ProfilePage() {
               <div className="panel-title">Kênh liên lạc</div>
               <div className="contact-methods">
                 <div className="contact-method">
-                  <div className="contact-icon"><ProfileIcon name="mail" /></div>
+                  <div className="contact-icon">
+                    <ProfileIcon name="mail" />
+                  </div>
                   <div className="contact-info">
                     <div className="c-label">Email</div>
                     <div className="c-value">{profile?.email ?? "—"}</div>
                   </div>
                 </div>
                 <div className="contact-method" style={{ flexWrap: "wrap" }}>
-                  <div className="contact-icon"><ProfileIcon name="phone" /></div>
+                  <div className="contact-icon">
+                    <ProfileIcon name="phone" />
+                  </div>
                   <div className="contact-info">
                     <div className="c-label">Số điện thoại</div>
                     <div className="c-value">{profile?.phone ?? "—"}</div>
@@ -1520,9 +1576,11 @@ export default function ProfilePage() {
                   {phoneOtpDevCode && (
                     <div className="inline-dev-note">
                       <ProfileIcon name="alert" size={14} />
-                      <span>[DEV] Backend chưa cấu hình SMS gateway thật — mã OTP
-                      test: <b>{phoneOtpDevCode}</b> (xem hướng dẫn cấu hình
-                      SMS_API_URL/SMS_API_KEY trong .env.example)</span>
+                      <span>
+                        [DEV] Backend chưa cấu hình SMS gateway thật — mã OTP
+                        test: <b>{phoneOtpDevCode}</b> (xem hướng dẫn cấu hình
+                        SMS_API_URL/SMS_API_KEY trong .env.example)
+                      </span>
                     </div>
                   )}
                   <button
@@ -1533,7 +1591,9 @@ export default function ProfilePage() {
                   </button>
                 </div>
                 <div className="contact-method">
-                  <div className="contact-icon"><ProfileIcon name="message" /></div>
+                  <div className="contact-icon">
+                    <ProfileIcon name="message" />
+                  </div>
                   <div className="contact-info">
                     <div className="c-label">Zalo</div>
                     <div className="c-value">Chưa liên kết</div>
@@ -1559,7 +1619,9 @@ export default function ProfilePage() {
               <div className="panel-title">Tùy chỉnh nhận thông báo</div>
               <div className="contact-methods">
                 <div className="contact-method">
-                  <div className="contact-icon"><ProfileIcon name="card" /></div>
+                  <div className="contact-icon">
+                    <ProfileIcon name="card" />
+                  </div>
                   <div className="contact-info">
                     <div className="c-label">Thông báo thanh toán</div>
                     <div
@@ -1579,7 +1641,9 @@ export default function ProfilePage() {
                   </label>
                 </div>
                 <div className="contact-method">
-                  <div className="contact-icon"><ProfileIcon name="calendar" /></div>
+                  <div className="contact-icon">
+                    <ProfileIcon name="calendar" />
+                  </div>
                   <div className="contact-info">
                     <div className="c-label">Cập nhật dịch vụ</div>
                     <div
@@ -1599,7 +1663,9 @@ export default function ProfilePage() {
                   </label>
                 </div>
                 <div className="contact-method">
-                  <div className="contact-icon"><ProfileIcon name="service" /></div>
+                  <div className="contact-icon">
+                    <ProfileIcon name="service" />
+                  </div>
                   <div className="contact-info">
                     <div className="c-label">Nhắc ngày giỗ</div>
                     <div
@@ -1619,7 +1685,9 @@ export default function ProfilePage() {
                   </label>
                 </div>
                 <div className="contact-method">
-                  <div className="contact-icon"><ProfileIcon name="bell" /></div>
+                  <div className="contact-icon">
+                    <ProfileIcon name="bell" />
+                  </div>
                   <div className="contact-info">
                     <div className="c-label">Thông báo từ ban quản lý</div>
                     <div
@@ -1804,7 +1872,9 @@ export default function ProfilePage() {
                   <div className="contact-methods">
                     {authorizedPersons?.map((p) => (
                       <div className="contact-method" key={p.id}>
-                        <div className="contact-icon"><ProfileIcon name="user" /></div>
+                        <div className="contact-icon">
+                          <ProfileIcon name="user" />
+                        </div>
                         <div className="contact-info">
                           <div className="c-label">
                             {p.fullName}
@@ -1880,7 +1950,9 @@ export default function ProfilePage() {
               <div className="security-list">
                 <div className="security-item">
                   <div className="sec-left">
-                    <div className="sec-icon"><ProfileIcon name="key" /></div>
+                    <div className="sec-icon">
+                      <ProfileIcon name="key" />
+                    </div>
                     <div className="sec-info">
                       <h4>Mật khẩu</h4>
                       <p>
@@ -1899,7 +1971,9 @@ export default function ProfilePage() {
                 </div>
                 <div className="security-item">
                   <div className="sec-left">
-                    <div className="sec-icon"><ProfileIcon name="phone" /></div>
+                    <div className="sec-icon">
+                      <ProfileIcon name="phone" />
+                    </div>
                     <div className="sec-info">
                       <h4>Xác thực bằng số điện thoại (OTP SMS)</h4>
                       <p>
@@ -2471,7 +2545,9 @@ function ActionBtn({
       style={danger ? { borderColor: "rgba(224,92,92,0.2)" } : undefined}
       onClick={onClick}
     >
-      <span className="lab-icon"><ProfileIcon name={icon} /></span>
+      <span className="lab-icon">
+        <ProfileIcon name={icon} />
+      </span>
       <div className="lab-text">
         <div
           className="lab-title"
@@ -3035,9 +3111,7 @@ function PasswordModal({
               setError(null);
             }}
             placeholder={
-              !isNextFilled
-                ? "Vui lòng nhập mật khẩu mới trước"
-                : "••••••••"
+              !isNextFilled ? "Vui lòng nhập mật khẩu mới trước" : "••••••••"
             }
           />
         </div>
@@ -3080,8 +3154,8 @@ function PasswordModal({
                 marginTop: 5,
               }}
             >
-              * Cần điền tuần tự Mật khẩu hiện tại, Mật khẩu mới và Xác nhận
-              mật khẩu trước khi bấm Gửi mã OTP.
+              * Cần điền tuần tự Mật khẩu hiện tại, Mật khẩu mới và Xác nhận mật
+              khẩu trước khi bấm Gửi mã OTP.
             </p>
           )}
         </div>
@@ -3220,6 +3294,23 @@ function AuthorizedPersonModal({
     if (!fullName.trim()) {
       setError("Vui lòng nhập họ tên.");
       return;
+    }
+    // Số điện thoại, email của người ủy quyền không bắt buộc, nhưng nếu khách
+    // có điền thì phải đúng định dạng — báo lỗi rõ ràng bằng pop-up bên góc
+    // dưới phải (đồng bộ với các pop-up khác trong toàn hệ thống).
+    if (phone.trim()) {
+      const phoneError = getPhoneNumberError(phone);
+      if (phoneError) {
+        setError(phoneError);
+        return;
+      }
+    }
+    if (email.trim()) {
+      const emailError = getEmailError(email);
+      if (emailError) {
+        setError(emailError);
+        return;
+      }
     }
     setError(null);
     setSubmitting(true);
@@ -3503,9 +3594,18 @@ function TransferModal({
             color: "var(--text-muted)",
           }}
         >
-          <div className="document-requirement"><ProfileIcon name="paperclip" size={15} /><span>CCCD hai bên (bản scan)</span></div>
-          <div className="document-requirement"><ProfileIcon name="paperclip" size={15} /><span>Hợp đồng gốc lô đất</span></div>
-          <div className="document-requirement"><ProfileIcon name="paperclip" size={15} /><span>Giấy tờ chứng minh quan hệ (nếu thừa kế)</span></div>
+          <div className="document-requirement">
+            <ProfileIcon name="paperclip" size={15} />
+            <span>CCCD hai bên (bản scan)</span>
+          </div>
+          <div className="document-requirement">
+            <ProfileIcon name="paperclip" size={15} />
+            <span>Hợp đồng gốc lô đất</span>
+          </div>
+          <div className="document-requirement">
+            <ProfileIcon name="paperclip" size={15} />
+            <span>Giấy tờ chứng minh quan hệ (nếu thừa kế)</span>
+          </div>
           <div style={{ marginTop: 8 }}>
             <button
               className="btn-outline"
