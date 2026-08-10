@@ -35,24 +35,22 @@ import type {
 } from "./agent.types";
 import "./AgentPage.css";
 
-type WorkflowDirective = Exclude<
-  NonNullable<AgentResponse["uiDirective"]>,
-  { type: "SHOW_INLINE_SERVICE_PAYMENT" }
->;
+type WorkflowDirective = NonNullable<AgentResponse["uiDirective"]>;
 
 function asWorkflowDirective(
   directive: AgentResponse["uiDirective"],
 ): WorkflowDirective | undefined {
   if (!directive) return undefined;
   if (
+    directive.type === "SHOW_INLINE_SERVICE_PAYMENT" ||
     directive.type === "OPEN_SERVICE_SCHEDULE_CALENDAR" ||
     directive.type === "OPEN_APPOINTMENT_CALENDAR" ||
     directive.type === "OPEN_REMINDER_CALENDAR"
   ) {
     return directive;
   }
-  // Inline payment is rendered in-chat. Legacy/unknown directives (including
-  // the removed OPEN_SERVICE_PANEL stored in older conversations) are ignored.
+  // Legacy/unknown directives (including the removed OPEN_SERVICE_PANEL stored
+  // in older conversations) are ignored.
   return undefined;
 }
 
@@ -393,11 +391,7 @@ export default function AgentPage() {
     const restoredMap = getTourableRecommendations(restoredRecommendations);
     const restoredWorkflow = [...detail.messages]
       .reverse()
-      .find(
-        (message) =>
-          message.response?.uiDirective &&
-          message.response.uiDirective.type !== "SHOW_INLINE_SERVICE_PAYMENT",
-      )?.response;
+      .find((message) => message.response?.uiDirective)?.response;
     setSessionId(detail.sessionId);
     setMessages(
       detail.messages.map((message) => ({
@@ -886,15 +880,6 @@ export default function AgentPage() {
     );
   }
 
-  function handleUiDirective(
-    directive: NonNullable<AgentResponse["uiDirective"]>,
-  ) {
-    const nextDirective = asWorkflowDirective(directive);
-    if (!nextDirective) return;
-    setWorkflowDirective(nextDirective);
-    setMapOpen(false);
-  }
-
   function startServiceOrder(service: AgentService) {
     if (!token || role !== "customer") {
       sessionStorage.setItem(
@@ -1116,7 +1101,6 @@ export default function AgentPage() {
                       !comparisonOpen
                     }
                     onQuickReply={(reply) => void sendMessage(reply)}
-                    onUiDirective={handleUiDirective}
                   />
                 ))}
 
@@ -1263,6 +1247,10 @@ export default function AgentPage() {
           {workflowDirective && (
             <AgentWorkflowPanel
               directive={workflowDirective}
+              onDirectiveChange={(directive) => {
+                setWorkflowDirective(directive);
+                setMapOpen(false);
+              }}
               onClose={() => setWorkflowDirective(undefined)}
             />
           )}

@@ -334,7 +334,7 @@ describe('AgentBookingService', () => {
     expect(result?.assistantMessage).toContain('2099-08-10');
   });
 
-  it('prepares a service order without forcing a date before payment', async () => {
+  it('asks for the preferred service date before allowing confirmation', async () => {
     const { service, database } = createService();
     database.query.mockResolvedValue([
       { plotId: 10, plotCode: 'A-01-001', zoneName: 'Khu A' },
@@ -355,12 +355,17 @@ describe('AgentBookingService', () => {
 
     expect(result?.pendingAction).toMatchObject({
       kind: 'service_order',
-      stage: 'awaiting_confirmation',
+      stage: 'collecting',
       plotId: 10,
       requestedDate: undefined,
     });
     expect(result?.assistantMessage).toContain(
-      'chọn trên lịch sau bước thanh toán',
+      'Bạn muốn dịch vụ được thực hiện vào ngày nào?',
+    );
+    expect(result?.quickReplies).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'service-date-tomorrow' }),
+      ]),
     );
   });
 
@@ -386,7 +391,7 @@ describe('AgentBookingService', () => {
     });
   });
 
-  it('creates a service order after the customer confirms the summary', async () => {
+  it('creates a service order and opens the right-side checkout after confirmation', async () => {
     const { service, cemeteryServices } = createService();
     cemeteryServices.createOrder.mockResolvedValue({ id: 45 });
     const pending: AgentPendingAction = {
@@ -426,9 +431,8 @@ describe('AgentBookingService', () => {
     });
   });
 
-  it('creates a service order without a date and returns inline payment', async () => {
+  it('does not create a service order when the confirmed draft has no date', async () => {
     const { service, cemeteryServices } = createService();
-    cemeteryServices.createOrder.mockResolvedValue({ id: 46 });
     const pending: AgentPendingAction = {
       kind: 'service_order',
       stage: 'awaiting_confirmation',
@@ -447,19 +451,16 @@ describe('AgentBookingService', () => {
       pendingAction: pending,
     });
 
-    expect(cemeteryServices.createOrder).toHaveBeenCalledWith(
-      7,
-      expect.objectContaining({
-        serviceTypeId: 3,
-        plotId: 10,
-        requestedDate: undefined,
-      }),
-    );
-    expect(result?.uiDirective).toMatchObject({
-      type: 'SHOW_INLINE_SERVICE_PAYMENT',
-      orderId: 46,
-      paymentStatus: 'unpaid',
+    expect(cemeteryServices.createOrder).not.toHaveBeenCalled();
+    expect(result?.pendingAction).toMatchObject({
+      kind: 'service_order',
+      stage: 'collecting',
     });
+    expect(result?.pendingAction?.requestedDate).toBeUndefined();
+    expect(result?.assistantMessage).toContain(
+      'thiếu ngày bạn muốn thực hiện dịch vụ',
+    );
+    expect(result?.uiDirective).toBeUndefined();
   });
 
   it('requires confirmation again when the service price changes', async () => {

@@ -46,7 +46,7 @@ export type AgentPendingAction =
 
 export type AgentUiDirective =
   | {
-      /** Render the payment/confirmation card inside the chat, not in a side panel. */
+      /** Legacy directive name retained for stored conversations; frontend opens the service checkout side panel. */
       type: 'SHOW_INLINE_SERVICE_PAYMENT';
       serviceTypeId?: number;
       orderId?: number;

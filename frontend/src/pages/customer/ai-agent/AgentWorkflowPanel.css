@@ -137,3 +137,182 @@
 .agent-workflow-days button:disabled { color: #40535a; cursor: not-allowed; }
 .agent-workflow-calendar-note { margin: 8px 2px 0; color: #67838a; font-size: 10px; line-height: 1.55; }
 .agent-workflow-primary:disabled { opacity: .55; cursor: not-allowed; }
+
+/* Service checkout flow: Đã đặt -> Thanh toán -> Chọn lịch */
+.agent-workflow-progress {
+  display: grid;
+  grid-template-columns: minmax(64px, 1fr) 24px minmax(72px, 1fr) 24px minmax(70px, 1fr);
+  align-items: start;
+  gap: 4px;
+  padding: 12px 10px;
+  border: 1px solid rgba(81, 136, 140, .22);
+  border-radius: 12px;
+  background: rgba(9, 22, 36, .76);
+}
+
+.agent-workflow-progress > div {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  color: #58747c;
+}
+
+.agent-workflow-progress > div > span {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid rgba(91, 139, 143, .25);
+  border-radius: 50%;
+  background: #0b1725;
+}
+
+.agent-workflow-progress > div small {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  white-space: nowrap;
+}
+
+.agent-workflow-progress > i {
+  height: 1px;
+  margin-top: 14px;
+  background: rgba(91, 139, 143, .24);
+}
+
+.agent-workflow-progress > div.is-complete,
+.agent-workflow-progress > div.is-current {
+  color: #43dfd2;
+}
+
+.agent-workflow-progress > div.is-complete > span,
+.agent-workflow-progress > div.is-current > span {
+  border-color: rgba(34, 223, 205, .45);
+  background: rgba(18, 131, 126, .16);
+}
+
+.agent-workflow-progress > div.is-current > span {
+  box-shadow: 0 0 0 3px rgba(34, 223, 205, .06);
+}
+
+.agent-workflow-order-summary.is-payment-summary {
+  border-color: rgba(217, 179, 94, .24);
+}
+
+.agent-workflow-payment-box {
+  overflow: hidden;
+  border: 1px solid rgba(81, 136, 140, .25);
+  border-radius: 12px;
+  background: #091624;
+}
+
+.agent-workflow-payment-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 14px;
+  border-bottom: 1px solid rgba(81, 136, 140, .18);
+}
+
+.agent-workflow-payment-title > span {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid rgba(0, 229, 196, .28);
+  border-radius: 9px;
+  color: #25d7cb;
+  background: rgba(0, 229, 196, .07);
+}
+
+.agent-workflow-payment-title div {
+  display: grid;
+  gap: 2px;
+}
+
+.agent-workflow-payment-title small {
+  color: #6f8d95;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+.agent-workflow-payment-title strong {
+  color: #dce9eb;
+  font-size: 12px;
+}
+
+.agent-workflow-payment-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 0 14px;
+  padding: 10px 0;
+  border-bottom: 1px dashed rgba(81, 136, 140, .14);
+  font-size: 11px;
+}
+
+.agent-workflow-payment-row span {
+  color: #718f97;
+}
+
+.agent-workflow-payment-row strong {
+  color: #d7e6e8;
+  text-align: right;
+}
+
+.agent-workflow-payment-row strong.is-code {
+  color: #e4c276;
+  letter-spacing: .06em;
+  user-select: all;
+}
+
+.agent-workflow-payment-row.is-total {
+  margin-bottom: 2px;
+  border-bottom: 0;
+}
+
+.agent-workflow-payment-row.is-total strong {
+  color: #e4c276;
+  font-size: 13px;
+}
+
+.agent-workflow-payment-detected {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 13px;
+  border: 1px solid rgba(34, 184, 169, .24);
+  border-radius: 10px;
+  background: rgba(34, 184, 169, .07);
+  color: #45d9cb;
+}
+
+.agent-workflow-payment-detected > div {
+  display: grid;
+  gap: 3px;
+}
+
+.agent-workflow-payment-detected strong {
+  font-size: 11px;
+}
+
+.agent-workflow-payment-detected span {
+  color: #7ca2a6;
+  font-size: 10px;
+}
+
+.agent-workflow-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 14px;
+  cursor: pointer;
+}
+
+.agent-workflow-link {
+  padding: 0 14px;
+  cursor: pointer;
+}

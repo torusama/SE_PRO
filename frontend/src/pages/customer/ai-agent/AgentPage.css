@@ -2626,6 +2626,10 @@
     overflow-y: auto;
   }
 
+  .agent-workspace.has-workflow-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .agent-workspace.has-context-map .agent-chat {
     min-height: 420px;
   }

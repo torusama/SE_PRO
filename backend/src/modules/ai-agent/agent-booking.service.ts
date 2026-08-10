@@ -370,7 +370,33 @@ export class AgentBookingService {
           ...pending,
           requestedDate: undefined,
         },
-        assistantMessage: `Ngày **${pending.requestedDate}** không hợp lệ hoặc đã qua. Bạn có thể gửi lại ngày khác, hoặc để trống và chọn ngày trên lịch sau bước thanh toán.`,
+        assistantMessage: `Ngày **${pending.requestedDate}** không hợp lệ hoặc đã qua. Bạn cho mình một ngày khác từ hôm nay trở đi nhé; mình cần ghi nhận ngày mong muốn trước khi chuyển sang bước xác nhận và thanh toán.`,
+      };
+    }
+
+    if (!pending.requestedDate) {
+      return {
+        handled: true,
+        intent: 'service_booking',
+        pendingAction: pending,
+        assistantMessage: [
+          `Mình đã ghi nhận dịch vụ **${service.name}** cho lô **${selectedPlot.plotCode}**.`,
+          '',
+          '**Bạn muốn dịch vụ được thực hiện vào ngày nào?** Bạn có thể nói “ngày mai”, “3 ngày nữa” hoặc gửi ngày cụ thể. Mình sẽ ghi nhận ngày mong muốn trước khi chuyển sang bước xác nhận và thanh toán.',
+        ].join('\n'),
+        quickReplies: [
+          {
+            id: 'service-date-tomorrow',
+            label: 'Ngày mai',
+            message: 'Mình muốn thực hiện dịch vụ vào ngày mai.',
+            emphasis: 'strong',
+          },
+          {
+            id: 'service-date-three-days',
+            label: '3 ngày nữa',
+            message: 'Mình muốn thực hiện dịch vụ sau 3 ngày nữa.',
+          },
+        ],
       };
     }
 
@@ -384,13 +410,11 @@ export class AgentBookingService {
         'Mình đã chuẩn bị đơn dịch vụ:',
         `- Dịch vụ: **${service.name}**`,
         `- Lô áp dụng: **${selectedPlot.plotCode}**`,
-        pending.requestedDate
-          ? `- Ngày mong muốn: **${pending.requestedDate}**`
-          : '- Ngày thực hiện: **chọn trên lịch sau bước thanh toán**',
+        `- Ngày mong muốn: **${pending.requestedDate}**`,
         `- Chi phí dự kiến: **${service.basePrice.toLocaleString('vi-VN')} VND/${service.unit}**`,
         `- Khách hàng: **${profile.fullName || profile.email}** (lấy từ tài khoản hiện tại)`,
         '',
-        'Bạn xác nhận để mình gửi đơn dịch vụ này không? Sau khi đơn được xác nhận và bạn thanh toán, lịch chọn ngày sẽ mở để bạn đặt ngày thực hiện.',
+        'Bạn xác nhận để mình gửi đơn dịch vụ này không? Sau khi đơn được xác nhận, panel dịch vụ bên phải sẽ mở bước thanh toán; khi thanh toán được ghi nhận, panel sẽ tự chuyển sang lịch với ngày bạn vừa chọn để bạn kiểm tra hoặc điều chỉnh lần cuối.',
       ].join('\n'),
       quickReplies: [
         {
@@ -797,6 +821,18 @@ export class AgentBookingService {
     if (!pending.serviceTypeId || !pending.plotId) {
       throw new BadRequestException('Service order information is incomplete');
     }
+    if (!pending.requestedDate) {
+      return {
+        handled: true,
+        intent: 'service_booking',
+        pendingAction: {
+          ...pending,
+          stage: 'collecting',
+        },
+        assistantMessage:
+          'Mình còn thiếu ngày bạn muốn thực hiện dịch vụ. Bạn cho mình một ngày mong muốn trước khi mình tạo đơn nhé.',
+      };
+    }
     if (
       pending.requestedDate &&
       !this.isValidFutureDate(pending.requestedDate)
@@ -810,7 +846,7 @@ export class AgentBookingService {
           requestedDate: undefined,
         },
         assistantMessage:
-          'Ngày thực hiện đã qua hoặc không còn hợp lệ. Bạn có thể chọn lại ngay, hoặc để trống và chọn trên lịch sau bước thanh toán.',
+          'Ngày thực hiện đã qua hoặc không còn hợp lệ. Bạn chọn lại một ngày từ hôm nay trở đi để mình tiếp tục tạo đơn dịch vụ nhé.',
       };
     }
     const currentService = await this.resolveServiceType(pending.serviceTypeId);
@@ -839,9 +875,7 @@ export class AgentBookingService {
             ? 'Mình cần bạn xác nhận lại mức giá hiện tại trước khi gửi đơn dịch vụ.'
             : `Giá dịch vụ **${currentService.name}** đã thay đổi từ **${previousPrice.toLocaleString('vi-VN')} VND** thành **${currentService.basePrice.toLocaleString('vi-VN')} VND/${currentService.unit}**.`,
           `- Lô áp dụng: **${pending.plotCode}**`,
-          pending.requestedDate
-            ? `- Ngày mong muốn: **${pending.requestedDate}**`
-            : '- Ngày thực hiện: **chọn sau khi thanh toán**',
+          `- Ngày mong muốn: **${pending.requestedDate}**`,
           '',
           'Bạn có đồng ý với mức giá mới để mình gửi đơn không?',
         ].join('\n'),
@@ -856,13 +890,11 @@ export class AgentBookingService {
         'Đơn dịch vụ được Trợ lý AI thiết lập theo xác nhận của khách hàng',
     });
     const id = this.resultId(result);
-    const dateText = pending.requestedDate
-      ? ` với ngày mong muốn **${pending.requestedDate}**`
-      : '';
+    const dateText = ` với ngày mong muốn **${pending.requestedDate}**`;
     return {
       handled: true,
       intent: 'service_booking',
-      assistantMessage: `${(result as { reused?: boolean }).reused ? 'Đơn này đã được ghi nhận trước đó' : 'Đã gửi đơn dịch vụ'}${id ? ` **#${id}**` : ''} **${pending.serviceName ?? ''}** cho lô **${pending.plotCode}**${dateText}. Phần thanh toán sẽ hiển thị ngay trong cuộc trò chuyện; sau khi thanh toán, lịch chọn ngày thực hiện sẽ mở ở panel bên phải.`,
+      assistantMessage: `${(result as { reused?: boolean }).reused ? 'Đơn này đã được ghi nhận trước đó' : 'Đã gửi đơn dịch vụ'}${id ? ` **#${id}**` : ''} **${pending.serviceName ?? ''}** cho lô **${pending.plotCode}**${dateText}. Mình đã mở panel **Đã đặt → Thanh toán → Chọn lịch** ở bên phải. Sau khi bạn xác nhận đã thanh toán, panel sẽ tự chuyển sang lịch và tô sẵn ngày mong muốn để bạn kiểm tra hoặc đổi ngày.`,
       uiDirective: {
         type: 'SHOW_INLINE_SERVICE_PAYMENT',
         serviceTypeId: pending.serviceTypeId,

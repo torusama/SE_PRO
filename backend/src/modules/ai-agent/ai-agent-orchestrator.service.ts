@@ -411,9 +411,93 @@ function normalizeShortReply(message: string) {
     .replace(/đ/g, 'd')
     .replace(/Đ/g, 'D')
     .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/[^a-z0-9\s/-]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function vietnamTodayYmd(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const values = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, part.value]),
+  );
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function addDaysToYmd(ymd: string, days: number) {
+  const [year, month, day] = ymd.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day + days));
+  return date.toISOString().slice(0, 10);
+}
+
+function validYmd(year: number, month: number, day: number) {
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
+}
+
+/**
+ * Resolve the compact date replies that customers naturally send after the
+ * service-booking flow asks "Bạn muốn thực hiện vào ngày nào?". This is
+ * intentionally deterministic so a transactional continuation never depends
+ * on an LLM correctly distinguishing "mình muốn ... ngày mai" from a durable
+ * personal preference.
+ */
+export function extractPendingServiceRequestedDate(
+  message: string,
+  now = new Date(),
+): string | undefined {
+  const reply = normalizeShortReply(message);
+  const today = vietnamTodayYmd(now);
+
+  if (/\b(?:hom nay|ngay hom nay)\b/.test(reply)) return today;
+  if (/\bngay kia\b/.test(reply)) return addDaysToYmd(today, 2);
+  if (/\bngay mai\b/.test(reply) || /^(?:(?:minh|toi|em)\s+)?mai(?:\s+(?:nhe|nha|a))?$/.test(reply)) {
+    return addDaysToYmd(today, 1);
+  }
+
+  const relative =
+    reply.match(/\b(?:sau\s+)?(\d{1,3})\s+ngay\s+nua\b/) ??
+    reply.match(/\bsau\s+(\d{1,3})\s+ngay\b/);
+  if (relative) {
+    const days = Number(relative[1]);
+    if (Number.isInteger(days) && days >= 0 && days <= 3650) {
+      return addDaysToYmd(today, days);
+    }
+  }
+
+  const iso = reply.match(/\b(\d{4})-(\d{1,2})-(\d{1,2})\b/);
+  if (iso) {
+    const year = Number(iso[1]);
+    const month = Number(iso[2]);
+    const day = Number(iso[3]);
+    if (validYmd(year, month, day)) {
+      return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    }
+  }
+
+  const dmy = reply.match(/\b(\d{1,2})[/-](\d{1,2})(?:[/-](\d{4}))?\b/);
+  if (dmy) {
+    const [currentYear] = today.split('-').map(Number);
+    const day = Number(dmy[1]);
+    const month = Number(dmy[2]);
+    const year = dmy[3] ? Number(dmy[3]) : currentYear;
+    if (validYmd(year, month, day)) {
+      return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    }
+  }
+
+  return undefined;
 }
 
 export function resolvePendingBookingReply(
@@ -424,6 +508,34 @@ export function resolvePendingBookingReply(
   if (!pendingAction) return plan;
 
   const reply = normalizeShortReply(userMessage);
+
+  // A collecting service order owns the next date-like reply. Resolve it
+  // locally before any generic conversational/memory interpretation can steal
+  // the turn (e.g. "Mình muốn thực hiện dịch vụ vào ngày mai").
+  if (
+    pendingAction.kind === 'service_order' &&
+    pendingAction.stage === 'collecting' &&
+    !pendingAction.requestedDate
+  ) {
+    const requestedDate = extractPendingServiceRequestedDate(userMessage);
+    if (requestedDate) {
+      return {
+        ...plan,
+        intent: 'service_booking',
+        action: 'prepare_service_order',
+        contextMode: 'continue',
+        needsClarification: false,
+        clarificationQuestion: '',
+        directResponse: '',
+        memoryProposals: [],
+        requirements: {
+          ...plan.requirements,
+          requestedDate,
+        },
+      };
+    }
+  }
+
   if (
     !reply ||
     /\b(?:khong|chua|huy|dung lai|bo qua|thoi khong|khong dat|khong gui|khong xac nhan)\b/.test(
@@ -1149,6 +1261,7 @@ export class AiAgentOrchestratorService {
     // for a real plot/service action continue through the LLM planner below.
     if (
       recoveredPreferenceProposal?.length &&
+      !pendingAction &&
       this.isPurePreferenceStatement(dto.message)
     ) {
       await saveUserMessage();
@@ -1209,6 +1322,30 @@ export class AiAgentOrchestratorService {
       context.requirements,
       history,
     );
+
+    if (
+      pendingAction?.kind === 'service_order' &&
+      pendingAction.stage === 'collecting' &&
+      !pendingAction.requestedDate
+    ) {
+      const requestedDate = extractPendingServiceRequestedDate(dto.message);
+      if (requestedDate) {
+        deterministicAgentPlan = {
+          intent: 'service_booking',
+          action: 'prepare_service_order',
+          contextMode: 'continue',
+          needsClarification: false,
+          clarificationQuestion: '',
+          directResponse: '',
+          memoryProposals: [],
+          requirements: {
+            ...context.requirements,
+            requestedDate,
+          },
+        };
+      }
+    }
+
     if (pendingAction?.stage === 'awaiting_confirmation') {
       const pendingIntent: AgentPlan['intent'] =
         pendingAction.kind === 'service_order'
@@ -3748,9 +3885,11 @@ ${JSON.stringify(options)}
         folded,
       );
     const transactionalRequest =
-      /\b(?:dat|book|dang ky|gui yeu cau|tao yeu cau|mua lo|giu cho|dat cho|xem|tu van)\b/.test(
+      /\b(?:dat|book|dang ky|gui yeu cau|tao yeu cau|mua lo|giu cho|dat cho|xem|tu van|thuc hien dich vu|su dung dich vu|chon dich vu|xac nhan dich vu|thanh toan dich vu)\b/.test(
         folded,
-      );
+      ) ||
+      (/\bdich vu\b/.test(folded) &&
+        /\b(?:hom nay|ngay mai|ngay kia|ngay nua|sau \d+ ngay|\d{1,2}[/-]\d{1,2})\b/.test(folded));
     if (
       (!explicitlyAsksToRemember && !firstPersonPreference) ||
       isPreferenceQuestion ||
@@ -4801,7 +4940,7 @@ Việc gửi yêu cầu chưa đồng nghĩa với thanh toán hoặc hoàn tấ
   private isPurePreferenceStatement(message: string) {
     const folded = this.foldForMemory(message);
     const asksForAction =
-      /\b(?:tim|goi y|de xuat|so sanh|mua|giu cho|dat cho|dat mua|gui yeu cau|cho xem|xem lo|kiem tra lo|dat dich vu|recommend|suggest|show)\b/.test(
+      /\b(?:tim|goi y|de xuat|so sanh|mua|giu cho|dat cho|dat mua|gui yeu cau|cho xem|xem lo|kiem tra lo|dat dich vu|thuc hien dich vu|su dung dich vu|chon dich vu|xac nhan dich vu|thanh toan dich vu|recommend|suggest|show)\b/.test(
         folded,
       );
     const question =

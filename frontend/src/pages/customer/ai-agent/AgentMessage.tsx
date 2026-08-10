@@ -18,7 +18,6 @@ import MarkdownMessage from "./MarkdownMessage";
 import PacedMarkdownMessage from "./PacedMarkdownMessage";
 import RecommendationCard from "./RecommendationCard";
 import BaziCompassWidget from "./BaziCompassWidget";
-import InlineServicePaymentCard from "./InlineServicePaymentCard";
 import { getRecommendationCompareKey } from "./agentDisplay";
 
 interface AgentMessageProps {
@@ -34,9 +33,6 @@ interface AgentMessageProps {
   onPresentationComplete?: (message: ChatMessage) => void;
   showFollowUps?: boolean;
   onQuickReply?: (message: string) => void;
-  onUiDirective?: (
-    directive: NonNullable<NonNullable<ChatMessage["response"]>["uiDirective"]>,
-  ) => void;
 }
 
 async function writeClipboard(content: string) {
@@ -67,7 +63,6 @@ export default function AgentMessage({
   onPresentationComplete,
   showFollowUps = false,
   onQuickReply,
-  onUiDirective,
 }: AgentMessageProps) {
   const isAssistant = message.role === "assistant";
   const animated = isAssistant && message.animatePresentation === true;
@@ -359,16 +354,6 @@ export default function AgentMessage({
             </small>
           </div>
         )}
-
-        {isAssistant &&
-          presentationComplete &&
-          message.response?.uiDirective?.type === "SHOW_INLINE_SERVICE_PAYMENT" &&
-          message.response.uiDirective.orderId && (
-            <InlineServicePaymentCard
-              directive={message.response.uiDirective}
-              onPaymentRecorded={(directive) => onUiDirective?.(directive)}
-            />
-          )}
 
         {/* Recommendation Cards */}
         {message.response?.recommendations?.length && presentationComplete ? (

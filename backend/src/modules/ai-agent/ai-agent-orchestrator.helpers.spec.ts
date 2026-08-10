@@ -2,10 +2,65 @@ import { AgentPlan } from './agent-planner';
 import {
   AiAgentOrchestratorService,
   extractDeterministicRequirements,
+  extractPendingServiceRequestedDate,
   extractRequestedRecommendationCount,
   resolvePendingBookingReply,
 } from './ai-agent-orchestrator.service';
 import { AgentPendingAction } from './types/agent-response.types';
+
+describe('pending service date resolution', () => {
+  const now = new Date('2026-08-10T02:52:00.000Z'); // 09:52 in Viet Nam
+
+  it.each([
+    ['Mình muốn thực hiện dịch vụ vào ngày mai.', '2026-08-11'],
+    ['ngày kia', '2026-08-12'],
+    ['sau 3 ngày nữa', '2026-08-13'],
+    ['15/08/2026', '2026-08-15'],
+    ['2026-08-20', '2026-08-20'],
+  ])('resolves %s to %s', (message, expected) => {
+    expect(extractPendingServiceRequestedDate(message, now)).toBe(expected);
+  });
+
+  it('does not mistake the service name mai táng for tomorrow', () => {
+    expect(
+      extractPendingServiceRequestedDate('Mình muốn dùng dịch vụ mai táng.', now),
+    ).toBeUndefined();
+  });
+
+  it('forces a date reply back into the active service booking workflow', () => {
+    const pending: AgentPendingAction = {
+      kind: 'service_order',
+      stage: 'collecting',
+      serviceTypeId: 4,
+      serviceName: 'Thắp hương',
+      plotId: 12,
+      plotCode: 'A-01-002',
+      quotedPrice: 200_000,
+      serviceUnit: 'lần',
+    };
+    const plan: AgentPlan = {
+      intent: 'general_question',
+      action: 'none',
+      contextMode: 'continue',
+      needsClarification: false,
+      clarificationQuestion: '',
+      requirements: {},
+    };
+    const result = resolvePendingBookingReply(
+      plan,
+      pending,
+      'Mình muốn thực hiện dịch vụ vào ngày mai.',
+    );
+
+    expect(result).toMatchObject({
+      intent: 'service_booking',
+      action: 'prepare_service_order',
+      contextMode: 'continue',
+      requirements: { requestedDate: expect.any(String) },
+      memoryProposals: [],
+    });
+  });
+});
 
 describe('AI Agent deterministic requirement extraction', () => {
   it.each([

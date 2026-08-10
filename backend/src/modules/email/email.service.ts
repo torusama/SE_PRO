@@ -371,6 +371,97 @@ export class EmailService {
     });
   }
 
+  /**
+   * Nhắc lịch hẹn giữa khách hàng và ban quản lý trước 1 ngày. Phần message
+   * được ưu tiên soạn bởi AI ở AppointmentEmailDraftService; scheduler luôn
+   * truyền vào nội dung fallback đã kiểm soát nếu model không khả dụng.
+   */
+  async sendAppointmentReminderEmail(
+    to: string,
+    params: {
+      customerName?: string | null;
+      appointmentDate: string;
+      startTime: string;
+      endTime?: string | null;
+      location?: string | null;
+      topic?: string | null;
+      message: string;
+    },
+  ): Promise<boolean> {
+    if (!this.isConfigured()) {
+      this.logger.warn(
+        `Bỏ qua gửi email nhắc lịch hẹn tới ${to} vì Gmail API chưa được cấu hình.`,
+      );
+      return false;
+    }
+
+    const bannerCid = 'vpv-mail-1-appointment-reminder';
+    const banner = this.getBannerAttachment('mail-1.png', bannerCid);
+    const appointmentUrl = `${this.getFrontendUrl()}/lich-hen`;
+    const normalizedMessage = params.message
+      .replace(/^\s*Kính\s+(?:gửi|chào)[^\r\n]*[,.:：-]?\s*(?:\r?\n)+/i, '')
+      .replace(
+        /(?:\r?\n)+\s*Trân trọng[,.]?\s*(?:(?:\r?\n)+\s*Vĩnh Phúc Viên\s*)?$/i,
+        '',
+      )
+      .trim();
+    const safeMessage = this.escapeHtml(normalizedMessage).replace(/\n/g, '<br/>');
+    const safeTopic = this.escapeHtml(params.topic?.trim() || 'Lịch hẹn với ban quản lý');
+    const safeLocation = this.escapeHtml(params.location?.trim() || 'Theo thông tin trong lịch hẹn');
+    const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(params.appointmentDate);
+    const appointmentDateText = dateMatch
+      ? `${dateMatch[3]}/${dateMatch[2]}/${dateMatch[1]}`
+      : params.appointmentDate;
+    const timeText = params.endTime
+      ? `${params.startTime}–${params.endTime}`
+      : params.startTime;
+
+    const row = (label: string, value: string, last = false) => `
+      <tr>
+        <td style="padding:9px 0;${last ? '' : 'border-bottom:1px solid #d8e5e0;'}font-family:'Segoe UI',Tahoma,Arial,sans-serif;font-size:13.5px;line-height:22px;color:#668078;">${label}</td>
+        <td align="right" style="padding:9px 0;${last ? '' : 'border-bottom:1px solid #d8e5e0;'}font-family:'Segoe UI',Tahoma,Arial,sans-serif;font-size:13.5px;line-height:22px;font-weight:600;color:#355e55;text-align:right;">${value}</td>
+      </tr>`;
+
+    const rows = [
+      row('Ngày hẹn', this.escapeHtml(appointmentDateText)),
+      row('Thời gian', this.escapeHtml(timeText)),
+      row('Địa điểm', safeLocation),
+      row('Nội dung', safeTopic, true),
+    ].join('');
+
+    const content = this.renderLightCard({
+      topSpace: 18,
+      width: 510,
+      content: `
+        <div style="font-family:'Segoe UI',Tahoma,Arial,sans-serif;font-size:11.5px;line-height:18px;letter-spacing:3.1px;font-weight:600;text-transform:uppercase;color:#78998f;">Nhắc lịch hẹn ngày mai</div>
+        <div style="margin-top:14px;font-family:'Segoe UI',Tahoma,Arial,sans-serif;font-size:22px;line-height:31px;font-weight:600;color:#2f5b51;">Hẹn gặp Ban quản lý Vĩnh Phúc Viên</div>
+        <div style="margin-top:20px;font-family:'Segoe UI',Tahoma,Arial,sans-serif;font-size:14px;line-height:27px;color:#58756d;">Kính gửi Quý khách${params.customerName?.trim() ? ` <strong style="font-weight:600;color:#2f5b51;">${this.escapeHtml(params.customerName.trim())}</strong>` : ''},</div>
+        <div style="margin-top:12px;padding-left:15px;border-left:2px solid #c9ddd7;font-family:'Segoe UI',Tahoma,Arial,sans-serif;font-size:14px;line-height:27px;color:#3f655c;">${safeMessage}</div>
+        <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;margin-top:17px;">${rows}</table>
+        <div style="margin-top:16px;font-family:'Segoe UI',Tahoma,Arial,sans-serif;font-size:13px;line-height:25px;color:#6d877f;">Nếu cần thay đổi lịch, Quý khách vui lòng cập nhật sớm trên hệ thống để ban quản lý có thể hỗ trợ kịp thời.</div>
+        ${this.renderButton('Xem lịch hẹn', appointmentUrl)}`,
+    });
+
+    const html = this.renderShell({
+      theme: 'light',
+      bannerCid,
+      footerLine: 'Bạn nhận được email này vì lịch hẹn với ban quản lý đã được xác nhận trên Vĩnh Phúc Viên.',
+      content,
+      contentHeight: 700,
+      canvasHeight: 930,
+      footerShiftDown: 12,
+    });
+
+    await this.sendEmail({
+      to,
+      subject: `[Vĩnh Phúc Viên] Nhắc lịch hẹn ngày mai · ${appointmentDateText} ${params.startTime}`,
+      text: `${params.message}\n\nNgày hẹn: ${appointmentDateText}\nThời gian: ${timeText}\nĐịa điểm: ${params.location?.trim() || 'Theo thông tin trong lịch hẹn'}\nNội dung: ${params.topic?.trim() || 'Lịch hẹn với ban quản lý'}\n\nXem và cập nhật lịch hẹn tại ${appointmentUrl}`,
+      html,
+      attachments: banner ? [banner] : [],
+    });
+    return true;
+  }
+
   /** Gửi email xác nhận cho khách hàng ngay sau khi đặt một dịch vụ mới
    * (chăm sóc mộ, thay hoa, thắp hương...). Không throw khi Gmail API chưa cấu
    * hình — chỉ log cảnh báo, để không làm luồng đặt dịch vụ bị lỗi. */
