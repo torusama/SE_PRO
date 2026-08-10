@@ -50,7 +50,7 @@
 .appointment-section-heading p,
 .appointment-list-heading p {
   margin: 0 0 10px;
-  color: #caa860;
+  color: #0affd4;
   font-size: 11px;
   font-weight: 750;
   letter-spacing: 0.15em;
@@ -82,7 +82,7 @@
   min-width: 250px;
   gap: 12px;
   padding-left: 24px;
-  border-left: 1px solid rgba(202, 168, 96, 0.22);
+  border-left: 1px solid rgba(10, 255, 212, 0.22);
 }
 
 .appointments-process div {
@@ -93,7 +93,7 @@
 }
 
 .appointments-process strong {
-  color: #caa860;
+  color: #0affd4;
   font-family:
     system-ui,
     -apple-system,
@@ -144,7 +144,7 @@
 .appointment-summary-item strong {
   display: block;
   margin: 8px 0 5px;
-  color: #f0c367;
+  color: #7dffe8;
   font-family:
     system-ui,
     -apple-system,
@@ -169,9 +169,9 @@
   align-items: center;
   margin-top: 18px;
   padding: 13px 16px;
-  border: 1px solid rgba(202, 168, 96, 0.26);
+  border: 1px solid rgba(10, 255, 212, 0.26);
   border-radius: 10px;
-  background: rgba(202, 168, 96, 0.07);
+  background: rgba(10, 255, 212, 0.07);
 }
 
 .appointment-feedback.error {
@@ -180,7 +180,7 @@
 }
 
 .appointment-feedback strong {
-  color: #e6c778;
+  color: #7dffe8;
   font-size: 12px;
 }
 
@@ -282,7 +282,7 @@
 }
 
 .booking-form legend span {
-  color: #caa860;
+  color: #0affd4;
   font-family:
     system-ui,
     -apple-system,
@@ -379,9 +379,9 @@
   display: grid;
   grid-template-columns: 1fr 1fr 1.35fr;
   overflow: hidden;
-  border: 1px solid rgba(202, 168, 96, 0.2);
+  border: 1px solid rgba(10, 255, 212, 0.2);
   border-radius: 10px;
-  background: rgba(202, 168, 96, 0.045);
+  background: rgba(10, 255, 212, 0.045);
 }
 
 .booking-review div {
@@ -390,7 +390,7 @@
 }
 
 .booking-review div + div {
-  border-left: 1px solid rgba(202, 168, 96, 0.15);
+  border-left: 1px solid rgba(10, 255, 212, 0.15);
 }
 
 .booking-review span {
@@ -561,10 +561,10 @@
   align-items: center;
   min-height: 25px;
   padding: 0 9px;
-  border: 1px solid rgba(202, 168, 96, 0.22);
+  border: 1px solid rgba(10, 255, 212, 0.22);
   border-radius: 999px;
-  color: #ddb96c;
-  background: rgba(202, 168, 96, 0.08);
+  color: #0affd4;
+  background: rgba(10, 255, 212, 0.08);
   font-size: 9px;
   font-weight: 750;
   white-space: nowrap;
@@ -591,8 +591,8 @@
 .appointment-topic {
   margin-top: 16px;
   padding: 13px 14px;
-  border-left: 2px solid rgba(202, 168, 96, 0.42);
-  background: rgba(202, 168, 96, 0.045);
+  border-left: 2px solid rgba(10, 255, 212, 0.42);
+  background: rgba(10, 255, 212, 0.045);
 }
 
 .appointment-topic strong {
@@ -758,7 +758,7 @@
     grid-template-columns: repeat(3, 1fr);
     min-width: 0;
     padding: 18px 0 0;
-    border-top: 1px solid rgba(202, 168, 96, 0.18);
+    border-top: 1px solid rgba(10, 255, 212, 0.18);
     border-left: 0;
   }
 
@@ -782,7 +782,7 @@
   }
 
   .booking-review div + div {
-    border-top: 1px solid rgba(202, 168, 96, 0.15);
+    border-top: 1px solid rgba(10, 255, 212, 0.15);
     border-left: 0;
   }
 

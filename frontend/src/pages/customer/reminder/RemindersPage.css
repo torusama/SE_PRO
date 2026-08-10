@@ -10,15 +10,15 @@
   --teal-glow: #00e5c4;
   --teal-soft: #00b89e;
   --teal-dim: #065a50;
-  --gold: #c9a84c;
-  --gold-bright: #f0c060;
+  --gold: #0affd4;
+  --gold-bright: #7dffe8;
   --purple: #7b6bcc;
   --text-main: #d4e8e0;
   --text-soft: #aac3ba;
   --text-muted: #7a9a90;
   --border-dim: rgba(0, 229, 196, 0.12);
   --border-soft: rgba(0, 229, 196, 0.25);
-  --border-gold: rgba(201, 168, 76, 0.28);
+  --border-gold: rgba(10, 255, 212, 0.28);
   --danger: #e87575;
   --success: #78dbc4;
 
@@ -267,7 +267,7 @@
   border-radius: 18px;
   background: linear-gradient(
     105deg,
-    rgba(201, 168, 76, 0.085),
+    rgba(10, 255, 212, 0.085),
     rgba(8, 13, 26, 0.86) 44%,
     rgba(0, 229, 196, 0.025)
   );
@@ -285,7 +285,7 @@
   border-radius: 50%;
   background: radial-gradient(
     circle,
-    rgba(201, 168, 76, 0.08),
+    rgba(10, 255, 212, 0.08),
     transparent 68%
   );
   pointer-events: none;
@@ -296,9 +296,9 @@
   height: 50px;
   display: grid;
   place-items: center;
-  border: 1px solid rgba(201, 168, 76, 0.32);
+  border: 1px solid rgba(10, 255, 212, 0.32);
   border-radius: 14px;
-  background: rgba(201, 168, 76, 0.08);
+  background: rgba(10, 255, 212, 0.08);
   color: var(--gold-bright);
 }
 
@@ -334,7 +334,7 @@
 .reminder-page .upcoming-countdown {
   min-width: 76px;
   padding-left: 18px;
-  border-left: 1px solid rgba(201, 168, 76, 0.18);
+  border-left: 1px solid rgba(10, 255, 212, 0.18);
   text-align: center;
 }
 
@@ -365,7 +365,7 @@
   gap: 8px;
   border: 1px solid var(--border-gold);
   border-radius: 10px;
-  background: rgba(201, 168, 76, 0.08);
+  background: rgba(10, 255, 212, 0.08);
   color: var(--gold-bright);
   font-size: 12px;
   font-weight: 500;
@@ -377,8 +377,8 @@
 }
 
 .reminder-page .upcoming-btn:hover {
-  border-color: rgba(201, 168, 76, 0.48);
-  background: rgba(201, 168, 76, 0.13);
+  border-color: rgba(10, 255, 212, 0.48);
+  background: rgba(10, 255, 212, 0.13);
 }
 
 .reminder-page .upcoming-btn:active,
@@ -596,13 +596,13 @@
   height: 4px;
   border-radius: 50%;
   background: var(--gold);
-  box-shadow: 0 0 8px rgba(201, 168, 76, 0.4);
+  box-shadow: 0 0 8px rgba(10, 255, 212, 0.4);
   transform: translateX(-50%);
 }
 
 .reminder-page .cal-day.selected {
-  border-color: rgba(201, 168, 76, 0.36);
-  background: rgba(201, 168, 76, 0.09);
+  border-color: rgba(10, 255, 212, 0.36);
+  background: rgba(10, 255, 212, 0.09);
   color: var(--gold-bright);
 }
 
@@ -672,10 +672,10 @@
 }
 
 .reminder-page .reminder-item.upcoming-soon {
-  border-color: rgba(201, 168, 76, 0.26);
+  border-color: rgba(10, 255, 212, 0.26);
   background: linear-gradient(
     90deg,
-    rgba(201, 168, 76, 0.055),
+    rgba(10, 255, 212, 0.055),
     rgba(4, 6, 14, 0.28)
   );
 }
@@ -696,9 +696,9 @@
 }
 
 .reminder-page .r-icon.gold {
-  border-color: rgba(201, 168, 76, 0.2);
+  border-color: rgba(10, 255, 212, 0.2);
   color: var(--gold);
-  background: rgba(201, 168, 76, 0.055);
+  background: rgba(10, 255, 212, 0.055);
 }
 .reminder-page .r-icon.teal {
   border-color: rgba(0, 184, 158, 0.2);
@@ -780,8 +780,8 @@
 }
 
 .reminder-page .r-days.soon {
-  border: 1px solid rgba(201, 168, 76, 0.15);
-  background: rgba(201, 168, 76, 0.075);
+  border: 1px solid rgba(10, 255, 212, 0.15);
+  background: rgba(10, 255, 212, 0.075);
   color: var(--gold);
 }
 
@@ -873,7 +873,7 @@
   border: 1px solid var(--border-gold);
   border-radius: 11px;
   color: var(--gold);
-  background: rgba(201, 168, 76, 0.065);
+  background: rgba(10, 255, 212, 0.065);
 }
 
 .reminder-page .cancel-edit {
@@ -1024,14 +1024,14 @@
 }
 
 .reminder-page .type-opt.selected {
-  border-color: rgba(201, 168, 76, 0.36);
+  border-color: rgba(10, 255, 212, 0.36);
   background: linear-gradient(
     145deg,
-    rgba(201, 168, 76, 0.095),
-    rgba(201, 168, 76, 0.035)
+    rgba(10, 255, 212, 0.095),
+    rgba(10, 255, 212, 0.035)
   );
   color: var(--gold-bright);
-  box-shadow: inset 0 0 0 1px rgba(201, 168, 76, 0.025);
+  box-shadow: inset 0 0 0 1px rgba(10, 255, 212, 0.025);
 }
 
 .reminder-page .type-opt-icon {
@@ -1091,14 +1091,14 @@
   width: 40px;
   height: 40px;
   border-radius: 9px;
-  border-color: rgba(201, 168, 76, 0.26);
-  background: rgba(201, 168, 76, 0.055);
+  border-color: rgba(10, 255, 212, 0.26);
+  background: rgba(10, 255, 212, 0.055);
   color: var(--gold);
 }
 
 .reminder-page .notify-email-add:hover {
-  border-color: rgba(201, 168, 76, 0.42);
-  background: rgba(201, 168, 76, 0.1);
+  border-color: rgba(10, 255, 212, 0.42);
+  background: rgba(10, 255, 212, 0.1);
   color: var(--gold-bright);
 }
 
@@ -1169,12 +1169,12 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  border: 1px solid rgba(201, 168, 76, 0.34);
+  border: 1px solid rgba(10, 255, 212, 0.34);
   border-radius: 10px;
   background: linear-gradient(
     135deg,
-    rgba(201, 168, 76, 0.15),
-    rgba(201, 168, 76, 0.065)
+    rgba(10, 255, 212, 0.15),
+    rgba(10, 255, 212, 0.065)
   );
   color: var(--gold-bright);
   font-size: 11.5px;
@@ -1189,14 +1189,14 @@
 }
 
 .reminder-page .btn-add:hover:not(:disabled) {
-  border-color: rgba(201, 168, 76, 0.52);
+  border-color: rgba(10, 255, 212, 0.52);
   background: linear-gradient(
     135deg,
-    rgba(201, 168, 76, 0.2),
-    rgba(201, 168, 76, 0.09)
+    rgba(10, 255, 212, 0.2),
+    rgba(10, 255, 212, 0.09)
   );
   box-shadow:
-    0 8px 24px rgba(201, 168, 76, 0.06),
+    0 8px 24px rgba(10, 255, 212, 0.06),
     inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
@@ -1322,7 +1322,7 @@
     justify-content: flex-start;
     gap: 6px;
     padding: 10px 0 0;
-    border-top: 1px solid rgba(201, 168, 76, 0.12);
+    border-top: 1px solid rgba(10, 255, 212, 0.12);
     border-left: 0;
     text-align: left;
   }

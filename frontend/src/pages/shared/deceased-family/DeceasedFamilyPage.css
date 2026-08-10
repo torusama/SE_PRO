@@ -9,21 +9,40 @@
   --df-surface-soft: #0c1726;
   --df-teal: #00e5c4;
   --df-teal-soft: #75d8ca;
-  --df-gold: #d7ae4e;
+  --df-gold: #0affd4;
   --df-text: #e4edf1;
   --df-text-soft: #a4b5bc;
   --df-muted: #71858f;
   --df-line: rgba(137, 169, 179, 0.16);
   --df-line-strong: rgba(0, 229, 196, 0.28);
+  position: relative;
   width: min(100%, 1320px);
   min-height: 100vh;
   margin: 0 auto;
   padding: 30px clamp(22px, 4vw, 52px) 72px;
+  overflow-x: hidden;
   color: var(--df-text);
   background:
     radial-gradient(circle at 8% 0%, rgba(0, 229, 196, 0.045), transparent 27%),
     var(--df-bg);
   font-family: "Be Vietnam Pro", Inter, sans-serif;
+}
+
+.df-page::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 520px;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    linear-gradient(180deg, rgba(20, 42, 77, 0.16), transparent 78%),
+    linear-gradient(90deg, transparent, rgba(10, 255, 212, 0.035), transparent);
+}
+
+.df-page > * {
+  position: relative;
+  z-index: 1;
 }
 
 .df-hero {
@@ -32,7 +51,7 @@
   min-height: 190px;
   overflow: hidden;
   padding: clamp(28px, 4vw, 48px);
-  border: 1px solid rgba(215, 174, 78, 0.23);
+  border: 1px solid rgba(10, 255, 212, 0.23);
   border-radius: 22px;
   background:
     linear-gradient(105deg, rgba(4, 19, 27, 0.98), rgba(12, 35, 30, 0.95)),
@@ -45,11 +64,11 @@
   right: -45px;
   width: 330px;
   height: 330px;
-  border: 1px solid rgba(215, 174, 78, 0.12);
+  border: 1px solid rgba(10, 255, 212, 0.12);
   border-radius: 50%;
   box-shadow:
     0 0 0 36px rgba(0, 229, 196, 0.018),
-    0 0 0 86px rgba(215, 174, 78, 0.018);
+    0 0 0 86px rgba(10, 255, 212, 0.018);
   content: "";
 }
 
@@ -328,14 +347,14 @@
   width: 48px;
   height: 58px;
   margin-bottom: 18px;
-  border: 1px solid rgba(215, 174, 78, 0.38);
+  border: 1px solid rgba(10, 255, 212, 0.38);
   border-radius: 25px 25px 9px 9px;
 }
 
 .df-empty-mark::before,
 .df-empty-mark::after {
   position: absolute;
-  background: rgba(215, 174, 78, 0.32);
+  background: rgba(10, 255, 212, 0.32);
   content: "";
 }
 
@@ -391,10 +410,10 @@
   width: 48px;
   height: 48px;
   place-items: center;
-  border: 1px solid rgba(215, 174, 78, 0.25);
+  border: 1px solid rgba(10, 255, 212, 0.25);
   border-radius: 50%;
-  color: #e8c978;
-  background: rgba(215, 174, 78, 0.07);
+  color: #7dffe8;
+  background: rgba(10, 255, 212, 0.07);
   font-size: 17px;
   font-weight: 600;
 }
@@ -425,10 +444,10 @@
   min-height: 21px;
   align-items: center;
   padding: 0 7px;
-  border: 1px solid rgba(215, 174, 78, 0.23);
+  border: 1px solid rgba(10, 255, 212, 0.23);
   border-radius: 99px;
-  color: #d9bd72;
-  background: rgba(215, 174, 78, 0.07);
+  color: #0affd4;
+  background: rgba(10, 255, 212, 0.07);
   font-size: 8px;
   font-weight: 700;
   letter-spacing: 0.04em;

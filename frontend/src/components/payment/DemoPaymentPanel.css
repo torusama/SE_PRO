@@ -2,8 +2,8 @@
   margin-top: 16px;
   padding: 16px;
   border-radius: 10px;
-  border: 1px solid rgba(201, 168, 76, 0.35);
-  background: rgba(201, 168, 76, 0.06);
+  border: 1px solid rgba(10, 255, 212, 0.35);
+  background: rgba(10, 255, 212, 0.06);
 }
 
 .demo-payment h3 {
@@ -11,13 +11,13 @@
   font-size: 14px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #c9a84c;
+  color: #0affd4;
 }
 
 .demo-payment-timer {
   font-size: 13px;
   font-weight: 600;
-  color: #f0c060;
+  color: #7dffe8;
   margin-bottom: 12px;
 }
 .demo-payment-timer.expired {
@@ -88,7 +88,7 @@
 }
 .demo-payment-status--waiting {
   background: rgba(212, 133, 10, 0.1);
-  color: #f0c060;
+  color: #7dffe8;
 }
 .demo-payment-status--paid {
   background: rgba(0, 229, 196, 0.1);

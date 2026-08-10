@@ -35,8 +35,8 @@
   --teal: #69c8b7;
   --teal-dark: #235f56;
   --teal-soft: rgba(105, 200, 183, 0.1);
-  --gold: #d2b473;
-  --gold-soft: rgba(210, 180, 115, 0.1);
+  --gold: #0affd4;
+  --gold-soft: rgba(10, 255, 212, 0.1);
   --blue: #8bb8cf;
   --red: #d68b8b;
   --red-soft: rgba(214, 139, 139, 0.1);
@@ -61,7 +61,7 @@
   pointer-events: none;
   background:
     linear-gradient(180deg, rgba(20, 42, 77, 0.16), transparent 78%),
-    linear-gradient(90deg, transparent, rgba(210, 180, 115, 0.035), transparent);
+    linear-gradient(90deg, transparent, rgba(10, 255, 212, 0.035), transparent);
 }
 
 .service-page button,
@@ -382,7 +382,7 @@
 
 .service-page .notice-banner {
   background: var(--gold-soft);
-  border-color: rgba(210, 180, 115, 0.22);
+  border-color: rgba(10, 255, 212, 0.22);
   color: #decda5;
 }
 
@@ -717,7 +717,7 @@
   --category-color: #69c8b7;
 }
 .service-page .cat-card.category-memorial {
-  --category-color: #d2b473;
+  --category-color: #0affd4;
 }
 .service-page .cat-card.category-burial {
   --category-color: #a59bca;
@@ -1131,7 +1131,7 @@
   color: #69c8b7;
 }
 .service-page .service-category.category-memorial {
-  color: #d2b473;
+  color: #0affd4;
 }
 .service-page .service-category.category-burial {
   color: #a59bca;
@@ -1459,7 +1459,7 @@
 }
 
 .service-page .status-badge.done {
-  border-color: rgba(210, 180, 115, 0.25);
+  border-color: rgba(10, 255, 212, 0.25);
   background: var(--gold-soft);
   color: #dfc68f;
 }
@@ -1728,7 +1728,7 @@
 .service-page .completion-proof {
   margin-top: 20px;
   padding: 20px;
-  border: 1px solid rgba(210, 180, 115, 0.2);
+  border: 1px solid rgba(10, 255, 212, 0.2);
   border-radius: 10px;
   background: var(--gold-soft);
 }

@@ -60,7 +60,12 @@ type PlotIntroductionView = {
   text: string;
 };
 type CustomerReservationStatus =
-  "draft" | "submitted" | "pending" | "approved" | "rejected" | "cancelled";
+  | "draft"
+  | "submitted"
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "cancelled";
 
 interface BackendMapPlot {
   id?: string | number;
@@ -701,7 +706,7 @@ export default function MapPage() {
       const size = Math.random() * 1.8 + 0.4;
       const teal = Math.random() < 0.1;
       const gold = Math.random() < 0.08;
-      d.style.cssText = `width:${size}px;height:${size}px;left:${Math.random() * 100}%;top:${Math.random() * 65}%;--d:${2 + Math.random() * 5}s;--delay:${-Math.random() * 6}s;background:${teal ? "#00e5c4" : gold ? "#c9a84c" : "#fff"}`;
+      d.style.cssText = `width:${size}px;height:${size}px;left:${Math.random() * 100}%;top:${Math.random() * 65}%;--d:${2 + Math.random() * 5}s;--delay:${-Math.random() * 6}s;background:${teal ? "#00e5c4" : gold ? "#0affd4" : "#fff"}`;
       el.appendChild(d);
     }
   }, []);
@@ -882,8 +887,9 @@ export default function MapPage() {
     }
 
     try {
-      const response =
-        await api.get<{ data?: CustomerReservation[] }>("/my/reservations");
+      const response = await api.get<{ data?: CustomerReservation[] }>(
+        "/my/reservations",
+      );
       if (requestId === reservationRequestRef.current) {
         setMyReservations(response.data.data ?? []);
       }
@@ -893,10 +899,7 @@ export default function MapPage() {
   }, [token]);
 
   useEffect(() => {
-    const initialLoad = window.setTimeout(
-      () => void loadMyReservations(),
-      0,
-    );
+    const initialLoad = window.setTimeout(() => void loadMyReservations(), 0);
     return () => {
       window.clearTimeout(initialLoad);
       reservationRequestRef.current += 1;
@@ -1031,8 +1034,9 @@ export default function MapPage() {
     : undefined;
   const selectedIntroductionLoading = Boolean(
     selectedPlot &&
-      !selectedPlot.isPlaceholder &&
-      (!selectedIntroductionView || selectedIntroductionView.status === "loading"),
+    !selectedPlot.isPlaceholder &&
+    (!selectedIntroductionView ||
+      selectedIntroductionView.status === "loading"),
   );
   const selectedIntroduction = selectedPlot
     ? selectedIntroductionView?.text ||
@@ -1098,7 +1102,12 @@ export default function MapPage() {
   }
 
   function handlePlotPointerEnter(plot: MapPlot) {
-    if (plot.isPlaceholder || selectionMode !== "cluster" || !dragModeRef.current) return;
+    if (
+      plot.isPlaceholder ||
+      selectionMode !== "cluster" ||
+      !dragModeRef.current
+    )
+      return;
     applyClusterDrag(plot, dragModeRef.current);
   }
 
@@ -1236,7 +1245,7 @@ export default function MapPage() {
 
   function getPlotStroke(plot: MapPlot, myReservation?: CustomerReservation) {
     if (clusterIds.has(plot.id)) return "#00e5c4";
-    if (selectedPlot?.id === plot.id) return "#f0c060";
+    if (selectedPlot?.id === plot.id) return "#7dffe8";
     if (myReservation) return "#00e5c4";
     return STATUS_COLOR[plot.status].stroke;
   }
@@ -1467,7 +1476,9 @@ export default function MapPage() {
                 style={{
                   transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom}) rotate(${rotation}deg)`,
                   transformOrigin: "center center",
-                  transition: isDraggingRef.current ? "none" : "transform 0.1s ease-out",
+                  transition: isDraggingRef.current
+                    ? "none"
+                    : "transform 0.1s ease-out",
                 }}
               >
                 <svg
@@ -1511,7 +1522,10 @@ export default function MapPage() {
                   />
 
                   {/* Mạng lưới đường giao thông liên kết 100% (cắt gọn tuyệt đối theo ranh giới đỏ) */}
-                  <g className="map-road-network" clipPath="url(#cemetery-boundary-clip)">
+                  <g
+                    className="map-road-network"
+                    clipPath="url(#cemetery-boundary-clip)"
+                  >
                     {/* Trục đường vành đai Tây */}
                     <rect
                       x={LEFT_ROAD.x}
@@ -1809,15 +1823,17 @@ export default function MapPage() {
                   })}
 
                   {selectedPlot &&
-                    filteredPlots.some((plot) => plot.id === selectedPlot.id) && (
+                    filteredPlots.some(
+                      (plot) => plot.id === selectedPlot.id,
+                    ) && (
                       <rect
-                      fill="none"
-                      stroke="#f0c060"
-                      strokeWidth="2"
-                      strokeDasharray="4,2"
-                      opacity="0.9"
-                    />
-                  )}
+                        fill="none"
+                        stroke="#7dffe8"
+                        strokeWidth="2"
+                        strokeDasharray="4,2"
+                        opacity="0.9"
+                      />
+                    )}
                 </svg>
               </div>
 

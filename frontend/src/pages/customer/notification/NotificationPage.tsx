@@ -28,7 +28,12 @@ interface NotificationItem {
 }
 
 type FilterKey =
-  "all" | "unread" | "request" | "contract" | "service" | "reminder";
+  | "all"
+  | "unread"
+  | "request"
+  | "contract"
+  | "service"
+  | "reminder";
 
 const TYPE_META: Record<
   string,
@@ -340,7 +345,7 @@ export default function NotificationPage() {
             height: 420,
             bottom: "-10%",
             right: "-5%",
-            background: "radial-gradient(circle, #c9a84c, transparent 70%)",
+            background: "radial-gradient(circle, #0affd4, transparent 70%)",
             animationDelay: "3s",
           }}
         />
@@ -469,7 +474,10 @@ export default function NotificationPage() {
                             </span>
                           </div>
                           {item.relatedEntityType === "offline_appointment" &&
-                            ["appointment_created", "appointment_updated"].includes(item.type) && (
+                            [
+                              "appointment_created",
+                              "appointment_updated",
+                            ].includes(item.type) && (
                               <button
                                 type="button"
                                 className="notif-action"

@@ -9,15 +9,15 @@
   --teal-glow: #00e5c4;
   --teal-soft: #00b89e;
   --teal-dim: #065a50;
-  --gold: #c9a84c;
-  --gold-dim: #7a5f28;
-  --gold-bright: #f0c060;
+  --gold: #0affd4;
+  --gold-dim: #067a68;
+  --gold-bright: #7dffe8;
   --red: #e05c5c;
   --text-main: #d4e8e0;
   --text-muted: #7a9a90;
   --border-dim: rgba(0, 229, 196, 0.12);
   --border-soft: rgba(0, 229, 196, 0.25);
-  --border-gold: rgba(201, 168, 76, 0.25);
+  --border-gold: rgba(10, 255, 212, 0.25);
 
   position: relative;
   background: var(--ink-void);
@@ -641,7 +641,7 @@
   border: 1px solid var(--border-dim);
 }
 .profile-page .contact-status.unverified {
-  background: rgba(201, 168, 76, 0.08);
+  background: rgba(10, 255, 212, 0.08);
   color: var(--gold);
   border: 1px solid var(--border-gold);
 }
@@ -737,7 +737,7 @@
   border: 1px solid var(--border-dim);
 }
 .profile-page .lot-status.reserved {
-  background: rgba(201, 168, 76, 0.08);
+  background: rgba(10, 255, 212, 0.08);
   color: var(--gold);
   border: 1px solid var(--border-gold);
 }
@@ -824,7 +824,7 @@
   border: 1px solid var(--border-dim);
 }
 .profile-page .sec-status.off {
-  background: rgba(201, 168, 76, 0.06);
+  background: rgba(10, 255, 212, 0.06);
   color: var(--gold);
   border: 1px solid var(--border-gold);
 }
@@ -969,10 +969,10 @@
 }
 .profile-page .lot-action-btn.gold-btn {
   border-color: var(--border-gold);
-  background: rgba(201, 168, 76, 0.04);
+  background: rgba(10, 255, 212, 0.04);
 }
 .profile-page .lot-action-btn.gold-btn:hover {
-  background: rgba(201, 168, 76, 0.1);
+  background: rgba(10, 255, 212, 0.1);
 }
 
 /* STATUS TIMELINE */
@@ -1018,17 +1018,17 @@
 }
 .profile-page .st-dot.current {
   border-color: var(--gold);
-  background: rgba(201, 168, 76, 0.1);
+  background: rgba(10, 255, 212, 0.1);
   color: var(--gold);
   animation: pf-pulse-dot 2s ease-in-out infinite;
 }
 @keyframes pf-pulse-dot {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(201, 168, 76, 0.3);
+    box-shadow: 0 0 0 0 rgba(10, 255, 212, 0.3);
   }
   50% {
-    box-shadow: 0 0 0 6px rgba(201, 168, 76, 0);
+    box-shadow: 0 0 0 6px rgba(10, 255, 212, 0);
   }
 }
 .profile-page .st-dot.pending {
@@ -1144,7 +1144,7 @@
   background: var(--ink-deep);
 }
 .profile-page .modal-warn {
-  background: rgba(201, 168, 76, 0.07);
+  background: rgba(10, 255, 212, 0.07);
   border: 1px solid var(--border-gold);
   border-radius: 8px;
   padding: 12px 16px;
@@ -1240,16 +1240,16 @@
   --teal-glow: #7bcfc0;
   --teal-soft: #69bdae;
   --teal-dim: #315f58;
-  --gold: #d4ad61;
-  --gold-dim: #816737;
-  --gold-bright: #e4bf75;
+  --gold: #0affd4;
+  --gold-dim: #067a68;
+  --gold-bright: #7dffe8;
   --red: #df7474;
   --text-main: #e4ece9;
   --text-muted: #8da39d;
   --text-subtle: #657b76;
   --border-dim: rgba(96, 130, 189, 0.16);
   --border-soft: rgba(96, 130, 189, 0.32);
-  --border-gold: rgba(212, 173, 97, 0.28);
+  --border-gold: rgba(10, 255, 212, 0.28);
 
   min-height: calc(100vh - 72px);
   background: var(--ink-void);
@@ -1333,7 +1333,7 @@
 .profile-page .avatar-wrap {
   display: block;
   width: fit-content;
-  margin: 0 0 17px;
+  margin: 0 auto 17px;
 }
 
 .profile-page .avatar-ring {
@@ -1385,6 +1385,7 @@
   font-size: 11px;
   letter-spacing: 0.025em;
   opacity: 1;
+  text-align: center;
 }
 
 .profile-page .profile-since {
@@ -1415,7 +1416,7 @@
 }
 
 .profile-page .stat-num {
-  color: #e6c37b;
+  color: #7dffe8;
   font-family:
     ui-sans-serif,
     -apple-system,
@@ -1636,7 +1637,23 @@
   gap: 9px;
 }
 
-.profile-page .id-card-btn,
+.profile-page .id-card-btn {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 9px 14px;
+  border: none;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #0affd4, #06b8a0);
+  color: #04140f;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  box-shadow: 0 0 22px rgba(10, 255, 212, 0.28);
+}
+
 .profile-page .otp-btn {
   display: inline-flex;
   min-height: 42px;
@@ -1653,13 +1670,23 @@
   font-weight: 650;
 }
 
-.profile-page .id-card-btn:hover,
+.profile-page .id-card-btn:hover {
+  background: linear-gradient(135deg, #3dffe0, #08d1a6);
+  box-shadow: 0 0 28px rgba(10, 255, 212, 0.4);
+}
+
 .profile-page .otp-btn:hover {
   border-color: rgba(123, 207, 192, 0.48);
   background: #1c3c36;
 }
 
-.profile-page .id-card-btn.ghost,
+.profile-page .id-card-btn.ghost {
+  background: transparent;
+  color: #9db0ab;
+  border: 1px solid rgba(96, 130, 189, 0.18);
+  box-shadow: none;
+}
+
 .profile-page .otp-btn.ghost {
   border-color: rgba(96, 130, 189, 0.18);
   background: transparent;
@@ -1671,21 +1698,21 @@
 .profile-page .modal-btn-primary {
   min-height: 40px;
   padding: 9px 18px;
-  border: 1px solid rgba(123, 207, 192, 0.36);
+  border: none;
   border-radius: 9px;
-  background: #77c9ba;
-  color: #07110f;
+  background: linear-gradient(135deg, #0affd4, #06b8a0);
+  color: #04140f;
   font-family: inherit;
   font-size: 12px;
   font-weight: 750;
   letter-spacing: 0;
-  box-shadow: none;
+  box-shadow: 0 0 22px rgba(10, 255, 212, 0.28);
 }
 
 .profile-page .btn-save:hover,
 .profile-page .modal-btn-primary:hover {
-  background: #8ad7c9;
-  box-shadow: none;
+  background: linear-gradient(135deg, #3dffe0, #08d1a6);
+  box-shadow: 0 0 28px rgba(10, 255, 212, 0.4);
   transform: none;
 }
 
@@ -1808,9 +1835,9 @@
 
 .profile-page .contact-status.unverified,
 .profile-page .sec-status.off {
-  border-color: rgba(212, 173, 97, 0.25);
-  background: rgba(212, 173, 97, 0.07);
-  color: #d9b66f;
+  border-color: rgba(10, 255, 212, 0.25);
+  background: rgba(10, 255, 212, 0.07);
+  color: #0affd4;
 }
 
 .profile-page .inline-dev-note {
@@ -1820,10 +1847,10 @@
   gap: 8px;
   margin-top: 7px;
   padding: 10px 12px;
-  border: 1px solid rgba(212, 173, 97, 0.22);
+  border: 1px solid rgba(10, 255, 212, 0.22);
   border-radius: 8px;
-  background: rgba(212, 173, 97, 0.05);
-  color: #c4a66d;
+  background: rgba(10, 255, 212, 0.05);
+  color: #0affd4;
   font-size: 11px;
   line-height: 1.55;
 }
@@ -2054,10 +2081,10 @@
   display: flex;
   align-items: flex-start;
   gap: 9px;
-  border-color: rgba(212, 173, 97, 0.25);
+  border-color: rgba(10, 255, 212, 0.25);
   border-radius: 10px;
-  background: rgba(212, 173, 97, 0.06);
-  color: #d4b674;
+  background: rgba(10, 255, 212, 0.06);
+  color: #0affd4;
   line-height: 1.55;
 }
 
@@ -2077,13 +2104,13 @@
 }
 
 .profile-page .modal-btn-primary.gold {
-  border-color: rgba(212, 173, 97, 0.35);
-  background: #caa65e;
+  border-color: rgba(10, 255, 212, 0.35);
+  background: #0affd4;
   color: #151005;
 }
 
 .profile-page .modal-btn-primary.gold:hover {
-  background: #d8b66e;
+  background: #0affd4;
 }
 
 .profile-page .document-requirement {
