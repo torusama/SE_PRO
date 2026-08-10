@@ -12,7 +12,12 @@ const result = (rows: unknown[] = [], rowCount = rows.length) => ({
   rowCount,
 });
 
-function createService(handler?: QueryHandler, adjacency?: any, audit?: any) {
+function createService(
+  handler?: QueryHandler,
+  adjacency?: any,
+  audit?: any,
+  realtime?: any,
+) {
   const client = {
     query: jest.fn((sql: string, params?: unknown[]) =>
       handler ? handler(sql, params) : result(),
@@ -36,6 +41,7 @@ function createService(handler?: QueryHandler, adjacency?: any, audit?: any) {
       adjacency,
       undefined,
       audit,
+      realtime,
     ),
   };
 }
@@ -83,6 +89,7 @@ describe('ReservationsService', () => {
   });
   describe('create', () => {
     it('creates a pending multi-plot reservation in a transaction', async () => {
+      const realtime = { publish: jest.fn() };
       const { client, database, service } = createService((sql) => {
         if (sql.includes('FROM plots') && sql.includes('FOR UPDATE')) {
           return result([
@@ -118,6 +125,15 @@ describe('ReservationsService', () => {
           ]);
         }
         return result();
+      }, undefined, undefined, realtime);
+      const publicationOrder: string[] = [];
+      database.transaction.mockImplementation(async (callback) => {
+        const transactionResult = await callback(client);
+        publicationOrder.push('commit');
+        return transactionResult;
+      });
+      realtime.publish.mockImplementation(() => {
+        publicationOrder.push('publish');
       });
 
       const created = await service.create(7, {
@@ -138,6 +154,11 @@ describe('ReservationsService', () => {
         plotCount: 2,
         plotCodes: ['A-01-001', 'A-01-002'],
       });
+      expect(realtime.publish).toHaveBeenCalledWith(
+        ['reservations', 'plots', 'notifications', 'dashboard'],
+        ['admin', 'user:7'],
+      );
+      expect(publicationOrder).toEqual(['commit', 'publish']);
     });
 
     it('rejects duplicate plot IDs before opening a transaction', async () => {
@@ -232,6 +253,7 @@ describe('ReservationsService', () => {
       const adjacency = {
         validateAdjacent: jest.fn(() => ({ valid: true, method: 'map' })),
       };
+      const realtime = { publish: jest.fn() };
       const { client, service } = createService((sql) => {
         if (sql.includes('FROM plots') && sql.includes('FOR UPDATE')) {
           return result([
@@ -284,7 +306,7 @@ describe('ReservationsService', () => {
           ]);
         }
         return result();
-      }, adjacency);
+      }, adjacency, undefined, realtime);
 
       await expect(
         service.createMultiple(7, {
@@ -301,6 +323,10 @@ describe('ReservationsService', () => {
       expect(client.query).toHaveBeenCalledWith(
         expect.stringContaining('UPDATE plots'),
         [[1, 2]],
+      );
+      expect(realtime.publish).toHaveBeenCalledWith(
+        ['reservations', 'plots', 'notifications', 'dashboard'],
+        ['admin', 'user:7'],
       );
     });
 
@@ -342,6 +368,62 @@ describe('ReservationsService', () => {
     });
   });
 
+  describe('customer status mutations', () => {
+    it('publishes submit to the admin and actor rooms', async () => {
+      const realtime = { publish: jest.fn() };
+      const { service } = createService((sql) => {
+        if (sql.includes('FROM reservation_requests') && sql.includes('FOR UPDATE')) {
+          return result([{ request_id: 10, user_id: 7, status: 'draft' }]);
+        }
+        if (sql.includes('SELECT p.plot_id, p.status')) {
+          return result([{ plot_id: 1, status: 'available' }]);
+        }
+        if (sql.includes("status = 'submitted'")) {
+          return result([{ id: 10, status: 'submitted' }]);
+        }
+        return result();
+      }, undefined, undefined, realtime);
+
+      await expect(service.submit(7, 10)).resolves.toEqual({
+        id: 10,
+        status: 'submitted',
+      });
+      expect(realtime.publish).toHaveBeenCalledWith(
+        ['reservations', 'plots', 'dashboard'],
+        ['admin', 'user:7'],
+      );
+    });
+
+    it('keeps a committed cancellation successful when publication fails', async () => {
+      const realtime = {
+        publish: jest.fn(() => {
+          throw new Error('socket unavailable');
+        }),
+      };
+      const { service } = createService((sql) => {
+        if (sql.includes('FROM reservation_requests') && sql.includes('FOR UPDATE')) {
+          return result([{ request_id: 10, user_id: 7, status: 'pending' }]);
+        }
+        if (sql.includes("status = 'cancelled'")) {
+          return result([{ id: 10, status: 'cancelled' }]);
+        }
+        return result();
+      }, undefined, undefined, realtime);
+      jest
+        .spyOn((service as any).logger, 'warn')
+        .mockImplementation(() => undefined);
+
+      await expect(service.cancel(7, 10)).resolves.toEqual({
+        id: 10,
+        status: 'cancelled',
+      });
+      expect(realtime.publish).toHaveBeenCalledWith(
+        ['reservations', 'plots', 'dashboard'],
+        ['admin', 'user:7'],
+      );
+    });
+  });
+
   describe('releaseExpiredReservations', () => {
     it('cancels expired requests and releases plots with no active request', async () => {
       const { client, service } = createService((sql) => {
@@ -370,6 +452,7 @@ describe('ReservationsService', () => {
 
   describe('approve', () => {
     it('approves a reserve request, reserves plots, and creates a notification', async () => {
+      const realtime = { publish: jest.fn() };
       const { client, service } = createService((sql) => {
         if (
           sql.includes('FROM reservation_requests') &&
@@ -397,7 +480,7 @@ describe('ReservationsService', () => {
           return result([], 2);
         }
         return result();
-      });
+      }, undefined, undefined, realtime);
 
       await expect(service.approve(1, 10, 'ok')).resolves.toEqual({
         id: 10,
@@ -412,6 +495,16 @@ describe('ReservationsService', () => {
       expect(client.query).toHaveBeenCalledWith(
         expect.stringContaining('INSERT INTO notifications'),
         expect.arrayContaining([7, 'request_approved']),
+      );
+      expect(realtime.publish).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          'reservations',
+          'plots',
+          'notifications',
+          'dashboard',
+          'audit',
+        ]),
+        ['admin', 'user:7'],
       );
     });
 
@@ -515,6 +608,7 @@ describe('ReservationsService', () => {
   describe('cancelApprovedReserve', () => {
     it('cancels an approved reserve request and releases every plot', async () => {
       const audit = { record: jest.fn() };
+      const realtime = { publish: jest.fn() };
       const { client, service } = createService(
         (sql) => {
           if (
@@ -544,6 +638,7 @@ describe('ReservationsService', () => {
         },
         undefined,
         audit,
+        realtime,
       );
 
       await expect(
@@ -573,6 +668,17 @@ describe('ReservationsService', () => {
           action: 'reservation.cancel_approved_reserve',
           entityId: 10,
         }),
+      );
+      expect(realtime.publish).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          'reservations',
+          'plots',
+          'appointments',
+          'notifications',
+          'dashboard',
+          'audit',
+        ]),
+        ['admin', 'user:7'],
       );
     });
 
@@ -630,6 +736,7 @@ describe('ReservationsService', () => {
 
   describe('reject', () => {
     it('rejects a pending request, releases plots, and creates a notification', async () => {
+      const realtime = { publish: jest.fn() };
       const { client, service } = createService((sql) => {
         if (
           sql.includes('FROM reservation_requests') &&
@@ -646,7 +753,7 @@ describe('ReservationsService', () => {
           ]);
         }
         return result();
-      });
+      }, undefined, undefined, realtime);
 
       await expect(service.reject(1, 10, 'no')).resolves.toEqual({
         id: 10,
@@ -661,6 +768,10 @@ describe('ReservationsService', () => {
       expect(client.query).toHaveBeenCalledWith(
         expect.stringContaining('INSERT INTO notifications'),
         expect.arrayContaining([7, 'request_rejected']),
+      );
+      expect(realtime.publish).toHaveBeenCalledWith(
+        ['reservations', 'plots', 'notifications', 'dashboard', 'audit'],
+        ['admin', 'user:7'],
       );
     });
 
@@ -684,6 +795,7 @@ describe('ReservationsService', () => {
       const audit = {
         record: jest.fn().mockRejectedValue(new Error('audit failed')),
       };
+      const realtime = { publish: jest.fn() };
       const { client, database, service } = createService(
         (sql) => {
           if (
@@ -709,6 +821,7 @@ describe('ReservationsService', () => {
         },
         undefined,
         audit,
+        realtime,
       );
       await expect(
         service.reject(1, 10, 'Từ chối', {
@@ -725,6 +838,7 @@ describe('ReservationsService', () => {
           entityId: 10,
         }),
       );
+      expect(realtime.publish).not.toHaveBeenCalled();
     });
 
     it('does not create a notification when a decision fails', async () => {

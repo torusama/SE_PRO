@@ -30,7 +30,6 @@ function verifyRealtimeOrigin(
 
 @WebSocketGateway({
   namespace: '/realtime',
-  transports: ['websocket'],
   cors: {
     origin: verifyRealtimeOrigin,
     credentials: true,

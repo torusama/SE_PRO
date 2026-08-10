@@ -30,12 +30,15 @@ export type RealtimeUpdate = {
 };
 
 type UpdateListener = (update: RealtimeUpdate) => void;
-type ReconnectListener = () => void;
+type ConnectListener = () => void;
+type ConnectionListener = (connected: boolean) => void;
 
 const updateListeners = new Set<UpdateListener>();
-const reconnectListeners = new Set<ReconnectListener>();
+const connectListeners = new Set<ConnectListener>();
+const connectionListeners = new Set<ConnectionListener>();
 let socket: Socket | null = null;
 let currentToken: string | null | undefined;
+let connected = false;
 
 function realtimeUrl() {
   const url = new URL(API_BASE_URL, window.location.origin);
@@ -46,11 +49,19 @@ function realtimeUrl() {
 }
 
 function destroySocket() {
-  if (!socket) return;
-  socket.removeAllListeners();
-  socket.io.removeAllListeners();
-  socket.disconnect();
-  socket = null;
+  if (socket) {
+    socket.removeAllListeners();
+    socket.io.removeAllListeners();
+    socket.disconnect();
+    socket = null;
+  }
+  setConnected(false);
+}
+
+function setConnected(nextConnected: boolean) {
+  if (connected === nextConnected) return;
+  connected = nextConnected;
+  connectionListeners.forEach((listener) => listener(connected));
 }
 
 function invalidateAuthenticatedSession() {
@@ -72,23 +83,26 @@ export function connectRealtime(token: string | null) {
     autoConnect: false,
     auth: token ? { token } : {},
     reconnection: true,
-    transports: ["websocket"],
+    transports: ["websocket", "polling"],
+    tryAllTransports: true,
     withCredentials: true,
   });
 
+  socket.on("connect", () => {
+    setConnected(true);
+    connectListeners.forEach((listener) => listener());
+  });
+  socket.on("disconnect", () => setConnected(false));
   socket.on("realtime:update", (update: RealtimeUpdate) => {
     if (!Array.isArray(update?.topics)) return;
     updateListeners.forEach((listener) => listener(update));
   });
   socket.on("realtime:session-revoked", invalidateAuthenticatedSession);
   socket.on("connect_error", (error: Error) => {
+    setConnected(false);
     if (error.message.toLowerCase().includes("unauthorized")) {
       invalidateAuthenticatedSession();
     }
-  });
-  // Manager's reconnect event is not emitted for the initial connection.
-  socket.io.on("reconnect", () => {
-    reconnectListeners.forEach((listener) => listener());
   });
   socket.connect();
 }
@@ -103,7 +117,17 @@ export function onRealtimeUpdate(listener: UpdateListener) {
   return () => updateListeners.delete(listener);
 }
 
-export function onRealtimeReconnect(listener: ReconnectListener) {
-  reconnectListeners.add(listener);
-  return () => reconnectListeners.delete(listener);
+export function onRealtimeConnect(listener: ConnectListener) {
+  connectListeners.add(listener);
+  return () => connectListeners.delete(listener);
+}
+
+export function onRealtimeConnectionChange(listener: ConnectionListener) {
+  connectionListeners.add(listener);
+  listener(connected);
+  return () => connectionListeners.delete(listener);
+}
+
+export function isRealtimeConnected() {
+  return connected;
 }

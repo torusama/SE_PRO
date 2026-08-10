@@ -1,10 +1,25 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { useAuthStore } from "@/store/authStore";
 import AdminHeader from "./AdminHeader";
 
+const apiMocks = vi.hoisted(() => ({
+  get: vi.fn(),
+}));
+
+vi.mock("@/lib/api", () => ({ api: apiMocks }));
+vi.mock("@/hooks/useRealtimeRefresh", () => ({
+  useRealtimeRefresh: vi.fn(),
+}));
+
 describe("Admin Header", () => {
+  beforeEach(() => {
+    apiMocks.get.mockResolvedValue({
+      data: { success: true, data: [] },
+    });
+  });
+
   afterEach(() => {
     cleanup();
     useAuthStore.setState({ user: null, role: null });
@@ -20,7 +35,7 @@ describe("Admin Header", () => {
     expect(screen.getByText("Vĩnh Phúc Viên")).toBeInTheDocument();
   });
 
-  it("renders the shared account controls without notification icon", () => {
+  it("renders the admin account control without the notification icon", () => {
     useAuthStore.setState({
       role: "admin",
       user: {
