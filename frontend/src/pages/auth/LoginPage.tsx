@@ -70,98 +70,95 @@ export default function LoginPage() {
           <span className="hanzi">永 福 苑</span>
         </div>
 
-        {/* Center quote */}
+        {/* Center quote — cascades from top-left to bottom-right */}
         <div className="left-center">
-          <p className="left-quote">
+          <p className="left-quote-top">
             Nơi ký ức
             <br />
             được <em>lưu giữ</em> mãi,
-            <br />
-            nơi yêu thương
-            <br />
-            <em>vượt thời gian.</em>
           </p>
-          <p className="left-sub">
-            Hệ thống quản lý nghĩa trang thế hệ mới — trang trọng, thông minh,
-            và đầy tâm.
-          </p>
-        </div>
-
-        {/* Seal */}
-        <div className="seal">
-          永
-          <br />
-          福
-          <br />苑
+          <div className="left-quote-bottom">
+            <p className="left-quote-bottom-text">
+              nơi yêu thương
+              <br />
+              <em>vượt thời gian.</em>
+            </p>
+            <p className="left-sub">
+              Hệ thống quản lý nghĩa trang thế hệ mới — trang trọng, thông minh,
+              và đầy tâm.
+            </p>
+          </div>
         </div>
       </div>
 
       {/* RIGHT — floating glass card */}
       <div className="right">
-        {/* Back link */}
-        <Link className="back" to="/">
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-          >
-            <path d="M19 12H5M5 12l7-7M5 12l7 7" />
-          </svg>
-          Trang chủ
-        </Link>
+        <div className="right-inner">
+          {/* Back link */}
+          <Link className="back" to="/">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+            >
+              <path d="M19 12H5M5 12l7-7M5 12l7 7" />
+            </svg>
+            Trang chủ
+          </Link>
 
-        <div className="card-panel">
-          <div className="card-scroll">
-            {/* Tabs */}
-            <div className="tabs">
-              <span className="tab active">Đăng nhập</span>
-              <Link className="tab" to="/register">
-                Đăng ký
-              </Link>
-            </div>
-
-            {/* LOGIN PANEL */}
-            <div className="panel">
-              <div className="form-header">
-                <h1 className="form-title">Chào mừng trở lại</h1>
-                <p className="form-desc">
-                  Đăng nhập để tiếp tục sử dụng hệ thống.
-                </p>
+          <div className="card-panel">
+            <div className="card-scroll">
+              {/* Tabs */}
+              <div className="tabs">
+                <span className="tab active">Đăng nhập</span>
+                <Link className="tab" to="/register">
+                  Đăng ký
+                </Link>
               </div>
 
-              <form onSubmit={handleSubmit}>
-                <div className="field">
-                  <label>Địa chỉ email</label>
-                  <input
-                    type="email"
-                    placeholder="ten@email.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                  />
-                </div>
-                <div className="field">
-                  <label>Mật khẩu</label>
-                  <input
-                    type="password"
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                  />
-                </div>
-                <div className="forgot">
-                  <Link to={ROUTES.FORGOT_PASSWORD}>Quên mật khẩu?</Link>
+              {/* LOGIN PANEL */}
+              <div className="panel">
+                <div className="form-header">
+                  <h1 className="form-title">Chào mừng trở lại</h1>
+                  <p className="form-desc">
+                    Đăng nhập để tiếp tục sử dụng hệ thống.
+                  </p>
                 </div>
 
-                {error && <div className="form-error">{error}</div>}
+                <form onSubmit={handleSubmit}>
+                  <div className="field">
+                    <label>Địa chỉ email</label>
+                    <input
+                      type="email"
+                      placeholder="ten@email.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                    />
+                  </div>
+                  <div className="field">
+                    <label>Mật khẩu</label>
+                    <input
+                      type="password"
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                    />
+                  </div>
+                  <div className="forgot">
+                    <Link to={ROUTES.FORGOT_PASSWORD}>Quên mật khẩu?</Link>
+                  </div>
 
-                <button className="submit" type="submit" disabled={loading}>
-                  {loading ? "Đang đăng nhập..." : "Đăng nhập"}
-                </button>
-              </form>
+                  {error && <div className="form-error">{error}</div>}
 
-              <div className="alt-link">
-                Chưa có tài khoản? <Link to="/register">Đăng ký ngay</Link>
+                  <button className="submit" type="submit" disabled={loading}>
+                    {loading ? "Đang đăng nhập..." : "Đăng nhập"}
+                  </button>
+                </form>
+
+                <div className="alt-link">
+                  Chưa có tài khoản? <Link to="/register">Đăng ký ngay</Link>
+                </div>
               </div>
             </div>
           </div>

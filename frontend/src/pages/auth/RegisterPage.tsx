@@ -167,245 +167,247 @@ export default function RegisterPage() {
           <span className="hanzi">永 福 苑</span>
         </div>
 
-        {/* Center quote */}
+        {/* Center quote — cascades from top-left to bottom-right */}
         <div className="left-center">
-          <p className="left-quote">
+          <p className="left-quote-top">
             Nơi ký ức
             <br />
             được <em>lưu giữ</em> mãi,
-            <br />
-            nơi yêu thương
-            <br />
-            <em>vượt thời gian.</em>
           </p>
-          <p className="left-sub">
-            Hệ thống quản lý nghĩa trang thế hệ mới — trang trọng, thông minh,
-            và đầy tâm.
-          </p>
-        </div>
-
-        {/* Seal */}
-        <div className="seal">
-          永
-          <br />
-          福
-          <br />苑
+          <div className="left-quote-bottom">
+            <p className="left-quote-bottom-text">
+              nơi yêu thương
+              <br />
+              <em>vượt thời gian.</em>
+            </p>
+            <p className="left-sub">
+              Hệ thống quản lý nghĩa trang thế hệ mới — trang trọng, thông minh,
+              và đầy tâm.
+            </p>
+          </div>
         </div>
       </div>
 
       {/* RIGHT — floating glass card */}
       <div className="right">
-        {/* Back link */}
-        <Link className="back" to="/">
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-          >
-            <path d="M19 12H5M5 12l7-7M5 12l7 7" />
-          </svg>
-          Trang chủ
-        </Link>
+        <div className="right-inner">
+          {/* Back link */}
+          <Link className="back" to="/">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+            >
+              <path d="M19 12H5M5 12l7-7M5 12l7 7" />
+            </svg>
+            Trang chủ
+          </Link>
 
-        <div className="card-panel">
-          <div className="card-scroll">
-            {/* Tabs */}
-            <div className="tabs">
-              <Link className="tab" to="/login">
-                Đăng nhập
-              </Link>
-              <span className="tab active">Đăng ký</span>
-            </div>
-
-            {/* REGISTER PANEL — keyed by step so the fade-in replays each transition */}
-            <div className="panel" key={step}>
-              <div className="form-header">
-                <h1 className="form-title">
-                  {step === "email" && "Xác thực email"}
-                  {step === "otp" && "Nhập mã xác thực"}
-                  {step === "account" && "Tạo tài khoản"}
-                  {step === "success" && "Đăng ký thành công"}
-                </h1>
-                <p className="form-desc">
-                  {step === "email" &&
-                    "Nhập email bạn muốn dùng để đăng nhập hệ thống."}
-                  {step === "otp" &&
-                    `Mã OTP gồm 6 chữ số đã được gửi tới ${email}.`}
-                  {step === "account" &&
-                    "Email đã được xác thực. Hãy đặt mật khẩu cho tài khoản."}
-                  {step === "success" &&
-                    "Tài khoản của bạn đã được tạo. Đang chuyển tới trang đăng nhập..."}
-                </p>
+          <div className="card-panel">
+            <div className="card-scroll">
+              {/* Tabs */}
+              <div className="tabs">
+                <Link className="tab" to="/login">
+                  Đăng nhập
+                </Link>
+                <span className="tab active">Đăng ký</span>
               </div>
 
-              {step !== "success" && (
-                <div className="register-steps" aria-label="Tiến trình đăng ký">
-                  <span className={step === "email" ? "active" : "done"}>
-                    1
-                  </span>
-                  <i />
-                  <span
-                    className={
-                      step === "otp"
-                        ? "active"
-                        : step === "account"
-                          ? "done"
-                          : ""
-                    }
-                  >
-                    2
-                  </span>
-                  <i />
-                  <span className={step === "account" ? "active" : ""}>3</span>
+              {/* REGISTER PANEL — keyed by step so the fade-in replays each transition */}
+              <div className="panel" key={step}>
+                <div className="form-header">
+                  <h1 className="form-title">
+                    {step === "email" && "Xác thực email"}
+                    {step === "otp" && "Nhập mã xác thực"}
+                    {step === "account" && "Tạo tài khoản"}
+                    {step === "success" && "Đăng ký thành công"}
+                  </h1>
+                  <p className="form-desc">
+                    {step === "email" &&
+                      "Nhập email bạn muốn dùng để đăng nhập hệ thống."}
+                    {step === "otp" &&
+                      `Mã OTP gồm 6 chữ số đã được gửi tới ${email}.`}
+                    {step === "account" &&
+                      "Email đã được xác thực. Hãy đặt mật khẩu cho tài khoản."}
+                    {step === "success" &&
+                      "Tài khoản của bạn đã được tạo. Đang chuyển tới trang đăng nhập..."}
+                  </p>
                 </div>
-              )}
 
-              {error && <div className="register-error">{error}</div>}
-
-              {step === "email" && (
-                <form onSubmit={handleSendOtp}>
-                  <div className="field">
-                    <label>Địa chỉ email</label>
-                    <input
-                      type="email"
-                      autoComplete="email"
-                      autoFocus
-                      placeholder="ten@email.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                    />
-                  </div>
-                  <button className="submit" type="submit" disabled={loading}>
-                    {loading ? "Đang gửi mã..." : "Gửi mã xác thực"}
-                  </button>
-                </form>
-              )}
-
-              {step === "otp" && (
-                <form onSubmit={handleVerifyOtp}>
-                  <div className="field">
-                    <label>Mã OTP</label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      autoFocus
-                      maxLength={6}
-                      className="otp-input"
-                      placeholder="000000"
-                      value={otpCode}
-                      onChange={(e) =>
-                        setOtpCode(
-                          e.target.value.replace(/\D/g, "").slice(0, 6),
-                        )
+                {step !== "success" && (
+                  <div
+                    className="register-steps"
+                    aria-label="Tiến trình đăng ký"
+                  >
+                    <span className={step === "email" ? "active" : "done"}>
+                      1
+                    </span>
+                    <i />
+                    <span
+                      className={
+                        step === "otp"
+                          ? "active"
+                          : step === "account"
+                            ? "done"
+                            : ""
                       }
-                    />
-                  </div>
-                  <button className="submit" type="submit" disabled={loading}>
-                    {loading ? "Đang xác thực..." : "Xác nhận email"}
-                  </button>
-                  <div className="otp-actions">
-                    <button
-                      type="button"
-                      onClick={handleResendOtp}
-                      disabled={loading || resendCooldown > 0}
                     >
-                      {resendCooldown > 0
-                        ? `Gửi lại sau ${resendCooldown}s`
-                        : "Gửi lại mã"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setError(null);
-                        setStep("email");
-                      }}
-                    >
-                      Đổi email
-                    </button>
-                  </div>
-                </form>
-              )}
-
-              {step === "account" && (
-                <form onSubmit={handleCreateAccount}>
-                  <div className="verified-email">
-                    <span>✓</span>
-                    <div>
-                      <small>Email đã xác thực</small>
-                      <strong>{email}</strong>
-                    </div>
-                  </div>
-                  <div className="field-row">
-                    <div className="field">
-                      <label>Họ</label>
-                      <input
-                        type="text"
-                        autoComplete="family-name"
-                        placeholder="Nguyễn"
-                        value={firstName}
-                        onChange={(e) => setFirstName(e.target.value)}
-                      />
-                    </div>
-                    <div className="field">
-                      <label>Tên</label>
-                      <input
-                        type="text"
-                        autoComplete="given-name"
-                        placeholder="Văn A"
-                        value={lastName}
-                        onChange={(e) => setLastName(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                  <div className="field">
-                    <label>Mật khẩu</label>
-                    <input
-                      type="password"
-                      autoComplete="new-password"
-                      placeholder="Tối thiểu 8 ký tự"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                    />
-                  </div>
-                  <div className="field">
-                    <label>Xác nhận mật khẩu</label>
-                    <input
-                      type="password"
-                      autoComplete="new-password"
-                      placeholder="Nhập lại mật khẩu"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                    />
-                  </div>
-                  <div className="check-row" style={{ marginBottom: "16px" }}>
-                    <input
-                      type="checkbox"
-                      id="agree"
-                      checked={agree}
-                      onChange={(e) => setAgree(e.target.checked)}
-                    />
-                    <span>
-                      Tôi đồng ý với <a href="#">Điều khoản sử dụng</a> và{" "}
-                      <a href="#">Chính sách bảo mật</a> của Vĩnh Phúc Viên.
+                      2
+                    </span>
+                    <i />
+                    <span className={step === "account" ? "active" : ""}>
+                      3
                     </span>
                   </div>
-                  <button className="submit" type="submit" disabled={loading}>
-                    {loading ? "Đang tạo tài khoản..." : "Tạo tài khoản"}
-                  </button>
-                </form>
-              )}
+                )}
 
-              {step === "success" && (
-                <div className="register-success" role="status">
-                  <span>✓</span>
-                  <p>Bạn có thể đăng nhập bằng email vừa đăng ký.</p>
+                {error && <div className="register-error">{error}</div>}
+
+                {step === "email" && (
+                  <form onSubmit={handleSendOtp}>
+                    <div className="field">
+                      <label>Địa chỉ email</label>
+                      <input
+                        type="email"
+                        autoComplete="email"
+                        autoFocus
+                        placeholder="ten@email.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                      />
+                    </div>
+                    <button className="submit" type="submit" disabled={loading}>
+                      {loading ? "Đang gửi mã..." : "Gửi mã xác thực"}
+                    </button>
+                  </form>
+                )}
+
+                {step === "otp" && (
+                  <form onSubmit={handleVerifyOtp}>
+                    <div className="field">
+                      <label>Mã OTP</label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        autoFocus
+                        maxLength={6}
+                        className="otp-input"
+                        placeholder="000000"
+                        value={otpCode}
+                        onChange={(e) =>
+                          setOtpCode(
+                            e.target.value.replace(/\D/g, "").slice(0, 6),
+                          )
+                        }
+                      />
+                    </div>
+                    <button className="submit" type="submit" disabled={loading}>
+                      {loading ? "Đang xác thực..." : "Xác nhận email"}
+                    </button>
+                    <div className="otp-actions">
+                      <button
+                        type="button"
+                        onClick={handleResendOtp}
+                        disabled={loading || resendCooldown > 0}
+                      >
+                        {resendCooldown > 0
+                          ? `Gửi lại sau ${resendCooldown}s`
+                          : "Gửi lại mã"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setError(null);
+                          setStep("email");
+                        }}
+                      >
+                        Đổi email
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                {step === "account" && (
+                  <form onSubmit={handleCreateAccount}>
+                    <div className="verified-email">
+                      <span>✓</span>
+                      <div>
+                        <small>Email đã xác thực</small>
+                        <strong>{email}</strong>
+                      </div>
+                    </div>
+                    <div className="field-row">
+                      <div className="field">
+                        <label>Họ</label>
+                        <input
+                          type="text"
+                          autoComplete="family-name"
+                          placeholder="Nguyễn"
+                          value={firstName}
+                          onChange={(e) => setFirstName(e.target.value)}
+                        />
+                      </div>
+                      <div className="field">
+                        <label>Tên</label>
+                        <input
+                          type="text"
+                          autoComplete="given-name"
+                          placeholder="Văn A"
+                          value={lastName}
+                          onChange={(e) => setLastName(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <div className="field">
+                      <label>Mật khẩu</label>
+                      <input
+                        type="password"
+                        autoComplete="new-password"
+                        placeholder="Tối thiểu 8 ký tự"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                      />
+                    </div>
+                    <div className="field">
+                      <label>Xác nhận mật khẩu</label>
+                      <input
+                        type="password"
+                        autoComplete="new-password"
+                        placeholder="Nhập lại mật khẩu"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                      />
+                    </div>
+                    <div className="check-row" style={{ marginBottom: "16px" }}>
+                      <input
+                        type="checkbox"
+                        id="agree"
+                        checked={agree}
+                        onChange={(e) => setAgree(e.target.checked)}
+                      />
+                      <span>
+                        Tôi đồng ý với <a href="#">Điều khoản sử dụng</a> và{" "}
+                        <a href="#">Chính sách bảo mật</a> của Vĩnh Phúc Viên.
+                      </span>
+                    </div>
+                    <button className="submit" type="submit" disabled={loading}>
+                      {loading ? "Đang tạo tài khoản..." : "Tạo tài khoản"}
+                    </button>
+                  </form>
+                )}
+
+                {step === "success" && (
+                  <div className="register-success" role="status">
+                    <span>✓</span>
+                    <p>Bạn có thể đăng nhập bằng email vừa đăng ký.</p>
+                  </div>
+                )}
+
+                <div className="alt-link">
+                  Đã có tài khoản? <Link to="/login">Đăng nhập</Link>
                 </div>
-              )}
-
-              <div className="alt-link">
-                Đã có tài khoản? <Link to="/login">Đăng nhập</Link>
               </div>
             </div>
           </div>

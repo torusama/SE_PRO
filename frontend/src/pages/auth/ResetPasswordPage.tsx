@@ -67,93 +67,91 @@ export default function ResetPasswordPage() {
         </div>
 
         <div className="left-center">
-          <p className="left-quote">
+          <p className="left-quote-top">
             Nơi ký ức
             <br />
             được <em>lưu giữ</em> mãi,
-            <br />
-            nơi yêu thương
-            <br />
-            <em>vượt thời gian.</em>
           </p>
-          <p className="left-sub">
-            Hệ thống quản lý nghĩa trang thế hệ mới — trang trọng, thông minh,
-            và đầy tâm.
-          </p>
-        </div>
-
-        <div className="seal">
-          永
-          <br />
-          福
-          <br />苑
+          <div className="left-quote-bottom">
+            <p className="left-quote-bottom-text">
+              nơi yêu thương
+              <br />
+              <em>vượt thời gian.</em>
+            </p>
+            <p className="left-sub">
+              Hệ thống quản lý nghĩa trang thế hệ mới — trang trọng, thông minh,
+              và đầy tâm.
+            </p>
+          </div>
         </div>
       </div>
 
       {/* RIGHT — floating glass card */}
       <div className="right">
-        <Link className="back" to={ROUTES.HOME}>
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-          >
-            <path d="M19 12H5M5 12l7-7M5 12l7 7" />
-          </svg>
-          Trang chủ
-        </Link>
+        <div className="right-inner">
+          <Link className="back" to={ROUTES.HOME}>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+            >
+              <path d="M19 12H5M5 12l7-7M5 12l7 7" />
+            </svg>
+            Trang chủ
+          </Link>
 
-        <div className="card-panel">
-          <div className="card-scroll">
-            <div className="tabs">
-              <span className="tab active">Đặt lại mật khẩu</span>
-            </div>
-
-            <div className="panel">
-              <div className="form-header">
-                <h1 className="form-title">Đặt lại mật khẩu</h1>
-                <p className="form-desc">
-                  Nhập mật khẩu mới để tiếp tục sử dụng hệ thống.
-                </p>
+          <div className="card-panel">
+            <div className="card-scroll">
+              <div className="tabs">
+                <span className="tab active">Đặt lại mật khẩu</span>
               </div>
 
-              {!success ? (
-                <form onSubmit={handleSubmit}>
-                  <div className="field">
-                    <label>Mật khẩu mới</label>
-                    <input
-                      type="password"
-                      placeholder="Nhập mật khẩu mới"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                    />
-                  </div>
-                  <div className="field">
-                    <label>Xác nhận mật khẩu</label>
-                    <input
-                      type="password"
-                      placeholder="Nhập lại mật khẩu"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                    />
-                  </div>
-
-                  {error && <div className="form-error">{error}</div>}
-
-                  <button className="submit" type="submit" disabled={loading}>
-                    {loading ? "Đang xử lý..." : "Đặt lại mật khẩu"}
-                  </button>
-                </form>
-              ) : (
-                <div className="msg-box">
-                  Đặt lại mật khẩu thành công! Đang chuyển đến trang đăng
-                  nhập...
+              <div className="panel">
+                <div className="form-header">
+                  <h1 className="form-title">Đặt lại mật khẩu</h1>
+                  <p className="form-desc">
+                    Nhập mật khẩu mới để tiếp tục sử dụng hệ thống.
+                  </p>
                 </div>
-              )}
 
-              <div className="alt-link">
-                Đã nhớ mật khẩu? <Link to={ROUTES.LOGIN}>Đăng nhập ngay</Link>
+                {!success ? (
+                  <form onSubmit={handleSubmit}>
+                    <div className="field">
+                      <label>Mật khẩu mới</label>
+                      <input
+                        type="password"
+                        placeholder="Nhập mật khẩu mới"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                      />
+                    </div>
+                    <div className="field">
+                      <label>Xác nhận mật khẩu</label>
+                      <input
+                        type="password"
+                        placeholder="Nhập lại mật khẩu"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                      />
+                    </div>
+
+                    {error && <div className="form-error">{error}</div>}
+
+                    <button className="submit" type="submit" disabled={loading}>
+                      {loading ? "Đang xử lý..." : "Đặt lại mật khẩu"}
+                    </button>
+                  </form>
+                ) : (
+                  <div className="msg-box">
+                    Đặt lại mật khẩu thành công! Đang chuyển đến trang đăng
+                    nhập...
+                  </div>
+                )}
+
+                <div className="alt-link">
+                  Đã nhớ mật khẩu? <Link to={ROUTES.LOGIN}>Đăng nhập ngay</Link>
+                </div>
               </div>
             </div>
           </div>

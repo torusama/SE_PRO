@@ -9,7 +9,7 @@
 }
 
 .login-page {
-  /* ===== Synced with HomePage.css palette ===== */
+  /* ===== Synced with HomePage.css palette — teal-led, purple as a rare accent ===== */
   --night: #05071a;
   --deep: #080c2a;
   --navy: #0d1b4e;
@@ -17,9 +17,12 @@
   --teal-dim: rgba(10, 255, 212, 0.15);
   --teal-glow: rgba(10, 255, 212, 0.4);
   --lime: #c8f241;
+  --blue: #4f6fe0;
+  --blue-dim: rgba(79, 111, 224, 0.16);
+  --blue-glow: rgba(79, 111, 224, 0.42);
   --purple: #7b3fe4;
-  --purple-dim: rgba(123, 63, 228, 0.16);
-  --purple-glow: rgba(123, 63, 228, 0.45);
+  --purple-dim: rgba(123, 63, 228, 0.1);
+  --purple-glow: rgba(123, 63, 228, 0.28);
   --gold: #d4a847;
   --gold-dim: rgba(212, 168, 71, 0.18);
   --white: #e8f4f0;
@@ -27,18 +30,18 @@
   --muted-dim: rgba(232, 244, 240, 0.34);
 
   /* card (right panel) — bright, cool, opposite of the night sky */
-  --card-bg1: rgba(248, 246, 255, 0.86);
-  --card-bg2: rgba(233, 248, 255, 0.82);
-  --card-border: rgba(123, 63, 228, 0.28);
-  --card-ink: #241e42;
-  --card-ink2: #55507a;
+  --card-bg1: rgba(246, 250, 255, 0.86);
+  --card-bg2: rgba(233, 250, 255, 0.84);
+  --card-border: rgba(79, 111, 224, 0.26);
+  --card-ink: #1c2440;
+  --card-ink2: #4f5a7a;
   --card-field-bg: linear-gradient(
     135deg,
-    rgba(123, 63, 228, 0.07),
-    rgba(10, 255, 212, 0.07)
+    rgba(79, 111, 224, 0.07),
+    rgba(10, 255, 212, 0.08)
   );
-  --card-field-border: rgba(123, 63, 228, 0.22);
-  --card-hint: #7a6fb0;
+  --card-field-border: rgba(79, 111, 224, 0.2);
+  --card-hint: #6c78a8;
 
   height: 100vh;
   overflow: hidden;
@@ -68,19 +71,52 @@
   height: 100%;
 }
 
+/* Slowly shifting multi-color nebula glows — continuous background motion */
 .auth-breathe {
-  animation: authBreathe 9s ease-in-out infinite;
   transform-origin: center;
+}
+.auth-breathe--purple {
+  animation: authBreathe 10s ease-in-out infinite;
+}
+.auth-breathe--blue {
+  animation: authBreatheBlue 13s ease-in-out infinite;
+  animation-delay: -3s;
+}
+.auth-breathe--teal {
+  animation: authBreatheTeal 8.5s ease-in-out infinite;
+  animation-delay: -1.5s;
 }
 @keyframes authBreathe {
   0%,
   100% {
-    opacity: 0.7;
+    opacity: 0.55;
     transform: scale(1);
   }
   50% {
-    opacity: 1;
+    opacity: 0.9;
     transform: scale(1.08);
+  }
+}
+@keyframes authBreatheBlue {
+  0%,
+  100% {
+    opacity: 0.6;
+    transform: scale(1) translate(0, 0);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.12) translate(-18px, 10px);
+  }
+}
+@keyframes authBreatheTeal {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(1) translate(0, 0);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scale(1.1) translate(14px, -12px);
   }
 }
 
@@ -178,8 +214,8 @@
   border-radius: 50%;
   background: var(--gold);
   box-shadow:
-    0 0 6px 1px var(--gold),
-    0 0 14px 3px rgba(212, 168, 71, 0.4);
+    0 0 8px 2px var(--gold),
+    0 0 18px 4px rgba(212, 168, 71, 0.45);
   animation-name: authFireflyFloat;
   animation-timing-function: ease-in-out;
   animation-iteration-count: infinite;
@@ -187,26 +223,29 @@
 @keyframes authFireflyFloat {
   0% {
     transform: translate(0, 0);
-    opacity: 0.15;
+    opacity: 0.18;
   }
   20% {
-    opacity: 0.9;
+    opacity: 0.95;
   }
   50% {
     transform: translate(calc(var(--drift) * -1), calc(var(--drift) * 0.6));
-    opacity: 0.55;
+    opacity: 0.6;
   }
   80% {
-    opacity: 0.85;
+    opacity: 0.9;
   }
   100% {
     transform: translate(0, 0);
-    opacity: 0.15;
+    opacity: 0.18;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .auth-breathe,
+  .auth-breathe--purple,
+  .auth-breathe--blue,
+  .auth-breathe--teal,
   .auth-twinkle,
   .auth-star-node,
   .auth-constellation,
@@ -227,27 +266,6 @@
   flex-direction: column;
   justify-content: space-between;
   padding: 40px 52px;
-}
-
-.login-page .seal {
-  position: absolute;
-  bottom: 40px;
-  right: 44px;
-  width: 60px;
-  height: 60px;
-  border: 1.5px solid var(--teal);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0.5;
-  font-family: "Noto Serif SC", serif;
-  font-size: 10px;
-  color: var(--teal);
-  letter-spacing: 0.1em;
-  font-weight: 400;
-  text-align: center;
-  line-height: 1.4;
-  box-shadow: 0 0 16px var(--teal-dim);
 }
 
 .login-page .left-logo {
@@ -277,9 +295,12 @@
   font-family: "Noto Serif SC", serif;
   font-size: 11px;
   letter-spacing: 0.4em;
-  color: var(--gold);
+  color: var(--teal);
+  text-shadow: 0 0 10px rgba(10, 255, 212, 0.35);
 }
 
+/* ===== Hero quote — cascades from top-left to bottom-right so the
+   reading order visually points toward the login/register card ===== */
 .login-page .left-center {
   position: relative;
   z-index: 2;
@@ -287,16 +308,34 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
+  padding-top: 34px;
+  gap: 26px;
 }
-.login-page .left-quote {
+.login-page .left-quote-top {
+  align-self: flex-start;
+  text-align: left;
   font-family: "Playfair Display", Georgia, serif;
   font-size: clamp(22px, 2.8vw, 34px);
   line-height: 1.5;
   color: var(--white);
   font-weight: 400;
-  margin-bottom: 20px;
 }
-.login-page .left-quote em {
+.login-page .left-quote-bottom {
+  align-self: flex-end;
+  text-align: right;
+  max-width: 380px;
+  margin-top: 18px;
+}
+.login-page .left-quote-bottom-text {
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: clamp(22px, 2.8vw, 34px);
+  line-height: 1.5;
+  color: var(--white);
+  font-weight: 400;
+  margin-bottom: 18px;
+}
+.login-page .left-quote-top em,
+.login-page .left-quote-bottom-text em {
   color: var(--teal);
   font-style: italic;
 }
@@ -306,7 +345,8 @@
   color: var(--muted);
   font-weight: 300;
   line-height: 1.8;
-  max-width: 340px;
+  text-align: right;
+  margin-left: auto;
 }
 
 /* ===== RIGHT PANEL — floating glass card, no hard divider line ===== */
@@ -320,10 +360,17 @@
   z-index: 1;
 }
 
+/* Shared-width column so "Trang chủ" lines up with the card's left edge */
+.login-page .right-inner {
+  width: 100%;
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+}
+
 .login-page .back {
-  position: absolute;
-  top: 28px;
-  left: 36px;
   z-index: 3;
   font-size: 11px;
   letter-spacing: 0.12em;
@@ -343,14 +390,14 @@
   height: 14px;
 }
 
-/* ---- The floating rectangle ---- */
+/* ---- The floating rectangle — widened toward a square shape ---- */
 .login-page .card-panel {
   position: relative;
   width: 100%;
-  max-width: 420px;
-  max-height: calc(100vh - 80px);
+  max-width: 560px;
+  max-height: calc(100vh - 120px);
   border-radius: 22px;
-  padding: 40px 40px 34px;
+  padding: 40px 44px 34px;
   background: linear-gradient(160deg, var(--card-bg1), var(--card-bg2));
   border: 1px solid var(--card-border);
   backdrop-filter: blur(22px);
@@ -358,8 +405,8 @@
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.4) inset,
     0 30px 70px rgba(5, 7, 26, 0.55),
-    0 0 60px rgba(123, 63, 228, 0.18),
-    0 0 90px rgba(10, 255, 212, 0.08);
+    0 0 60px rgba(79, 111, 224, 0.2),
+    0 0 90px rgba(10, 255, 212, 0.1);
   color: var(--card-ink);
   overflow: hidden;
   display: flex;
@@ -373,12 +420,12 @@
   top: -120px;
   left: 50%;
   transform: translateX(-50%);
-  width: 320px;
+  width: 340px;
   height: 260px;
   background: radial-gradient(
     circle,
-    rgba(123, 63, 228, 0.22),
-    rgba(10, 255, 212, 0.1) 55%,
+    rgba(79, 111, 224, 0.22),
+    rgba(10, 255, 212, 0.12) 55%,
     transparent 75%
   );
   pointer-events: none;
@@ -392,7 +439,7 @@
   width: 180px;
   height: 180px;
   border-radius: 50%;
-  border: 1px solid rgba(123, 63, 228, 0.18);
+  border: 1px solid rgba(79, 111, 224, 0.18);
   box-shadow: 0 0 0 22px rgba(10, 255, 212, 0.05);
   pointer-events: none;
 }
@@ -412,13 +459,13 @@
   background: transparent;
 }
 .login-page .card-scroll::-webkit-scrollbar-thumb {
-  background: var(--purple-glow);
+  background: var(--blue-glow);
   border-radius: 3px;
 }
 
 .login-page .tabs {
   display: flex;
-  border-bottom: 1px solid rgba(123, 63, 228, 0.18);
+  border-bottom: 1px solid rgba(79, 111, 224, 0.16);
   margin-bottom: 30px;
   flex: 0 0 auto;
 }
@@ -441,7 +488,8 @@
   display: block;
 }
 .login-page .tab.active {
-  color: var(--purple);
+  color: var(--teal);
+  text-shadow: 0 0 14px rgba(10, 255, 212, 0.25);
 }
 .login-page .tab.active::after {
   content: "";
@@ -450,8 +498,8 @@
   left: 0;
   right: 0;
   height: 2px;
-  background: linear-gradient(90deg, var(--purple), var(--teal));
-  box-shadow: 0 0 8px var(--purple-glow);
+  background: linear-gradient(90deg, var(--blue), var(--teal));
+  box-shadow: 0 0 8px var(--blue-glow);
 }
 .login-page .tab:hover:not(.active) {
   color: var(--card-ink);
@@ -502,26 +550,26 @@
   font-weight: 400;
 }
 .login-page .field input::placeholder {
-  color: rgba(85, 80, 122, 0.45);
+  color: rgba(108, 120, 168, 0.45);
 }
 .login-page .field input:focus {
-  border-color: var(--purple);
+  border-color: var(--teal);
   background: linear-gradient(
     135deg,
-    rgba(123, 63, 228, 0.1),
-    rgba(10, 255, 212, 0.1)
+    rgba(79, 111, 224, 0.1),
+    rgba(10, 255, 212, 0.12)
   );
-  box-shadow: 0 0 0 3px var(--purple-dim);
+  box-shadow: 0 0 0 3px var(--teal-dim);
 }
 
 .login-page .submit {
   width: 100%;
   padding: 13px;
-  background: linear-gradient(135deg, var(--purple), #4f6fe0 55%, var(--teal));
-  color: #fdfcff;
+  background: linear-gradient(135deg, var(--blue), var(--teal) 85%);
+  color: #06251f;
   font-family: "Be Vietnam Pro", "Inter", sans-serif;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   border: none;
@@ -532,8 +580,8 @@
 }
 .login-page .submit:hover:not(:disabled) {
   box-shadow:
-    0 6px 24px var(--purple-glow),
-    0 0 20px var(--teal-dim);
+    0 6px 24px var(--blue-glow),
+    0 0 22px var(--teal-glow);
   transform: translateY(-1px);
 }
 .login-page .submit:disabled {
@@ -548,7 +596,7 @@
   color: var(--card-ink2);
 }
 .login-page .alt-link a {
-  color: var(--purple);
+  color: var(--blue);
   text-decoration: none;
   font-weight: 600;
 }
@@ -568,7 +616,7 @@
   letter-spacing: 0.03em;
 }
 .login-page .forgot a:hover {
-  color: var(--purple);
+  color: var(--teal);
 }
 
 .login-page .panel {
@@ -594,8 +642,8 @@
   border: 1px solid var(--card-field-border);
   background: linear-gradient(
     135deg,
-    rgba(10, 255, 212, 0.08),
-    rgba(123, 63, 228, 0.06)
+    rgba(10, 255, 212, 0.1),
+    rgba(79, 111, 224, 0.07)
   );
   border-radius: 8px;
   font-size: 12px;
@@ -630,8 +678,11 @@
   .login-page .right {
     padding: 28px 20px;
   }
+  .login-page .right-inner,
   .login-page .card-panel {
-    max-width: 440px;
+    max-width: 460px;
+  }
+  .login-page .card-panel {
     padding: 32px 26px 28px;
   }
   .login-page {

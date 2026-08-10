@@ -2,25 +2,31 @@ import { useMemo } from "react";
 
 /**
  * Full-viewport animated cosmic backdrop shared by Login & Register.
- * - starry night sky (twinkling)
+ * - starry night sky (twinkling), spread across the full width
  * - a "V · P · Y" constellation (Vĩnh Phúc Viên) drawn like a star chart
  * - shooting stars
- * - a small grave-hill silhouette with fireflies drifting above it
+ * - three small grave-hill silhouettes (upright + leaning headstones)
+ *   scattered across the full width, with fireflies drifting above them
+ * - a slowly shifting teal / blue / violet nebula glow for continuous motion
  */
 export default function AuthCosmicBackground() {
-  const fireflies = useMemo(
-    () =>
-      Array.from({ length: 16 }, (_, i) => ({
-        id: i,
-        left: 3 + Math.random() * 46, // keep within the left storytelling half
-        top: 55 + Math.random() * 38,
-        size: 2 + Math.random() * 2.4,
-        duration: 6 + Math.random() * 7,
+  const fireflies = useMemo(() => {
+    // Cluster fireflies around the three grave-hill silhouettes so they
+    // actually read as "fireflies near the graves" instead of floating
+    // randomly in the middle of the sky.
+    const clusterCenters = [20, 58, 89]; // % across the full width
+    return clusterCenters.flatMap((cx, ci) =>
+      Array.from({ length: 9 }, (_, i) => ({
+        id: ci * 9 + i,
+        left: Math.min(97, Math.max(2, cx + (Math.random() - 0.5) * 22)),
+        top: 78 + Math.random() * 17,
+        size: 2.6 + Math.random() * 2.8,
+        duration: 5.5 + Math.random() * 6,
         delay: -Math.random() * 10,
-        drift: 12 + Math.random() * 22,
+        drift: 10 + Math.random() * 20,
       })),
-    [],
-  );
+    );
+  }, []);
 
   return (
     <div className="auth-cosmic-bg" aria-hidden="true">
@@ -37,8 +43,16 @@ export default function AuthCosmicBackground() {
             <stop offset="100%" stopColor="#05071a" />
           </radialGradient>
           <radialGradient id="authGlowPurple" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="#7b3fe4" stopOpacity="0.35" />
+            <stop offset="0%" stopColor="#7b3fe4" stopOpacity="0.22" />
             <stop offset="100%" stopColor="#7b3fe4" stopOpacity="0" />
+          </radialGradient>
+          <radialGradient id="authGlowBlue" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="#3f6fe8" stopOpacity="0.32" />
+            <stop offset="100%" stopColor="#3f6fe8" stopOpacity="0" />
+          </radialGradient>
+          <radialGradient id="authGlowTeal" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="#0affd4" stopOpacity="0.26" />
+            <stop offset="100%" stopColor="#0affd4" stopOpacity="0" />
           </radialGradient>
           <filter id="authStarGlow">
             <feGaussianBlur stdDeviation="1.1" result="b" />
@@ -48,14 +62,26 @@ export default function AuthCosmicBackground() {
             <feGaussianBlur stdDeviation="4" result="b" />
             <feComposite in="SourceGraphic" in2="b" operator="over" />
           </filter>
-          <filter id="authLineGlow" x="-60%" y="-60%" width="220%" height="220%">
+          <filter
+            id="authLineGlow"
+            x="-60%"
+            y="-60%"
+            width="220%"
+            height="220%"
+          >
             <feGaussianBlur stdDeviation="3.2" result="blur" />
             <feMerge>
               <feMergeNode in="blur" />
               <feMergeNode in="SourceGraphic" />
             </feMerge>
           </filter>
-          <filter id="authNodeGlow" x="-200%" y="-200%" width="500%" height="500%">
+          <filter
+            id="authNodeGlow"
+            x="-200%"
+            y="-200%"
+            width="500%"
+            height="500%"
+          >
             <feGaussianBlur stdDeviation="2.2" result="blur" />
             <feMerge>
               <feMergeNode in="blur" />
@@ -66,13 +92,31 @@ export default function AuthCosmicBackground() {
 
         {/* Sky */}
         <rect width="1440" height="900" fill="url(#authSky)" />
+
+        {/* Slowly shifting multi-color nebula — continuous, non-static bg */}
         <ellipse
-          className="auth-breathe"
-          cx="640"
-          cy="230"
+          className="auth-breathe auth-breathe--purple"
+          cx="620"
+          cy="220"
           rx="420"
           ry="320"
           fill="url(#authGlowPurple)"
+        />
+        <ellipse
+          className="auth-breathe auth-breathe--blue"
+          cx="1080"
+          cy="480"
+          rx="460"
+          ry="360"
+          fill="url(#authGlowBlue)"
+        />
+        <ellipse
+          className="auth-breathe auth-breathe--teal"
+          cx="340"
+          cy="640"
+          rx="420"
+          ry="320"
+          fill="url(#authGlowTeal)"
         />
 
         {/* Crescent moon */}
@@ -84,7 +128,7 @@ export default function AuthCosmicBackground() {
           />
         </g>
 
-        {/* ===== Generic twinkling stars ===== */}
+        {/* ===== Generic twinkling stars — spread across the full width ===== */}
         <g fill="#ffffff">
           {[
             [90, 70, 1.2, 0.5, 0],
@@ -107,6 +151,14 @@ export default function AuthCosmicBackground() {
             [1050, 340, 1, 0.35, 1.6],
             [900, 400, 1.2, 0.5, 2.4],
             [1250, 380, 1, 0.4, 0.2],
+            [720, 90, 1.1, 0.45, 1.5],
+            [810, 320, 1, 0.4, 0.5],
+            [960, 500, 1.2, 0.45, 1.1],
+            [1400, 120, 1, 0.4, 2.0],
+            [1140, 470, 1.1, 0.4, 0.8],
+            [50, 550, 1, 0.35, 1.4],
+            [280, 500, 1.1, 0.4, 0.6],
+            [560, 470, 1, 0.35, 1.9],
           ].map(([cx, cy, r, o, d], i) => (
             <circle
               key={i}
@@ -126,6 +178,8 @@ export default function AuthCosmicBackground() {
             [40, 160, 1.2, 0.4],
             [1150, 90, 1.2, 1.1],
             [700, 130, 1, 2],
+            [1300, 480, 1.1, 0.7],
+            [880, 470, 1, 1.3],
           ].map(([cx, cy, r, d], i) => (
             <circle
               key={i}
@@ -141,11 +195,11 @@ export default function AuthCosmicBackground() {
 
         {/* =====================================================
              "V · P · Y" constellation (Vĩnh Phúc Viên)
-             — big, centered in the left half, drawn like a real
-               star chart: each edge is 3 stars that aren't quite
-               collinear, and each letter leans a little.
+             — big, drawn like a real star chart: each edge is 3
+               stars that aren't quite collinear, each letter leans
+               a little. Shifted right + down from the original spot.
         ===================================================== */}
-        <g className="auth-constellation">
+        <g className="auth-constellation" transform="translate(170,46)">
           {/* ---- V (tilts slightly left) ---- */}
           <g transform="rotate(-7 194 270)">
             <g
@@ -279,72 +333,68 @@ export default function AuthCosmicBackground() {
 
         {/* Shooting stars */}
         <g className="auth-shooting-star auth-shooting-star--1">
-          <line x1="0" y1="0" x2="70" y2="34" stroke="#e8fbff" strokeWidth="1.4" />
+          <line
+            x1="0"
+            y1="0"
+            x2="70"
+            y2="34"
+            stroke="#e8fbff"
+            strokeWidth="1.4"
+          />
         </g>
         <g className="auth-shooting-star auth-shooting-star--2">
-          <line x1="0" y1="0" x2="56" y2="26" stroke="#c8f241" strokeWidth="1.2" />
+          <line
+            x1="0"
+            y1="0"
+            x2="56"
+            y2="26"
+            stroke="#c8f241"
+            strokeWidth="1.2"
+          />
         </g>
 
-        {/* ===== Grave hill silhouette (lower-left) ===== */}
-        <g>
+        {/* =====================================================
+             Grave-hill silhouettes — minimalist one-line style.
+             No fill: a single flowing contour rises out of the
+             gently rolling ground into each headstone (upright,
+             rounded, leaning) and settles back down, echoing the
+             single-continuous-line illustration style.
+        ===================================================== */}
+        {[0, 560, 1080].map((offset, gi) => (
           <path
-            d="M-20 900 C 60 760 180 730 300 780 C 420 820 520 800 640 860 L 700 900 Z"
-            fill="#070b22"
-          />
-          <path
-            d="M-20 900 C 40 810 140 790 240 820 C 340 850 420 840 520 900 Z"
-            fill="#0a0f2c"
-          />
-          {/* upright headstone */}
-          <g fill="#0d1330" stroke="#1c2a5e" strokeWidth="1">
-            <path d="M120 840 Q120 812 138 812 Q156 812 156 840 L156 862 L120 862 Z" />
-          </g>
-          {/* rounded headstone */}
-          <g fill="#0d1330" stroke="#1c2a5e" strokeWidth="1">
-            <path d="M210 850 Q210 826 226 826 Q242 826 242 850 L242 868 L210 868 Z" />
-          </g>
-          {/* leaning cross-topped headstone */}
-          <g
-            fill="#0d1330"
-            stroke="#1c2a5e"
-            strokeWidth="1"
-            transform="rotate(-9 300 855)"
-          >
-            <rect x="286" y="812" width="30" height="46" rx="3" />
-            <line
-              x1="301"
-              y1="812"
-              x2="301"
-              y2="796"
-              stroke="#1c2a5e"
-              strokeWidth="2"
-            />
-            <line
-              x1="292"
-              y1="802"
-              x2="310"
-              y2="802"
-              stroke="#1c2a5e"
-              strokeWidth="2"
-            />
-          </g>
-          {/* small distant headstone */}
-          <g fill="#0d1330" stroke="#1c2a5e" strokeWidth="0.8" opacity="0.8">
-            <path d="M60 858 Q60 842 70 842 Q80 842 80 858 L80 872 L60 872 Z" />
-          </g>
-          {/* grass line glow */}
-          <path
-            d="M-20 900 C 60 760 180 730 300 780 C 420 820 520 800 640 860"
+            key={`grave-${gi}`}
+            transform={`translate(${offset},0)`}
+            d="M-20 882
+               C 30 866 70 856 112 862
+               L 118 862 L 118 820
+               Q 118 802 136 802
+               Q 154 802 154 820
+               L 154 862
+               C 170 858 184 866 200 862
+               L 206 862 L 206 828
+               Q 206 812 223 812
+               Q 240 812 240 828
+               L 240 862
+               C 254 858 268 868 282 860
+               L 286 858 L 295 818
+               Q 299 802 315 806
+               Q 322 810 318 820
+               L 318 858
+               C 340 850 375 864 410 854
+               C 450 843 495 858 540 850
+               C 585 843 630 856 675 848
+               C 700 844 715 850 700 862"
             fill="none"
-            stroke="#0affd4"
-            strokeWidth="1"
-            opacity="0.18"
-            filter="url(#authSoftGlow)"
+            stroke="#8fe9ff"
+            strokeWidth="1.1"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            opacity="0.45"
           />
-        </g>
+        ))}
       </svg>
 
-      {/* Fireflies */}
+      {/* Fireflies — drifting above the grave clusters */}
       <div className="auth-fireflies">
         {fireflies.map((f) => (
           <span
