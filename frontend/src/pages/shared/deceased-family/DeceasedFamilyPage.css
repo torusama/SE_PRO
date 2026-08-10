@@ -16,15 +16,20 @@
   --df-line: rgba(137, 169, 179, 0.16);
   --df-line-strong: rgba(0, 229, 196, 0.28);
   position: relative;
-  width: min(100%, 1320px);
+  width: 100%;
   min-height: 100vh;
-  margin: 0 auto;
-  padding: 30px clamp(22px, 4vw, 52px) 72px;
+  margin: 0;
+  padding: 0;
   overflow-x: hidden;
   color: var(--df-text);
   background:
-    radial-gradient(circle at 8% 0%, rgba(0, 229, 196, 0.045), transparent 27%),
-    var(--df-bg);
+    radial-gradient(circle at 8% 0%, rgba(0, 229, 196, 0.06), transparent 30%),
+    radial-gradient(
+      circle at 92% 18%,
+      rgba(0, 229, 196, 0.045),
+      transparent 34%
+    ),
+    linear-gradient(180deg, #061020 0%, #050914 55%, #04080f 100%);
   font-family: "Be Vietnam Pro", Inter, sans-serif;
 }
 
@@ -40,7 +45,15 @@
     linear-gradient(90deg, transparent, rgba(10, 255, 212, 0.035), transparent);
 }
 
-.df-page > * {
+.df-shell {
+  position: relative;
+  z-index: 1;
+  width: min(1320px, 100%);
+  margin: 0 auto;
+  padding: 30px clamp(22px, 4vw, 52px) 72px;
+}
+
+.df-shell > * {
   position: relative;
   z-index: 1;
 }
