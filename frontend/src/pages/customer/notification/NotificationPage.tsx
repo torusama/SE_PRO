@@ -175,6 +175,35 @@ function metaFor(type: string) {
   };
 }
 
+// Nhãn tiếng Việt, dễ hiểu cho khách hàng — thay cho mã kỹ thuật thô
+// (vd. "reservation_request", "offline_appointment"...) đang được backend
+// lưu ở relatedEntityType. Đây là danh mục thực thể liên quan tới thông báo.
+const ENTITY_TYPE_LABELS: Record<string, string> = {
+  reservation_request: "Yêu cầu giữ chỗ / mua lô",
+  offline_appointment: "Lịch hẹn tại nghĩa trang",
+  service_order: "Đơn dịch vụ",
+  contract: "Hợp đồng",
+  reminder: "Nhắc lịch tưởng niệm",
+  admin_broadcast: "Thông báo hệ thống",
+};
+
+// Nhãn dự phòng theo nhóm (group) khi gặp entity type lạ/mới chưa kịp khai
+// báo ở trên, để không bao giờ lộ mã kỹ thuật ra ngoài giao diện.
+const GROUP_FALLBACK_LABELS: Record<FilterKey, string> = {
+  all: "Thông báo hệ thống",
+  unread: "Thông báo hệ thống",
+  request: "Yêu cầu của bạn",
+  contract: "Hợp đồng",
+  service: "Dịch vụ",
+  reminder: "Nhắc lịch tưởng niệm",
+};
+
+function entityLabelFor(item: NotificationItem) {
+  const key = item.relatedEntityType ?? item.type;
+  if (ENTITY_TYPE_LABELS[key]) return ENTITY_TYPE_LABELS[key];
+  return GROUP_FALLBACK_LABELS[metaFor(item.type).group];
+}
+
 function formatRelative(value: string) {
   const date = new Date(value);
   const diffMs = Date.now() - date.getTime();
@@ -470,7 +499,7 @@ export default function NotificationPage() {
                           <p className="notif-desc">{item.message}</p>
                           <div className="notif-tags">
                             <span className={`notif-tag ${meta.tagClass}`}>
-                              {item.relatedEntityType ?? item.type}
+                              {entityLabelFor(item)}
                             </span>
                           </div>
                           {item.relatedEntityType === "offline_appointment" &&

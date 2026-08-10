@@ -35,7 +35,7 @@ describe("Admin Header", () => {
     expect(screen.getByText("Vĩnh Phúc Viên")).toBeInTheDocument();
   });
 
-  it("renders the shared account controls with the admin notification icon", () => {
+  it("renders the admin account control without the notification icon", () => {
     useAuthStore.setState({
       role: "admin",
       user: {
@@ -52,10 +52,10 @@ describe("Admin Header", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getAllByRole("button")).toHaveLength(2);
+    expect(screen.getAllByRole("button")).toHaveLength(1);
     expect(
-      screen.getByRole("button", { name: "Thông báo" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: "Thông báo" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", {
         name: "Mở menu tài khoản của Nguyễn An",

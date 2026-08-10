@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
+import NavyStarfield from "@/components/decor/NavyStarfield";
 import "./DeceasedFamilyPage.css";
 
 type Profile = {
@@ -155,152 +156,159 @@ export default function DeceasedFamilyPage() {
 
   return (
     <main className="df-page">
-      <header className="df-hero">
-        <div className="df-hero-copy">
-          <span className="df-eyebrow">
-            {admin ? "Quản trị hồ sơ" : "Gia đình tưởng niệm"}
-          </span>
-          <h1>
-            {admin ? "Hồ sơ người đã khuất" : "Gìn giữ ký ức, kết nối gia đình"}
-          </h1>
-          <p>
-            {admin
-              ? "Xác minh hồ sơ và quản lý sức chứa của từng lô trong một khu vực tập trung."
-              : "Lưu thông tin người thân, cùng gia đình chăm sóc hồ sơ và chia sẻ quyền truy cập an toàn."}
-          </p>
-        </div>
-      </header>
+      <NavyStarfield />
+      <div className="df-shell">
+        <header className="df-hero">
+          <div className="df-hero-copy">
+            <span className="df-eyebrow">
+              {admin ? "Quản trị hồ sơ" : "Gia đình tưởng niệm"}
+            </span>
+            <h1>
+              {admin
+                ? "Hồ sơ người đã khuất"
+                : "Gìn giữ ký ức, kết nối gia đình"}
+            </h1>
+            <p>
+              {admin
+                ? "Xác minh hồ sơ và quản lý sức chứa của từng lô trong một khu vực tập trung."
+                : "Lưu thông tin người thân, cùng gia đình chăm sóc hồ sơ và chia sẻ quyền truy cập an toàn."}
+            </p>
+          </div>
+        </header>
 
-      <section
-        className={`df-summary ${admin ? "is-admin" : ""}`}
-        aria-label="Tổng quan không gian tưởng niệm"
-      >
-        <SummaryItem
-          label={admin ? "Tổng hồ sơ" : "Hồ sơ người thân"}
-          value={profiles.length}
-          note={admin ? "Trong toàn hệ thống" : "Đang được gia đình lưu giữ"}
-        />
-        <SummaryItem
-          label={admin ? "Chờ xác minh" : "Nhóm gia đình"}
-          value={admin ? pendingProfiles : families.length}
-          note={admin ? "Cần quản trị viên xử lý" : "Không gian đang tham gia"}
-        />
-        {!admin && (
+        <section
+          className={`df-summary ${admin ? "is-admin" : ""}`}
+          aria-label="Tổng quan không gian tưởng niệm"
+        >
           <SummaryItem
-            label="Lời mời mới"
-            value={pendingInvites}
-            note="Đang chờ bạn phản hồi"
+            label={admin ? "Tổng hồ sơ" : "Hồ sơ người thân"}
+            value={profiles.length}
+            note={admin ? "Trong toàn hệ thống" : "Đang được gia đình lưu giữ"}
           />
-        )}
-      </section>
-
-      {error && <div className="df-alert error">{error}</div>}
-      {message && <div className="df-alert ok">{message}</div>}
-
-      {admin ? (
-        <section className="df-admin-layout">
-          <SimpleForm
-            title="Cập nhật sức chứa lô"
-            description="Thiết lập số hồ sơ tối đa có thể liên kết với một lô."
-            fields={[
-              ["plotId", "Mã số lô", "number"],
-              ["capacity", "Sức chứa tối đa", "number"],
-            ]}
-            onSubmit={(data, form) =>
-              run(async () => {
-                await api.patch(
-                  `/admin/plots/${Number(data.get("plotId"))}/deceased-capacity`,
-                  { capacity: Number(data.get("capacity")) },
-                );
-                form.reset();
-              }, "Đã cập nhật sức chứa của lô.")
+          <SummaryItem
+            label={admin ? "Chờ xác minh" : "Nhóm gia đình"}
+            value={admin ? pendingProfiles : families.length}
+            note={
+              admin ? "Cần quản trị viên xử lý" : "Không gian đang tham gia"
             }
           />
-          <ProfileList
-            profiles={profiles}
-            admin
-            busy={busy}
-            onVerify={(id) =>
-              void run(async () => {
-                await api.patch(`/admin/deceased/${id}/verify`);
-                await load();
-              }, "Đã xác minh hồ sơ.")
-            }
-            onReject={(id) => {
-              const reason = window.prompt("Nhập lý do từ chối hồ sơ:");
-              if (!reason?.trim()) return;
-              void run(async () => {
-                await api.patch(`/admin/deceased/${id}/reject`, {
-                  reason: reason.trim(),
-                });
-                await load();
-              }, "Đã từ chối hồ sơ.");
-            }}
-          />
+          {!admin && (
+            <SummaryItem
+              label="Lời mời mới"
+              value={pendingInvites}
+              note="Đang chờ bạn phản hồi"
+            />
+          )}
         </section>
-      ) : (
-        <>
-          <section className="df-section">
-            <SectionHeading
-              eyebrow="Hồ sơ tưởng niệm"
-              title="Người thân trong gia đình"
-              description="Mỗi hồ sơ là một nơi lưu giữ thông tin nền tảng trước khi gia đình cùng chia sẻ và chăm sóc."
-            />
-            <div className="df-profile-layout">
-              <ProfileList
-                profiles={profiles}
-                busy={busy}
-                onDelete={(id) =>
-                  void run(async () => {
-                    await api.delete(`/deceased/${id}`);
-                    await load();
-                  }, "Đã xóa hồ sơ.")
-                }
-              />
-              <CreateProfileForm busy={busy} run={run} reload={load} />
-            </div>
-          </section>
 
-          <section className="df-section df-family-section">
-            <SectionHeading
-              eyebrow="Cùng nhau gìn giữ"
-              title="Chia sẻ với gia đình"
-              description="Tạo nhóm, mời người thân và chỉ cấp đúng quyền cần thiết cho từng hồ sơ hoặc dịch vụ."
+        {error && <div className="df-alert error">{error}</div>}
+        {message && <div className="df-alert ok">{message}</div>}
+
+        {admin ? (
+          <section className="df-admin-layout">
+            <SimpleForm
+              title="Cập nhật sức chứa lô"
+              description="Thiết lập số hồ sơ tối đa có thể liên kết với một lô."
+              fields={[
+                ["plotId", "Mã số lô", "number"],
+                ["capacity", "Sức chứa tối đa", "number"],
+              ]}
+              onSubmit={(data, form) =>
+                run(async () => {
+                  await api.patch(
+                    `/admin/plots/${Number(data.get("plotId"))}/deceased-capacity`,
+                    { capacity: Number(data.get("capacity")) },
+                  );
+                  form.reset();
+                }, "Đã cập nhật sức chứa của lô.")
+              }
             />
-            <div className="df-family-layout">
-              <FamilyList
-                families={families}
-                selectedId={familyId}
-                busy={busy}
-                onSelect={(id) => void selectFamily(id)}
-                onCreate={(name, form) =>
-                  run(async () => {
-                    await api.post("/families", { name });
-                    form.reset();
-                    await load();
-                  }, "Đã tạo nhóm gia đình.")
-                }
-              />
-              <FamilyPanel
-                familyId={familyId}
-                permissions={permissions}
-                busy={busy}
-                run={run}
-                reload={async () => {
+            <ProfileList
+              profiles={profiles}
+              admin
+              busy={busy}
+              onVerify={(id) =>
+                void run(async () => {
+                  await api.patch(`/admin/deceased/${id}/verify`);
                   await load();
-                  if (familyId) await selectFamily(familyId);
-                }}
-              />
-              <InvitationList
-                invites={invites}
-                busy={busy}
-                run={run}
-                reload={load}
-              />
-            </div>
+                }, "Đã xác minh hồ sơ.")
+              }
+              onReject={(id) => {
+                const reason = window.prompt("Nhập lý do từ chối hồ sơ:");
+                if (!reason?.trim()) return;
+                void run(async () => {
+                  await api.patch(`/admin/deceased/${id}/reject`, {
+                    reason: reason.trim(),
+                  });
+                  await load();
+                }, "Đã từ chối hồ sơ.");
+              }}
+            />
           </section>
-        </>
-      )}
+        ) : (
+          <>
+            <section className="df-section">
+              <SectionHeading
+                eyebrow="Hồ sơ tưởng niệm"
+                title="Người thân trong gia đình"
+                description="Mỗi hồ sơ là một nơi lưu giữ thông tin nền tảng trước khi gia đình cùng chia sẻ và chăm sóc."
+              />
+              <div className="df-profile-layout">
+                <ProfileList
+                  profiles={profiles}
+                  busy={busy}
+                  onDelete={(id) =>
+                    void run(async () => {
+                      await api.delete(`/deceased/${id}`);
+                      await load();
+                    }, "Đã xóa hồ sơ.")
+                  }
+                />
+                <CreateProfileForm busy={busy} run={run} reload={load} />
+              </div>
+            </section>
+
+            <section className="df-section df-family-section">
+              <SectionHeading
+                eyebrow="Cùng nhau gìn giữ"
+                title="Chia sẻ với gia đình"
+                description="Tạo nhóm, mời người thân và chỉ cấp đúng quyền cần thiết cho từng hồ sơ hoặc dịch vụ."
+              />
+              <div className="df-family-layout">
+                <FamilyList
+                  families={families}
+                  selectedId={familyId}
+                  busy={busy}
+                  onSelect={(id) => void selectFamily(id)}
+                  onCreate={(name, form) =>
+                    run(async () => {
+                      await api.post("/families", { name });
+                      form.reset();
+                      await load();
+                    }, "Đã tạo nhóm gia đình.")
+                  }
+                />
+                <FamilyPanel
+                  familyId={familyId}
+                  permissions={permissions}
+                  busy={busy}
+                  run={run}
+                  reload={async () => {
+                    await load();
+                    if (familyId) await selectFamily(familyId);
+                  }}
+                />
+                <InvitationList
+                  invites={invites}
+                  busy={busy}
+                  run={run}
+                  reload={load}
+                />
+              </div>
+            </section>
+          </>
+        )}
+      </div>
     </main>
   );
 }

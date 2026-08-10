@@ -13,6 +13,7 @@ import { useAuthStore } from "@/store/authStore";
 import { ROUTES } from "@/constants/routes";
 import { nextLunarOccurrence } from "@/lib/lunarCalendar";
 import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
+import NavyStarfield from "@/components/decor/NavyStarfield";
 import "./RemindersPage.css";
 
 interface ApiResponse<T> {
@@ -621,6 +622,7 @@ export default function RemindersPage() {
   return (
     <div className="reminder-page">
       <div className="bg-canvas" aria-hidden="true" />
+      <NavyStarfield starsOnly starCount={60} />
 
       <div className="breadcrumb">
         <button type="button" onClick={() => navigate(ROUTES.HOME)}>
@@ -633,7 +635,6 @@ export default function RemindersPage() {
       <main>
         <header className="page-header rm-reveal">
           <div className="page-header-copy">
-            <div className="page-tag">Customer Portal · Nhắc lịch</div>
             <h1 className="page-title">Nhắc lịch ngày giỗ</h1>
             <p className="page-desc">
               Theo dõi ngày giỗ, lễ tưởng niệm và lịch chăm sóc phần mộ. Các

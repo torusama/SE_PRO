@@ -1118,7 +1118,7 @@ const pageStyles = `
     margin: 0 18px 18px;
     padding: 0;
     overflow: hidden;
-    border: 1px solid rgba(208, 182, 111, 0.16);
+    border: 1px solid rgba(104, 215, 189, 0.16);
     border-radius: 12px;
     background: linear-gradient(160deg, rgba(13, 27, 56, 0.62) 0%, rgba(5, 7, 26, 0.68) 100%);
   }
@@ -1148,7 +1148,7 @@ const pageStyles = `
 
   .lots-appointment-kicker {
     gap: 8px;
-    color: #b89d59;
+    color: #52bfa6;
   }
 
   .lots-appointment-kicker span,
@@ -1164,7 +1164,7 @@ const pageStyles = `
   .lots-appointment-range {
     display: block;
     margin-top: 13px;
-    color: #f1e6c9;
+    color: #c6f4e9;
     font-size: 18px;
     font-weight: 720;
     letter-spacing: -0.01em;
@@ -1220,7 +1220,7 @@ const pageStyles = `
   }
 
   .lots-appointment-booking-head svg {
-    color: #9b8450;
+    color: #4aa18c;
   }
 
   .lots-appointment-picker {
@@ -1353,7 +1353,7 @@ const pageStyles = `
   .lots-section-header p,
   .lots-attention-card p {
     margin: 0 0 10px;
-    color: #caaa64;
+    color: #5cd2b6;
     font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.14em;
@@ -1527,7 +1527,7 @@ const pageStyles = `
   .lots-summary-card > strong {
     display: block;
     margin: 15px 0 8px;
-    color: #f0cc7c;
+    color: #73f9da;
     font-size: 32px;
     font-weight: 700;
     letter-spacing: -0.035em;
@@ -1551,17 +1551,17 @@ const pageStyles = `
     justify-content: space-between;
     padding: 24px;
     overflow: hidden;
-    border-color: rgba(202, 170, 100, 0.22);
+    border-color: rgba(92, 210, 182, 0.22);
     border-radius: 11px;
     background:
-      linear-gradient(145deg, rgba(202, 170, 100, 0.08), transparent 58%),
+      linear-gradient(145deg, rgba(92, 210, 182, 0.08), transparent 58%),
       linear-gradient(160deg, rgba(13, 27, 56, 0.6) 0%, rgba(5, 7, 26, 0.66) 100%);
   }
 
   .lots-attention-card h2 {
     max-width: 320px;
     margin: 0 0 14px;
-    color: #f1ece0;
+    color: #dff2ee;
     font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
     font-size: clamp(24px, 3vw, 32px);
     font-variant-numeric: tabular-nums;
@@ -1579,8 +1579,8 @@ const pageStyles = `
 
   .lots-attention-card small {
     padding-top: 18px;
-    border-top: 1px solid rgba(202, 170, 100, 0.14);
-    color: #867a61;
+    border-top: 1px solid rgba(92, 210, 182, 0.14);
+    color: #5e897f;
     font-size: 11px;
     line-height: 1.5;
   }
@@ -1620,7 +1620,7 @@ const pageStyles = `
   }
 
   .lots-section-header > strong {
-    color: rgba(202, 170, 100, 0.34);
+    color: rgba(92, 210, 182, 0.34);
     font-family: "Playfair Display", serif;
     font-size: 44px;
     font-weight: 500;
@@ -1708,7 +1708,7 @@ const pageStyles = `
   }
 
   .lots-record-code strong {
-    color: #d6c18d;
+    color: #88dbc8;
     font-size: 17px;
     font-weight: 700;
   }
@@ -1770,7 +1770,7 @@ const pageStyles = `
   }
 
   .lots-info strong.is-emphasized {
-    color: #e4c879;
+    color: #71eccf;
   }
 
   .lots-next-step:not(.lots-appointment-card) {
@@ -1793,9 +1793,9 @@ const pageStyles = `
   .lots-step-marker {
     width: 8px;
     height: 8px;
-    border: 2px solid #d0b66f;
+    border: 2px solid #68d7bd;
     border-radius: 50%;
-    box-shadow: 0 0 0 5px rgba(208, 182, 111, 0.08);
+    box-shadow: 0 0 0 5px rgba(104, 215, 189, 0.08);
   }
 
   .lots-step-copy,
@@ -1806,7 +1806,7 @@ const pageStyles = `
 
   .lots-step-copy strong,
   .lots-step-meta strong {
-    color: #e7ddc2;
+    color: #bfeae0;
     font-size: 13px;
   }
 
@@ -1819,7 +1819,7 @@ const pageStyles = `
 
   .lots-step-meta {
     padding-left: 18px;
-    border-left: 1px solid rgba(202, 170, 100, 0.14);
+    border-left: 1px solid rgba(92, 210, 182, 0.14);
   }
 
   .lots-contract-grid,
@@ -1891,7 +1891,7 @@ const pageStyles = `
   }
 
   .lots-payment-heading strong {
-    color: #dfc273;
+    color: #6be7ca;
     font-size: 14px;
   }
 
@@ -1907,7 +1907,7 @@ const pageStyles = `
     display: block;
     height: 100%;
     border-radius: inherit;
-    background: #c8aa66;
+    background: #5fcfb5;
     transition: width 500ms ease;
   }
 
@@ -1924,10 +1924,10 @@ const pageStyles = `
     gap: 12px;
     margin-top: 22px;
     padding: 13px 14px;
-    border: 1px solid rgba(202, 170, 100, 0.24);
+    border: 1px solid rgba(92, 210, 182, 0.24);
     border-radius: 9px;
-    color: #e7d39d;
-    background: rgba(202, 170, 100, 0.055);
+    color: #97edd9;
+    background: rgba(92, 210, 182, 0.055);
     text-align: left;
     cursor: pointer;
     transition:
@@ -1936,8 +1936,8 @@ const pageStyles = `
   }
 
   .lots-document-button:hover:not(:disabled) {
-    border-color: rgba(202, 170, 100, 0.46);
-    background: rgba(202, 170, 100, 0.09);
+    border-color: rgba(92, 210, 182, 0.46);
+    background: rgba(92, 210, 182, 0.09);
   }
 
   .lots-document-button span {
@@ -1946,7 +1946,7 @@ const pageStyles = `
   }
 
   .lots-document-button small {
-    color: #8e805f;
+    color: #5b9285;
     font-size: 10px;
     white-space: nowrap;
   }
@@ -1983,7 +1983,7 @@ const pageStyles = `
     width: 44px;
     height: 1px;
     margin-bottom: 18px;
-    background: #b89a59;
+    background: #52bfa6;
   }
 
   .lots-empty strong {
@@ -2139,7 +2139,7 @@ const pageStyles = `
     .lots-step-meta {
       grid-column: 2;
       padding: 12px 0 0;
-      border-top: 1px solid rgba(202, 170, 100, 0.12);
+      border-top: 1px solid rgba(92, 210, 182, 0.12);
       border-left: 0;
     }
   }

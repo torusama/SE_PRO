@@ -13,9 +13,18 @@ import "./NavyStarfield.css";
 interface NavyStarfieldProps {
   /** Số lượng sao hiển thị. Mặc định 70. */
   starCount?: number;
+  /**
+   * Chỉ vẽ lớp sao lấp lánh, KHÔNG vẽ nền gradient navy + 2 đốm sáng góc.
+   * Dùng cho các trang đã có sẵn nền/đốm sáng riêng, chỉ cần thêm hiệu ứng
+   * sao nhấp nháy (ví dụ trang Nhắc lịch ngày giỗ).
+   */
+  starsOnly?: boolean;
 }
 
-export default function NavyStarfield({ starCount = 70 }: NavyStarfieldProps) {
+export default function NavyStarfield({
+  starCount = 70,
+  starsOnly = false,
+}: NavyStarfieldProps) {
   const starsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -40,9 +49,16 @@ export default function NavyStarfield({ starCount = 70 }: NavyStarfieldProps) {
   }, [starCount]);
 
   return (
-    <div className="navy-starfield" aria-hidden="true">
-      <div className="navy-starfield__glow navy-starfield__glow--a" />
-      <div className="navy-starfield__glow navy-starfield__glow--b" />
+    <div
+      className={`navy-starfield${starsOnly ? " navy-starfield--stars-only" : ""}`}
+      aria-hidden="true"
+    >
+      {!starsOnly && (
+        <>
+          <div className="navy-starfield__glow navy-starfield__glow--a" />
+          <div className="navy-starfield__glow navy-starfield__glow--b" />
+        </>
+      )}
       <div className="navy-starfield__stars" ref={starsRef} />
     </div>
   );

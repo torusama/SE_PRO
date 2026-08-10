@@ -61,7 +61,7 @@
   background:
     radial-gradient(
       circle at 8% 12%,
-      rgba(200, 242, 65, 0.06),
+      rgba(34, 197, 94, 0.075),
       transparent 28%
     ),
     radial-gradient(circle at 92% 76%, rgba(20, 58, 110, 0.22), transparent 34%);
@@ -73,7 +73,7 @@
   position: absolute;
   border-radius: 999px;
   filter: blur(90px);
-  opacity: 0.08;
+  opacity: 0.1;
   animation: rm-ambient 10s ease-in-out infinite;
 }
 
@@ -82,7 +82,7 @@
   height: 360px;
   top: 8%;
   left: -120px;
-  background: #c8f241;
+  background: #22c55e;
 }
 
 .reminder-page .bg-canvas::after {
@@ -173,15 +173,15 @@
 /* PAGE INTRO */
 .reminder-page .page-header {
   display: block;
-  padding: 10px 0 30px;
+  padding: 26px 0 32px;
 }
 
 .reminder-page .page-header-copy {
   max-width: 790px;
-  padding-left: 14px;
+  padding-left: 18px;
+  border-left: 2px solid rgba(34, 197, 94, 0.4);
 }
 
-.reminder-page .page-tag,
 .reminder-page .card-kicker,
 .reminder-page .upcoming-label {
   margin-bottom: 6px;
@@ -204,10 +204,11 @@
 
 .reminder-page .page-desc {
   max-width: 740px;
-  margin: 10px 0 0;
+  margin: 12px 0 0;
   color: var(--text-muted);
   font-size: 13.5px;
   line-height: 1.75;
+  font-family: "Be Vietnam Pro", sans-serif;
 }
 
 /* FEEDBACK BANNERS */
@@ -837,7 +838,8 @@
 .reminder-page .empty-state h3 {
   margin: 0 0 5px;
   color: var(--text-soft);
-  font-size: 13px;
+  font-family: "Playfair Display", serif;
+  font-size: 14px;
   font-weight: 500;
 }
 

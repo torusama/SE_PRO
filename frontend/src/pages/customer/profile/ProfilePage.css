@@ -363,6 +363,10 @@
   transform: translateY(-1px);
 }
 .profile-page .btn-outline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
   background: none;
   border: 1px solid var(--border-soft);
   color: var(--teal-soft);
@@ -1376,6 +1380,7 @@
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.35;
+  text-align: center;
 }
 
 .profile-page .profile-id,
@@ -2045,6 +2050,7 @@
   border-radius: 8px;
   background: #0d1820;
   color: #8ea39e;
+  z-index: 2;
 }
 
 .profile-page .modal-close:hover {
@@ -2095,6 +2101,87 @@
 
 .profile-page .modal-btn-row {
   justify-content: flex-end;
+}
+
+/* ===== Modal "Đổi Ảnh Đại Diện" — nền xanh dương + đốm sáng vàng bay bay ===== */
+.profile-page .modal-overlay.avatar-modal-overlay {
+  align-items: center;
+}
+
+.profile-page .modal-box.avatar-modal-box {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(
+      circle at 12% -10%,
+      rgba(58, 130, 255, 0.18),
+      transparent 55%
+    ),
+    radial-gradient(
+      circle at 100% 110%,
+      rgba(40, 90, 210, 0.14),
+      transparent 50%
+    ),
+    linear-gradient(165deg, #060b19 0%, #081226 45%, #050a1a 100%);
+  border-color: rgba(80, 150, 255, 0.25);
+}
+
+.profile-page .avatar-modal-fireflies {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.profile-page .avatar-modal-firefly {
+  position: absolute;
+  border-radius: 50%;
+  background: #f4c542;
+  box-shadow:
+    0 0 6px 1px rgba(244, 197, 66, 0.9),
+    0 0 14px 4px rgba(244, 197, 66, 0.35);
+  opacity: 0;
+  animation: avatar-firefly-float ease-in-out infinite;
+}
+
+@keyframes avatar-firefly-float {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 6px, 0) scale(0.8);
+  }
+  12% {
+    opacity: 0.9;
+  }
+  50% {
+    opacity: 0.55;
+    transform: translate3d(6px, -10px, 0) scale(1.1);
+  }
+  88% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(-4px, -22px, 0) scale(0.8);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .profile-page .avatar-modal-firefly {
+    animation: none;
+    opacity: 0.5;
+  }
+}
+
+.profile-page
+  .avatar-modal-box
+  > *:not(.avatar-modal-fireflies):not(.modal-close) {
+  position: relative;
+  z-index: 1;
+}
+
+.profile-page .avatar-modal-btn-row {
+  justify-content: center;
 }
 
 .profile-page .modal-btn-primary,
