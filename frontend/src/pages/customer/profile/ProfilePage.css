@@ -1245,8 +1245,14 @@
   min-height: calc(100vh - 72px);
   background: var(--ink-void);
   color: var(--text-main);
-  font-family: "Be Vietnam Pro", Inter, ui-sans-serif, -apple-system,
-    BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family:
+    "Be Vietnam Pro",
+    Inter,
+    ui-sans-serif,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
   line-height: 1.55;
 }
 
@@ -1401,7 +1407,11 @@
 
 .profile-page .stat-num {
   color: #e6c37b;
-  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
+  font-family:
+    ui-sans-serif,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
     sans-serif;
   font-size: 19px;
   font-variant-numeric: tabular-nums;
@@ -1881,7 +1891,11 @@
 .profile-page .lot-row .lv,
 .profile-page .ld-stat .ls-val {
   color: #d8e3df;
-  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
+  font-family:
+    ui-sans-serif,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
     sans-serif;
   font-variant-numeric: tabular-nums;
 }

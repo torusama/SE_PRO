@@ -8,6 +8,7 @@ import {
 import { api } from "@/lib/api";
 import { formatCalendarDate } from "@/lib/utils";
 import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
+import NavyStarfield from "@/components/decor/NavyStarfield";
 import "./AppointmentsPage.css";
 
 type AppointmentStatus = "pending" | "confirmed" | "cancelled" | "completed";
@@ -78,7 +79,9 @@ function parseMeetingNote(note: string | null) {
   }
 
   const normalized = note.trim();
-  const topicMatch = normalized.match(/^Công việc:\s*(.*?)(?:\.\s*Chi tiết:\s*(.*))?$/i);
+  const topicMatch = normalized.match(
+    /^Công việc:\s*(.*?)(?:\.\s*Chi tiết:\s*(.*))?$/i,
+  );
 
   if (!topicMatch) {
     return { topic: normalized, detail: "" };
@@ -161,7 +164,9 @@ export default function AppointmentsPage() {
   const sortedAppointments = useMemo(() => {
     return [...appointments].sort((first, second) => {
       const firstIsHistory = ["completed", "cancelled"].includes(first.status);
-      const secondIsHistory = ["completed", "cancelled"].includes(second.status);
+      const secondIsHistory = ["completed", "cancelled"].includes(
+        second.status,
+      );
 
       if (firstIsHistory !== secondIsHistory) return firstIsHistory ? 1 : -1;
 
@@ -277,6 +282,7 @@ export default function AppointmentsPage() {
 
   return (
     <main className="appointments-page">
+      <NavyStarfield />
       <div className="appointments-shell">
         <header className="appointments-hero" data-appointment-reveal>
           <div className="appointments-hero-copy">
@@ -348,7 +354,10 @@ export default function AppointmentsPage() {
               <span>Thời lượng đề xuất: 30–60 phút</span>
             </div>
 
-            <form className="booking-form" onSubmit={(event) => void book(event)}>
+            <form
+              className="booking-form"
+              onSubmit={(event) => void book(event)}
+            >
               <fieldset>
                 <legend>
                   <span>01</span>
@@ -435,7 +444,11 @@ export default function AppointmentsPage() {
                 </div>
               </div>
 
-              <button className="booking-submit" type="submit" disabled={saving}>
+              <button
+                className="booking-submit"
+                type="submit"
+                disabled={saving}
+              >
                 {saving ? "Đang gửi yêu cầu" : "Gửi yêu cầu đặt lịch"}
               </button>
             </form>
@@ -486,10 +499,14 @@ export default function AppointmentsPage() {
                       key={appointment.id}
                       className="appointment-card"
                       data-appointment-reveal
-                      style={{ transitionDelay: `${Math.min(index, 6) * 55}ms` }}
+                      style={{
+                        transitionDelay: `${Math.min(index, 6) * 55}ms`,
+                      }}
                     >
                       <div className="appointment-date-block">
-                        <strong>{formatCalendarDate(appointment.appointmentDate)}</strong>
+                        <strong>
+                          {formatCalendarDate(appointment.appointmentDate)}
+                        </strong>
                         <span>
                           {formatTime(appointment.startTime)}–
                           {formatTime(appointment.endTime)}
@@ -515,7 +532,8 @@ export default function AppointmentsPage() {
 
                         <div className="appointment-card-footer">
                           <small>
-                            Mã lịch hẹn #{String(appointment.id).padStart(4, "0")}
+                            Mã lịch hẹn #
+                            {String(appointment.id).padStart(4, "0")}
                           </small>
                           {canCancel ? (
                             <button

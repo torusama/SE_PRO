@@ -1,13 +1,9 @@
-import {
-  useEffect,
-  useMemo,
-  useState,
-  type CSSProperties,
-} from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useSearchParams } from "react-router-dom";
 import { CalendarDays, Clock3, MapPin, UserRound } from "lucide-react";
 import { api } from "@/lib/api";
 import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
+import NavyStarfield from "@/components/decor/NavyStarfield";
 
 type ReservationType = "reserve" | "purchase";
 type ReservationStatus =
@@ -244,7 +240,9 @@ export default function MyLotsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
-  const [respondingAppointmentId, setRespondingAppointmentId] = useState<number | null>(null);
+  const [respondingAppointmentId, setRespondingAppointmentId] = useState<
+    number | null
+  >(null);
   const [selectedAppointmentTimes, setSelectedAppointmentTimes] = useState<
     Record<number, string>
   >({});
@@ -391,7 +389,14 @@ export default function MyLotsPage() {
   }, []);
 
   useRealtimeRefresh(
-    ["reservations", "appointments", "contracts", "ownership", "services", "transfers"],
+    [
+      "reservations",
+      "appointments",
+      "contracts",
+      "ownership",
+      "services",
+      "transfers",
+    ],
     () => loadData(true),
   );
 
@@ -408,9 +413,7 @@ export default function MyLotsPage() {
   }, [appointments.length, loading, targetAppointmentId]);
 
   useEffect(() => {
-    const nodes = document.querySelectorAll<HTMLElement>(
-      "[data-lots-reveal]",
-    );
+    const nodes = document.querySelectorAll<HTMLElement>("[data-lots-reveal]");
 
     if (!nodes.length) return;
 
@@ -467,7 +470,8 @@ export default function MyLotsPage() {
     if (
       status === "declined" &&
       !window.confirm("Bạn muốn từ chối khoảng ngày lịch hẹn này?")
-    ) return;
+    )
+      return;
     let selectedAt: string | undefined;
     if (status === "confirmed") {
       const selectedValue = selectedAppointmentTimes[appointment.id];
@@ -504,6 +508,7 @@ export default function MyLotsPage() {
   return (
     <main className="lots-page">
       <style>{pageStyles}</style>
+      <NavyStarfield />
 
       <div className="lots-shell">
         <header className="lots-hero" data-lots-reveal>
@@ -540,7 +545,11 @@ export default function MyLotsPage() {
           </div>
         ) : null}
 
-        <nav className="lots-tabs" aria-label="Điều hướng hồ sơ" data-lots-reveal>
+        <nav
+          className="lots-tabs"
+          aria-label="Điều hướng hồ sơ"
+          data-lots-reveal
+        >
           <a href="#overview">Tổng quan</a>
           <a href="#requests">Yêu cầu</a>
           <a href="#contracts">Hợp đồng và lô đất</a>
@@ -612,9 +621,13 @@ export default function MyLotsPage() {
                 return (
                   <article
                     key={request.id}
-                    id={appointment ? `appointment-${appointment.id}` : undefined}
+                    id={
+                      appointment ? `appointment-${appointment.id}` : undefined
+                    }
                     className={`lots-request-card${appointment?.id === targetAppointmentId ? " is-target-appointment" : ""}`}
-                    tabIndex={appointment?.id === targetAppointmentId ? -1 : undefined}
+                    tabIndex={
+                      appointment?.id === targetAppointmentId ? -1 : undefined
+                    }
                     data-lots-reveal
                     style={
                       {
@@ -648,7 +661,9 @@ export default function MyLotsPage() {
                           />
                           <Info
                             label="Giá trị dự kiến"
-                            value={money.format(Number(request.totalPrice ?? 0))}
+                            value={money.format(
+                              Number(request.totalPrice ?? 0),
+                            )}
                             emphasize
                           />
                         </div>
@@ -659,20 +674,35 @@ export default function MyLotsPage() {
                       <div className="lots-next-step lots-appointment-card">
                         <section className="lots-appointment-summary">
                           <div className="lots-appointment-kicker">
-                            <CalendarDays size={16} strokeWidth={1.8} aria-hidden="true" />
+                            <CalendarDays
+                              size={16}
+                              strokeWidth={1.8}
+                              aria-hidden="true"
+                            />
                             <span>Lịch hẹn ký hợp đồng</span>
                           </div>
                           <strong className="lots-appointment-range">
-                            {formatAppointmentDate(appointment.scheduledAt)} – {formatAppointmentDate(appointment.scheduledEndAt)}
+                            {formatAppointmentDate(appointment.scheduledAt)} –{" "}
+                            {formatAppointmentDate(appointment.scheduledEndAt)}
                           </strong>
                           <div className="lots-appointment-detail">
-                            <MapPin size={15} strokeWidth={1.8} aria-hidden="true" />
+                            <MapPin
+                              size={15}
+                              strokeWidth={1.8}
+                              aria-hidden="true"
+                            />
                             <span>{appointment.location}</span>
                           </div>
                           <div className="lots-appointment-detail">
-                            <UserRound size={15} strokeWidth={1.8} aria-hidden="true" />
+                            <UserRound
+                              size={15}
+                              strokeWidth={1.8}
+                              aria-hidden="true"
+                            />
                             <span>
-                              Phụ trách: {appointment.assignedStaffName || "Chưa phân công"}
+                              Phụ trách:{" "}
+                              {appointment.assignedStaffName ||
+                                "Chưa phân công"}
                             </span>
                           </div>
                           <div
@@ -696,12 +726,17 @@ export default function MyLotsPage() {
                                   : "Thông tin lịch của bạn"}
                               </strong>
                             </div>
-                            <Clock3 size={18} strokeWidth={1.8} aria-hidden="true" />
+                            <Clock3
+                              size={18}
+                              strokeWidth={1.8}
+                              aria-hidden="true"
+                            />
                           </div>
 
                           {appointment.customerSelectedAt ? (
                             <p className="lots-selected-time">
-                              Thời gian đã chọn: {formatDate(appointment.customerSelectedAt)}
+                              Thời gian đã chọn:{" "}
+                              {formatDate(appointment.customerSelectedAt)}
                             </p>
                           ) : null}
 
@@ -714,7 +749,10 @@ export default function MyLotsPage() {
                                   step="60"
                                   min={appointmentTimeBounds(appointment).min}
                                   max={appointmentTimeBounds(appointment).max}
-                                  value={selectedAppointmentTimes[appointment.id] ?? ""}
+                                  value={
+                                    selectedAppointmentTimes[appointment.id] ??
+                                    ""
+                                  }
                                   onChange={(event) =>
                                     setSelectedAppointmentTimes((current) => ({
                                       ...current,
@@ -723,23 +761,44 @@ export default function MyLotsPage() {
                                   }
                                 />
                                 <small>
-                                  Có thể chọn trong khoảng {formatAppointmentDate(appointment.scheduledAt)} – {formatAppointmentDate(appointment.scheduledEndAt)}.
+                                  Có thể chọn trong khoảng{" "}
+                                  {formatAppointmentDate(
+                                    appointment.scheduledAt,
+                                  )}{" "}
+                                  –{" "}
+                                  {formatAppointmentDate(
+                                    appointment.scheduledEndAt,
+                                  )}
+                                  .
                                 </small>
                               </label>
                               <div className="lots-appointment-actions">
                                 <button
                                   type="button"
-                                  onClick={() => void respondAppointment(appointment, "declined")}
-                                  disabled={respondingAppointmentId === appointment.id}
+                                  onClick={() =>
+                                    void respondAppointment(
+                                      appointment,
+                                      "declined",
+                                    )
+                                  }
+                                  disabled={
+                                    respondingAppointmentId === appointment.id
+                                  }
                                 >
                                   Từ chối lịch
                                 </button>
                                 <button
                                   type="button"
                                   className="confirm"
-                                  onClick={() => void respondAppointment(appointment, "confirmed")}
+                                  onClick={() =>
+                                    void respondAppointment(
+                                      appointment,
+                                      "confirmed",
+                                    )
+                                  }
                                   disabled={
-                                    respondingAppointmentId === appointment.id ||
+                                    respondingAppointmentId ===
+                                      appointment.id ||
                                     !selectedAppointmentTimes[appointment.id]
                                   }
                                 >
@@ -757,8 +816,8 @@ export default function MyLotsPage() {
                           <span>Bước tiếp theo</span>
                           <strong>Đang chờ tạo lịch hẹn</strong>
                           <p>
-                            Nhân viên sẽ cập nhật ngày ký hợp đồng cho yêu
-                            cầu này.
+                            Nhân viên sẽ cập nhật ngày ký hợp đồng cho yêu cầu
+                            này.
                           </p>
                         </div>
                       </div>
@@ -792,7 +851,10 @@ export default function MyLotsPage() {
                 const paidAmount = Number(contract.paidAmount ?? 0);
                 const paymentPercent =
                   totalAmount > 0
-                    ? Math.min(Math.max((paidAmount / totalAmount) * 100, 0), 100)
+                    ? Math.min(
+                        Math.max((paidAmount / totalAmount) * 100, 0),
+                        100,
+                      )
                     : 0;
 
                 return (
@@ -1268,6 +1330,8 @@ const pageStyles = `
   }
 
   .lots-shell {
+    position: relative;
+    z-index: 1;
     width: min(1180px, 100%);
     margin: 0 auto;
   }
