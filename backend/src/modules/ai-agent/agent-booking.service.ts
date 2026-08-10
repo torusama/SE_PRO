@@ -392,6 +392,19 @@ export class AgentBookingService {
         '',
         'Bạn xác nhận để mình gửi đơn dịch vụ này không? Sau khi đơn được xác nhận và bạn thanh toán, lịch chọn ngày sẽ mở để bạn đặt ngày thực hiện.',
       ].join('\n'),
+      quickReplies: [
+        {
+          id: 'service-confirm-order',
+          label: 'Xác nhận đặt dịch vụ',
+          message: 'Mình xác nhận đặt dịch vụ này.',
+          emphasis: 'strong',
+        },
+        {
+          id: 'service-cancel-order',
+          label: 'Chưa đặt lúc này',
+          message: 'Mình chưa muốn đặt dịch vụ này, hãy hủy bước xác nhận.',
+        },
+      ],
     };
   }
 

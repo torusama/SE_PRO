@@ -29,6 +29,7 @@ import {
   ComparisonOptionDto,
 } from './dto/compare-recommendations.dto';
 import { KnowledgeService } from './knowledge.service';
+import { ConversationMemoryService } from './conversation-memory.service';
 import { MultiProviderLlmService } from './multi-provider-llm.service';
 import {
   ComparisonAiService,
@@ -423,7 +424,13 @@ export function resolvePendingBookingReply(
   if (!pendingAction) return plan;
 
   const reply = normalizeShortReply(userMessage);
-  if (!reply || /\b(?:khong|chua|huy|dung)\b/.test(reply)) return plan;
+  if (
+    !reply ||
+    /\b(?:khong|chua|huy|dung lai|bo qua|thoi khong|khong dat|khong gui|khong xac nhan)\b/.test(
+      reply,
+    )
+  )
+    return plan;
 
   if (
     pendingAction.kind === 'plot_request' &&
@@ -460,11 +467,20 @@ export function resolvePendingBookingReply(
     }
   }
 
+  const confirmsPendingAction =
+    /^(?:(?:minh|toi|em|anh|chi)\s+)?(?:ok|oke|okay|oki|dong y|xac nhan|chot|dung roi|chuan roi|gui di|gui don|gui yeu cau|hoan tat|tien hanh|dat di|dat i|dat luon)(?:\s+.*)?$/.test(
+      reply,
+    ) ||
+    /^(?:(?:minh|toi|em|anh|chi)\s+)?(?:xac nhan|dong y|chot)\s+(?:dat|gui)(?:\s+dich vu|\s+don|\s+yeu cau)?(?:\s+.*)?$/.test(
+      reply,
+    ) ||
+    /^(?:ok|oke|okay|oki)\s+(?:dat|gui|xac nhan|dong y)(?:\s+.*)?$/.test(
+      reply,
+    );
+
   if (
     pendingAction.stage === 'awaiting_confirmation' &&
-    /^(?:ok|oke|dong y|xac nhan|gui di|gui yeu cau|hoan tat|tien hanh)(?: nhe| luon)?$/.test(
-      reply,
-    )
+    confirmsPendingAction
   ) {
     return {
       ...plan,
@@ -501,6 +517,8 @@ export class AiAgentOrchestratorService {
     private readonly comparisonAi: ComparisonAiService,
     @Optional()
     private readonly decisionComparisonAi?: DecisionComparisonAiService,
+    @Optional()
+    private readonly conversationMemory?: ConversationMemoryService,
   ) {}
 
   async chat(dto: ChatDto, user?: { id: number; role: string } | null) {
@@ -532,12 +550,14 @@ export class AiAgentOrchestratorService {
     const bareAcknowledgement = this.isBareAcknowledgement(dto.message);
     const lowInformationTurn = this.isLowInformationTurn(dto.message);
     const clearlyOutOfScope = this.isClearlyOutOfScope(dto.message);
+    const contextReferenceTurn = this.isContextReferenceTurn(dto.message);
     const skipsContextBootstrap = Boolean(
-      immediateSafetyTurn ||
-      sensitiveDisclosureRequest ||
-      (socialTurn && !bareAcknowledgement && !ambiguousDomainTurn) ||
-      lowInformationTurn ||
-      clearlyOutOfScope,
+      !contextReferenceTurn &&
+        (immediateSafetyTurn ||
+          sensitiveDisclosureRequest ||
+          (socialTurn && !bareAcknowledgement && !ambiguousDomainTurn) ||
+          lowInformationTurn ||
+          clearlyOutOfScope),
     );
     const conversation = await this.ensureConversation(sessionId, userId);
     // If a completed HTTP request is retried with the same clientRequestId,
@@ -564,6 +584,8 @@ export class AiAgentOrchestratorService {
     const [
       pendingAction,
       persistentKnowledgeContext,
+      conversationMemoryContext,
+      conversationMemoryRequirements,
       activeUserPreferences,
       ownedPlots,
       customerProfile,
@@ -587,6 +609,30 @@ export class AiAgentOrchestratorService {
             '',
             'memory_context',
           ),
+      this.conversationMemory
+        ? this.withTimeout(
+            this.conversationMemory.getPromptContext(
+              conversation.id,
+              userId,
+              dto.message,
+            ),
+            900,
+            '',
+            'conversation_memory_context',
+          )
+        : Promise.resolve(''),
+      this.conversationMemory && contextReferenceTurn
+        ? this.withTimeout(
+            this.conversationMemory.getRecoveredRequirements(
+              conversation.id,
+              userId,
+              dto.message,
+            ),
+            700,
+            {} as AgentRequirements,
+            'conversation_memory_requirements',
+          )
+        : Promise.resolve({} as AgentRequirements),
       userId === null || skipsContextBootstrap
         ? Promise.resolve([])
         : this.withTimeout(
@@ -661,6 +707,10 @@ export class AiAgentOrchestratorService {
       : {};
     let trustedRequirements = this.mergeDefinedRequirements(
       profileRequirements,
+      conversationMemoryRequirements,
+    );
+    trustedRequirements = this.mergeDefinedRequirements(
+      trustedRequirements,
       historyRequirements,
     );
     trustedRequirements = this.mergeDefinedRequirements(
@@ -811,7 +861,7 @@ export class AiAgentOrchestratorService {
       });
     }
 
-    if (lowInformationTurn) {
+    if (lowInformationTurn && !contextReferenceTurn) {
       await saveUserMessage();
       return this.finish({
         conversation,
@@ -1218,6 +1268,8 @@ export class AiAgentOrchestratorService {
         learningResults,
         ownedPlots,
         pendingAction,
+        history,
+        conversationMemoryContext,
       });
     }
 
@@ -1232,7 +1284,9 @@ export class AiAgentOrchestratorService {
         (await this.createAgentPlan(
           history,
           dto.message,
-          persistentKnowledgeContext,
+          [persistentKnowledgeContext, conversationMemoryContext]
+            .filter(Boolean)
+            .join('\n\n'),
           traceId,
           {
             pendingAction,
@@ -1455,6 +1509,7 @@ export class AiAgentOrchestratorService {
         toolOutput: execution.toolOutput,
         prefix: alternativeMessage,
         ownedPlots,
+        userMessage: dto.message,
       });
       // Tool output is authoritative and already has a natural grounded formatter.
       // Do not make a second LLM request after a successful tool call: that old
@@ -1512,6 +1567,8 @@ export class AiAgentOrchestratorService {
             : 'LLM_AGENT_PLAN_FAILED',
         ownedPlots,
         pendingAction,
+        history,
+        conversationMemoryContext,
       });
     }
   }
@@ -1534,6 +1591,35 @@ export class AiAgentOrchestratorService {
       clarificationQuestion: '',
       requirements,
     });
+
+    if (this.isContextReferenceTurn(message)) {
+      const recentMeaningfulIntent = [...history]
+        .reverse()
+        .filter((item) => item.role === 'user' && item.content)
+        .map((item) => this.detectIntent(item.content ?? ''))
+        .find((value) => value !== 'general_question');
+
+      if (
+        recentMeaningfulIntent === 'service_booking' ||
+        recentMeaningfulIntent === 'service_suggestions'
+      ) {
+        return requirements.serviceQuery
+          ? deterministicPlan('service_booking', 'prepare_service_order')
+          : deterministicPlan('service_suggestions', 'get_service_suggestions');
+      }
+      if (recentMeaningfulIntent === 'plot_request') {
+        return deterministicPlan('plot_request', 'prepare_plot_request');
+      }
+      if (recentMeaningfulIntent === 'recommend_plots') {
+        return deterministicPlan('recommend_plots', 'browse_available_plots');
+      }
+      if (recentMeaningfulIntent === 'purchase_process') {
+        return deterministicPlan('purchase_process', 'get_purchase_process');
+      }
+      if (recentMeaningfulIntent === 'bazi_suggestion' && requirements.birthDate) {
+        return deterministicPlan('bazi_suggestion', 'suggest_bazi_direction');
+      }
+    }
 
     // High-confidence operational commands with all required date/time fields
     // can go straight to the authoritative confirmation workflow. Ambiguous
@@ -2174,6 +2260,7 @@ Write the final helpful, highly consultative response now.
     toolOutput: unknown;
     prefix: string;
     ownedPlots?: OwnedPlotContext[] | null;
+    userMessage?: string;
   }) {
     if (input.recommendationResult) {
       return (
@@ -2184,6 +2271,7 @@ Write the final helpful, highly consultative response now.
       return this.describeServices(
         input.suggestedServices,
         input.ownedPlots ?? null,
+        input.userMessage,
       );
     }
     if (input.baziSuggestion) {
@@ -2435,6 +2523,8 @@ Bạn muốn mình đi sâu vào yêu cầu lô, đơn dịch vụ hay lịch ch
     learningResults: AutonomousLearningResult[];
     ownedPlots: OwnedPlotContext[] | null;
     pendingAction?: AgentPendingAction;
+    history?: PersistedMessage[];
+    conversationMemoryContext?: string;
   }) {
     let recommendationResult: RecommendationResult | null = null;
     let suggestedServices: SuggestedService[] = [];
@@ -2445,6 +2535,9 @@ Bạn muốn mình đi sâu vào yêu cầu lô, đơn dịch vụ hay lịch ch
     let assistantMessage = await this.buildGracefulConversationFallback(
       input.message,
       input.conversation?.userId ?? null,
+      input.history ?? [],
+      input.pendingAction,
+      input.conversationMemoryContext ?? '',
     );
     const socialFallback = this.buildDeterministicSocialTurn(input.message);
     if (socialFallback) assistantMessage = socialFallback.assistantMessage;
@@ -2452,23 +2545,39 @@ Bạn muốn mình đi sâu vào yêu cầu lô, đơn dịch vụ hay lịch ch
     if (
       input.intent === 'appointment_booking' ||
       input.intent === 'memorial_reminder' ||
+      input.intent === 'service_booking' ||
+      input.intent === 'plot_request' ||
       input.pendingAction?.kind === 'appointment' ||
-      input.pendingAction?.kind === 'memorial_reminder'
+      input.pendingAction?.kind === 'memorial_reminder' ||
+      input.pendingAction?.kind === 'service_order' ||
+      input.pendingAction?.kind === 'plot_request'
     ) {
-      const fallbackIntent =
+      const fallbackIntent: AgentPlan['intent'] =
         input.pendingAction?.kind === 'appointment'
           ? 'appointment_booking'
           : input.pendingAction?.kind === 'memorial_reminder'
             ? 'memorial_reminder'
-            : input.intent === 'appointment_booking'
-              ? 'appointment_booking'
-              : 'memorial_reminder';
+            : input.pendingAction?.kind === 'service_order'
+              ? 'service_booking'
+              : input.pendingAction?.kind === 'plot_request'
+                ? 'plot_request'
+                : input.intent === 'appointment_booking'
+                  ? 'appointment_booking'
+                  : input.intent === 'memorial_reminder'
+                    ? 'memorial_reminder'
+                    : input.intent === 'service_booking'
+                      ? 'service_booking'
+                      : 'plot_request';
       let fallbackPlan: AgentPlan = {
         intent: fallbackIntent,
         action:
           fallbackIntent === 'appointment_booking'
             ? 'prepare_appointment'
-            : 'prepare_memorial_reminder',
+            : fallbackIntent === 'memorial_reminder'
+              ? 'prepare_memorial_reminder'
+              : fallbackIntent === 'service_booking'
+                ? 'prepare_service_order'
+                : 'prepare_plot_request',
         contextMode: 'continue',
         needsClarification: false,
         clarificationQuestion: '',
@@ -2666,6 +2775,7 @@ Bạn muốn mình đi sâu vào yêu cầu lô, đơn dịch vụ hay lịch ch
       assistantMessage = this.describeServices(
         suggestedServices,
         input.ownedPlots,
+        input.message,
       );
     }
 
@@ -3333,6 +3443,23 @@ ${JSON.stringify(options)}
         );
       }
     }
+    if (input.conversation && messageId && this.conversationMemory) {
+      await this.withTimeout(
+        this.conversationMemory.recordTurnSnapshot({
+          conversationId: input.conversation.id,
+          userId: input.conversation.userId,
+          userMessageId: input.userMessageId,
+          userMessage: input.userMessage,
+          assistantMessage,
+          intent: input.intent,
+          requirements: input.requirements,
+          pendingAction: input.requirements.pendingAction,
+        }),
+        1_200,
+        undefined,
+        'conversation_memory_snapshot',
+      );
+    }
     return {
       sessionId: input.sessionId,
       messageId,
@@ -3402,12 +3529,16 @@ ${JSON.stringify(options)}
     proposals: MemoryProposal[] | undefined,
     sourceMessage: string,
   ) {
-    const filtered = (proposals ?? []).filter(
-      (proposal) =>
-        proposal.memoryType !== 'user_preference' ||
-        proposal.memoryKey !== 'consultation_topic_preference' ||
-        this.hasDurableConsultationPreferenceCue(sourceMessage),
-    );
+    const filtered = (proposals ?? []).filter((proposal) => {
+      if (proposal.memoryType !== 'user_preference') return true;
+      if (proposal.memoryKey === 'consultation_topic_preference') {
+        return this.hasDurableConsultationPreferenceCue(sourceMessage);
+      }
+      if (proposal.memoryKey === 'service_interest') {
+        return this.hasDurableServicePreferenceCue(sourceMessage);
+      }
+      return true;
+    });
     return filtered.length ? filtered : undefined;
   }
 
@@ -3430,6 +3561,23 @@ ${JSON.stringify(options)}
         folded,
       );
     return asksToRemember || futureScope || explicitStylePreference;
+  }
+
+  private hasDurableServicePreferenceCue(message: string) {
+    const folded = this.foldForMemory(message);
+    const serviceTopic =
+      /\b(?:dich vu|cham soc|don dep|thay hoa|thap huong|tuong niem)\b/.test(
+        folded,
+      );
+    if (!serviceTopic) return false;
+    return (
+      /\b(?:ghi nho|nho giup|hay nho|luu lai|luu giup|remember)\b/.test(
+        folded,
+      ) ||
+      /\b(?:tu gio|sau nay|lan sau|nhung lan sau|moi lan|thuong xuyen|dinh ky|uu tien)\b/.test(
+        folded,
+      )
+    );
   }
 
   private buildBaziIntakeTurn(input: {
@@ -3599,9 +3747,14 @@ ${JSON.stringify(options)}
       /\b(?:thich gi|uu tien gi|muon gi|so thich gi|biet .* thich gi)\b/.test(
         folded,
       );
+    const transactionalRequest =
+      /\b(?:dat|book|dang ky|gui yeu cau|tao yeu cau|mua lo|giu cho|dat cho|xem|tu van)\b/.test(
+        folded,
+      );
     if (
       (!explicitlyAsksToRemember && !firstPersonPreference) ||
-      isPreferenceQuestion
+      isPreferenceQuestion ||
+      (!explicitlyAsksToRemember && transactionalRequest)
     ) {
       return undefined;
     }
@@ -4166,6 +4319,59 @@ ${JSON.stringify(options)}
         folded,
       );
     return protectedTarget && asksToReveal;
+  }
+
+  private isContextReferenceTurn(message: string) {
+    const folded = this.foldForMemory(message);
+    return /\b(?:hoi nay|luc nay|ban nay|nay do|cai do|cai nay|y do|y nay|luc truoc|hoi truoc|lan truoc|hom truoc|nhu da noi|nhu minh noi|nhu toi noi|tiep tuc|noi tiep|do ma)\b/.test(
+      folded,
+    );
+  }
+
+  private buildContextReferenceFallback(
+    message: string,
+    history: PersistedMessage[],
+    pendingAction?: AgentPendingAction,
+    conversationMemoryContext = '',
+  ) {
+    if (!this.isContextReferenceTurn(message)) return '';
+
+    if (pendingAction?.kind === 'service_order') {
+      return `Ừ, mình nhớ. Bạn đang tiếp tục đơn dịch vụ${pendingAction.serviceName ? ` **${pendingAction.serviceName}**` : ''}${pendingAction.plotCode ? ` cho lô **${pendingAction.plotCode}**` : ''}. Mình sẽ bám đúng luồng đặt dịch vụ này, không chuyển sang tư vấn lô.`;
+    }
+    if (pendingAction?.kind === 'plot_request') {
+      return `Ừ, mình nhớ. Bạn đang tiếp tục yêu cầu cho lô **${pendingAction.plotCodes.join(', ')}**. Mình sẽ tiếp tục từ trạng thái hiện tại thay vì bắt bạn chọn lại từ đầu.`;
+    }
+
+    const recentUsers = [...history]
+      .reverse()
+      .filter((item) => item.role === 'user' && item.content)
+      .slice(0, 8);
+    const recentService = recentUsers.find((item) =>
+      /\b(?:dat|book|dang ky)\b.{0,30}\b(?:dich vu|mai tang|cham soc|don dep|thay hoa|thap huong|tuong niem)\b/.test(
+        this.foldForMemory(item.content ?? ''),
+      ),
+    );
+    if (recentService?.content) {
+      const remembered = this.extractRequirements(recentService.content);
+      const service = remembered.serviceQuery;
+      const plot = remembered.selectedPlotCode;
+      return `Ừ, mình nhớ đoạn bạn đang nói. Lúc nãy bạn đang muốn **đặt dịch vụ${service ? ` ${service}` : ''}**${plot ? ` cho lô **${plot}**` : ''}. Mình sẽ tiếp tục đúng việc đó và giữ nguyên những thông tin đã có.`;
+    }
+
+    const recentMeaningful = recentUsers.find((item) => {
+      const value = this.detectIntent(item.content ?? '');
+      return value !== 'general_question';
+    });
+    if (recentMeaningful?.content) {
+      return `Ừ, mình nhớ ngữ cảnh trước đó. Phần bạn đang nhắc tới là: “${recentMeaningful.content.trim().slice(0, 260)}”. Mình sẽ tiếp tục từ phần này, không bắt bạn kể lại từ đầu.`;
+    }
+
+    const memorySummary = conversationMemoryContext.match(/Summary:\s*([^\n]+)/)?.[1];
+    if (memorySummary) {
+      return `Ừ, mình nhớ phần trước. Tóm tắt gần nhất của cuộc trao đổi là: ${memorySummary.slice(0, 420)}. Mình sẽ tiếp tục dựa trên ngữ cảnh đó.`;
+    }
+    return '';
   }
 
   private isLowInformationTurn(message: string) {
@@ -4757,8 +4963,18 @@ Việc gửi yêu cầu chưa đồng nghĩa với thanh toán hoặc hoàn tấ
   private async buildGracefulConversationFallback(
     message: string,
     userId: number | null,
+    history: PersistedMessage[] = [],
+    pendingAction?: AgentPendingAction,
+    conversationMemoryContext = '',
   ) {
     const folded = this.foldForMemory(message);
+    const contextualRecall = this.buildContextReferenceFallback(
+      message,
+      history,
+      pendingAction,
+      conversationMemoryContext,
+    );
+    if (contextualRecall) return contextualRecall;
     if (/^(?:xin chao|chao|hello|hi|alo|hey)\b/.test(folded)) {
       return 'Chào bạn! Mình có thể hỗ trợ tìm và so sánh lô, xem giá và tình trạng còn trống, giải thích quy trình mua/giữ chỗ, dịch vụ chăm sóc và tư vấn phong thủy mang tính tham khảo. Bạn muốn bắt đầu từ phần nào?';
     }
@@ -5030,17 +5246,89 @@ Việc gửi yêu cầu chưa đồng nghĩa với thanh toán hoặc hoàn tấ
       .join('\n\n');
   }
 
+  /**
+   * Build a rich, consultative analysis paragraph for a single service.
+   * Uses category, unit, price and description to generate practical guidance
+   * that goes beyond just parroting the DB description.
+   */
+  private buildServiceAnalysis(service: SuggestedService): string {
+    const priceStr = service.basePrice.toLocaleString('vi-VN');
+    const categoryLabels: Record<string, string> = {
+      burial: 'an táng',
+      maintenance: 'chăm sóc & bảo trì',
+      memorial: 'tưởng niệm & tâm linh',
+      other: 'tiện ích bổ sung',
+    };
+    const categoryLabel = categoryLabels[service.category] ?? service.category;
+    const lines: string[] = [];
+    lines.push(
+      `- **Chi phí:** ${priceStr} VND/${service.unit}`,
+    );
+    if (service.description) {
+      lines.push(`- **Nội dung thực hiện:** ${service.description}`);
+    }
+    lines.push(`- **Phân loại:** ${categoryLabel}`);
+
+    // Frequency & usage guidance based on unit
+    if (service.unit === 'tháng') {
+      lines.push(
+        `- **Tần suất:** Dịch vụ tính theo tháng — phù hợp cho gia đình muốn duy trì chăm sóc liên tục mà không cần tự sắp xếp từng lần. Bạn có thể đăng ký theo gói 3, 6 hoặc 12 tháng tùy nhu cầu.`,
+      );
+      const monthly = service.basePrice;
+      const quarterly = monthly * 3;
+      const yearly = monthly * 12;
+      lines.push(
+        `- **Ước tính chi phí:** ~${quarterly.toLocaleString('vi-VN')} VND/quý, ~${yearly.toLocaleString('vi-VN')} VND/năm nếu duy trì hàng tháng.`,
+      );
+    } else if (service.unit === 'lần') {
+      lines.push(
+        `- **Tần suất:** Dịch vụ tính theo lần — linh hoạt, bạn đặt khi cần mà không bị ràng buộc định kỳ. Thích hợp khi muốn chăm sóc trước ngày giỗ, lễ Tết, hoặc dịp đặc biệt.`,
+      );
+    } else if (service.unit === 'buổi') {
+      lines.push(
+        `- **Tần suất:** Dịch vụ tính theo buổi — thường được đặt vào dịp giỗ, ngày mất, lễ Vu Lan, hoặc các dịp tưởng niệm quan trọng của gia đình.`,
+      );
+    }
+
+    // Category-specific practical advice
+    if (service.category === 'burial') {
+      lines.push(
+        `- **Lưu ý:** Đây là dịch vụ quan trọng cần phối hợp với ban quản lý nghĩa trang. Sau khi đặt, đội ngũ sẽ liên hệ để xác nhận lịch trình, thủ tục giấy tờ cần thiết và phối hợp với gia đình trong suốt quá trình.`,
+      );
+    } else if (service.category === 'maintenance') {
+      lines.push(
+        `- **Phù hợp khi:** Gia đình ở xa không thể đến nghĩa trang thường xuyên, hoặc muốn đảm bảo mộ phần luôn sạch sẽ, gọn gàng. Nhân viên sẽ thực hiện tại lô và gửi xác nhận sau khi hoàn tất.`,
+      );
+    } else if (service.category === 'memorial') {
+      lines.push(
+        `- **Phù hợp khi:** Chuẩn bị cho ngày giỗ, lễ tưởng niệm, Tết Thanh minh, hoặc các dịp gia đình muốn bày tỏ lòng tưởng nhớ mà không thể đến trực tiếp.`,
+      );
+    }
+
+    return lines.join('\n');
+  }
+
+  /**
+   * Format a service price for comparison (e.g. "rẻ hơn 350.000 VND so với…")
+   */
+  private formatPriceDifference(
+    cheaper: SuggestedService,
+    pricier: SuggestedService,
+  ): string {
+    const diff = pricier.basePrice - cheaper.basePrice;
+    if (diff <= 0) return '';
+    return `${diff.toLocaleString('vi-VN')} VND`;
+  }
+
   private describeServices(
     services: SuggestedService[],
     ownedPlots: OwnedPlotContext[] | null = null,
+    userMessage?: string,
   ) {
     if (!services.length) {
       return 'Hiện chưa có dịch vụ đang hoạt động để đề xuất. Bạn muốn mình kiểm tra lại sau hay chuyển sang tư vấn lô và quy trình chăm sóc phù hợp?';
     }
     const options = services.slice(0, 5);
-    const cheapest = [...options].sort(
-      (left, right) => left.basePrice - right.basePrice,
-    )[0];
     const ownershipAdvice =
       ownedPlots === null
         ? 'Mình chưa thể kiểm tra lô thuộc tài khoản trong lượt này. Khi bạn đăng nhập hoặc khi dữ liệu tài khoản sẵn sàng, mình sẽ đối chiếu đúng lô trước khi tạo đơn dịch vụ.'
@@ -5054,20 +5342,154 @@ Việc gửi yêu cầu chưa đồng nghĩa với thanh toán hoặc hoàn tấ
                 '; ',
               )}. Mình sẽ dùng chính thông tin này để xác định lô áp dụng, phạm vi chăm sóc và phần thông tin còn thiếu trước khi tạo đơn.`
           : 'Mình chưa thấy tài khoản của bạn sở hữu lô đất nào. Bạn vẫn có thể tham khảo danh mục và chi phí dịch vụ; tuy nhiên hệ thống chỉ tạo đơn chăm sóc sau khi có lô thuộc quyền sử dụng. Bạn có muốn mình tư vấn thêm về lô đất phù hợp không?';
-    return [
+
+    // Identify which services the user specifically asked about
+    const matchedServices: SuggestedService[] = [];
+    const otherServices: SuggestedService[] = [];
+    if (userMessage) {
+      const normalizedMsg = userMessage
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd')
+        .replace(/Đ/g, 'D')
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      for (const service of options) {
+        const normalizedName = service.name
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/đ/g, 'd')
+          .replace(/Đ/g, 'D')
+          .toLowerCase()
+          .replace(/[^a-z0-9\s]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        const keywords = normalizedName
+          .split(/\s+/)
+          .filter((word) => word.length >= 2);
+        const matchingKeywords = keywords.filter((keyword) =>
+          normalizedMsg.includes(keyword),
+        );
+        const threshold = Math.max(1, Math.ceil(keywords.length / 2));
+        if (matchingKeywords.length >= threshold) {
+          matchedServices.push(service);
+        } else {
+          otherServices.push(service);
+        }
+      }
+    }
+
+    // ── User asked about specific services → detailed analysis ──
+    if (matchedServices.length > 0 && matchedServices.length < options.length) {
+      const sections: string[] = [];
+
+      if (matchedServices.length === 1) {
+        const service = matchedServices[0];
+        sections.push(
+          `Mình đã tra cứu thông tin chi tiết về dịch vụ **${service.name}** mà bạn quan tâm:\n\n` +
+          this.buildServiceAnalysis(service),
+        );
+      } else {
+        // Multiple matched services — detailed analysis + comparison
+        sections.push(
+          `Mình đã tra cứu chi tiết ${matchedServices.length} dịch vụ bạn quan tâm:`,
+        );
+        for (const service of matchedServices) {
+          sections.push(
+            `### ${service.name}\n\n` +
+            this.buildServiceAnalysis(service),
+          );
+        }
+
+        // Price comparison between matched services
+        const sorted = [...matchedServices].sort(
+          (left, right) => left.basePrice - right.basePrice,
+        );
+        if (sorted.length === 2) {
+          const diff = this.formatPriceDifference(sorted[0], sorted[1]);
+          const sameUnit = sorted[0].unit === sorted[1].unit;
+          sections.push(
+            `**So sánh nhanh:** **${sorted[0].name}** có chi phí thấp hơn ${diff}/${sameUnit ? sorted[0].unit : 'lần sử dụng'} so với **${sorted[1].name}**. ` +
+            (sorted[0].category === sorted[1].category
+              ? `Cả hai cùng thuộc nhóm ${(({ maintenance: 'chăm sóc & bảo trì', memorial: 'tưởng niệm & tâm linh', burial: 'an táng' } as Record<string, string>)[sorted[0].category] ?? sorted[0].category)}, nên bạn có thể kết hợp sử dụng song song để phủ đủ nhu cầu.`
+              : `Hai dịch vụ thuộc nhóm khác nhau nên phục vụ mục đích khác nhau — bạn có thể cân nhắc đặt cả hai tùy dịp.`),
+          );
+        } else {
+          const cheapest = sorted[0];
+          const priciest = sorted[sorted.length - 1];
+          sections.push(
+            `**So sánh chi phí:** Trong ${matchedServices.length} dịch vụ, **${cheapest.name}** có mức phí thấp nhất (${cheapest.basePrice.toLocaleString('vi-VN')} VND/${cheapest.unit}) và **${priciest.name}** cao nhất (${priciest.basePrice.toLocaleString('vi-VN')} VND/${priciest.unit}). Mỗi dịch vụ phục vụ mục đích riêng nên mức giá phản ánh phạm vi công việc thực tế chứ không đơn thuần là giá trị cao hay thấp.`,
+          );
+        }
+      }
+
+      // Contextual recommendation based on owned plots
+      if (ownedPlots && ownedPlots.length > 0) {
+        const plotList =
+          ownedPlots.length === 1
+            ? `lô **${ownedPlots[0].plotCode}**`
+            : `các lô **${ownedPlots.map((plot) => plot.plotCode).join(', ')}**`;
+        sections.push(
+          ownershipAdvice + '\n\n' +
+          `**Gợi ý tiếp theo:** Bạn muốn mình đặt **${matchedServices[0].name}** cho ${plotList}, ${matchedServices.length > 1 ? `so sánh kỹ hơn giữa **${matchedServices.map((service) => service.name).join('** và **')}**,` : 'xem thêm dịch vụ khác,'} hay cần mình tư vấn lịch chăm sóc phù hợp theo thời gian?`,
+        );
+      } else {
+        sections.push(ownershipAdvice);
+      }
+
+      // Suggest other services briefly
+      if (otherServices.length > 0) {
+        sections.push(
+          `Ngoài ra, nghĩa trang còn có ${otherServices.length} dịch vụ khác bạn có thể tham khảo thêm:\n\n` +
+          otherServices
+            .map(
+              (service) =>
+                `- **${service.name}:** ${service.basePrice.toLocaleString('vi-VN')} VND/${service.unit}${service.description ? ` — ${service.description}` : ''}.`,
+            )
+            .join('\n'),
+        );
+      }
+
+      return sections.filter(Boolean).join('\n\n');
+    }
+
+    // ── Default: no specific service matched — full consultative catalog ──
+    const sorted = [...options].sort(
+      (left, right) => left.basePrice - right.basePrice,
+    );
+    const cheapest = sorted[0];
+    const priciest = sorted[sorted.length - 1];
+
+    const sections: string[] = [];
+    sections.push(
       `Mình đã đối chiếu danh mục đang hoạt động và chọn ${options.length} dịch vụ để bạn dễ cân nhắc:`,
-      options
-        .map(
-          (service, index) =>
-            `- **${index + 1}. ${service.name}:** ${service.basePrice.toLocaleString('vi-VN')} VND/${service.unit}.${service.description ? ` ${service.description}` : ''}`,
-        )
-        .join('\n'),
-      `**Gợi ý chọn:** nếu ưu tiên chi phí, **${cheapest.name}** hiện có mức niêm yết thấp nhất trong nhóm trên. Nếu mục tiêu là chăm sóc định kỳ hoặc chuẩn bị cho một dịp tưởng niệm cụ thể, mình sẽ ưu tiên dịch vụ theo tần suất, nội dung thực hiện và ngày bạn mong muốn thay vì chỉ nhìn giá.`,
-      ownershipAdvice,
-      ownedPlots?.length
-        ? `Bạn muốn mình phân tích kỹ **${options[0].name}**, so sánh hai dịch vụ, hay bắt đầu đặt cho ${ownedPlots.length === 1 ? `lô **${ownedPlots[0].plotCode}**` : 'một trong các lô đang sở hữu'}?`
-        : '',
-    ].join('\n\n');
+    );
+
+    for (const service of options) {
+      sections.push(
+        `### ${service.name}\n\n` +
+        this.buildServiceAnalysis(service),
+      );
+    }
+
+    // Price overview and recommendation
+    if (options.length >= 2) {
+      sections.push(
+        `**Tổng quan chi phí:** Trong ${options.length} dịch vụ trên, **${cheapest.name}** có mức niêm yết thấp nhất (${cheapest.basePrice.toLocaleString('vi-VN')} VND/${cheapest.unit}) và **${priciest.name}** cao nhất (${priciest.basePrice.toLocaleString('vi-VN')} VND/${priciest.unit}). Nếu ưu tiên chi phí thì **${cheapest.name}** là điểm khởi đầu hợp lý. Nếu mục tiêu là chăm sóc toàn diện và liên tục, mình khuyên bạn kết hợp một dịch vụ định kỳ (tính theo tháng) với dịch vụ theo lần vào các dịp đặc biệt.`,
+      );
+    }
+
+    sections.push(ownershipAdvice);
+
+    if (ownedPlots?.length) {
+      sections.push(
+        `Bạn muốn mình phân tích kỹ dịch vụ nào, so sánh hai dịch vụ cụ thể, hay bắt đầu đặt cho ${ownedPlots.length === 1 ? `lô **${ownedPlots[0].plotCode}**` : 'một trong các lô đang sở hữu'}?`,
+      );
+    }
+
+    return sections.filter(Boolean).join('\n\n');
   }
 
   private plotTypeLabel(value: string) {
@@ -5615,7 +6037,7 @@ Việc gửi yêu cầu chưa đồng nghĩa với thanh toán hoặc hoàn tấ
   }
 
   private async loadHistory(conversationId: number) {
-    const limit = this.config.get<number>('ai.maxHistoryMessages') ?? 20;
+    const limit = this.config.get<number>('ai.maxHistoryMessages') ?? 40;
     const rows = await this.database.query<PersistedMessage>(
       `SELECT message_id AS id, role, content, intent,
               extracted_data AS "extractedData", metadata

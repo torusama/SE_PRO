@@ -320,6 +320,15 @@ describe('AgentBookingService', () => {
       plotId: 10,
       plotCode: 'A-01-001',
     });
+    expect(result?.quickReplies).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'service-confirm-order',
+          label: 'Xác nhận đặt dịch vụ',
+        }),
+      ]),
+    );
+
     expect(result?.assistantMessage).toContain('An Võ');
     expect(result?.assistantMessage).toContain('A-01-001');
     expect(result?.assistantMessage).toContain('2099-08-10');

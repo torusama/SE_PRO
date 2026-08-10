@@ -175,6 +175,33 @@ describe('AI Agent pending booking reply resolution', () => {
     });
   });
 
+
+  it.each([
+    'ok đặt i',
+    'ok đặt đi',
+    'đặt đi',
+    'mình xác nhận đặt dịch vụ này',
+    'đồng ý đặt dịch vụ',
+    'chốt',
+  ])('keeps colloquial confirmation inside the pending service flow for "%s"', (message) => {
+    const ready: AgentPendingAction = {
+      kind: 'service_order',
+      stage: 'awaiting_confirmation',
+      serviceTypeId: 3,
+      serviceName: 'Thay hoa tươi',
+      plotId: 10,
+      plotCode: 'A-01-002',
+      quotedPrice: 150_000,
+      serviceUnit: 'lần',
+    };
+
+    expect(resolvePendingBookingReply(basePlan(), ready, message)).toMatchObject({
+      intent: 'service_booking',
+      action: 'confirm_pending_action',
+      needsClarification: false,
+    });
+  });
+
   it('does not convert a negative reply into a purchase request', () => {
     expect(
       resolvePendingBookingReply(
