@@ -1,4 +1,5 @@
 import { RealtimeGateway } from './realtime.gateway';
+import { GATEWAY_OPTIONS } from '@nestjs/websockets/constants';
 
 function setup(options?: {
   payload?: Record<string, unknown>;
@@ -66,6 +67,12 @@ async function runMiddleware(middleware: Function, client: object) {
 }
 
 describe('RealtimeGateway', () => {
+  it('keeps Socket.IO polling available with websocket upgrade', () => {
+    const options = Reflect.getMetadata(GATEWAY_OPTIONS, RealtimeGateway);
+
+    expect(options.transports).toBeUndefined();
+  });
+
   it('allows anonymous clients into only the public room', async () => {
     const { gateway, middleware } = setup();
     const client = socket();

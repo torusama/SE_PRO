@@ -48,9 +48,53 @@ export function notificationTypeLabel(type: string) {
   );
 }
 
-export function notificationTargetRoute(item: NotificationItem) {
+export function notificationTargetRoute(
+  item: NotificationItem,
+  audience: "customer" | "admin" = "customer",
+) {
   if (item.type === "appointment_response") {
     return `${ROUTES.ADMIN_REQUESTS}?appointment=${item.relatedEntityId ?? ""}`;
+  }
+
+  if (audience === "admin") {
+    const id = item.relatedEntityId;
+
+    switch (item.relatedEntityType) {
+      case "offline_appointment":
+        return id
+          ? `${ROUTES.ADMIN_REQUESTS}?appointment=${id}`
+          : ROUTES.ADMIN_REQUESTS;
+      case "reservation_request":
+        return id
+          ? `${ROUTES.ADMIN_REQUESTS}?request=${id}`
+          : ROUTES.ADMIN_REQUESTS;
+      case "contract":
+        return id
+          ? `${ROUTES.ADMIN_CONTRACTS}?contractId=${id}`
+          : ROUTES.ADMIN_CONTRACTS;
+      case "service_order":
+        return id
+          ? `${ROUTES.ADMIN_SERVICES}?order=${id}`
+          : ROUTES.ADMIN_SERVICES;
+      case "reminder":
+        return ROUTES.ADMIN_REMINDERS;
+      case "schedule_appointment":
+      case "appointment":
+        return ROUTES.ADMIN_APPOINTMENTS;
+      case "transfer_request":
+      case "transfer":
+      case "ownership_record":
+      case "ownership":
+        return ROUTES.ADMIN_TRANSFER;
+      case "deceased_profile":
+        return id
+          ? `${ROUTES.ADMIN_DECEASED}?profileId=${id}`
+          : ROUTES.ADMIN_DECEASED;
+      case "plot":
+        return ROUTES.ADMIN_MAP;
+      default:
+        return null;
+    }
   }
 
   switch (item.relatedEntityType) {

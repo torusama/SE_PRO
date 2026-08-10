@@ -6,7 +6,9 @@ const realtimeListeners = vi.hoisted(() => ({
   update: undefined as
     | undefined
     | ((update: { topics: string[]; occurredAt: string }) => void),
-  reconnect: undefined as undefined | (() => void),
+  connect: undefined as undefined | (() => void),
+  connection: undefined as undefined | ((connected: boolean) => void),
+  connected: true,
 }));
 
 vi.mock("@/lib/realtime", () => ({
@@ -18,10 +20,17 @@ vi.mock("@/lib/realtime", () => ({
       realtimeListeners.update = undefined;
     };
   },
-  onRealtimeReconnect: (listener: () => void) => {
-    realtimeListeners.reconnect = listener;
+  onRealtimeConnect: (listener: () => void) => {
+    realtimeListeners.connect = listener;
     return () => {
-      realtimeListeners.reconnect = undefined;
+      realtimeListeners.connect = undefined;
+    };
+  },
+  onRealtimeConnectionChange: (listener: (connected: boolean) => void) => {
+    realtimeListeners.connection = listener;
+    listener(realtimeListeners.connected);
+    return () => {
+      realtimeListeners.connection = undefined;
     };
   },
 }));
@@ -30,10 +39,12 @@ describe("useRealtimeRefresh", () => {
   afterEach(() => {
     vi.useRealTimers();
     realtimeListeners.update = undefined;
-    realtimeListeners.reconnect = undefined;
+    realtimeListeners.connect = undefined;
+    realtimeListeners.connection = undefined;
+    realtimeListeners.connected = true;
   });
 
-  it("filters topics, collapses bursts and refreshes once after reconnect", async () => {
+  it("filters topics, collapses bursts and refreshes on every connect", async () => {
     vi.useFakeTimers();
     const refresh = vi.fn().mockResolvedValue(undefined);
     renderHook(() => useRealtimeRefresh(["plots"], refresh, 50));
@@ -61,8 +72,35 @@ describe("useRealtimeRefresh", () => {
     expect(refresh).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      realtimeListeners.reconnect?.();
+      realtimeListeners.connect?.();
       await vi.advanceTimersByTimeAsync(50);
+    });
+    expect(refresh).toHaveBeenCalledTimes(2);
+  });
+
+  it("polls only while disconnected and stops immediately after connect", async () => {
+    vi.useFakeTimers();
+    realtimeListeners.connected = false;
+    const refresh = vi.fn().mockResolvedValue(undefined);
+    renderHook(() => useRealtimeRefresh(["plots"], refresh, 20, 100));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120);
+    });
+    expect(refresh).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      realtimeListeners.connected = true;
+      realtimeListeners.connection?.(true);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    expect(refresh).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      realtimeListeners.connect?.();
+      await vi.advanceTimersByTimeAsync(20);
     });
     expect(refresh).toHaveBeenCalledTimes(2);
   });

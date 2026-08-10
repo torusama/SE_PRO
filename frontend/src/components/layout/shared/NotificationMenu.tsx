@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bell, CheckCheck, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { ROUTES } from "@/constants/routes";
@@ -19,10 +19,12 @@ type ApiResponse<T> = {
 
 type NotificationMenuProps = {
   variant?: "dark" | "light";
+  audience?: "customer" | "admin";
 };
 
 export default function NotificationMenu({
   variant = "dark",
+  audience = "customer",
 }: NotificationMenuProps) {
   const navigate = useNavigate();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -32,40 +34,85 @@ export default function NotificationMenu({
   const [error, setError] = useState("");
   const [markingAll, setMarkingAll] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [toast, setToast] = useState<NotificationItem | null>(null);
   const requestInFlightRef = useRef(false);
+  const pendingReloadRef = useRef(false);
+  const pendingAnnouncementRef = useRef(false);
   const mutationVersionRef = useRef(0);
+  const knownItemIdsRef = useRef<Set<number>>(new Set());
+  const hasLoadedRef = useRef(false);
 
-  async function load(silent = false) {
-    if (requestInFlightRef.current) return;
+  const load = useCallback(async (silent = false, announceNew = false) => {
+    if (requestInFlightRef.current) {
+      pendingReloadRef.current = true;
+      pendingAnnouncementRef.current ||= announceNew;
+      return;
+    }
+
     requestInFlightRef.current = true;
-    const requestVersion = mutationVersionRef.current;
+    let announceDuringCycle = announceNew;
     if (!silent) setLoading(true);
-    setError("");
 
     try {
-      const response =
-        await api.get<ApiResponse<NotificationItem[]>>("/notifications");
-      if (requestVersion === mutationVersionRef.current) {
-        setItems(
-          [...(response.data.data ?? [])].sort(
+      do {
+        pendingReloadRef.current = false;
+        announceDuringCycle ||= pendingAnnouncementRef.current;
+        pendingAnnouncementRef.current = false;
+        const requestVersion = mutationVersionRef.current;
+        setError("");
+
+        try {
+          const response =
+            await api.get<ApiResponse<NotificationItem[]>>("/notifications");
+          const nextItems = [...(response.data.data ?? [])].sort(
             (a, b) =>
               new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-          ),
-        );
-      }
-    } catch {
-      setError("Không tải được thông báo.");
+          );
+
+          if (requestVersion === mutationVersionRef.current) {
+            const shouldAnnounce =
+              audience === "admin" &&
+              hasLoadedRef.current &&
+              (announceDuringCycle || pendingAnnouncementRef.current);
+            const newestUnread = shouldAnnounce
+              ? nextItems.find(
+                  (item) =>
+                    !item.isRead && !knownItemIdsRef.current.has(item.id),
+                )
+              : undefined;
+
+            knownItemIdsRef.current = new Set(
+              nextItems.map((item) => item.id),
+            );
+            hasLoadedRef.current = true;
+            setItems(nextItems);
+            if (newestUnread) setToast(newestUnread);
+          } else {
+            pendingReloadRef.current = true;
+          }
+        } catch {
+          setError("Không tải được thông báo.");
+        }
+      } while (pendingReloadRef.current);
     } finally {
       requestInFlightRef.current = false;
+      pendingAnnouncementRef.current = false;
       if (!silent) setLoading(false);
     }
-  }
+  }, [audience]);
 
   useEffect(() => {
-    queueMicrotask(() => void load());
-  }, []);
+    const timeoutId = window.setTimeout(() => void load(), 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [load]);
 
-  useRealtimeRefresh(["notifications"], () => load(true));
+  useRealtimeRefresh(["notifications"], () => load(true, true));
+
+  useEffect(() => {
+    if (!toast) return;
+    const timeoutId = window.setTimeout(() => setToast(null), 6_000);
+    return () => window.clearTimeout(timeoutId);
+  }, [toast]);
 
   useEffect(() => {
     if (!open) return;
@@ -138,7 +185,9 @@ export default function NotificationMenu({
     mutationVersionRef.current += 1;
     try {
       await api.delete("/notifications");
+      knownItemIdsRef.current = new Set();
       setItems([]);
+      setToast(null);
     } catch {
       setError("Không thể xóa thông báo. Vui lòng thử lại.");
     } finally {
@@ -148,8 +197,12 @@ export default function NotificationMenu({
 
   function selectNotification(item: NotificationItem) {
     if (!item.isRead) void toggleRead(item);
-    const route = notificationTargetRoute(item);
-    if (item.relatedEntityType === "offline_appointment" && route) {
+    const route = notificationTargetRoute(item, audience);
+    if (audience === "admin") {
+      setToast(null);
+      setOpen(false);
+      navigate(route ?? ROUTES.ADMIN_NOTIFY);
+    } else if (item.relatedEntityType === "offline_appointment" && route) {
       setOpen(false);
       navigate(route);
     }
@@ -157,7 +210,9 @@ export default function NotificationMenu({
 
   function openAllNotifications() {
     setOpen(false);
-    navigate(ROUTES.NOTIFICATION);
+    navigate(
+      audience === "admin" ? ROUTES.ADMIN_NOTIFY : ROUTES.NOTIFICATION,
+    );
   }
 
   return (
@@ -287,6 +342,19 @@ export default function NotificationMenu({
             </button>
           </footer>
         </section>
+      )}
+
+      {audience === "admin" && toast && (
+        <button
+          type="button"
+          className="notification-menu__toast"
+          aria-live="polite"
+          onClick={() => selectNotification(toast)}
+        >
+          <span>Thông báo mới</span>
+          <strong>{toast.title}</strong>
+          <small>{toast.message}</small>
+        </button>
       )}
     </div>
   );

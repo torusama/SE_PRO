@@ -269,13 +269,23 @@ function notificationActionRoute(
     };
   }
   if (entity.includes("contract")) {
-    return { label: "Đi tới Hợp đồng", to: ROUTES.ADMIN_CONTRACTS };
+    return {
+      label: "Đi tới Hợp đồng",
+      to: id
+        ? `${ROUTES.ADMIN_CONTRACTS}?contractId=${id}`
+        : ROUTES.ADMIN_CONTRACTS,
+    };
   }
   if (entity.includes("transfer") || entity.includes("ownership")) {
     return { label: "Đi tới Chuyển nhượng", to: ROUTES.ADMIN_TRANSFER };
   }
   if (entity === "deceased_profile") {
-    return { label: "Đi tới Hồ sơ người đã khuất", to: ROUTES.ADMIN_DECEASED };
+    return {
+      label: "Đi tới Hồ sơ người đã khuất",
+      to: id
+        ? `${ROUTES.ADMIN_DECEASED}?profileId=${id}`
+        : ROUTES.ADMIN_DECEASED,
+    };
   }
   return null;
 }
@@ -293,6 +303,7 @@ export default function NotificationManagementPage() {
   const [feedLoading, setFeedLoading] = useState(true);
   const [feedError, setFeedError] = useState("");
   const requestInFlightRef = useRef(false);
+  const pendingReloadRef = useRef(false);
   const mutationVersionRef = useRef(0);
 
   const [activeNotification, setActiveNotification] =
@@ -302,24 +313,38 @@ export default function NotificationManagementPage() {
   const [detailError, setDetailError] = useState("");
 
   const loadFeed = useCallback(async (silent = false) => {
-    if (requestInFlightRef.current) return;
+    if (requestInFlightRef.current) {
+      pendingReloadRef.current = true;
+      return;
+    }
+
     requestInFlightRef.current = true;
-    const requestVersion = mutationVersionRef.current;
     if (!silent) setFeedLoading(true);
-    setFeedError("");
+
     try {
-      const response =
-        await api.get<ApiResponse<FeedNotification[]>>("/notifications");
-      if (requestVersion === mutationVersionRef.current) {
-        setItems(
-          [...(response.data.data ?? [])].sort(
-            (a, b) =>
-              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-          ),
-        );
-      }
-    } catch {
-      setFeedError("Không thể tải danh sách thông báo.");
+      do {
+        pendingReloadRef.current = false;
+        const requestVersion = mutationVersionRef.current;
+        setFeedError("");
+
+        try {
+          const response =
+            await api.get<ApiResponse<FeedNotification[]>>("/notifications");
+          if (requestVersion === mutationVersionRef.current) {
+            setItems(
+              [...(response.data.data ?? [])].sort(
+                (a, b) =>
+                  new Date(b.createdAt).getTime() -
+                  new Date(a.createdAt).getTime(),
+              ),
+            );
+          } else {
+            pendingReloadRef.current = true;
+          }
+        } catch {
+          setFeedError("Không thể tải danh sách thông báo.");
+        }
+      } while (pendingReloadRef.current);
     } finally {
       requestInFlightRef.current = false;
       if (!silent) setFeedLoading(false);

@@ -18,11 +18,16 @@ export default function AccountActions({
   const role = useAuthStore((state) => state.role);
   if (!user) return null;
 
-  const shouldShowNotification = showNotification && role !== "admin";
+  const notificationAudience = role === "admin" ? "admin" : "customer";
 
   return (
     <div className={`account-actions${className ? ` ${className}` : ""}`}>
-      {shouldShowNotification && <NotificationMenu variant={variant} />}
+      {showNotification && (
+        <NotificationMenu
+          variant={variant}
+          audience={notificationAudience}
+        />
+      )}
       <UserAccountMenu variant={variant} />
     </div>
   );

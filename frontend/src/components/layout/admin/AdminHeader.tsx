@@ -9,7 +9,6 @@ export default function AdminHeader() {
       <AccountActions
         variant="light"
         className="admin-account"
-        showNotification={false}
       />
     </header>
   );

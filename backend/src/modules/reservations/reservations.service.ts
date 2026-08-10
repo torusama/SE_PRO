@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
   OnModuleInit,
   Optional,
@@ -22,6 +23,7 @@ import type { AdminRequestContext } from '../../common/decorators/admin-request-
 import { AdminAuditService } from '../admin-audit/admin-audit.service';
 import { composeContractContent } from '../contracts/contract-content';
 import { RealtimeService } from '../realtime/realtime.service';
+import type { RealtimeRoom, RealtimeTopic } from '../realtime/realtime.types';
 
 type ReservationStatus = 'pending' | 'submitted' | 'approved' | 'rejected';
 
@@ -88,6 +90,7 @@ export interface StatusRow extends QueryResultRow {
 
 @Injectable()
 export class ReservationsService implements OnModuleInit {
+  private readonly logger = new Logger(ReservationsService.name);
   private readonly activeStatuses: ReservationStatus[] = [
     'pending',
     'submitted',
@@ -152,7 +155,7 @@ export class ReservationsService implements OnModuleInit {
       };
     });
     if (result.requestsCancelled > 0 || result.plotsReleased > 0) {
-      this.realtime?.publish(
+      this.publishRealtime(
         ['reservations', 'plots', 'dashboard'],
         ['authenticated'],
       );
@@ -187,7 +190,7 @@ export class ReservationsService implements OnModuleInit {
   ) {
     this.assertUniquePlotIds(dto.plotIds);
 
-    return this.database.transaction(async (client) => {
+    const result = await this.database.transaction(async (client) => {
       const plots = await this.lockPlots(client, dto.plotIds);
       if (
         plots.length !== dto.plotIds.length ||
@@ -246,6 +249,11 @@ export class ReservationsService implements OnModuleInit {
       const detail = await this.getDetailForClient(client, requestId, userId);
       return adjacency ? { ...detail, adjacency } : detail;
     });
+    this.publishRealtime(
+      ['reservations', 'plots', 'notifications', 'dashboard'],
+      ['admin', `user:${userId}`],
+    );
+    return result;
   }
 
   /** Báo cho toàn bộ admin đang hoạt động biết có yêu cầu mới cần xử lý. */
@@ -265,7 +273,7 @@ export class ReservationsService implements OnModuleInit {
   }
 
   async submit(userId: number, id: number) {
-    return this.database.transaction(async (client) => {
+    const result = await this.database.transaction(async (client) => {
       const request = await this.getOwnedRequest(client, userId, id);
       if (!['draft', 'cancelled'].includes(request.status)) {
         throw new BadRequestException(
@@ -300,10 +308,15 @@ export class ReservationsService implements OnModuleInit {
       );
       return updated.rows[0];
     });
+    this.publishRealtime(
+      ['reservations', 'plots', 'dashboard'],
+      ['admin', `user:${userId}`],
+    );
+    return result;
   }
 
   async cancel(userId: number, id: number) {
-    return this.database.transaction(async (client) => {
+    const result = await this.database.transaction(async (client) => {
       const request = await this.getOwnedRequest(client, userId, id);
       if (!['draft', 'pending', 'submitted'].includes(request.status)) {
         throw new BadRequestException('Chỉ có thể hủy yêu cầu đang chờ xử lý');
@@ -322,6 +335,11 @@ export class ReservationsService implements OnModuleInit {
       );
       return updated.rows[0];
     });
+    this.publishRealtime(
+      ['reservations', 'plots', 'dashboard'],
+      ['admin', `user:${userId}`],
+    );
+    return result;
   }
 
   async my(userId: number) {
@@ -417,8 +435,12 @@ export class ReservationsService implements OnModuleInit {
     adminNote?: string,
     context?: AdminRequestContext,
   ) {
-    return this.database.transaction(async (client) => {
+    let targetUserId: number | undefined;
+    let isPurchase = false;
+    const result = await this.database.transaction(async (client) => {
       const request = await this.lockRequest(client, id);
+      targetUserId = request.user_id;
+      isPurchase = request.request_type === 'purchase';
       this.assertPendingDecision(request.status, 'approved');
       const plots = await this.lockRequestPlots(client, id);
       this.assertPlotsPending(plots);
@@ -478,6 +500,18 @@ export class ReservationsService implements OnModuleInit {
         ...(request.request_type === 'purchase' ? { contracts } : {}),
       };
     });
+    this.publishRealtime(
+      [
+        'reservations',
+        'plots',
+        'notifications',
+        'dashboard',
+        'audit',
+        ...(isPurchase ? (['contracts'] as const) : []),
+      ],
+      this.reservationRooms(targetUserId),
+    );
+    return result;
   }
 
   private async createPurchaseContracts(
@@ -639,8 +673,10 @@ Thời hạn và thời điểm có hiệu lực được ghi tại phần ký k
     adminNote?: string,
     context?: AdminRequestContext,
   ) {
-    return this.database.transaction(async (client) => {
+    let targetUserId: number | undefined;
+    const result = await this.database.transaction(async (client) => {
       const request = await this.lockRequest(client, id);
+      targetUserId = request.user_id;
       this.assertPendingDecision(request.status, 'rejected');
       const plots = await this.lockRequestPlots(client, id);
       const plotIds = plots.map((plot) => plot.id);
@@ -695,6 +731,11 @@ Thời hạn và thời điểm có hiệu lực được ghi tại phần ký k
         notificationCreated: true,
       };
     });
+    this.publishRealtime(
+      ['reservations', 'plots', 'notifications', 'dashboard', 'audit'],
+      this.reservationRooms(targetUserId),
+    );
+    return result;
   }
 
   async cancelApprovedReserve(
@@ -707,8 +748,10 @@ Thời hạn và thời điểm có hiệu lực được ghi tại phần ký k
     if (!reason) {
       throw new BadRequestException('Vui lòng nhập lý do hủy giữ chỗ');
     }
-    return this.database.transaction(async (client) => {
+    let targetUserId: number | undefined;
+    const result = await this.database.transaction(async (client) => {
       const request = await this.lockRequest(client, id);
+      targetUserId = request.user_id;
       if (request.request_type !== 'reserve') {
         throw new BadRequestException(
           'Yêu cầu mua lô phải được xử lý qua quy trình hủy hợp đồng',
@@ -777,6 +820,36 @@ Thời hạn và thời điểm có hiệu lực được ghi tại phần ký k
         notificationCreated: true,
       };
     });
+    this.publishRealtime(
+      [
+        'reservations',
+        'plots',
+        'appointments',
+        'notifications',
+        'dashboard',
+        'audit',
+      ],
+      this.reservationRooms(targetUserId),
+    );
+    return result;
+  }
+
+  private reservationRooms(userId?: number): RealtimeRoom[] {
+    return userId && Number.isInteger(userId) && userId > 0
+      ? ['admin', `user:${userId}`]
+      : ['admin'];
+  }
+
+  private publishRealtime(
+    topics: readonly RealtimeTopic[],
+    rooms: readonly RealtimeRoom[],
+  ) {
+    try {
+      this.realtime?.publish(topics, rooms);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`Realtime reservation publication failed: ${message}`);
+    }
   }
 
   private assertUniquePlotIds(plotIds: number[]) {

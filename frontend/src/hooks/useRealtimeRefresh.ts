@@ -1,11 +1,14 @@
 import { useEffect, useRef } from "react";
 import {
-  onRealtimeReconnect,
+  onRealtimeConnect,
+  onRealtimeConnectionChange,
   onRealtimeUpdate,
   type RealtimeTopic,
 } from "@/lib/realtime";
 
 type Refresh = () => void | Promise<void>;
+
+export const DISCONNECTED_REFRESH_MS = 30_000;
 
 /**
  * Refreshes mounted data after a matching server event. Bursts are collapsed
@@ -15,6 +18,7 @@ export function useRealtimeRefresh(
   topics: readonly RealtimeTopic[],
   refresh: Refresh,
   debounceMs = 120,
+  disconnectedRefreshMs = DISCONNECTED_REFRESH_MS,
 ) {
   const refreshRef = useRef(refresh);
   const timerRef = useRef<number | null>(null);
@@ -30,6 +34,7 @@ export function useRealtimeRefresh(
     const topicSet = new Set<RealtimeTopic>(
       topicKey ? (topicKey.split("|") as RealtimeTopic[]) : [],
     );
+    let fallbackInterval: number | null = null;
 
     const run = async () => {
       timerRef.current = null;
@@ -61,14 +66,33 @@ export function useRealtimeRefresh(
     const removeUpdateListener = onRealtimeUpdate((update) => {
       if (update.topics.some((topic) => topicSet.has(topic))) schedule();
     });
-    const removeReconnectListener = onRealtimeReconnect(schedule);
+    const removeConnectListener = onRealtimeConnect(schedule);
+    const removeConnectionListener = onRealtimeConnectionChange(
+      (isConnected) => {
+        if (isConnected) {
+          if (fallbackInterval !== null) {
+            window.clearInterval(fallbackInterval);
+            fallbackInterval = null;
+          }
+          return;
+        }
+        if (fallbackInterval === null && disconnectedRefreshMs > 0) {
+          fallbackInterval = window.setInterval(
+            schedule,
+            disconnectedRefreshMs,
+          );
+        }
+      },
+    );
 
     return () => {
       removeUpdateListener();
-      removeReconnectListener();
+      removeConnectListener();
+      removeConnectionListener();
       if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+      if (fallbackInterval !== null) window.clearInterval(fallbackInterval);
       timerRef.current = null;
       pendingRef.current = false;
     };
-  }, [debounceMs, topicKey]);
+  }, [debounceMs, disconnectedRefreshMs, topicKey]);
 }

@@ -23,12 +23,15 @@ Use `Authorization: Bearer <accessToken>` for protected endpoints.
 
 ## Real-time invalidation
 
-Socket.IO uses the same host as the API with namespace `/realtime` and
-WebSocket transport. Pass the access token in the handshake when available:
+Socket.IO uses the same host as the API with namespace `/realtime`. Clients
+prefer WebSocket and automatically fall back to HTTP long-polling when a local
+proxy or production gateway does not support WebSocket upgrade. Pass the access
+token in the handshake when available:
 
 ```ts
 io('http://localhost:3001/realtime', {
-  transports: ['websocket'],
+  transports: ['websocket', 'polling'],
+  tryAllTransports: true,
   auth: { token: accessToken },
 })
 ```
@@ -47,8 +50,11 @@ The server emits `realtime:update` after a successful committed mutation:
 ```
 
 The payload is an invalidation hint, not business data. Clients reload only the
-mounted REST resource matching a topic and must resynchronize after reconnect.
-Session revocation is emitted separately as `realtime:session-revoked`.
+mounted REST resource matching a topic and resynchronize after every connect or
+reconnect. The web client performs a slow REST refresh only while both realtime
+transports are disconnected, then stops that fallback as soon as Socket.IO is
+connected again. Session revocation is emitted separately as
+`realtime:session-revoked`.
 
 ## Auth
 
