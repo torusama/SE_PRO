@@ -1475,9 +1475,12 @@ export class AiAgentOrchestratorService {
       // planner proposals so one LLM-captured preference does not suppress
       // other explicit preferences from the same customer sentence. The merge
       // helper deduplicates by stable memoryKey and keeps planner output first.
+      const hasPlannerPreferenceProposal = (plan.memoryProposals ?? []).some(
+        (p) => p.memoryType === 'user_preference',
+      );
       plan.memoryProposals = this.mergeMemoryProposals(
         plan.memoryProposals,
-        recoveredPreferenceProposal,
+        hasPlannerPreferenceProposal ? undefined : recoveredPreferenceProposal,
       );
       // A click on the concrete "Đặt yêu cầu" action is stronger evidence
       // than an LLM guess about what the customer selected. Record that
@@ -4006,15 +4009,15 @@ ${JSON.stringify(options)}
     );
     if (!memoryKeys.length) return undefined;
     return memoryKeys.map((memoryKey) => ({
-        category: 'explicit_user_preference',
-        title: 'Sở thích người dùng',
-        content: this.redactSensitiveData(message).trim(),
-        memoryType: 'user_preference',
-        requestedScope: 'user',
-        memoryKey,
-        reason:
-          'The user explicitly stated a reusable first-person preference in the current message.',
-      }));
+      category: 'explicit_user_preference',
+      title: 'Sở thích người dùng',
+      content: this.redactSensitiveData(message).trim(),
+      memoryType: 'user_preference',
+      requestedScope: 'user',
+      memoryKey,
+      reason:
+        'The user explicitly stated a reusable first-person preference in the current message.',
+    }));
   }
 
   private inferReliableMemoryKeys(
@@ -4416,7 +4419,7 @@ ${JSON.stringify(options)}
       };
     }
 
-    if (/^(?:cham soc)(?:\s+(?:a|ha|nha|nhe|di))?$/.test(folded)) {
+    if (/^(?:dich vu|cham soc)(?:\s+(?:a|ha|nha|nhe|di))?$/.test(folded)) {
       return {
         assistantMessage:
           'Bạn muốn xem danh sách dịch vụ hiện có hay cần mình tư vấn dịch vụ phù hợp với lô của gia đình?',
