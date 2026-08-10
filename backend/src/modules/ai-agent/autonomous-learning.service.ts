@@ -589,9 +589,10 @@ export class AutonomousLearningService {
                       model_version AS "modelVersion"
                FROM ai_recommendation_runs
                WHERE conversation_id = $1
+                 AND ($2::text IS NULL OR recommendation_run_id = $2)
                ORDER BY created_at DESC
                LIMIT 1`,
-              [context.conversationId],
+              [context.conversationId, proposal.recommendationRunId ?? null],
             )
           ).rows[0] ?? null)
         : null;
@@ -825,6 +826,10 @@ export class AutonomousLearningService {
       effectiveTo: this.optionalText(proposal.effectiveTo, 50),
       selectedOptionId: this.optionalText(proposal.selectedOptionId, 100),
       rejectedOptionId: this.optionalText(proposal.rejectedOptionId, 100),
+      recommendationRunId: this.optionalText(
+        proposal.recommendationRunId,
+        100,
+      ),
     };
   }
 

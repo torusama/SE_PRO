@@ -136,6 +136,21 @@ describe('AI Agent deterministic requirement extraction', () => {
     });
   });
 
+  it('extracts the complete appointment range and panel-provided topic', () => {
+    expect(
+      extractDeterministicRequirements(
+        'Mình muốn đặt lịch với ban quản lý vào ngày 2026-08-22, từ 14:30 đến 15:45. Nội dung: Trao đổi hợp đồng lô B-02-004.',
+      ),
+    ).toMatchObject({
+      selectedPlotCode: 'B-02-004',
+      appointmentDate: '2026-08-22',
+      appointmentStartTime: '14:30',
+      appointmentEndTime: '15:45',
+      appointmentTopic: 'Trao đổi hợp đồng lô B-02-004',
+      birthDate: undefined,
+    });
+  });
+
   it('extracts a memorial subject, recurrence and recipients for safe fallback', () => {
     expect(
       extractDeterministicRequirements(
@@ -323,6 +338,40 @@ describe('AI Agent regression routing helpers', () => {
         requestedScope: 'global',
       }),
     ]);
+  });
+
+  it('records a real recommendation-card selection as analytics without inferring a durable preference', () => {
+    const proposals = orchestrator.recoverClientActionLearningProposal({
+      type: 'START_PLOT_REQUEST',
+      optionId: 'OPT-002',
+      recommendationRunId: 'REC-OLDER-2',
+      plotIds: [11, 12],
+      plotCodes: ['B-01-011', 'B-01-012'],
+    });
+    expect(proposals).toEqual([
+      expect.objectContaining({
+        memoryType: 'recommendation_feedback',
+        requestedScope: 'user',
+        selectedOptionId: 'OPT-002',
+        recommendationRunId: 'REC-OLDER-2',
+      }),
+    ]);
+    expect(proposals?.[0]).not.toHaveProperty('memoryKey');
+    expect(proposals?.[0]).not.toHaveProperty('rejectedOptionId');
+  });
+
+  it('recovers every explicit reusable preference from one customer message', () => {
+    const proposals = orchestrator.recoverExplicitUserPreferenceProposal(
+      'Từ giờ nhớ giúp mình ngân sách tối đa 300 triệu, ưu tiên khu B, hướng Đông và lô gần cổng.',
+    );
+    expect(proposals?.map((item: { memoryKey?: string }) => item.memoryKey)).toEqual(
+      expect.arrayContaining([
+        'maximum_budget',
+        'preferred_zone',
+        'preferred_direction',
+        'preferred_plot_location',
+      ]),
+    );
   });
 
   it('treats a saved-budget question as memory lookup instead of plot discovery', () => {

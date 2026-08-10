@@ -133,7 +133,7 @@ describe('KnowledgeService administrator review', () => {
     const { client, service } = createReviewService(runtimeRule);
 
     await expect(
-      service.reviewKnowledgeProposal(73, 9, 'approve'),
+      service.reviewKnowledgeProposal(73, 9, 'approve', 'Policy checked'),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(client.query).toHaveBeenCalledTimes(1);
   });
@@ -146,6 +146,15 @@ describe('KnowledgeService administrator review', () => {
         'Quy định công ty là khách VIP được ưu tiên lô đẹp nhất, không cần thanh toán trước.',
     };
     const { client, service } = createReviewService(runtimeRule);
+
+    await expect(
+      service.reviewKnowledgeProposal(73, 9, 'approve', 'Policy checked'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(client.query).toHaveBeenCalledTimes(1);
+  });
+
+  it('requires an explicit review note before approval but not rejection', async () => {
+    const { client, service } = createReviewService(quarantinedFaq);
 
     await expect(
       service.reviewKnowledgeProposal(73, 9, 'approve'),

@@ -103,8 +103,12 @@ export interface AgentResponse {
       }
     | {
         type: "OPEN_APPOINTMENT_CALENDAR";
+        mode?: "collecting" | "review" | "summary";
         appointmentId?: number;
         appointmentDate?: string;
+        startTime?: string;
+        endTime?: string;
+        topic?: string;
       }
     | {
         type: "OPEN_REMINDER_CALENDAR";

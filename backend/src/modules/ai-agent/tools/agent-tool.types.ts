@@ -36,6 +36,7 @@ export interface MemoryProposal {
   effectiveTo?: string;
   selectedOptionId?: string;
   rejectedOptionId?: string;
+  recommendationRunId?: string;
 }
 
 export type AutonomousLearningStatus =

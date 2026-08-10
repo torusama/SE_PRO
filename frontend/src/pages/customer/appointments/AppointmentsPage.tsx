@@ -5,6 +5,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import { formatCalendarDate } from "@/lib/utils";
 import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
@@ -99,6 +100,9 @@ function getErrorMessage(error: unknown, fallback: string) {
 }
 
 export default function AppointmentsPage() {
+  const [searchParams] = useSearchParams();
+  const focusedAppointmentId =
+    Number(searchParams.get("appointment")) || null;
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [date, setDate] = useState("");
   const [startTime, setStartTime] = useState("09:00");
@@ -129,6 +133,10 @@ export default function AppointmentsPage() {
   }, [loadAppointments]);
 
   useRealtimeRefresh(["appointments"], loadAppointments);
+
+  useEffect(() => {
+    if (focusedAppointmentId) setFilter("all");
+  }, [focusedAppointmentId]);
 
   useEffect(() => {
     const nodes = document.querySelectorAll<HTMLElement>(
@@ -186,6 +194,16 @@ export default function AppointmentsPage() {
       return ["completed", "cancelled"].includes(appointment.status);
     });
   }, [filter, sortedAppointments]);
+
+  useEffect(() => {
+    if (!focusedAppointmentId || loading) return;
+    const timer = window.setTimeout(() => {
+      document
+        .getElementById(`appointment-${focusedAppointmentId}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [focusedAppointmentId, loading, visibleAppointments.length]);
 
   const summary = useMemo(() => {
     const pending = appointments.filter(
@@ -497,7 +515,8 @@ export default function AppointmentsPage() {
                   return (
                     <article
                       key={appointment.id}
-                      className="appointment-card"
+                      id={`appointment-${appointment.id}`}
+                      className={`appointment-card${appointment.id === focusedAppointmentId ? " is-agent-highlighted" : ""}`}
                       data-appointment-reveal
                       style={{
                         transitionDelay: `${Math.min(index, 6) * 55}ms`,

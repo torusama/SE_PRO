@@ -169,6 +169,12 @@ const knowledgeStatusLabel = (value: string) =>
 
 const feedbackTypeLabel = (value: string) =>
   ({
+    helpful: "Phản hồi hữu ích",
+    bad_recommendation: "Đề xuất lô chưa phù hợp",
+    wrong_information: "Báo thông tin chưa chính xác",
+    irrelevant_answer: "Câu trả lời chưa đúng trọng tâm",
+    other: "Phản hồi khác",
+    // Legacy values kept so older rows still render cleanly.
     correction: "Đề nghị sửa câu trả lời",
     positive: "Phản hồi tích cực",
     negative: "Phản hồi chưa hài lòng",
@@ -358,20 +364,27 @@ export default function AgentAdminPage() {
     action: "approve" | "reject",
   ) => {
     const reviewNote = knowledgeReviewNotes[item.knowledgeEntryId]?.trim();
-    if (!reviewNote || reviewNote.length < 5) {
-      setError("Vui lòng ghi căn cứ kiểm duyệt tri thức, tối thiểu 5 ký tự.");
+    if (action === "approve" && (!reviewNote || reviewNote.length < 5)) {
+      setError(
+        "Vui lòng ghi căn cứ trước khi kích hoạt tri thức, tối thiểu 5 ký tự.",
+      );
+      return;
+    }
+    if (action === "reject" && reviewNote && reviewNote.length < 5) {
+      setError(
+        "Nếu ghi lý do từ chối, vui lòng nhập tối thiểu 5 ký tự hoặc để trống.",
+      );
       return;
     }
     const label = action === "approve" ? "Duyệt và kích hoạt" : "Từ chối";
     if (!window.confirm(`${label} đề xuất tri thức này?`)) return;
 
     setBusy(`knowledge-${item.knowledgeEntryId}`);
+    setError(undefined);
     try {
       await api.patch(
         `/admin/ai-agent/knowledge/${item.knowledgeEntryId}/${action}`,
-        {
-          reviewNote,
-        },
+        reviewNote ? { reviewNote } : {},
       );
       setKnowledgeReviewNotes((current) => {
         const next = { ...current };
@@ -379,9 +392,19 @@ export default function AgentAdminPage() {
         return next;
       });
       await loadData();
-    } catch {
+    } catch (error) {
+      const responseMessage =
+        typeof error === "object" &&
+        error !== null &&
+        "response" in error &&
+        typeof (error as { response?: { data?: { message?: unknown } } }).response
+          ?.data?.message === "string"
+          ? (error as { response: { data: { message: string } } }).response.data
+              .message
+          : undefined;
       setError(
-        "Không thể duyệt tri thức. Nội dung vẫn ở trạng thái chờ xác minh.",
+        responseMessage ||
+          "Không thể cập nhật trạng thái tri thức. Vui lòng thử lại hoặc kiểm tra log backend.",
       );
     } finally {
       setBusy(undefined);
@@ -391,7 +414,7 @@ export default function AgentAdminPage() {
   const trainPlotRanker = async () => {
     if (
       !window.confirm(
-        "Tạo phiên bản thử nghiệm của bộ xếp hạng từ các mẫu đầy đủ đã được duyệt? Mô hình hội thoại nền sẽ không thay đổi.",
+        "Tạo phiên bản thử nghiệm của bộ xếp hạng? Các tín hiệu lựa chọn đầy đủ (có phương án chọn và loại) sẽ được chuyển thành mẫu huấn luyện tại bước quản trị này. Mô hình hội thoại nền sẽ không thay đổi và bản xếp hạng mới vẫn phải được triển khai riêng sau khi đạt kiểm tra.",
       )
     )
       return;
@@ -400,9 +423,16 @@ export default function AgentAdminPage() {
       await api.post("/admin/ai-agent/retrain", {});
       await loadData();
       setTab("ranker");
-    } catch {
+    } catch (error: unknown) {
+      const responseMessage =
+        typeof (error as { response?: { data?: { message?: unknown } } }).response
+          ?.data?.message === "string"
+          ? (error as { response: { data: { message: string } } }).response.data
+              .message
+          : undefined;
       setError(
-        "Không thể tạo bản xếp hạng thử nghiệm. Dữ liệu đang dùng không bị thay đổi.",
+        responseMessage ||
+          "Không thể tạo bản xếp hạng thử nghiệm. Dữ liệu đang dùng không bị thay đổi.",
       );
     } finally {
       setBusy(undefined);

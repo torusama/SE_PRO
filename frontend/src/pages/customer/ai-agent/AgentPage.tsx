@@ -643,6 +643,7 @@ export default function AgentPage() {
         | {
             type: "START_PLOT_REQUEST";
             optionId: string;
+            recommendationRunId?: string;
             plotIds: number[];
             plotCodes: string[];
           }
@@ -853,7 +854,10 @@ export default function AgentPage() {
     navigate(buildFullMapUrl(ROUTES.MAP, option));
   }
 
-  function startPlotRequest(option: AgentRecommendation) {
+  function startPlotRequest(
+    option: AgentRecommendation,
+    recommendationRunId?: string,
+  ) {
     if (!token || role !== "customer") {
       sessionStorage.setItem(
         "ai-agent-pending-action",
@@ -873,6 +877,7 @@ export default function AgentPage() {
         clientAction: {
           type: "START_PLOT_REQUEST",
           optionId: option.optionId,
+          recommendationRunId,
           plotIds: option.plotIds,
           plotCodes: option.plotCodes,
         },
@@ -1247,6 +1252,7 @@ export default function AgentPage() {
           {workflowDirective && (
             <AgentWorkflowPanel
               directive={workflowDirective}
+              onSendMessage={(message) => sendMessage(message)}
               onDirectiveChange={(directive) => {
                 setWorkflowDirective(directive);
                 setMapOpen(false);

@@ -34,11 +34,10 @@ export function isGroundedRecommendationNarrative(
   )) {
     if (Number(match[1]) > result.recommendations.length) return false;
   }
-  if (
-    !result.baziSuggestion &&
-    /\b(?:bazi|phong\s*thủy|may\s*mắn|tài\s*lộc|vượng)\b/i.test(content)
-  ) {
-    return false;
+  if (!result.baziSuggestion) {
+    const unsupportedSpiritualClaim =
+      /(?:\b(?:bazi|phong\s*thủy)\b.{0,80}\b(?:hợp(?:\s+mệnh)?|phù\s+hợp|khắc|tốt|xấu|cát|hung|may\s*mắn|tài\s*lộc|vượng|mang\s+lại|đem\s+lại)\b|\b(?:may\s*mắn|tài\s*lộc|vượng)\b)/isu;
+    if (unsupportedSpiritualClaim.test(content)) return false;
   }
   if (
     /sẵn\s+sàng\s+(?:để\s+)?(?:đặt\s+cọc|mua)|có\s+thể\s+đặt\s+cọc\s+ngay/i.test(
@@ -58,7 +57,7 @@ export function isConsultativeRecommendationNarrative(
   if (!result.recommendations.length) return true;
 
   const wordCount = content.trim().split(/\s+/u).filter(Boolean).length;
-  const minimumWords = result.recommendations.length > 1 ? 100 : 70;
+  const minimumWords = result.recommendations.length > 1 ? 170 : 110;
   if (wordCount < minimumWords) return false;
 
   const coversEveryOption = result.recommendations.every((option) =>

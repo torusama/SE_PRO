@@ -468,7 +468,13 @@ export class AgentBookingService {
         handled: true,
         intent: 'appointment_booking',
         pendingAction: pending,
-        uiDirective: { type: 'OPEN_APPOINTMENT_CALENDAR' },
+        uiDirective: {
+          type: 'OPEN_APPOINTMENT_CALENDAR',
+          mode: 'collecting',
+          startTime: pending.startTime,
+          endTime: pending.endTime,
+          topic: pending.topic,
+        },
         assistantMessage:
           'Bạn muốn gặp ban quản lý vào ngày nào? Mình sẽ mở lịch để bạn chọn ngày phù hợp.',
       };
@@ -482,7 +488,11 @@ export class AgentBookingService {
         pendingAction: pending,
         uiDirective: {
           type: 'OPEN_APPOINTMENT_CALENDAR',
+          mode: 'collecting',
           appointmentDate: pending.appointmentDate,
+          startTime: pending.startTime,
+          endTime: pending.endTime,
+          topic: pending.topic,
         },
         assistantMessage: `Bạn muốn gặp ban quản lý lúc mấy giờ ngày **${pending.appointmentDate}**?`,
       };
@@ -508,7 +518,11 @@ export class AgentBookingService {
       pendingAction: pending,
       uiDirective: {
         type: 'OPEN_APPOINTMENT_CALENDAR',
+        mode: 'review',
         appointmentDate: pending.appointmentDate,
+        startTime: pending.startTime,
+        endTime: pending.endTime,
+        topic: subject,
       },
       assistantMessage: [
         'Mình đã chuẩn bị lịch hẹn với ban quản lý:',
@@ -693,8 +707,12 @@ export class AgentBookingService {
         assistantMessage: `Đã gửi yêu cầu đặt lịch${id ? ` **#${id}**` : ''} với ban quản lý vào **${pending.startTime}–${pending.endTime}, ngày ${pending.appointmentDate}**. Lịch đang chờ ban quản lý xác nhận.`,
         uiDirective: {
           type: 'OPEN_APPOINTMENT_CALENDAR',
+          mode: 'summary',
           appointmentId: id,
           appointmentDate: pending.appointmentDate,
+          startTime: pending.startTime,
+          endTime: pending.endTime,
+          topic,
         },
       };
     }
@@ -894,7 +912,7 @@ export class AgentBookingService {
     return {
       handled: true,
       intent: 'service_booking',
-      assistantMessage: `${(result as { reused?: boolean }).reused ? 'Đơn này đã được ghi nhận trước đó' : 'Đã gửi đơn dịch vụ'}${id ? ` **#${id}**` : ''} **${pending.serviceName ?? ''}** cho lô **${pending.plotCode}**${dateText}. Mình đã mở panel **Đã đặt → Thanh toán → Chọn lịch** ở bên phải. Sau khi bạn xác nhận đã thanh toán, panel sẽ tự chuyển sang lịch và tô sẵn ngày mong muốn để bạn kiểm tra hoặc đổi ngày.`,
+      assistantMessage: `${(result as { reused?: boolean }).reused ? 'Đơn này đã được ghi nhận trước đó' : 'Đã gửi đơn dịch vụ'}${id ? ` **#${id}**` : ''} **${pending.serviceName ?? ''}** cho lô **${pending.plotCode}**${dateText}. Mình đã mở panel **Đã đặt → Thanh toán → Chọn lịch** ở bên phải. Sau khi bạn báo đã chuyển khoản, hệ thống sẽ ghi nhận trạng thái chờ xác minh; panel sẽ tự chuyển sang lịch và tô sẵn ngày mong muốn để bạn kiểm tra hoặc đổi ngày.`,
       uiDirective: {
         type: 'SHOW_INLINE_SERVICE_PAYMENT',
         serviceTypeId: pending.serviceTypeId,

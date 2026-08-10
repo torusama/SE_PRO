@@ -117,21 +117,21 @@ Persistent user memory remains isolated by `owner_user_id`; one customer's priva
 
 Semantic RAG follows the safe retrieval design from the learning architecture:
 
-- Migration `024_ai_knowledge_embeddings.sql` introduced the original vector column; migration `025_switch_rag_to_nvidia_bge_m3.sql` upgrades it to `VECTOR(1024)`, clears incompatible old vectors, and lets the startup backfill recreate them with NVIDIA NIM BGE-M3.
+- Migration `024_ai_knowledge_embeddings.sql` introduced the original vector column; migration `025_switch_rag_to_nvidia_bge_m3.sql` upgrades it to `VECTOR(1024)` and clears incompatible old vectors. The current runtime then recreates missing vectors with the configured NVIDIA NIM embedding model.
 - Only `is_active=TRUE` + `validation_status='active'` knowledge is eligible for vector retrieval. Raw `ai_messages`, quarantined proposals, and unapproved corrections are never placed into RAG.
 - Retrieval first applies hard filters (`scope`, `owner_user_id`, active/effective dates, and the exact embedding model), then ranks the safe candidate pool by cosine distance. User memory and verified global knowledge remain separate prompt sections.
 - The current user question is embedded as `input_type=query`; stored memory/knowledge is embedded as `input_type=passage`. This is important for NVIDIA Retriever embedding models and improves semantic retrieval quality. A direct “what do you remember about me?” request skips both the external embedding call and the LLM, and reads active user memory exactly from PostgreSQL. Memory state is authoritative backend data, so the model is not allowed to guess what was saved. This also makes that check return quickly even when NVIDIA is slow or unavailable.
-- The default embedding model is `baai/bge-m3` through NVIDIA NIM. It is multilingual and returns fixed 1024-dimensional dense vectors, which is a better fit for Vietnamese user conversations than the previous OpenAI-only prototype.
+- The current default embedding model is `nvidia/llama-nemotron-embed-1b-v2` through NVIDIA NIM and the RAG store remains pinned to 1024-dimensional dense vectors. The model can be overridden with `AI_EMBEDDING_MODEL` only when its output remains compatible with the configured pgvector dimension.
 - If the embedding API, pgvector extension, vector dimension, or vector query is unavailable, the same request immediately falls back to the existing structured SQL memory retrieval. RAG failure never blocks the primary Agent workflow.
 - The migration runner treats the two pgvector-only migrations as optional. On a PostgreSQL host that does not expose the `vector` extension, it defers only those migrations, continues independent schema migrations, and retries them automatically on later startups if the extension becomes available. It does not write deferred migrations into `schema_migrations`, so no checksum or feature state is faked.
-- Existing active knowledge can be backfilled at startup in a small low-priority batch. Startup backfill is delayed 15 seconds and defaults to only 5 rows so it does not compete with the first chat requests. New validated user memory and newly activated verified knowledge are embedded after the database transaction commits; embedding is non-blocking for persistence.
+- Existing active knowledge can be backfilled at startup in small low-priority batches. Startup backfill is delayed 15 seconds, processes 5 rows per batch by default, and drains up to 25 missing active entries per startup window so older KB rows are not permanently left outside semantic retrieval. New validated user memory and newly activated verified knowledge are embedded after the database transaction commits; embedding is non-blocking for persistence.
 
 Embedding configuration (no extra OpenAI key required):
 
 ```env
 AI_RAG_ENABLED=true
 AI_EMBEDDING_API_BASE_URL=https://integrate.api.nvidia.com/v1
-AI_EMBEDDING_MODEL=baai/bge-m3
+AI_EMBEDDING_MODEL=nvidia/llama-nemotron-embed-1b-v2
 AI_EMBEDDING_DIMENSION=1024
 AI_EMBEDDING_TIMEOUT_MS=1000
 AI_EMBEDDING_TOTAL_TIMEOUT_MS=1400
@@ -140,11 +140,12 @@ AI_RAG_USER_LIMIT=8
 AI_RAG_GLOBAL_LIMIT=6
 AI_RAG_BACKFILL_ON_STARTUP=true
 AI_RAG_BACKFILL_BATCH_SIZE=5
+AI_RAG_BACKFILL_MAX_ENTRIES=25
 ```
 
 By default the embedding client reuses the existing `NVIDIA_API_KEY` / `NVIDIA_API_KEYS` pool, including the legacy multiline wrapped format. `AI_EMBEDDING_API_KEY` / `AI_EMBEDDING_API_KEYS` remain optional overrides only if you intentionally want a separate NVIDIA NIM key pool for embedding requests.
 
-The "self-learning" system is intentionally not foundation-model self-training. It is a controlled continual-learning pipeline: the LLM proposes memories/signals, backend code validates and persists them, approved knowledge becomes retrievable context, recommendation feedback becomes `ai_learning_signals`, and PlotRanker training still creates a candidate model that must pass the metric gate and be explicitly activated by an administrator. This keeps audit/version/rollback behavior intact.
+The "self-learning" system is intentionally not foundation-model self-training. It is a controlled continual-learning pipeline: the LLM proposes memories/signals, backend code validates and persists them, approved knowledge becomes retrievable context, and recommendation feedback becomes `ai_learning_signals`. Complete pairwise recommendation signals are converted into positive/negative `ai_training_samples` only when an authenticated administrator explicitly starts PlotRanker retraining. Training creates a candidate model that must pass the metric gate and still be explicitly activated by an administrator. This keeps audit/version/rollback behavior intact while making the learning-signal pipeline usable.
 
 Email is sent from a personal Gmail account through the Gmail HTTPS API. Enable
 the Gmail API in Google Cloud, create an OAuth client of type `Desktop app`, set

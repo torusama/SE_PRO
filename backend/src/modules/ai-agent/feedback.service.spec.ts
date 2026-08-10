@@ -119,6 +119,40 @@ describe('FeedbackService learning review', () => {
     expect(knowledge.applyApprovedCorrection).toHaveBeenCalledWith(7, 9);
   });
 
+
+  it('restores feedback to pending when applying an approved correction fails', async () => {
+    const { client, database, knowledge, service } = createService();
+    client.query
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            feedback_type: 'correction',
+            validation_status: 'pending',
+            corrected_content: 'Verified correction',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [{ feedbackId: 7, status: 'approved' }],
+      });
+    knowledge.applyApprovedCorrection.mockRejectedValueOnce(
+      new Error('knowledge write failed'),
+    );
+    database.query.mockResolvedValueOnce([]);
+
+    await expect(
+      service.review(7, 9, 'approve', {
+        reviewNote: 'Evidence checked',
+        applyCorrection: true,
+      }),
+    ).rejects.toThrow('knowledge write failed');
+
+    expect(database.query).toHaveBeenCalledWith(
+      expect.stringContaining("SET validation_status = 'pending'"),
+      [7],
+    );
+  });
+
   it('records rejection without applying a correction', async () => {
     const { client, knowledge, service } = createService();
     client.query

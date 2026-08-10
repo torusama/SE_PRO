@@ -616,7 +616,7 @@ export class PlotRecommendationService {
         : `Giá niêm yết ${plotCost.toLocaleString('vi-VN')} VND từ dữ liệu lô đang trống`,
       plots.length > 1
         ? `${plots.length} lô tạo thành một nhóm liền kề hợp lệ`
-        : 'Lô đang ở trạng thái sẵn sàng',
+        : 'Lô đang được hệ thống ghi nhận là còn trống tại thời điểm tìm kiếm',
       ...(plots.every((plot) => plot.plotType === 'family')
         ? ['Đúng loại lô family dành cho gia đình hoặc dòng tộc']
         : []),

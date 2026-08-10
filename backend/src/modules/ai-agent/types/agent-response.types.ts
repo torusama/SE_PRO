@@ -62,8 +62,18 @@ export type AgentUiDirective =
     }
   | {
       type: 'OPEN_APPOINTMENT_CALENDAR';
+      /**
+       * collecting: the side panel should collect/adjust date and time.
+       * review: the appointment is complete but still waiting for explicit user confirmation.
+       * summary: the appointment request has already been created.
+       * Optional for backward compatibility with stored conversations.
+       */
+      mode?: 'collecting' | 'review' | 'summary';
       appointmentId?: number;
       appointmentDate?: string;
+      startTime?: string;
+      endTime?: string;
+      topic?: string;
     }
   | {
       type: 'OPEN_REMINDER_CALENDAR';
