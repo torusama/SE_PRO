@@ -1120,7 +1120,7 @@ const pageStyles = `
     overflow: hidden;
     border: 1px solid rgba(208, 182, 111, 0.16);
     border-radius: 12px;
-    background: linear-gradient(135deg, rgba(18, 28, 38, 0.94), rgba(11, 20, 30, 0.92));
+    background: linear-gradient(160deg, rgba(13, 27, 56, 0.62) 0%, rgba(5, 7, 26, 0.68) 100%);
   }
 
   .lots-appointment-summary,
@@ -1136,7 +1136,7 @@ const pageStyles = `
   }
 
   .lots-appointment-booking {
-    border-left: 1px solid rgba(155, 187, 177, 0.11);
+    border-left: 1px solid rgba(96, 130, 189, 0.11);
     background: rgba(7, 15, 24, 0.48);
   }
 
@@ -1279,7 +1279,7 @@ const pageStyles = `
 
   .lots-appointment-actions button {
     min-height: 39px;
-    border: 1px solid rgba(155, 187, 177, 0.17);
+    border: 1px solid rgba(96, 130, 189, 0.17);
     border-radius: 8px;
     background: rgba(255, 255, 255, 0.035);
     color: #bac8c4;
@@ -1292,7 +1292,7 @@ const pageStyles = `
 
   .lots-appointment-actions button:hover:not(:disabled) {
     transform: translateY(-1px);
-    border-color: rgba(155, 187, 177, 0.32);
+    border-color: rgba(96, 130, 189, 0.32);
     color: #eef5f2;
     background: rgba(255, 255, 255, 0.06);
   }
@@ -1342,7 +1342,7 @@ const pageStyles = `
     justify-content: space-between;
     gap: 32px;
     padding: 0 0 30px;
-    border-bottom: 1px solid rgba(155, 187, 177, 0.14);
+    border-bottom: 1px solid rgba(96, 130, 189, 0.14);
   }
 
   .lots-hero-copy {
@@ -1443,7 +1443,7 @@ const pageStyles = `
     margin: 22px 0 24px;
     padding: 6px;
     overflow-x: auto;
-    border: 1px solid rgba(155, 187, 177, 0.12);
+    border: 1px solid rgba(96, 130, 189, 0.12);
     border-radius: 11px;
     background: rgba(11, 18, 27, 0.76);
     scrollbar-width: none;
@@ -1497,8 +1497,8 @@ const pageStyles = `
   .lots-service-card,
   .lots-empty,
   .lots-loading-card {
-    border: 1px solid rgba(155, 187, 177, 0.12);
-    background: #0a111a;
+    border: 1px solid rgba(96, 130, 189, 0.16);
+    background: linear-gradient(160deg, rgba(13, 27, 56, 0.6) 0%, rgba(5, 7, 26, 0.66) 100%);
   }
 
   .lots-summary-card {
@@ -1513,8 +1513,8 @@ const pageStyles = `
 
   .lots-summary-card:hover {
     transform: translateY(-2px);
-    border-color: rgba(155, 187, 177, 0.22);
-    background: #0c141e;
+    border-color: rgba(96, 130, 189, 0.3);
+    background: linear-gradient(160deg, rgba(18, 34, 68, 0.66) 0%, rgba(7, 10, 30, 0.72) 100%);
   }
 
   .lots-summary-card > span {
@@ -1555,7 +1555,7 @@ const pageStyles = `
     border-radius: 11px;
     background:
       linear-gradient(145deg, rgba(202, 170, 100, 0.08), transparent 58%),
-      #0b1119;
+      linear-gradient(160deg, rgba(13, 27, 56, 0.6) 0%, rgba(5, 7, 26, 0.66) 100%);
   }
 
   .lots-attention-card h2 {
@@ -1673,8 +1673,8 @@ const pageStyles = `
   .lots-contract-card:hover,
   .lots-service-card:hover {
     transform: translateY(-2px);
-    border-color: rgba(155, 187, 177, 0.23);
-    background-color: #0c141e;
+    border-color: rgba(96, 130, 189, 0.3);
+    background: linear-gradient(160deg, rgba(18, 34, 68, 0.66) 0%, rgba(7, 10, 30, 0.72) 100%);
   }
 
   .lots-request-main {
@@ -1688,7 +1688,7 @@ const pageStyles = `
     flex-direction: column;
     justify-content: space-between;
     padding: 20px;
-    border-right: 1px solid rgba(155, 187, 177, 0.1);
+    border-right: 1px solid rgba(96, 130, 189, 0.1);
     background: rgba(14, 24, 34, 0.52);
   }
 
@@ -1780,13 +1780,13 @@ const pageStyles = `
     align-items: center;
     margin: 0 18px 18px;
     padding: 16px 18px;
-    border: 1px solid rgba(155, 187, 177, 0.1);
+    border: 1px solid rgba(96, 130, 189, 0.1);
     border-radius: 10px;
     background: rgba(125, 164, 152, 0.035);
   }
 
   .lots-next-step-muted {
-    border-color: rgba(155, 187, 177, 0.11);
+    border-color: rgba(96, 130, 189, 0.11);
     background: rgba(125, 164, 152, 0.035);
   }
 
@@ -1851,7 +1851,7 @@ const pageStyles = `
     gap: 16px 20px;
     margin: 22px 0;
     padding: 16px;
-    border: 1px solid rgba(155, 187, 177, 0.09);
+    border: 1px solid rgba(96, 130, 189, 0.09);
     border-radius: 9px;
     background: rgba(16, 26, 36, 0.54);
   }
@@ -1859,7 +1859,7 @@ const pageStyles = `
   .lots-plot-panel > div:last-child:nth-child(3) {
     grid-column: 1 / -1;
     padding-top: 14px;
-    border-top: 1px solid rgba(155, 187, 177, 0.08);
+    border-top: 1px solid rgba(96, 130, 189, 0.08);
   }
 
   .lots-plot-panel strong {
@@ -1966,7 +1966,7 @@ const pageStyles = `
   .lots-service-details {
     margin-top: 26px;
     padding-top: 17px;
-    border-top: 1px solid rgba(155, 187, 177, 0.1);
+    border-top: 1px solid rgba(96, 130, 189, 0.1);
   }
 
   .lots-empty {
@@ -2115,7 +2115,7 @@ const pageStyles = `
       flex-direction: row;
       padding: 13px 17px;
       border-right: 0;
-      border-bottom: 1px solid rgba(155, 187, 177, 0.1);
+      border-bottom: 1px solid rgba(96, 130, 189, 0.1);
     }
 
     .lots-request-content,
@@ -2178,7 +2178,7 @@ const pageStyles = `
 
     .lots-plot-panel > div + div {
       padding-top: 12px;
-      border-top: 1px solid rgba(155, 187, 177, 0.08);
+      border-top: 1px solid rgba(96, 130, 189, 0.08);
     }
 
     .lots-plot-panel > div:last-child:nth-child(3) {
@@ -2223,7 +2223,7 @@ const pageStyles = `
     }
 
     .lots-appointment-booking {
-      border-top: 1px solid rgba(155, 187, 177, 0.11);
+      border-top: 1px solid rgba(96, 130, 189, 0.11);
       border-left: 0;
     }
   }

@@ -1065,7 +1065,7 @@
   display: flex;
 }
 .profile-page .modal-box {
-  background: var(--ink-deep);
+  background: var(--surface-blend);
   border: 1px solid var(--border-soft);
   border-radius: 14px;
   padding: 32px;
@@ -1227,7 +1227,16 @@
   --ink-deep: #0a1118;
   --surface: #0c151d;
   --surface-raised: #101a23;
-  --surface-soft: #081017;
+  --surface-soft: linear-gradient(
+    160deg,
+    rgba(16, 30, 60, 0.5) 0%,
+    rgba(6, 9, 26, 0.56) 100%
+  );
+  --surface-blend: linear-gradient(
+    160deg,
+    rgba(13, 27, 56, 0.6) 0%,
+    rgba(5, 7, 26, 0.66) 100%
+  );
   --teal-glow: #7bcfc0;
   --teal-soft: #69bdae;
   --teal-dim: #315f58;
@@ -1238,8 +1247,8 @@
   --text-main: #e4ece9;
   --text-muted: #8da39d;
   --text-subtle: #657b76;
-  --border-dim: rgba(141, 174, 166, 0.16);
-  --border-soft: rgba(123, 207, 192, 0.32);
+  --border-dim: rgba(96, 130, 189, 0.16);
+  --border-soft: rgba(96, 130, 189, 0.32);
   --border-gold: rgba(212, 173, 97, 0.28);
 
   min-height: calc(100vh - 72px);
@@ -1316,7 +1325,7 @@
   overflow: hidden;
   border: 1px solid var(--border-dim);
   border-radius: 14px;
-  background: var(--ink-deep);
+  background: var(--surface-blend);
   box-shadow: none;
   text-align: left;
 }
@@ -1399,7 +1408,7 @@
 .profile-page .stat-item {
   min-width: 0;
   padding: 10px 6px;
-  border: 1px solid rgba(141, 174, 166, 0.11);
+  border: 1px solid rgba(96, 130, 189, 0.11);
   border-radius: 9px;
   background: var(--surface-soft);
   text-align: center;
@@ -1447,7 +1456,7 @@
 }
 
 .profile-page .side-nav-item:hover {
-  border-color: rgba(141, 174, 166, 0.13);
+  border-color: rgba(96, 130, 189, 0.13);
   background: #0e1820;
   color: #dfe8e5;
 }
@@ -1529,7 +1538,7 @@
   padding: 26px;
   border: 1px solid var(--border-dim);
   border-radius: 14px;
-  background: var(--ink-deep);
+  background: var(--surface-blend);
   box-shadow: none;
 }
 
@@ -1545,7 +1554,7 @@
 .profile-page .panel-title::after {
   height: 1px;
   margin-left: 6px;
-  background: rgba(141, 174, 166, 0.13);
+  background: rgba(96, 130, 189, 0.13);
 }
 
 .profile-page .form-grid {
@@ -1572,7 +1581,7 @@
 .profile-page .modal-field select {
   min-height: 44px;
   padding: 10px 13px;
-  border: 1px solid rgba(141, 174, 166, 0.2);
+  border: 1px solid rgba(96, 130, 189, 0.2);
   border-radius: 9px;
   background: #071017;
   color: #e2ebe8;
@@ -1590,7 +1599,7 @@
 .profile-page .field textarea:hover,
 .profile-page .modal-field input:hover,
 .profile-page .modal-field select:hover {
-  border-color: rgba(141, 174, 166, 0.34);
+  border-color: rgba(96, 130, 189, 0.34);
 }
 
 .profile-page .field input:focus,
@@ -1652,7 +1661,7 @@
 
 .profile-page .id-card-btn.ghost,
 .profile-page .otp-btn.ghost {
-  border-color: rgba(141, 174, 166, 0.18);
+  border-color: rgba(96, 130, 189, 0.18);
   background: transparent;
   color: #9db0ab;
 }
@@ -1690,7 +1699,7 @@
 .profile-page .btn-mini,
 .profile-page .modal-btn-ghost,
 .profile-page .back-to-lots {
-  border: 1px solid rgba(141, 174, 166, 0.2);
+  border: 1px solid rgba(96, 130, 189, 0.2);
   border-radius: 8px;
   background: transparent;
   color: #a4b5b1;
@@ -1723,9 +1732,9 @@
 .profile-page .security-list {
   gap: 0;
   overflow: hidden;
-  border: 1px solid rgba(141, 174, 166, 0.15);
+  border: 1px solid rgba(96, 130, 189, 0.15);
   border-radius: 11px;
-  background: #081118;
+  background: var(--surface-blend);
 }
 
 .profile-page .contact-method,
@@ -1734,7 +1743,7 @@
   gap: 13px;
   padding: 14px 16px;
   border: 0;
-  border-bottom: 1px solid rgba(141, 174, 166, 0.12);
+  border-bottom: 1px solid rgba(96, 130, 189, 0.12);
   border-radius: 0;
   background: transparent;
 }
@@ -1837,7 +1846,7 @@
 }
 
 .profile-page .toggle-slider {
-  border-color: rgba(141, 174, 166, 0.22);
+  border-color: rgba(96, 130, 189, 0.22);
   background: #142029;
 }
 
@@ -1865,15 +1874,19 @@
 
 .profile-page .lot-card {
   padding: 18px;
-  border: 1px solid rgba(141, 174, 166, 0.16);
+  border: 1px solid rgba(96, 130, 189, 0.16);
   border-radius: 11px;
-  background: #081118;
+  background: var(--surface-blend);
   box-shadow: none;
 }
 
 .profile-page .lot-card:hover {
-  border-color: rgba(123, 207, 192, 0.35);
-  background: #0a151c;
+  border-color: rgba(96, 130, 189, 0.4);
+  background: linear-gradient(
+    160deg,
+    rgba(18, 34, 68, 0.66) 0%,
+    rgba(7, 10, 30, 0.72) 100%
+  );
 }
 
 .profile-page .lot-name {
@@ -1909,9 +1922,9 @@
 
 .profile-page .lot-detail-hero {
   padding: 25px;
-  border: 1px solid rgba(141, 174, 166, 0.18);
+  border: 1px solid rgba(96, 130, 189, 0.18);
   border-radius: 14px;
-  background: var(--ink-deep);
+  background: var(--surface-blend);
 }
 
 .profile-page .lot-detail-id {
@@ -1928,17 +1941,17 @@
 
 .profile-page .ld-stat {
   padding: 15px;
-  border: 1px solid rgba(141, 174, 166, 0.13);
+  border: 1px solid rgba(96, 130, 189, 0.13);
   border-radius: 10px;
-  background: #081118;
+  background: var(--surface-blend);
 }
 
 .profile-page .lot-action-btn {
   min-height: 72px;
   padding: 13px;
-  border-color: rgba(141, 174, 166, 0.16);
+  border-color: rgba(96, 130, 189, 0.16);
   border-radius: 10px;
-  background: #081118;
+  background: var(--surface-blend);
   color: #dbe6e2;
   font-family: inherit;
 }
@@ -1988,7 +2001,7 @@
 .profile-page .modal-box {
   max-width: 520px;
   padding: 28px;
-  border: 1px solid rgba(141, 174, 166, 0.23);
+  border: 1px solid rgba(96, 130, 189, 0.23);
   border-radius: 15px;
   background: #0b141b;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
@@ -2001,14 +2014,14 @@
   align-items: center;
   justify-content: center;
   padding: 0;
-  border: 1px solid rgba(141, 174, 166, 0.15);
+  border: 1px solid rgba(96, 130, 189, 0.15);
   border-radius: 8px;
   background: #0d1820;
   color: #8ea39e;
 }
 
 .profile-page .modal-close:hover {
-  border-color: rgba(141, 174, 166, 0.3);
+  border-color: rgba(96, 130, 189, 0.3);
   color: #e0e9e6;
 }
 

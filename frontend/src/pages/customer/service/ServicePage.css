@@ -5,16 +5,33 @@
 
 .service-page {
   --page-bg: #05090b;
-  --surface: #0b1114;
-  --surface-soft: #0e161a;
-  --surface-hover: #111c20;
-  --surface-deep: #070c0f;
+  --surface: #0d1b38;
+  --surface-blend: linear-gradient(
+    160deg,
+    rgba(13, 27, 56, 0.6) 0%,
+    rgba(5, 7, 26, 0.66) 100%
+  );
+  --surface-soft: linear-gradient(
+    160deg,
+    rgba(16, 30, 60, 0.5) 0%,
+    rgba(6, 9, 26, 0.56) 100%
+  );
+  --surface-hover: linear-gradient(
+    160deg,
+    rgba(18, 34, 68, 0.66) 0%,
+    rgba(7, 10, 30, 0.72) 100%
+  );
+  --surface-deep: linear-gradient(
+    160deg,
+    rgba(9, 18, 40, 0.62) 0%,
+    rgba(4, 5, 18, 0.7) 100%
+  );
   --text: #edf3f0;
   --text-soft: #c9d2ce;
   --muted: #8f9d97;
   --muted-2: #65736e;
-  --line: rgba(196, 215, 207, 0.13);
-  --line-strong: rgba(196, 215, 207, 0.24);
+  --line: rgba(96, 130, 189, 0.16);
+  --line-strong: rgba(96, 130, 189, 0.28);
   --teal: #69c8b7;
   --teal-dark: #235f56;
   --teal-soft: rgba(105, 200, 183, 0.1);
@@ -395,7 +412,7 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
-  background: var(--surface);
+  background: var(--surface-blend);
   overflow: hidden;
 }
 
@@ -588,7 +605,7 @@
   gap: 16px;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
-  background: var(--surface);
+  background: var(--surface-blend);
 }
 
 .service-page .filter-group {
@@ -677,7 +694,7 @@
   flex-direction: column;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
-  background: var(--surface);
+  background: var(--surface-blend);
   cursor: pointer;
   outline: none;
   transition:
@@ -878,7 +895,7 @@
   gap: 28px;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
-  background: var(--surface);
+  background: var(--surface-blend);
 }
 
 .service-page .support-info {
@@ -909,7 +926,7 @@
   text-align: center;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
-  background: var(--surface);
+  background: var(--surface-blend);
 }
 
 .service-page .empty-state strong {
@@ -958,7 +975,7 @@
   gap: 24px;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
-  background: var(--surface);
+  background: var(--surface-blend);
 }
 
 .service-page .lot-info {
@@ -1039,7 +1056,7 @@
   padding: 26px;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
-  background: var(--surface);
+  background: var(--surface-blend);
 }
 
 .service-page .form-section-head {
@@ -1354,7 +1371,7 @@
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
-  background: var(--surface);
+  background: var(--surface-blend);
   transition:
     border-color 0.2s ease,
     background 0.2s ease;
@@ -1810,7 +1827,7 @@
   justify-content: center;
   border: 1px solid var(--line);
   border-radius: 7px;
-  background: var(--surface);
+  background: var(--surface-blend);
   color: var(--muted);
   font-size: 10px;
   cursor: pointer;
