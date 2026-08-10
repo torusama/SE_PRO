@@ -211,7 +211,7 @@ export class ScheduleService {
       );
       if (overlap.rows.length) {
         throw new BadRequestException(
-          'Host already has an appointment in that time range',
+          'Ban quản lý đã có lịch hẹn trong khung giờ này. Bạn vui lòng chọn khung giờ khác.',
         );
       }
 

@@ -63,7 +63,7 @@ export default function RecommendationCard({
 
       {option.analysisSummary && (
         <div className="agent-option-analysis">
-          <strong>Nhận định tư vấn</strong>
+          <strong>Tóm tắt đối chiếu dữ liệu</strong>
           <p>{cleanAgentDisplayText(option.analysisSummary)}</p>
         </div>
       )}

@@ -26,7 +26,10 @@ interface AgentMessageProps {
   busy: boolean;
   onToggleCompare: (option: AgentRecommendation) => void;
   onViewMap: (option: AgentRecommendation) => void;
-  onStartRequest: (option: AgentRecommendation) => void;
+  onStartRequest: (
+    option: AgentRecommendation,
+    recommendationRunId?: string,
+  ) => void;
   onStartServiceOrder: (service: AgentService) => void;
   onEditResend: (message: ChatMessage, content: string) => void;
   onResend: (message: ChatMessage) => void;
@@ -376,7 +379,15 @@ export default function AgentMessage({
                   )}
                   onToggleCompare={onToggleCompare}
                   onViewMap={onViewMap}
-                  onStartRequest={onStartRequest}
+                  onStartRequest={(selectedOption) => {
+                    const recommendationRunId =
+                      message.response?.metadata.recommendationRunId;
+                    if (recommendationRunId) {
+                      onStartRequest(selectedOption, recommendationRunId);
+                      return;
+                    }
+                    onStartRequest(selectedOption);
+                  }}
                 />
               </div>
             ))}

@@ -316,3 +316,191 @@
   padding: 0 14px;
   cursor: pointer;
 }
+
+/* Agent-guided workflow focus: subtle motion, never a full-page zoom. */
+.agent-workflow-panel {
+  box-shadow: -18px 0 52px rgba(0, 0, 0, 0.24);
+  animation: agent-workflow-panel-enter 260ms cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.agent-workflow-content {
+  animation: agent-workflow-content-enter 220ms ease-out both;
+}
+
+.agent-workflow-close,
+.agent-workflow-primary,
+.agent-workflow-link,
+.agent-workflow-calendar-head > button,
+.agent-workflow-days button {
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.agent-workflow-close:hover,
+.agent-workflow-primary:hover:not(:disabled),
+.agent-workflow-link:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.agent-workflow-primary:focus-visible,
+.agent-workflow-link:focus-visible,
+.agent-workflow-close:focus-visible,
+.agent-workflow-calendar button:focus-visible,
+.agent-workflow-appointment-fields input:focus-visible {
+  outline: 2px solid rgba(66, 223, 210, .72);
+  outline-offset: 2px;
+}
+
+.agent-workflow-progress > div.is-current > span {
+  animation: agent-workflow-step-focus 900ms ease-out 1;
+}
+
+.agent-workflow-appointment-progress {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.agent-workflow-appointment-progress > span {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 8px;
+  border: 1px solid rgba(81, 136, 140, .2);
+  border-radius: 9px;
+  background: rgba(9, 22, 36, .72);
+  color: #617f87;
+  font-size: 9px;
+  font-weight: 750;
+  text-align: center;
+}
+
+.agent-workflow-appointment-progress b {
+  display: grid;
+  width: 19px;
+  height: 19px;
+  flex: 0 0 19px;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(95, 144, 149, .12);
+  font-size: 9px;
+}
+
+.agent-workflow-appointment-progress > span.is-complete,
+.agent-workflow-appointment-progress > span.is-current {
+  border-color: rgba(37, 215, 203, .28);
+  color: #9bd8d3;
+}
+
+.agent-workflow-appointment-progress > span.is-current {
+  background: rgba(18, 125, 123, .12);
+  box-shadow: 0 0 0 3px rgba(37, 215, 203, .035);
+  animation: agent-workflow-step-focus 900ms ease-out 1;
+}
+
+.agent-workflow-appointment-fields {
+  display: grid;
+  gap: 11px;
+  padding: 13px;
+  border: 1px solid rgba(81, 136, 140, .22);
+  border-radius: 12px;
+  background: #091624;
+}
+
+.agent-workflow-time-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.agent-workflow-time-grid label,
+.agent-workflow-topic-field {
+  display: grid;
+  gap: 7px;
+}
+
+.agent-workflow-time-grid label > span,
+.agent-workflow-topic-field > span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #78969d;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .03em;
+}
+
+.agent-workflow-time-grid input,
+.agent-workflow-topic-field input {
+  width: 100%;
+  min-height: 38px;
+  box-sizing: border-box;
+  border: 1px solid rgba(81, 136, 140, .25);
+  border-radius: 8px;
+  background: #07131f;
+  color: #dce9eb;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 11px;
+}
+
+.agent-workflow-topic-field input {
+  min-height: 40px;
+}
+
+.agent-workflow-review-note {
+  margin: 0;
+  padding: 11px 12px;
+  border-left: 2px solid #d9b35e;
+  background: rgba(217, 179, 94, .07);
+  color: #b8a77f;
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.agent-workflow-appointment-summary {
+  border-color: rgba(37, 215, 203, .26);
+  box-shadow: 0 0 0 3px rgba(37, 215, 203, .025);
+}
+
+@keyframes agent-workflow-panel-enter {
+  from { opacity: 0; transform: translateX(18px) scale(.992); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+@keyframes agent-workflow-content-enter {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes agent-workflow-step-focus {
+  0% { box-shadow: 0 0 0 0 rgba(37, 215, 203, .2); }
+  100% { box-shadow: 0 0 0 7px rgba(37, 215, 203, 0); }
+}
+
+@media (max-width: 420px) {
+  .agent-workflow-time-grid { grid-template-columns: 1fr; }
+  .agent-workflow-appointment-progress > span { padding-inline: 5px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-workflow-panel,
+  .agent-workflow-content,
+  .agent-workflow-progress > div.is-current > span,
+  .agent-workflow-appointment-progress > span.is-current {
+    animation: none !important;
+  }
+
+  .agent-workflow-close,
+  .agent-workflow-primary,
+  .agent-workflow-link,
+  .agent-workflow-calendar-head > button,
+  .agent-workflow-days button {
+    transition: none !important;
+  }
+}

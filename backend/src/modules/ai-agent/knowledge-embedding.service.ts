@@ -8,7 +8,11 @@ interface EmbeddingResponse {
 
 interface MissingEmbeddingRow {
   id: number;
+  category: string;
+  title: string;
   content: string;
+  knowledgeType: string;
+  memoryKey: string | null;
 }
 
 type EmbeddingInputType = 'query' | 'passage';
@@ -30,7 +34,7 @@ export class KnowledgeEmbeddingService implements OnModuleInit {
   onModuleInit() {
     if (!this.isConfigured() || !this.backfillOnStartup()) return;
     setTimeout(() => {
-      void this.backfillMissingActiveEntries().catch((error) => {
+      void this.backfillStartupWindow().catch((error) => {
         this.logger.warn(
           `RAG startup backfill skipped: ${error instanceof Error ? error.message : String(error)}`,
         );
@@ -189,8 +193,11 @@ export class KnowledgeEmbeddingService implements OnModuleInit {
 
   async embedKnowledgeEntry(entryId: number) {
     if (!this.isConfigured() || !(await this.supportsPgVector())) return false;
-    const row = await this.database.queryOne<{ content: string }>(
-      `SELECT content
+    const row = await this.database.queryOne<MissingEmbeddingRow>(
+      `SELECT knowledge_entry_id AS id,
+              category, title, content,
+              knowledge_type AS "knowledgeType",
+              memory_key AS "memoryKey"
        FROM ai_knowledge_entries
        WHERE knowledge_entry_id = $1
          AND is_active = TRUE
@@ -198,7 +205,7 @@ export class KnowledgeEmbeddingService implements OnModuleInit {
       [entryId],
     );
     if (!row?.content?.trim()) return false;
-    const vector = await this.embed(row.content, 'passage');
+    const vector = await this.embed(this.knowledgePassage(row), 'passage');
     await this.database.query(
       `UPDATE ai_knowledge_entries
        SET embedding = $1::vector,
@@ -212,7 +219,7 @@ export class KnowledgeEmbeddingService implements OnModuleInit {
     return true;
   }
 
-  async backfillMissingActiveEntries() {
+  async backfillMissingActiveEntries(maxRows?: number) {
     if (this.backfillRunning || !this.isConfigured()) return 0;
     if (!(await this.supportsPgVector())) {
       this.logger.warn(
@@ -223,13 +230,20 @@ export class KnowledgeEmbeddingService implements OnModuleInit {
     this.backfillRunning = true;
     let completed = 0;
     try {
-      const limit = Math.min(
+      const configuredBatchSize = Math.min(
         this.positiveConfig('ai.rag.backfillBatchSize', 5),
-        5,
+        10,
+      );
+      const limit = Math.max(
+        1,
+        Math.min(maxRows ?? configuredBatchSize, configuredBatchSize),
       );
       const model = this.embeddingModel();
       const rows = await this.database.query<MissingEmbeddingRow>(
-        `SELECT knowledge_entry_id AS id, content
+        `SELECT knowledge_entry_id AS id,
+                category, title, content,
+                knowledge_type AS "knowledgeType",
+                memory_key AS "memoryKey"
          FROM ai_knowledge_entries
          WHERE is_active = TRUE
            AND validation_status = 'active'
@@ -240,7 +254,7 @@ export class KnowledgeEmbeddingService implements OnModuleInit {
       );
       for (const row of rows) {
         try {
-          const vector = await this.embed(row.content, 'passage');
+          const vector = await this.embed(this.knowledgePassage(row), 'passage');
           await this.database.query(
             `UPDATE ai_knowledge_entries
              SET embedding = $1::vector,
@@ -267,6 +281,18 @@ export class KnowledgeEmbeddingService implements OnModuleInit {
     } finally {
       this.backfillRunning = false;
     }
+  }
+
+  private knowledgePassage(row: MissingEmbeddingRow) {
+    return [
+      `[${row.knowledgeType || 'knowledge'}]`,
+      row.memoryKey ? `Memory key: ${row.memoryKey}` : '',
+      row.category ? `Category: ${row.category}` : '',
+      row.title ? `Title: ${row.title}` : '',
+      `Content: ${row.content}`,
+    ]
+      .filter(Boolean)
+      .join('\n');
   }
 
   vectorLiteral(vector: number[]) {
@@ -301,6 +327,27 @@ export class KnowledgeEmbeddingService implements OnModuleInit {
 
   private backfillOnStartup() {
     return this.config.get<boolean>('ai.rag.backfillOnStartup') !== false;
+  }
+
+  private async backfillStartupWindow() {
+    const maxEntries = Math.min(
+      this.positiveConfig('ai.rag.backfillMaxEntries', 25),
+      100,
+    );
+    let total = 0;
+    while (total < maxEntries) {
+      const completed = await this.backfillMissingActiveEntries(
+        maxEntries - total,
+      );
+      total += completed;
+      // Zero means either the queue is drained or the remaining row(s) failed.
+      // Stop instead of hammering the embedding provider during startup.
+      if (completed === 0) break;
+    }
+    if (total > 0) {
+      this.logger.log(`RAG startup window embedded ${total} knowledge entries.`);
+    }
+    return total;
   }
 
   private apiKeys() {

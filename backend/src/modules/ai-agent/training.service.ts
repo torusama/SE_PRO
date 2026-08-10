@@ -17,6 +17,13 @@ interface TrainResponse {
   metrics: Record<string, number>;
 }
 
+interface TrainingReadySignalRow {
+  signalId: number;
+  selectedOptionId: string;
+  rejectedOptionId: string;
+  featureSnapshot: Record<string, Record<string, number>>;
+}
+
 @Injectable()
 export class TrainingService {
   constructor(
@@ -25,6 +32,16 @@ export class TrainingService {
   ) {}
 
   async retrain(adminId: number, dto: RetrainModelDto) {
+    const datasetVersion =
+      dto.datasetVersion ?? `dataset-${new Date().toISOString().slice(0, 10)}`;
+    // A recommendation signal becomes training data only at this explicit
+    // administrator-controlled retrain boundary. The chat path never retrains
+    // or deploys a model by itself. A complete pairwise signal contributes one
+    // positive row (selected option) and one negative row (rejected option).
+    const materializedSampleCount = await this.materializeReadySignals(
+      adminId,
+      datasetVersion,
+    );
     const approved = await this.database.queryOne<{ count: number }>(
       `SELECT COUNT(*)::int AS count
        FROM ai_training_samples
@@ -37,8 +54,6 @@ export class TrainingService {
         `PlotRanker training requires at least ${minSamples} complete, approved samples`,
       );
     }
-    const datasetVersion =
-      dto.datasetVersion ?? `dataset-${new Date().toISOString().slice(0, 10)}`;
     const provisionalVersion = `plot-ranker-${Date.now()}`;
     const run = await this.database.queryOne<{ id: number }>(
       `INSERT INTO ai_training_runs
@@ -47,13 +62,35 @@ export class TrainingService {
        VALUES (
          (SELECT version_name FROM ai_model_versions
           WHERE status = 'active' LIMIT 1),
-         $1, $2, $3, $3, 'running', $4
+         $1, $2, $3, $4, 'running', $5
        )
        RETURNING run_id AS id`,
-      [provisionalVersion, datasetVersion, approved?.count ?? 0, adminId],
+      [
+        provisionalVersion,
+        datasetVersion,
+        approved?.count ?? 0,
+        materializedSampleCount,
+        adminId,
+      ],
     );
     if (!run)
       throw new ServiceUnavailableException('Cannot create training run');
+
+    await this.database.query(
+      `UPDATE ai_learning_signals signal
+       SET consumed_at = COALESCE(signal.consumed_at, NOW()),
+           consumed_by_training_run_id = $1
+       WHERE signal.training_ready = TRUE
+         AND signal.consumed_at IS NULL
+         AND EXISTS (
+           SELECT 1
+           FROM ai_training_samples sample
+           WHERE sample.source_signal_id = signal.signal_id
+             AND sample.is_approved = TRUE
+             AND sample.training_ready = TRUE
+         )`,
+      [run.id],
+    );
 
     try {
       const result = await this.callMl<TrainResponse>('/train', {
@@ -129,6 +166,7 @@ export class TrainingService {
         metricBefore,
         metricAfter,
         sampleCount: result.sampleCount,
+        materializedSampleCount,
       };
     } catch (error) {
       await this.database.query(
@@ -144,6 +182,98 @@ export class TrainingService {
       );
       throw error;
     }
+  }
+
+  private async materializeReadySignals(
+    adminId: number,
+    datasetVersion: string,
+  ) {
+    const signals = await this.database.query<TrainingReadySignalRow>(
+      `SELECT signal_id AS "signalId",
+              selected_option_id AS "selectedOptionId",
+              rejected_option_id AS "rejectedOptionId",
+              feature_snapshot AS "featureSnapshot"
+       FROM ai_learning_signals
+       WHERE signal_type = 'recommendation_feedback'
+         AND training_ready = TRUE
+         AND consumed_at IS NULL
+       ORDER BY created_at ASC, signal_id ASC
+       LIMIT 500`,
+    );
+
+    let inserted = 0;
+    for (const signal of signals) {
+      const snapshot = signal.featureSnapshot ?? {};
+      const selected = snapshot[signal.selectedOptionId];
+      const rejected = snapshot[signal.rejectedOptionId];
+      if (!this.validFeatureRow(selected) || !this.validFeatureRow(rejected)) {
+        continue;
+      }
+
+      inserted += await this.insertTrainingSampleIfMissing({
+        sourceSignalId: signal.signalId,
+        features: selected,
+        labelSelected: 1,
+        datasetVersion,
+        adminId,
+      });
+      inserted += await this.insertTrainingSampleIfMissing({
+        sourceSignalId: signal.signalId,
+        features: rejected,
+        labelSelected: 0,
+        datasetVersion,
+        adminId,
+      });
+    }
+    return inserted;
+  }
+
+  private async insertTrainingSampleIfMissing(input: {
+    sourceSignalId: number;
+    features: Record<string, number>;
+    labelSelected: 0 | 1;
+    datasetVersion: string;
+    adminId: number;
+  }) {
+    const inserted = await this.database.queryOne<{ id: number }>(
+      `INSERT INTO ai_training_samples
+         (source_signal_id, features, label, dataset_version,
+          is_approved, approved_by, training_ready)
+       SELECT $1, $2::jsonb, $3::jsonb, $4, TRUE, $5, TRUE
+       WHERE NOT EXISTS (
+         SELECT 1
+         FROM ai_training_samples
+         WHERE source_signal_id = $1
+           AND COALESCE(label->>'label_selected', '') = $6
+       )
+       ON CONFLICT DO NOTHING
+       RETURNING sample_id AS id`,
+      [
+        input.sourceSignalId,
+        JSON.stringify(input.features),
+        JSON.stringify({ label_selected: input.labelSelected }),
+        input.datasetVersion,
+        input.adminId,
+        String(input.labelSelected),
+      ],
+    );
+    return inserted ? 1 : 0;
+  }
+
+  private validFeatureRow(
+    value: Record<string, number> | undefined,
+  ): value is Record<string, number> {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    const entries = Object.entries(value);
+    return (
+      entries.length > 0 &&
+      entries.every(
+        ([key, feature]) =>
+          key.trim().length > 0 &&
+          typeof feature === 'number' &&
+          Number.isFinite(feature),
+      )
+    );
   }
 
   listRuns() {

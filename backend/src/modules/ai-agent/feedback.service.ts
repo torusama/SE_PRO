@@ -145,7 +145,24 @@ export class FeedbackService {
     });
 
     if (action === 'approve' && dto.applyCorrection && reviewed.hasCorrection) {
-      return this.knowledge.applyApprovedCorrection(id, adminId);
+      try {
+        return await this.knowledge.applyApprovedCorrection(id, adminId);
+      } catch (error) {
+        // applyApprovedCorrection is transactional, so a failure means no
+        // knowledge entry was committed. Restore the feedback to a retryable
+        // state instead of leaving it permanently `approved` while the
+        // correction was never applied.
+        await this.database.query(
+          `UPDATE ai_feedback
+           SET validation_status = 'pending', reviewed_by = NULL,
+               review_note = NULL, validated_at = NULL, updated_at = NOW()
+           WHERE feedback_id = $1
+             AND validation_status = 'approved'
+             AND applied_at IS NULL`,
+          [id],
+        );
+        throw error;
+      }
     }
     return reviewed;
   }

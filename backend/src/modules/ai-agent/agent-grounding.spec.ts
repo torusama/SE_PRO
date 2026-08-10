@@ -57,6 +57,12 @@ describe('agent recommendation grounding', () => {
     ).toBe(false);
     expect(
       isGroundedRecommendationNarrative(
+        'A-01-001 có dữ liệu hướng nhưng chưa đủ thông tin để kết luận phong thủy.',
+        result,
+      ),
+    ).toBe(true);
+    expect(
+      isGroundedRecommendationNarrative(
         'Lô A-01-001 đang sẵn sàng để đặt cọc.',
         result,
       ),
