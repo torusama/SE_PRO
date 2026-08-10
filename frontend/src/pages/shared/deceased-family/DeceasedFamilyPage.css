@@ -64,10 +64,16 @@
   min-height: 190px;
   overflow: hidden;
   padding: clamp(28px, 4vw, 48px);
-  border: 1px solid rgba(10, 255, 212, 0.23);
+  border: 1px solid rgba(10, 255, 212, 0.28);
   border-radius: 22px;
   background:
-    linear-gradient(105deg, rgba(4, 19, 27, 0.98), rgba(12, 35, 30, 0.95)),
+    linear-gradient(
+      135deg,
+      rgba(10, 255, 212, 0.22) 0%,
+      rgba(4, 19, 27, 0.97) 38%,
+      rgba(12, 35, 30, 0.96) 62%,
+      rgba(34, 197, 94, 0.32) 100%
+    ),
     var(--df-surface);
 }
 

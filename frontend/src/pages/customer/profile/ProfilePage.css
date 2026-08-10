@@ -2050,6 +2050,7 @@
   border-radius: 8px;
   background: #0d1820;
   color: #8ea39e;
+  z-index: 2;
 }
 
 .profile-page .modal-close:hover {
@@ -2104,14 +2105,7 @@
 
 /* ===== Modal "Đổi Ảnh Đại Diện" — nền xanh dương + đốm sáng vàng bay bay ===== */
 .profile-page .modal-overlay.avatar-modal-overlay {
-  align-items: flex-start;
-  padding-top: 118px;
-}
-
-@media (max-width: 640px) {
-  .profile-page .modal-overlay.avatar-modal-overlay {
-    padding-top: 96px;
-  }
+  align-items: center;
 }
 
 .profile-page .modal-box.avatar-modal-box {
@@ -2179,7 +2173,9 @@
   }
 }
 
-.profile-page .avatar-modal-box > *:not(.avatar-modal-fireflies) {
+.profile-page
+  .avatar-modal-box
+  > *:not(.avatar-modal-fireflies):not(.modal-close) {
   position: relative;
   z-index: 1;
 }
