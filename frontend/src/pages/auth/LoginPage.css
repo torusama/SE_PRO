@@ -1,81 +1,282 @@
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+@import url("https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Noto+Serif+SC:wght@400;500&display=swap");
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
 
 .login-page {
-  --paper: #F2EDE3;
-  --paper2: #EAE4D8;
-  --ink: #1A1410;
-  --ink2: #3D3529;
-  --vermil: #8B4A2C;
-  --vermil-l: rgba(139,74,44,.12);
-  --vermil-g: rgba(139,74,44,.28);
-  --moss: #2D5A3D;
-  --moss-l: rgba(45,90,61,.1);
-  --gold: #9A7A3A;
-  --gold-l: rgba(154,122,58,.15);
-  --border: rgba(26,20,16,.14);
-  --border2: rgba(26,20,16,.24);
+  /* ===== Synced with HomePage.css palette ===== */
+  --night: #05071a;
+  --deep: #080c2a;
+  --navy: #0d1b4e;
+  --teal: #0affd4;
+  --teal-dim: rgba(10, 255, 212, 0.15);
+  --teal-glow: rgba(10, 255, 212, 0.4);
+  --lime: #c8f241;
+  --purple: #7b3fe4;
+  --purple-dim: rgba(123, 63, 228, 0.16);
+  --purple-glow: rgba(123, 63, 228, 0.45);
+  --gold: #d4a847;
+  --gold-dim: rgba(212, 168, 71, 0.18);
+  --white: #e8f4f0;
+  --muted: rgba(232, 244, 240, 0.55);
+  --muted-dim: rgba(232, 244, 240, 0.34);
+
+  /* card (right panel) — bright, cool, opposite of the night sky */
+  --card-bg1: rgba(248, 246, 255, 0.86);
+  --card-bg2: rgba(233, 248, 255, 0.82);
+  --card-border: rgba(123, 63, 228, 0.28);
+  --card-ink: #241e42;
+  --card-ink2: #55507a;
+  --card-field-bg: linear-gradient(
+    135deg,
+    rgba(123, 63, 228, 0.07),
+    rgba(10, 255, 212, 0.07)
+  );
+  --card-field-border: rgba(123, 63, 228, 0.22);
+  --card-hint: #7a6fb0;
 
   height: 100vh;
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
-  background: var(--paper);
-  color: var(--ink);
-  font-family: 'Inter', sans-serif;
+  background: var(--night);
+  color: var(--white);
+  font-family: "Be Vietnam Pro", "Inter", sans-serif;
   display: flex;
+  position: relative;
 }
 
-/* ===== LEFT PANEL ===== */
+/* ===================================================================
+   COSMIC BACKGROUND (full-bleed, shared by left content & right card)
+=================================================================== */
+.auth-cosmic-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  background: var(--night);
+}
+.auth-cosmic-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.auth-breathe {
+  animation: authBreathe 9s ease-in-out infinite;
+  transform-origin: center;
+}
+@keyframes authBreathe {
+  0%,
+  100% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+}
+
+.auth-twinkle {
+  animation: authTwinkle 3.2s ease-in-out infinite;
+  transform-origin: center;
+}
+@keyframes authTwinkle {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.auth-star-node {
+  animation-name: authNodeTwinkle;
+}
+@keyframes authNodeTwinkle {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.auth-constellation {
+  animation: authConstellationGlow 6s ease-in-out infinite;
+}
+@keyframes authConstellationGlow {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.75;
+  }
+}
+
+.auth-shooting-star {
+  opacity: 0;
+}
+.auth-shooting-star--1 {
+  animation: authShoot1 7s linear infinite;
+  animation-delay: 1.2s;
+}
+.auth-shooting-star--2 {
+  animation: authShoot2 9s linear infinite;
+  animation-delay: 4.5s;
+}
+@keyframes authShoot1 {
+  0% {
+    transform: translate(140px, 40px);
+    opacity: 0;
+  }
+  4% {
+    opacity: 1;
+  }
+  16% {
+    transform: translate(420px, 190px);
+    opacity: 0;
+  }
+  100% {
+    transform: translate(420px, 190px);
+    opacity: 0;
+  }
+}
+@keyframes authShoot2 {
+  0% {
+    transform: translate(880px, 30px);
+    opacity: 0;
+  }
+  4% {
+    opacity: 1;
+  }
+  14% {
+    transform: translate(1080px, 130px);
+    opacity: 0;
+  }
+  100% {
+    transform: translate(1080px, 130px);
+    opacity: 0;
+  }
+}
+
+.auth-fireflies {
+  position: absolute;
+  inset: 0;
+}
+.auth-firefly {
+  position: absolute;
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow:
+    0 0 6px 1px var(--gold),
+    0 0 14px 3px rgba(212, 168, 71, 0.4);
+  animation-name: authFireflyFloat;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+@keyframes authFireflyFloat {
+  0% {
+    transform: translate(0, 0);
+    opacity: 0.15;
+  }
+  20% {
+    opacity: 0.9;
+  }
+  50% {
+    transform: translate(calc(var(--drift) * -1), calc(var(--drift) * 0.6));
+    opacity: 0.55;
+  }
+  80% {
+    opacity: 0.85;
+  }
+  100% {
+    transform: translate(0, 0);
+    opacity: 0.15;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-breathe,
+  .auth-twinkle,
+  .auth-star-node,
+  .auth-constellation,
+  .auth-shooting-star--1,
+  .auth-shooting-star--2,
+  .auth-firefly {
+    animation: none !important;
+  }
+}
+
+/* ===== LEFT PANEL (storytelling side, sits over cosmic bg) ===== */
 .login-page .left {
   flex: 0 0 52%;
   position: relative;
+  z-index: 1;
   overflow: hidden;
-  background: var(--paper2);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   padding: 40px 52px;
 }
 
-.login-page .left-bg {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  overflow: hidden;
-}
-
 .login-page .seal {
   position: absolute;
-  bottom: 48px;
-  right: 48px;
-  width: 64px;
-  height: 64px;
-  border: 2px solid var(--vermil);
+  bottom: 40px;
+  right: 44px;
+  width: 60px;
+  height: 60px;
+  border: 1.5px solid var(--teal);
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: .55;
-  font-family: 'Noto Serif SC', serif;
+  opacity: 0.5;
+  font-family: "Noto Serif SC", serif;
   font-size: 10px;
-  color: var(--vermil);
-  letter-spacing: .1em;
+  color: var(--teal);
+  letter-spacing: 0.1em;
   font-weight: 400;
   text-align: center;
   line-height: 1.4;
+  box-shadow: 0 0 16px var(--teal-dim);
 }
 
-.login-page .left-logo { position: relative; z-index: 2; }
+.login-page .left-logo {
+  position: relative;
+  z-index: 2;
+}
 .login-page .left-logo .name {
-  font-family: 'Cinzel Decorative', serif;
-  font-size: 14px;
-  letter-spacing: .16em;
-  color: var(--vermil);
+  font-family: "Playfair Display", Georgia, serif;
+  font-weight: 600;
+  font-size: 18px;
+  letter-spacing: -0.01em;
   display: block;
   margin-bottom: 4px;
+  background: linear-gradient(
+    135deg,
+    #f3fffc 0%,
+    var(--teal) 55%,
+    var(--lime) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 10px rgba(10, 255, 212, 0.25));
 }
 .login-page .left-logo .hanzi {
-  font-family: 'Noto Serif SC', serif;
+  font-family: "Noto Serif SC", serif;
   font-size: 11px;
-  letter-spacing: .4em;
+  letter-spacing: 0.4em;
   color: var(--gold);
 }
 
@@ -88,200 +289,354 @@
   justify-content: center;
 }
 .login-page .left-quote {
-  font-family: 'Noto Serif SC', serif;
+  font-family: "Playfair Display", Georgia, serif;
   font-size: clamp(22px, 2.8vw, 34px);
-  line-height: 1.55;
-  color: var(--ink);
-  font-weight: 300;
+  line-height: 1.5;
+  color: var(--white);
+  font-weight: 400;
   margin-bottom: 20px;
 }
-.login-page .left-quote em { color: var(--vermil); font-style: normal; }
+.login-page .left-quote em {
+  color: var(--teal);
+  font-style: italic;
+}
 .login-page .left-sub {
+  font-family: "Be Vietnam Pro", "Inter", sans-serif;
   font-size: 13px;
-  color: var(--ink2);
+  color: var(--muted);
   font-weight: 300;
   line-height: 1.8;
   max-width: 340px;
 }
 
-.login-page .pills {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.login-page .pill {
-  font-size: 10px;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-  border: 1px solid var(--border2);
-  color: var(--ink2);
-  padding: 5px 12px;
-  font-weight: 400;
-}
-
-/* ===== RIGHT PANEL ===== */
+/* ===== RIGHT PANEL — floating glass card, no hard divider line ===== */
 .login-page .right {
   flex: 1;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 48px 52px;
+  padding: 40px 48px;
   position: relative;
-  overflow: hidden;
+  z-index: 1;
 }
-
-.login-page .right-bg { position: absolute; inset: 0; pointer-events: none; opacity: .04; }
 
 .login-page .back {
   position: absolute;
   top: 28px;
   left: 36px;
+  z-index: 3;
   font-size: 11px;
-  letter-spacing: .12em;
-  color: var(--ink2);
+  letter-spacing: 0.12em;
+  color: var(--muted);
   text-decoration: none;
   display: flex;
   align-items: center;
   gap: 6px;
   text-transform: uppercase;
-  transition: color .2s;
+  transition: color 0.2s;
 }
-.login-page .back:hover { color: var(--vermil); }
-.login-page .back svg { width: 14px; height: 14px; }
+.login-page .back:hover {
+  color: var(--teal);
+}
+.login-page .back svg {
+  width: 14px;
+  height: 14px;
+}
 
-.login-page .card { width: 100%; max-width: 400px; }
+/* ---- The floating rectangle ---- */
+.login-page .card-panel {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  max-height: calc(100vh - 80px);
+  border-radius: 22px;
+  padding: 40px 40px 34px;
+  background: linear-gradient(160deg, var(--card-bg1), var(--card-bg2));
+  border: 1px solid var(--card-border);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.4) inset,
+    0 30px 70px rgba(5, 7, 26, 0.55),
+    0 0 60px rgba(123, 63, 228, 0.18),
+    0 0 90px rgba(10, 255, 212, 0.08);
+  color: var(--card-ink);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* soft mystical ornament glow inside the card — top */
+.login-page .card-panel::before {
+  content: "";
+  position: absolute;
+  top: -120px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 320px;
+  height: 260px;
+  background: radial-gradient(
+    circle,
+    rgba(123, 63, 228, 0.22),
+    rgba(10, 255, 212, 0.1) 55%,
+    transparent 75%
+  );
+  pointer-events: none;
+}
+/* faint orbit ring decoration */
+.login-page .card-panel::after {
+  content: "";
+  position: absolute;
+  top: -70px;
+  right: -60px;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  border: 1px solid rgba(123, 63, 228, 0.18);
+  box-shadow: 0 0 0 22px rgba(10, 255, 212, 0.05);
+  pointer-events: none;
+}
+
+.login-page .card-scroll {
+  position: relative;
+  z-index: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+  margin-right: -4px;
+}
+.login-page .card-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.login-page .card-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.login-page .card-scroll::-webkit-scrollbar-thumb {
+  background: var(--purple-glow);
+  border-radius: 3px;
+}
 
 .login-page .tabs {
   display: flex;
-  border-bottom: 1.5px solid var(--border2);
-  margin-bottom: 36px;
+  border-bottom: 1px solid rgba(123, 63, 228, 0.18);
+  margin-bottom: 30px;
+  flex: 0 0 auto;
 }
 .login-page .tab {
   flex: 1;
   padding: 10px 0;
+  font-family: "Be Vietnam Pro", "Inter", sans-serif;
   font-size: 12px;
-  letter-spacing: .16em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  font-weight: 500;
-  color: var(--ink2);
+  font-weight: 600;
+  color: var(--card-ink2);
   background: none;
   border: none;
   cursor: pointer;
   position: relative;
-  transition: color .2s;
+  transition: color 0.2s;
   text-decoration: none;
   text-align: center;
   display: block;
 }
-.login-page .tab.active { color: var(--vermil); }
+.login-page .tab.active {
+  color: var(--purple);
+}
 .login-page .tab.active::after {
-  content: '';
+  content: "";
   position: absolute;
-  bottom: -1.5px;
+  bottom: -1px;
   left: 0;
   right: 0;
   height: 2px;
-  background: var(--vermil);
+  background: linear-gradient(90deg, var(--purple), var(--teal));
+  box-shadow: 0 0 8px var(--purple-glow);
 }
-.login-page .tab:hover:not(.active) { color: var(--ink); }
+.login-page .tab:hover:not(.active) {
+  color: var(--card-ink);
+}
 
-.login-page .form-header { margin-bottom: 28px; }
+.login-page .form-header {
+  margin-bottom: 26px;
+}
 .login-page .form-title {
-  font-family: 'Cinzel Decorative', serif;
-  font-size: clamp(18px, 2.2vw, 24px);
-  color: var(--ink);
+  font-family: "Playfair Display", Georgia, serif;
+  font-weight: 600;
+  font-size: clamp(19px, 2.2vw, 24px);
+  color: var(--card-ink);
   margin-bottom: 6px;
 }
-.login-page .form-desc { font-size: 13px; color: var(--ink2); font-weight: 300; line-height: 1.6; }
+.login-page .form-desc {
+  font-family: "Be Vietnam Pro", "Inter", sans-serif;
+  font-size: 12.5px;
+  color: var(--card-ink2);
+  font-weight: 400;
+  line-height: 1.6;
+}
 
-.login-page .field { margin-bottom: 18px; }
+.login-page .field {
+  margin-bottom: 16px;
+}
 .login-page .field label {
   display: block;
+  font-family: "Be Vietnam Pro", "Inter", sans-serif;
   font-size: 10px;
-  letter-spacing: .2em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--ink2);
-  font-weight: 500;
+  color: var(--card-ink2);
+  font-weight: 600;
   margin-bottom: 7px;
 }
 .login-page .field input {
   width: 100%;
   padding: 11px 14px;
-  background: rgba(255,255,255,.6);
-  border: 1px solid var(--border2);
-  border-radius: 0;
-  font-family: 'Inter', sans-serif;
+  background: var(--card-field-bg);
+  border: 1px solid var(--card-field-border);
+  border-radius: 10px;
+  font-family: "Be Vietnam Pro", "Inter", sans-serif;
   font-size: 13px;
-  color: var(--ink);
+  color: var(--card-ink);
   outline: none;
-  transition: all .2s;
-  font-weight: 300;
+  transition: all 0.2s;
+  font-weight: 400;
 }
-.login-page .field input::placeholder { color: rgba(26,20,16,.3); }
+.login-page .field input::placeholder {
+  color: rgba(85, 80, 122, 0.45);
+}
 .login-page .field input:focus {
-  border-color: var(--vermil);
-  background: rgba(255,255,255,.85);
-  box-shadow: 0 0 0 3px var(--vermil-l);
+  border-color: var(--purple);
+  background: linear-gradient(
+    135deg,
+    rgba(123, 63, 228, 0.1),
+    rgba(10, 255, 212, 0.1)
+  );
+  box-shadow: 0 0 0 3px var(--purple-dim);
 }
-
-.login-page .or-line {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 20px 0;
-  font-size: 11px;
-  letter-spacing: .15em;
-  color: var(--ink2);
-}
-.login-page .or-line::before,
-.login-page .or-line::after { content: ''; flex: 1; height: 1px; background: var(--border); }
 
 .login-page .submit {
   width: 100%;
   padding: 13px;
-  background: var(--vermil);
-  color: #F2EDE3;
-  font-family: 'Inter', sans-serif;
+  background: linear-gradient(135deg, var(--purple), #4f6fe0 55%, var(--teal));
+  color: #fdfcff;
+  font-family: "Be Vietnam Pro", "Inter", sans-serif;
   font-size: 11px;
-  font-weight: 500;
-  letter-spacing: .2em;
+  font-weight: 600;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   border: none;
   cursor: pointer;
-  clip-path: polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%);
-  transition: all .25s;
-  margin-top: 6px;
+  border-radius: 10px;
+  transition: all 0.25s;
+  margin-top: 4px;
 }
-.login-page .submit:hover { background: #7A3E23; box-shadow: 0 4px 20px var(--vermil-g); }
+.login-page .submit:hover:not(:disabled) {
+  box-shadow:
+    0 6px 24px var(--purple-glow),
+    0 0 20px var(--teal-dim);
+  transform: translateY(-1px);
+}
+.login-page .submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 
-.login-page .alt-link { text-align: center; margin-top: 20px; font-size: 12px; color: var(--ink2); }
-.login-page .alt-link a { color: var(--vermil); text-decoration: none; font-weight: 500; }
+.login-page .alt-link {
+  text-align: center;
+  margin-top: 20px;
+  font-size: 12px;
+  color: var(--card-ink2);
+}
+.login-page .alt-link a {
+  color: var(--purple);
+  text-decoration: none;
+  font-weight: 600;
+}
+.login-page .alt-link a:hover {
+  color: var(--teal);
+}
 
-.login-page .forgot { text-align: right; margin-top: -12px; margin-bottom: 14px; font-size: 11px; }
-.login-page .forgot a { color: var(--gold); text-decoration: none; letter-spacing: .05em; }
-.login-page .forgot a:hover { color: var(--vermil); }
+.login-page .forgot {
+  text-align: right;
+  margin-top: -10px;
+  margin-bottom: 14px;
+  font-size: 11px;
+}
+.login-page .forgot a {
+  color: var(--card-hint);
+  text-decoration: none;
+  letter-spacing: 0.03em;
+}
+.login-page .forgot a:hover {
+  color: var(--purple);
+}
 
-.login-page .panel { animation: loginFadeIn .3s ease; }
+.login-page .panel {
+  animation: loginFadeIn 0.35s ease;
+  flex: 1 1 auto;
+  min-height: 0;
+}
 @keyframes loginFadeIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-.login-page .ink-painting {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  width: 240px;
-  height: 300px;
-  opacity: .18;
-  pointer-events: none;
+/* Success / notice box (used by Register, Forgot & Reset password flows) */
+.login-page .msg-box {
+  margin-top: 18px;
+  padding: 12px;
+  border: 1px solid var(--card-field-border);
+  background: linear-gradient(
+    135deg,
+    rgba(10, 255, 212, 0.08),
+    rgba(123, 63, 228, 0.06)
+  );
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--card-ink2);
+  line-height: 1.6;
+}
+.login-page .msg-box-error {
+  margin-top: 18px;
+  padding: 12px;
+  border: 1px solid rgba(194, 63, 90, 0.2);
+  background: rgba(194, 63, 90, 0.08);
+  border-radius: 8px;
+  font-size: 12px;
+  color: #c23f5a;
+  line-height: 1.6;
+}
+
+.login-page .form-error {
+  color: #c23f5a;
+  font-size: 11.5px;
+  margin-bottom: 12px;
+  padding: 9px 12px;
+  background: rgba(194, 63, 90, 0.08);
+  border: 1px solid rgba(194, 63, 90, 0.2);
+  border-radius: 8px;
 }
 
 @media (max-width: 768px) {
-  .login-page .left { display: none; }
-  .login-page .right { padding: 32px 24px; }
-  .login-page { overflow-y: auto; height: auto; }
+  .login-page .left {
+    display: none;
+  }
+  .login-page .right {
+    padding: 28px 20px;
+  }
+  .login-page .card-panel {
+    max-width: 440px;
+    padding: 32px 26px 28px;
+  }
+  .login-page {
+    overflow-y: auto;
+    height: auto;
+    min-height: 100vh;
+  }
 }
