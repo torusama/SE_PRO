@@ -43,8 +43,10 @@
     var(--ink-void);
   color: var(--text-main);
   font-family: "Be Vietnam Pro", sans-serif;
-  min-height: 100vh;
-  overflow-x: hidden;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 /* ---------- animated background ---------- */
@@ -122,6 +124,7 @@
 .map-page .breadcrumb {
   position: relative;
   z-index: 10;
+  flex-shrink: 0;
   padding: 16px 48px;
   display: flex;
   align-items: center;
@@ -170,42 +173,57 @@
   z-index: 10;
   display: grid;
   grid-template-columns: 280px minmax(480px, 1fr) 320px;
-  height: calc(100vh - 110px);
+  gap: 14px;
+  flex: 1;
+  min-height: 0;
+  padding: 0 20px 16px;
   overflow: hidden;
 }
 
 /* ---------- sidebar left ---------- */
 .map-page .sidebar-left {
-  border-right: 0.5px solid var(--border-dim);
-  background: rgba(8, 13, 26, 0.6);
-  backdrop-filter: blur(8px);
+  border: 0.5px solid var(--border-dim);
+  border-radius: 18px;
+  background: rgba(9, 14, 28, 0.5);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.22);
   display: flex;
   flex-direction: column;
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: thin;
-  scrollbar-color: rgba(0, 229, 196, 0.3) transparent;
+  scrollbar-color: rgba(0, 229, 196, 0.35) transparent;
 }
 
-.map-page .sidebar-left::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+.map-page .sidebar-left::-webkit-scrollbar,
+.map-page .panel-right::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }
 
-.map-page .sidebar-left::-webkit-scrollbar-track {
+.map-page .sidebar-left::-webkit-scrollbar-track,
+.map-page .panel-right::-webkit-scrollbar-track {
   background: transparent;
+  margin-block: 12px;
 }
 
-.map-page .sidebar-left::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.18);
-  border-radius: 10px;
+.map-page .sidebar-left::-webkit-scrollbar-thumb,
+.map-page .panel-right::-webkit-scrollbar-thumb {
+  background: rgba(0, 229, 196, 0.4);
+  border-radius: 999px;
+  border: 1.5px solid transparent;
+  background-clip: padding-box;
 }
 
-.map-page .sidebar-left::-webkit-scrollbar-thumb:hover {
+.map-page .sidebar-left::-webkit-scrollbar-thumb:hover,
+.map-page .panel-right::-webkit-scrollbar-thumb:hover {
   background: var(--teal-soft);
+  background-clip: padding-box;
 }
 
-.map-page .sidebar-left::-webkit-scrollbar-button {
+.map-page .sidebar-left::-webkit-scrollbar-button,
+.map-page .panel-right::-webkit-scrollbar-button {
   display: none;
   width: 0;
   height: 0;
@@ -479,25 +497,31 @@
 
 /* ---------- map area ---------- */
 .map-page .map-area {
+  position: relative;
   display: flex;
   flex-direction: column;
   background: rgba(4, 6, 14, 0.4);
-  min-height: 560px;
+  border: 0.5px solid var(--border-dim);
+  border-radius: 18px;
+  min-height: 0;
   overflow: hidden;
 }
 
-/* toolbar — normal flow, sits ABOVE the SVG */
+/* toolbar — floats OVER the map instead of taking its own row, so the
+   map viewport underneath gets the full height of the map area. */
 .map-page .map-toolbar {
+  position: absolute;
+  top: 14px;
+  left: 16px;
+  z-index: 20;
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
   align-items: center;
-  padding: 12px 16px;
-  border-bottom: 0.5px solid var(--border-dim);
-  background: rgba(8, 13, 26, 0.5);
-  backdrop-filter: blur(8px);
-  z-index: 20;
-  flex-shrink: 0;
+  pointer-events: none;
+}
+.map-page .map-toolbar > * {
+  pointer-events: auto;
 }
 
 /* map viewport — the bounded map-viewing area. Overlay controls (compass,
@@ -540,10 +564,6 @@
 .map-page .mode-switch {
   display: flex;
   gap: 0;
-  background: rgba(8, 13, 26, 0.85);
-  border: 0.5px solid var(--border-dim);
-  border-radius: 8px;
-  overflow: hidden;
 }
 
 .map-page .mode-btn {
@@ -557,6 +577,7 @@
   transition: all 0.2s;
   white-space: nowrap;
   position: relative;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.75);
 }
 .map-page .mode-btn:not(:last-child)::after {
   content: "";
@@ -569,11 +590,19 @@
 }
 .map-page .mode-btn:hover {
   color: var(--text-main);
-  background: rgba(0, 229, 196, 0.03);
 }
 .map-page .mode-btn.active {
   color: var(--teal-glow);
-  background: rgba(0, 229, 196, 0.08);
+}
+.map-page .mode-btn.active::before {
+  content: "";
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--teal-glow);
 }
 
 .map-page .map-btn {
@@ -892,21 +921,17 @@
 
 /* ---------- panel right ---------- */
 .map-page .panel-right {
-  border-left: 0.5px solid var(--border-dim);
-  background: rgba(8, 13, 26, 0.6);
-  backdrop-filter: blur(8px);
+  border: 0.5px solid var(--border-dim);
+  border-radius: 18px;
+  background: rgba(9, 14, 28, 0.5);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.22);
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 229, 196, 0.35) transparent;
   display: flex;
   flex-direction: column;
-}
-
-.map-page .panel-right::-webkit-scrollbar,
-.map-page .sidebar-left::-webkit-scrollbar {
-  width: 4px;
-}
-.map-page .panel-right::-webkit-scrollbar-thumb,
-.map-page .sidebar-left::-webkit-scrollbar-thumb {
-  background: var(--border-dim);
 }
 
 /* detail empty */
@@ -1442,17 +1467,18 @@
 
 /* tablet: detail panel drops below */
 @media (max-width: 1180px) {
+  .map-page {
+    height: auto;
+    overflow: visible auto;
+  }
   .map-page .app-body {
     grid-template-columns: 260px minmax(420px, 1fr);
     grid-template-rows: minmax(560px, 1fr) auto;
     height: auto;
-    min-height: calc(100vh - 110px);
     overflow: visible;
   }
   .map-page .panel-right {
     grid-column: 1 / -1;
-    border-left: none;
-    border-top: 0.5px solid var(--border-dim);
   }
 }
 
@@ -1468,8 +1494,6 @@
     overflow: visible;
   }
   .map-page .sidebar-left {
-    border-right: none;
-    border-bottom: 0.5px solid var(--border-dim);
     max-height: none;
   }
   .map-page .map-area {
@@ -1483,11 +1507,8 @@
     height: 1120px;
   }
   .map-page .map-toolbar {
-    padding: 10px 12px;
-  }
-  .map-page .panel-right {
-    border-left: none;
-    border-top: 0.5px solid var(--border-dim);
+    top: 10px;
+    left: 12px;
   }
   .map-page .detail-panel {
     padding: 20px;
