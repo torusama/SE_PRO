@@ -83,7 +83,15 @@
     transform 0.55s cubic-bezier(0.22, 1, 0.36, 1) var(--reveal-delay, 0ms);
 }
 
-.service-page [data-reveal].is-visible {
+/* FIX: trước đây dùng selector `[data-reveal].is-visible`. Class "is-visible"
+   được gắn imperatively bởi IntersectionObserver trong JS (ngoài tầm quản lý
+   của React). Với những phần tử có className do React tính lại mỗi lần
+   re-render (ví dụ .service-card đổi className theo state "selected"), React
+   sẽ ghi đè toàn bộ className và xoá mất "is-visible" mỗi khi state đổi (ví
+   dụ khi bấm chọn dịch vụ) -> phần tử bị set lại opacity:0 và trông như biến
+   mất. Đổi sang dùng attribute [data-revealed="true"] (không nằm trong JSX,
+   React không đụng tới) để trạng thái "đã hiện" không bị mất khi re-render. */
+.service-page [data-reveal][data-revealed="true"] {
   opacity: 1;
   transform: translateY(0);
 }

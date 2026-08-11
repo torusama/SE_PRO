@@ -102,6 +102,13 @@ const CATEGORY_CLASS: Record<Category, string> = {
   other: "other",
 };
 
+// Dịch vụ mai táng (an táng) không còn được cung cấp trong hệ thống này,
+// nên loại bỏ khỏi danh sách dịch vụ ngay từ khi tải dữ liệu để không
+// hiển thị ở bất kỳ đâu (danh mục dịch vụ lẫn bước chọn dịch vụ khi đặt).
+function excludeBurialServices(list: ServiceType[]): ServiceType[] {
+  return list.filter((service) => service.category !== "burial");
+}
+
 const STEP_KEYS: OrderStatus[] = [
   "submitted",
   "pending_confirm",
@@ -273,7 +280,17 @@ export default function ServicePage() {
           (entries) => {
             entries.forEach((entry) => {
               if (entry.isIntersecting) {
-                entry.target.classList.add("is-visible");
+                // FIX: dùng data-attribute thay vì class để đánh dấu "đã hiện".
+                // React quản lý toàn bộ `className` của các phần tử này (ví dụ
+                // .service-card có className phụ thuộc state "selected"), nên
+                // mỗi khi component re-render, React sẽ GHI ĐÈ lại toàn bộ
+                // className theo đúng JSX -> nếu ta gắn class "is-visible" bằng
+                // classList.add (ngoài tầm kiểm soát của React) thì class đó sẽ
+                // bị xoá mất ở lần re-render tiếp theo (ví dụ khi bấm chọn dịch
+                // vụ), khiến phần tử quay lại trạng thái opacity:0 và trông như
+                // "biến mất" khỏi giao diện. Dùng attribute không nằm trong JSX
+                // (data-revealed) thì React sẽ không đụng tới, nên không bị mất.
+                entry.target.setAttribute("data-revealed", "true");
                 observer?.unobserve(entry.target);
               }
             });
@@ -283,9 +300,11 @@ export default function ServicePage() {
 
     const registerRevealElements = (root: ParentNode) => {
       root
-        .querySelectorAll<HTMLElement>("[data-reveal]:not(.is-visible)")
+        .querySelectorAll<HTMLElement>(
+          "[data-reveal]:not([data-revealed='true'])",
+        )
         .forEach((item) => {
-          if (revealImmediately) item.classList.add("is-visible");
+          if (revealImmediately) item.setAttribute("data-revealed", "true");
           else observer?.observe(item);
         });
     };
@@ -296,8 +315,8 @@ export default function ServicePage() {
       mutations.forEach((mutation) => {
         mutation.addedNodes.forEach((node) => {
           if (!(node instanceof HTMLElement)) return;
-          if (node.matches("[data-reveal]:not(.is-visible)")) {
-            if (revealImmediately) node.classList.add("is-visible");
+          if (node.matches("[data-reveal]:not([data-revealed='true'])")) {
+            if (revealImmediately) node.setAttribute("data-revealed", "true");
             else observer?.observe(node);
           }
           registerRevealElements(node);
@@ -363,7 +382,7 @@ export default function ServicePage() {
       if (!isAuthenticated) {
         const typesRes =
           await api.get<ApiResponse<ServiceType[]>>("/service-types");
-        setServiceTypes(typesRes.data.data ?? []);
+        setServiceTypes(excludeBurialServices(typesRes.data.data ?? []));
         setOrders([]);
         setOwnedPlots([]);
         return;
@@ -373,7 +392,7 @@ export default function ServicePage() {
         api.get<ApiResponse<ServiceOrder[]>>("/my/service-orders"),
         api.get<ApiResponse<Contract[]>>("/my/contracts"),
       ]);
-      setServiceTypes(typesRes.data.data ?? []);
+      setServiceTypes(excludeBurialServices(typesRes.data.data ?? []));
       const loadedOrders = ordersRes.data.data ?? [];
       setOrders(loadedOrders);
       const plots = (contractsRes.data.data ?? [])
