@@ -30,6 +30,17 @@ interface PdfDocument {
   text(value: string, x: number, y: number, options?: { align?: string }): void
 }
 
+export const CONTRACT_PDF_RENDER_OPTIONS = {
+  image: { type: 'jpeg', quality: 0.92 },
+  html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+  jsPDF: {
+    unit: 'mm',
+    format: 'a4',
+    orientation: 'portrait',
+    compress: true,
+  },
+}
+
 function upgradePurchaseBase(baseContent: string, plots: ContractDocumentPlot[]) {
   if (!plots.length) return baseContent
   const article1 = /ĐIỀU\s+1\s*\./iu.exec(baseContent)
@@ -214,9 +225,7 @@ export async function createContractPdfBlob(contract: ContractPdfData) {
       .set({
         margin: [18, 25, 18, 25],
         filename: `${contract.contractCode}.pdf`,
-        image: { type: 'png', quality: 1 },
-        html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        ...CONTRACT_PDF_RENDER_OPTIONS,
         pagebreak: { mode: ['css', 'legacy'] },
       })
       .from(staging.firstElementChild as HTMLElement)

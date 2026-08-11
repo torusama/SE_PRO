@@ -1,8 +1,20 @@
 import { describe, expect, it } from 'vitest'
-import { composeContractDocument, createContractPdfElement } from './contractPdf'
+import {
+  composeContractDocument,
+  CONTRACT_PDF_RENDER_OPTIONS,
+  createContractPdfElement,
+} from './contractPdf'
 
 describe('composeContractDocument', () => {
   const base = 'ĐIỀU 1. ĐỐI TƯỢNG\nLô A và lô B\n\nĐIỀU 3. QUYỀN VÀ NGHĨA VỤ\nGiữ nguyên\n\nĐIỀU 5. THỜI HẠN\nNội dung'
+
+  it('uses compressed JPEG pages while preserving high-resolution rendering', () => {
+    expect(CONTRACT_PDF_RENDER_OPTIONS).toMatchObject({
+      image: { type: 'jpeg', quality: 0.92 },
+      html2canvas: { scale: 2 },
+      jsPDF: { compress: true },
+    })
+  })
 
   it('uses article 6 for general terms when inheritance is empty', () => {
     const result = composeContractDocument(base, '')
