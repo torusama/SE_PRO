@@ -93,7 +93,7 @@ describe('AppointmentsService', () => {
     );
   });
 
-  it('creates appointments for approved hold requests too', async () => {
+  it('rejects appointments for legacy hold requests', async () => {
     const { service } = createService((sql) => {
       if (sql.includes('FROM reservation_requests')) {
         return result([
@@ -120,10 +120,7 @@ describe('AppointmentsService', () => {
         location: 'Office',
         assignedStaffName: 'Staff',
       }),
-    ).resolves.toMatchObject({
-      id: 21,
-      notificationCreated: true,
-    });
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('rejects appointment dates earlier than the current date', async () => {
@@ -304,6 +301,26 @@ describe('AppointmentsService', () => {
         String(sql).includes("SET status = 'active'"),
       ),
     ).toBe(false);
+  });
+
+  it('blocks appointment creation while cancellation review is pending', async () => {
+    const { service } = createService((sql) => {
+      if (sql.includes('FROM reservation_requests')) {
+        return result([
+          { request_id: 10, user_id: 7, request_type: 'purchase', status: 'approved', cancellationPending: true },
+        ]);
+      }
+      return result();
+    });
+
+    await expect(
+      service.create(1, {
+        reservationRequestId: 10,
+        scheduledAt: '2099-07-15T00:00:00+07:00',
+        scheduledEndAt: '2099-07-15T23:59:59+07:00',
+        location: 'Office',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('records a customer confirmation for their pending appointment', async () => {

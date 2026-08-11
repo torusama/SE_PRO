@@ -29,6 +29,15 @@ describe('classifyRealtimeMutation', () => {
     );
   });
 
+  it('classifies admin purchase-cancellation reviews as reservation workflow mutations', () => {
+    expect(
+      classifyRealtimeMutation('PATCH', '/api/admin/reservation-cancellations/7/approve', 1),
+    ).toMatchObject({
+      rooms: ['authenticated'],
+      topics: expect.arrayContaining(['reservations', 'plots', 'contracts', 'audit']),
+    });
+  });
+
   it('scopes notification read state to its owner', () => {
     expect(
       classifyRealtimeMutation('PATCH', '/api/notifications/7/read', 33),

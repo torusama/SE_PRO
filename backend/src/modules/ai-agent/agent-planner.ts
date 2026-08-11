@@ -123,12 +123,6 @@ export const AGENT_PLANNER_TOOL = {
           type: 'string',
           enum: ['male', 'female', 'other'],
         },
-        requestType: {
-          type: 'string',
-          enum: ['reserve', 'purchase'],
-          description:
-            'Whether the customer wants a temporary reservation or a purchase request.',
-        },
         serviceQuery: {
           type: 'string',
           description:
@@ -461,10 +455,6 @@ export function parseAgentPlan(raw: string): AgentPlan {
       parsed.gender === 'female' ||
       parsed.gender === 'other'
         ? parsed.gender
-        : undefined,
-    requestType:
-      parsed.requestType === 'reserve' || parsed.requestType === 'purchase'
-        ? parsed.requestType
         : undefined,
     serviceQuery: optionalString(parsed.serviceQuery),
     serviceTypeId:

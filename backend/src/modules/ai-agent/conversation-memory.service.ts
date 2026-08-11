@@ -405,7 +405,7 @@ export class ConversationMemoryService {
       return `Hoàn tất đặt dịch vụ${pendingAction.serviceName ? ` ${pendingAction.serviceName}` : ''}${pendingAction.plotCode ? ` cho lô ${pendingAction.plotCode}` : ''}`;
     }
     if (pendingAction?.kind === 'plot_request') {
-      return `Hoàn tất yêu cầu ${pendingAction.requestType === 'purchase' ? 'mua lô' : 'giữ chỗ'} ${pendingAction.plotCodes.join(', ')}`.trim();
+      return `Hoàn tất yêu cầu mua lô ${pendingAction.plotCodes.join(', ')}`.trim();
     }
     if (pendingAction?.kind === 'appointment') return 'Hoàn tất đặt lịch với ban quản lý';
     if (pendingAction?.kind === 'memorial_reminder') return 'Hoàn tất tạo lịch nhắc tưởng niệm';
@@ -413,9 +413,9 @@ export class ConversationMemoryService {
       recommend_plots: 'Tìm và so sánh lô phù hợp',
       service_booking: 'Đặt dịch vụ nghĩa trang',
       service_suggestions: 'Tìm hiểu dịch vụ nghĩa trang',
-      plot_request: 'Tạo yêu cầu giữ chỗ hoặc mua lô',
+      plot_request: 'Tạo yêu cầu mua lô',
       bazi_suggestion: 'Tư vấn Bát Tự/phong thủy tham khảo',
-      purchase_process: 'Tìm hiểu quy trình mua/giữ chỗ',
+      purchase_process: 'Tìm hiểu quy trình mua lô',
       plot_details: 'Kiểm tra thông tin lô',
       customer_care: 'Theo dõi chăm sóc khách hàng',
     };

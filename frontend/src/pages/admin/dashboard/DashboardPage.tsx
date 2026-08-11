@@ -73,7 +73,7 @@ export default function DashboardPage() {
     () => [
       { label: "Còn trống", value: summary?.availablePlots ?? 0 },
       { label: "Đang chờ", value: summary?.pendingPlots ?? 0 },
-      { label: "Đã giữ", value: summary?.reservedPlots ?? 0 },
+      { label: "Đang giao dịch", value: summary?.reservedPlots ?? 0 },
       { label: "Đã bán", value: summary?.soldPlots ?? 0 },
       { label: "Đã khóa", value: summary?.lockedPlots ?? 0 },
     ],

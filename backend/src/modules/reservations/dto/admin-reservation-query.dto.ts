@@ -7,10 +7,6 @@ export class AdminReservationQueryDto extends AdminListQueryDto {
   status?: string;
 
   @IsOptional()
-  @IsIn(['reserve', 'purchase'])
-  type?: string;
-
-  @IsOptional()
   @IsIn(['customer', 'ai'])
   source?: 'customer' | 'ai';
 }

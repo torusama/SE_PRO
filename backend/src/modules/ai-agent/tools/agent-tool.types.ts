@@ -67,7 +67,6 @@ export type AgentToolName =
   | 'get_purchase_process'
   | 'analyze_plot_competitiveness'
   | 'get_customer_care_overview'
-  | 'create_draft_reservation'
   | 'propose_knowledge_update';
 
 export interface AgentToolContext {

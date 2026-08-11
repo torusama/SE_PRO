@@ -134,7 +134,7 @@ const STATUS_META: Record<
     text: "#9b650d",
   },
   reserved: {
-    label: "Đã giữ chỗ",
+    label: "Đang giao dịch",
     fill: "#fff4cc",
     stroke: "#ba8b12",
     text: "#7d5d08",
@@ -555,20 +555,6 @@ export default function MapManagementPage() {
     }
   }
 
-  async function changeStatus(plot: BackendPlot, status: PlotStatus) {
-    if (plot.status === status) return;
-    setSaving(true);
-    try {
-      await api.patch(`/admin/plots/${plot.id}/status`, { status });
-      notify(`Đã chuyển ${plot.plotCode} sang “${STATUS_META[status].label}”.`);
-      await loadData(true);
-    } catch (statusError) {
-      setError(errorMessage(statusError));
-    } finally {
-      setSaving(false);
-    }
-  }
-
   async function toggleLock(plot: BackendPlot) {
     setSaving(true);
     try {
@@ -731,7 +717,7 @@ export default function MapManagementPage() {
               onClick={() => toggleStatusFilter("reserved")}
             >
               <span className="stat-num yellow">{stats.reserved}</span>
-              <span className="stat-lbl">Đã giữ chỗ</span>
+              <span className="stat-lbl">Đang giao dịch</span>
             </div>
             <div
               className={`stat-card ${statusFilter === "sold" ? "active" : ""}`}
@@ -1291,34 +1277,6 @@ export default function MapManagementPage() {
                     Sửa thông tin
                   </button>
                   <div className="admin-map-management-actions">
-                    {plot.status !== "locked" && (
-                      <label>
-                        Cập nhật trạng thái
-                        <select
-                          value={plot.status}
-                          disabled={saving}
-                          onChange={(event) =>
-                            void changeStatus(
-                              plot,
-                              event.target.value as PlotStatus,
-                            )
-                          }
-                        >
-                          {(
-                            [
-                              "available",
-                              "pending",
-                              "reserved",
-                              "sold",
-                            ] as PlotStatus[]
-                          ).map((value) => (
-                            <option key={value} value={value}>
-                              {STATUS_META[value].label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    )}
                     <button
                       className={plot.status === "locked" ? "unlock" : "lock"}
                       disabled={saving}

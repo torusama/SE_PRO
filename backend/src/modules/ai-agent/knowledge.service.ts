@@ -8,7 +8,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { DatabaseService } from '../../database/database.service';
 import { KnowledgeEmbeddingService } from './knowledge-embedding.service';
-import { PLOT_PENDING_HOLD_MINUTES } from '../reservations/reservation-policy.constants';
+import { PLOT_PENDING_LOCK_MINUTES } from '../reservations/reservation-policy.constants';
 import { isRuntimeOperationalClaim } from './knowledge-safety.util';
 
 interface PromptKnowledgeRow {
@@ -50,23 +50,19 @@ export class KnowledgeService {
          AND (k.effective_from IS NULL OR k.effective_from <= NOW())
          AND (k.effective_to IS NULL OR k.effective_to > NOW())`,
     );
-    return (
-      row ?? {
-        title: 'Quy trình tạo yêu cầu mua hoặc giữ chỗ',
-        content: `Chọn phương án, kiểm tra thông tin rồi chủ động gửi yêu cầu để quản trị viên xác minh. Khi yêu cầu được gửi và lô chuyển sang trạng thái chờ xử lý, backend tạm khóa lô trong ${PLOT_PENDING_HOLD_MINUTES} phút để chống trùng/race-condition. Nếu hết thời gian này mà yêu cầu vẫn ở trạng thái pending/submitted, hệ thống tự hủy yêu cầu và trả lô về available. Sau khi quản trị viên duyệt yêu cầu giữ chỗ, lô chuyển sang reserved và hiện backend không có quy tắc tự hết hạn theo số ngày cho trạng thái reserved.`,
-        version: 'kb-runtime-policy-v1',
-      }
-    );
+    return {
+      title: 'Quy trình gửi yêu cầu mua lô',
+      content: `Chọn một hoặc nhiều lô đang trống, kiểm tra thông tin rồi chủ động gửi yêu cầu mua để quản trị viên xác minh. Khi yêu cầu được gửi và đang chờ xử lý, backend khóa tạm lô trong ${PLOT_PENDING_LOCK_MINUTES} phút để chống hai khách cùng gửi yêu cầu cho một lô. Nếu hết thời gian này mà yêu cầu vẫn chưa được xử lý, hệ thống tự hủy yêu cầu và trả lô về trạng thái đang trống. Khi quản trị viên duyệt yêu cầu mua, hệ thống tạo hợp đồng nháp để tiếp tục các bước hẹn ký, thanh toán, tải minh chứng hợp đồng đã ký và xác lập quyền sở hữu.`,
+      version: row?.version ?? 'kb-runtime-policy-v2',
+    };
   }
 
-  getReservationHoldPolicy() {
+  getPurchaseRequestPolicy() {
     return {
-      temporaryPendingHoldMinutes: PLOT_PENDING_HOLD_MINUTES,
-      temporaryPendingStatuses: ['pending', 'submitted'],
+      temporaryLockMinutes: PLOT_PENDING_LOCK_MINUTES,
+      pendingStatuses: ['pending', 'submitted'],
       temporaryPlotStatus: 'pending',
-      approvedReservePlotStatus: 'reserved',
-      approvedReserveAutoExpiryDays: null as number | null,
-      summary: `Backend hiện tạm khóa lô ${PLOT_PENDING_HOLD_MINUTES} phút khi yêu cầu đang chờ xử lý. Hết thời gian này, yêu cầu pending/submitted có thể bị tự hủy và lô được trả về available. Với lô đã được duyệt sang reserved, source hiện tại không có giới hạn tự hết hạn theo số ngày.`,
+      summary: `Backend khóa tạm lô ${PLOT_PENDING_LOCK_MINUTES} phút khi yêu cầu mua đang chờ xử lý để chống gửi trùng. Hết thời gian này, yêu cầu pending/submitted có thể bị tự hủy và lô được trả về available.`,
     };
   }
 
@@ -670,7 +666,7 @@ export class KnowledgeService {
 
       if (action === 'approve' && isRuntimeOperationalClaim(current.content)) {
         throw new BadRequestException(
-          'This proposal attempts to change runtime operational behavior. Chat knowledge approval cannot modify reservation timing, prices/discounts, roles, permissions, or other backend rules.',
+          'This proposal attempts to change runtime operational behavior. Chat knowledge approval cannot modify purchase-request timing, prices/discounts, roles, permissions, or other backend rules.',
         );
       }
 

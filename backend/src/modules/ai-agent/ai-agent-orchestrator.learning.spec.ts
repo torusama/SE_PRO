@@ -736,7 +736,7 @@ describe('AiAgentOrchestratorService application-level learning', () => {
       {},
     ],
     [
-      'Quy trình giữ chỗ như thế nào?',
+      'Quy trình mua lô như thế nào?',
       'purchase_process',
       'get_purchase_process',
       {},
@@ -862,12 +862,11 @@ describe('AiAgentOrchestratorService application-level learning', () => {
       stage: 'awaiting_confirmation' as const,
       plotIds: [1],
       plotCodes: ['B-01-001'],
-      requestType: 'reserve' as const,
       quotedTotal: 30_000_000,
     };
     booking.loadPendingAction.mockResolvedValue(pendingAction);
     booking.handleTurn.mockResolvedValue({
-      assistantMessage: 'Yêu cầu giữ chỗ đã được gửi để quản trị viên xử lý.',
+      assistantMessage: 'Yêu cầu mua lô đã được gửi để quản trị viên xử lý.',
       intent: 'plot_request',
     });
 
@@ -908,7 +907,6 @@ describe('AiAgentOrchestratorService application-level learning', () => {
           action: 'prepare_plot_request',
           requirements: expect.objectContaining({
             selectedPlotCode: 'B-01-001',
-            requestType: 'reserve',
           }),
         }),
       }),
@@ -1023,7 +1021,7 @@ describe('AiAgentOrchestratorService application-level learning', () => {
       Mình đã ghi nhớ ưu tiên gần cổng và đã đối chiếu phương án từ dữ liệu lô còn trống hiện tại.
       **Nhóm A-01-001 và A-01-002** là phương án mình ưu tiên trong tiêu chí bạn đưa ra. Hai lô liền kề có tổng giá niêm yết 300.000.000 VND, tức khoảng 150.000.000 VND mỗi lô nếu chia đều để dễ hình dung. Tổng diện tích của nhóm là 40 m², thuộc Khu A và dữ liệu truy cập cho biết nhóm này ở gần cổng chính. Với nhu cầu dành hai lô cạnh nhau cho gia đình, tính liền kề là điểm phù hợp quan trọng vì giúp giữ bố cục chung thay vì phải tách sang hai vị trí khác nhau.
 
-      Về cân nhắc, trạng thái còn trống chỉ phản ánh thời điểm tìm kiếm, chưa phải giữ chỗ hay xác nhận mua. Hướng East là dữ liệu vị trí của lô; mình không xem riêng yếu tố hướng này là kết luận văn hóa hay phong thủy khi chưa có thông tin Bát Tự. Điểm số xếp hạng cũng chỉ dùng để sắp thứ tự theo các tiêu chí đã biết, không phải bảo đảm chất lượng tuyệt đối.
+      Về cân nhắc, trạng thái còn trống chỉ phản ánh thời điểm tìm kiếm, chưa phải yêu cầu mua đã được duyệt. Hướng East là dữ liệu vị trí của lô; mình không xem riêng yếu tố hướng này là kết luận văn hóa hay phong thủy khi chưa có thông tin Bát Tự. Điểm số xếp hạng cũng chỉ dùng để sắp thứ tự theo các tiêu chí đã biết, không phải bảo đảm chất lượng tuyệt đối.
 
       Nếu ưu tiên lớn nhất của bạn là hai lô liền nhau, gần lối vào và vẫn nằm trong ngân sách 400.000.000 VND, mình nghiêng về nhóm này vì nó đáp ứng đồng thời cả ba điều kiện mà không phải hy sinh tiêu chí chính. Bước hợp lý tiếp theo là mở hai lô trên bản đồ để kiểm tra vị trí trực quan trước khi tạo yêu cầu. Bạn muốn mình mở nhóm A-01-001 và A-01-002 trên bản đồ để xem kỹ vị trí không?
     `.trim();

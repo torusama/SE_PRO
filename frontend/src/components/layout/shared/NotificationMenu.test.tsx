@@ -34,6 +34,7 @@ function CurrentLocation() {
     <output data-testid="current-location">
       {location.pathname}
       {location.search}
+      {location.hash}
     </output>
   );
 }
@@ -224,6 +225,46 @@ describe("NotificationMenu", () => {
     await waitFor(() =>
       expect(screen.getByTestId("current-location")).toHaveTextContent(
         "/admin/dich-vu?order=12",
+      ),
+    );
+  });
+
+  it("opens the customer request view for a cancellation notification", async () => {
+    apiMocks.get.mockResolvedValue({
+      data: {
+        success: true,
+        data: [
+          {
+            id: 8,
+            type: "request_cancellation_approved",
+            title: "Yêu cầu hủy đã được duyệt",
+            message: "Yêu cầu mua lô của bạn đã được hủy.",
+            isRead: false,
+            relatedEntityType: "reservation_request",
+            relatedEntityId: 42,
+            createdAt: "2026-08-11T08:00:00.000Z",
+          },
+        ],
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/thong-bao"]}>
+        <NotificationMenu />
+        <CurrentLocation />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Thông báo, 1 chưa đọc" }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /Yêu cầu hủy đã được duyệt/ }),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId("current-location")).toHaveTextContent(
+        "/lo-cua-toi?request=42#requests",
       ),
     );
   });

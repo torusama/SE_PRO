@@ -191,49 +191,12 @@ describe('AI Agent pending booking reply resolution', () => {
     plotCodes: ['C-02-001'],
   });
 
-  it.each(['gửi yêu cầu', 'mình muốn đặt mua', 'mua lô đi'])(
-    'continues a collecting plot request as purchase for "%s"',
-    (message) => {
-      expect(
-        resolvePendingBookingReply(
-          basePlan(),
-          collectingPlotRequest(),
-          message,
-        ),
-      ).toMatchObject({
-        intent: 'plot_request',
-        action: 'prepare_plot_request',
-        needsClarification: false,
-        requirements: { requestType: 'purchase' },
-      });
-    },
-  );
-
-  it.each(['giữ chỗ', 'mình chọn giữ tạm', 'đặt chỗ nhé'])(
-    'continues a collecting plot request as reservation for "%s"',
-    (message) => {
-      expect(
-        resolvePendingBookingReply(
-          basePlan(),
-          collectingPlotRequest(),
-          message,
-        ),
-      ).toMatchObject({
-        intent: 'plot_request',
-        action: 'prepare_plot_request',
-        needsClarification: false,
-        requirements: { requestType: 'reserve' },
-      });
-    },
-  );
-
   it('only treats submit language as confirmation after the summary is ready', () => {
     const ready: AgentPendingAction = {
       kind: 'plot_request',
       stage: 'awaiting_confirmation',
       plotIds: [201],
       plotCodes: ['C-02-001'],
-      requestType: 'purchase',
     };
 
     expect(

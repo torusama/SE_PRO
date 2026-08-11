@@ -558,41 +558,6 @@ export function resolvePendingBookingReply(
   )
     return plan;
 
-  if (
-    pendingAction.kind === 'plot_request' &&
-    pendingAction.stage === 'collecting' &&
-    !pendingAction.requestType
-  ) {
-    const politePrefix = '(?:(?:minh|toi|em|anh|chi)\\s+(?:muon|chon)\\s+)?';
-    const politeSuffix = '(?:\\s+(?:di|nhe|luon|giup\\s+(?:minh|toi|em)))?';
-    const purchaseReply = new RegExp(
-      `^${politePrefix}(?:gui\\s+yeu\\s+cau(?:\\s+mua)?|yeu\\s+cau\\s+mua|mua(?:\\s+lo)?|dat\\s+mua)${politeSuffix}$`,
-    );
-    const reserveReply = new RegExp(
-      `^${politePrefix}(?:giu\\s+cho(?:\\s+tam\\s+thoi)?|giu\\s+tam(?:\\s+thoi)?|dat\\s+cho)${politeSuffix}$`,
-    );
-    const requestType = purchaseReply.test(reply)
-      ? 'purchase'
-      : reserveReply.test(reply)
-        ? 'reserve'
-        : undefined;
-
-    if (requestType) {
-      return {
-        ...plan,
-        intent: 'plot_request',
-        action: 'prepare_plot_request',
-        contextMode: 'continue',
-        needsClarification: false,
-        clarificationQuestion: '',
-        requirements: {
-          ...plan.requirements,
-          requestType,
-        },
-      };
-    }
-  }
-
   const confirmsPendingAction =
     /^(?:(?:minh|toi|em|anh|chi)\s+)?(?:ok|oke|okay|oki|dong y|xac nhan|chot|dung roi|chuan roi|gui di|gui don|gui yeu cau|hoan tat|tien hanh|dat di|dat i|dat luon)(?:\s+.*)?$/.test(
       reply,
@@ -994,7 +959,7 @@ export class AiAgentOrchestratorService {
         sessionId,
         userMessageId,
         assistantMessage:
-          'Mình chưa có đủ thông tin để hiểu bạn muốn tiếp tục việc nào. Bạn có thể nói ngắn gọn như “gợi ý lô phù hợp”, “xem dịch vụ chăm sóc”, “hỏi quy trình giữ chỗ” hoặc nêu mã lô cần kiểm tra.',
+          'Mình chưa có đủ thông tin để hiểu bạn muốn tiếp tục việc nào. Bạn có thể nói ngắn gọn như “gợi ý lô phù hợp”, “xem dịch vụ chăm sóc”, “hỏi quy trình mua lô” hoặc nêu mã lô cần kiểm tra.',
         intent: 'clarification',
         requirements,
         recommendationResult: null,
@@ -1084,7 +1049,7 @@ export class AiAgentOrchestratorService {
     }
 
     // Chat is never an operational admin console. A customer claiming to be an
-    // admin cannot change runtime rules, prices, discounts, reservation TTLs or
+    // admin cannot change runtime rules, prices, discounts, request TTLs or
     // permissions by natural language. Even a real admin must use the protected
     // management workflow for operational changes.
     if (this.isSystemRuleMutationAttempt(dto.message)) {
@@ -1100,8 +1065,8 @@ export class AiAgentOrchestratorService {
         quickReplies: [
           {
             id: 'mutation-process',
-            label: 'Xem quy trình giữ chỗ',
-            message: 'Giải thích giúp mình quy trình giữ chỗ hiện tại.',
+            label: 'Xem quy trình mua lô',
+            message: 'Giải thích giúp mình quy trình mua lô hiện tại.',
             emphasis: 'strong',
           },
           {
@@ -1119,26 +1084,26 @@ export class AiAgentOrchestratorService {
       });
     }
 
-    if (this.isReservationHoldDurationQuestion(dto.message)) {
+    if (this.isPurchaseRequestTimingQuestion(dto.message)) {
       await saveUserMessage();
       return this.finish({
         conversation,
         sessionId,
         userMessageId,
-        assistantMessage: this.buildReservationHoldPolicyAnswer(),
+        assistantMessage: this.buildPurchaseRequestTimingAnswer(),
         intent: 'purchase_process',
         requirements,
         recommendationResult: null,
         quickReplies: [
           {
-            id: 'hold-process',
-            label: 'Xem toàn bộ quy trình giữ chỗ',
+            id: 'purchase-process',
+            label: 'Xem toàn bộ quy trình mua lô',
             message:
-              'Giải thích giúp mình toàn bộ quy trình giữ chỗ từ lúc gửi yêu cầu đến khi được duyệt.',
+              'Giải thích giúp mình toàn bộ quy trình mua lô từ lúc gửi yêu cầu đến khi được duyệt.',
             emphasis: 'strong',
           },
           {
-            id: 'hold-plots',
+            id: 'purchase-plots',
             label: 'Gợi ý lô đang trống',
             message: 'Gợi ý cho mình vài lô đang trống phù hợp nhé.',
           },
@@ -1149,14 +1114,14 @@ export class AiAgentOrchestratorService {
       });
     }
 
-    if (this.isReservationProcessQuestion(dto.message)) {
+    if (this.isPurchaseProcessQuestion(dto.message)) {
       await saveUserMessage();
       return this.finish({
         conversation,
         sessionId,
         userMessageId,
         userMessage: dto.message,
-        assistantMessage: this.buildReservationProcessAnswer(),
+        assistantMessage: this.buildPurchaseProcessAnswer(),
         intent: 'purchase_process',
         requirements,
         recommendationResult: null,
@@ -1851,18 +1816,7 @@ export class AiAgentOrchestratorService {
         folded,
       );
     if (requestsExactPlotBooking) {
-      const requestType = /\b(?:giu cho|dat cho|giu lo)\b/.test(folded)
-        ? 'reserve'
-        : /\b(?:mua lo|gui yeu cau mua|dat mua)\b/.test(folded)
-          ? 'purchase'
-          : requirements.requestType;
-      return {
-        ...deterministicPlan('plot_request', 'prepare_plot_request'),
-        requirements: {
-          ...requirements,
-          ...(requestType ? { requestType } : {}),
-        },
-      };
+      return deterministicPlan('plot_request', 'prepare_plot_request');
     }
 
     const requestsSpecificServiceBooking =
@@ -2391,7 +2345,7 @@ Write the final helpful, highly consultative response now.
   5. Normally end with at most ONE context-specific question that advances the topic the user is actually discussing. Never force a budget/price/plot-count question into casual conversation, memory requests, cultural discussion, or explanations. Never end with a generic "Bạn cần hỗ trợ gì thêm?".
 - Aim for 100–220 Vietnamese words for ordinary substantive follow-ups and 140–260 words for service/process advice. Plot recommendation depth follows the dedicated plot rules below. Brief confirmations may remain short.
 - For service advice, explain who the service fits, the grounded listed price/unit, the owned-plot or date information still needed, and the confirmation step before an order is created.
-- For purchase/reservation guidance, distinguish what the system can prepare from what still requires customer confirmation, current availability, or staff processing.
+- For plot-purchase guidance, distinguish what the system can prepare from what still requires customer confirmation, current availability, or staff processing. Never offer a separate hold/reserve choice.
 - For plot competitiveness, call it an internal point-in-time pressure signal. Explain the real active-request count, 30-day interest, comparable available alternatives, internal listed-price position, status, scoring basis, and limitations. Never imply external market demand, urgency, future appreciation, or guaranteed scarcity.
 - For customer care, prioritize active or upcoming items, translate statuses into plain language, identify the single most time-sensitive next step, and state when sign-in or staff processing is required. Never mention or infer another user's records.
 - For greetings, capability questions, vague openings, and short replies, write a fresh context-aware response yourself. Never reuse a canned welcome or sales script. Use the conversation and account context when available, briefly establish the most useful value you can provide, then ask at most one intelligent question when it naturally helps the customer move forward.
@@ -2416,7 +2370,7 @@ Write the final helpful, highly consultative response now.
 - INTERNAL MAP DATA: Never reveal mapX, mapY, mapWidth, mapHeight, numeric canvas distances, or ask the customer to infer where a gate lies. Use only each option's accessSummary for entrance proximity. If no accessSummary exists, say the map does not yet provide a verified access comparison and offer the interactive map or staff confirmation.
 - PRICE GUIDANCE: inventoryPriceContext is a comparison against matching currently available listings inside Vĩnh Phúc Viên only. Explain listed total, per-plot price for groups, and lower/middle/higher position within that inventory when useful. Never present it as the external real-estate market, an appraisal, historical trend, or investment forecast.
 - SALES DEPTH: Introduce the strongest plot in customer-friendly language, explain practical benefits and trade-offs, proactively contrast alternatives, state what still needs verification, and make a reasoned recommendation for a customer who may know nothing about cemetery plots. Do not simply dump a table of fields.
-- SCOPE BOUNDARY: You, the LLM, decide scope from semantic meaning and the full conversation—never from keyword matching. Focus on Vĩnh Phúc Viên cemetery plots, maps, prices, comparisons, cultural direction guidance, purchase/reservation workflow, owned-plot context, order/request status, and memorial-care services. For a genuinely unrelated request, respond briefly and naturally, explain what you can help with, and ask one relevant redirecting question. For a mixed request, answer the supported part and briefly decline the rest.
+- SCOPE BOUNDARY: You, the LLM, decide scope from semantic meaning and the full conversation—never from keyword matching. Focus on Vĩnh Phúc Viên cemetery plots, maps, prices, comparisons, cultural direction guidance, plot-purchase workflow, owned-plot context, order/request status, and memorial-care services. For a genuinely unrelated request, respond briefly and naturally, explain what you can help with, and ask one relevant redirecting question. For a mixed request, answer the supported part and briefly decline the rest.
 - Do not state ungrounded plot facts or turn an "available" status into a claim that a plot is ready for deposit without user request.
 - Do not say that you are waiting, searching later, or about to call a tool.`,
       },
@@ -2579,7 +2533,7 @@ Nếu bạn muốn, mình có thể **lọc lô theo các hướng ưu tiên nà
     const statusLabels: Record<string, string> = {
       available: 'đang trống',
       pending: 'đang được xử lý yêu cầu',
-      reserved: 'đã giữ chỗ',
+      reserved: 'đang trong quy trình hoàn tất mua',
       sold: 'đã bán',
       locked: 'đang khóa',
     };
@@ -2603,7 +2557,7 @@ Nếu bạn muốn, mình có thể **lọc lô theo các hướng ưu tiên nà
 
 Đây là tín hiệu tại thời điểm kiểm tra từ dữ liệu nội bộ, không phải định giá thị trường, dự báo tăng giá hay cam kết lô sắp hết. Trước khi gửi yêu cầu, hệ thống vẫn phải kiểm tra lại trạng thái thực tế.
 
-Bạn muốn mình so sánh tiếp lô ${plotCode} với một mã lô cụ thể hay chuẩn bị yêu cầu giữ chỗ/mua?`;
+Bạn muốn mình so sánh tiếp lô ${plotCode} với một mã lô cụ thể hay chuẩn bị yêu cầu mua?`;
   }
 
   private describeBasicPlotDetails(toolOutput: unknown, requestedCode: string) {
@@ -2620,7 +2574,7 @@ Bạn muốn mình so sánh tiếp lô ${plotCode} với một mã lô cụ th�
     const statusLabels: Record<string, string> = {
       available: 'đang trống',
       pending: 'đang được xử lý yêu cầu',
-      reserved: 'đã giữ chỗ',
+      reserved: 'đang trong quy trình hoàn tất mua',
       sold: 'đã bán',
       locked: 'đang khóa',
       maintenance: 'đang bảo trì',
@@ -2645,7 +2599,7 @@ Bạn muốn mình so sánh tiếp lô ${plotCode} với một mã lô cụ th�
     ].filter(Boolean);
     const nextStep =
       status === 'available'
-        ? 'Lô đang trống tại thời điểm kiểm tra. Bạn muốn xem trên bản đồ, so sánh với lô khác hay bắt đầu yêu cầu giữ chỗ?'
+        ? 'Lô đang trống tại thời điểm kiểm tra. Bạn muốn xem trên bản đồ, so sánh với lô khác hay bắt đầu yêu cầu mua?'
         : 'Lô hiện không ở trạng thái có thể chọn mới. Mình có thể tìm các lô đang trống có tiêu chí tương tự cho bạn.';
     return `**Lô ${code}:** ${facts.join(', ')}.\n\n${nextStep}`;
   }
@@ -3022,7 +2976,7 @@ Yêu cầu bắt buộc:
 
 Ví dụ JSON output:
 [
-  {"category": "Chi phí đặt giữ", "text": "Chi phí đặt cọc và giữ lô diễn ra như thế nào?"},
+  {"category": "Chi phí mua lô", "text": "Giá trị hợp đồng và thanh toán khi mua lô diễn ra như thế nào?"},
   {"category": "Hướng phong thủy", "text": "Khu vực này có hợp với gia chủ tuổi Mậu Thìn không?"},
   {"category": "Xem thực tế", "text": "Tôi muốn đăng ký xem thực tế hoa viên vào cuối tuần."}
 ]`;
@@ -4110,7 +4064,7 @@ ${JSON.stringify(options)}
     if (isShortGreeting) {
       return {
         assistantMessage:
-          'Chào bạn! Mình là trợ lý của Vĩnh Phúc Viên. Mình có thể giúp bạn xem lô đang trống và giá hiện tại, so sánh phương án, hướng dẫn giữ chỗ/mua lô, tìm dịch vụ chăm sóc hoặc trao đổi phong thủy – Bát Tự theo hướng tham khảo. Bạn muốn bắt đầu từ đâu?',
+          'Chào bạn! Mình là trợ lý của Vĩnh Phúc Viên. Mình có thể giúp bạn xem lô đang trống và giá hiện tại, so sánh phương án, hướng dẫn mua lô, tìm dịch vụ chăm sóc hoặc trao đổi phong thủy – Bát Tự theo hướng tham khảo. Bạn muốn bắt đầu từ đâu?',
         quickReplies: this.baseHelpQuickReplies(),
       };
     }
@@ -4210,7 +4164,7 @@ ${JSON.stringify(options)}
     if (asksForOrientation) {
       return {
         assistantMessage:
-          'Không sao, mình có thể giúp bạn bắt đầu từng bước. Nếu đang chọn nơi an táng, ta có thể xem lô và ngân sách trước; nếu đã có lô, ta có thể xem dịch vụ chăm sóc; hoặc mình giải thích quy trình mua/giữ chỗ trước.',
+          'Không sao, mình có thể giúp bạn bắt đầu từng bước. Nếu đang chọn nơi an táng, ta có thể xem lô và ngân sách trước; nếu đã có lô, ta có thể xem dịch vụ chăm sóc; hoặc mình giải thích quy trình mua lô trước.',
         quickReplies: this.baseHelpQuickReplies(),
       };
     }
@@ -4358,7 +4312,7 @@ ${JSON.stringify(options)}
     if (asksCapabilities) {
       return {
         assistantMessage:
-          'Mình là trợ lý AI của Vĩnh Phúc Viên. Mình có thể hỗ trợ tìm và so sánh lô từ dữ liệu hiện có, xem giá/tình trạng, giải thích quy trình giữ chỗ – mua lô, gợi ý dịch vụ chăm sóc, theo dõi một số thông tin khách hàng và tư vấn phong thủy/Bát Tự theo hướng tham khảo.',
+          'Mình là trợ lý AI của Vĩnh Phúc Viên. Mình có thể hỗ trợ tìm và so sánh lô từ dữ liệu hiện có, xem giá/tình trạng, giải thích quy trình mua lô, gợi ý dịch vụ chăm sóc, theo dõi một số thông tin khách hàng và tư vấn phong thủy/Bát Tự theo hướng tham khảo.',
         quickReplies: this.baseHelpQuickReplies(),
       };
     }
@@ -4473,7 +4427,7 @@ ${JSON.stringify(options)}
           {
             id: 'ambiguous-purchase-process',
             label: 'Xem quy trình',
-            message: 'Giải thích giúp mình quy trình mua và giữ chỗ.',
+            message: 'Giải thích giúp mình quy trình mua lô.',
           },
         ],
       };
@@ -4526,7 +4480,7 @@ ${JSON.stringify(options)}
     if (/^(?:tu van|ho tro|giup minh|giup tui|can giup)$/.test(folded)) {
       return {
         assistantMessage:
-          'Mình sẵn sàng hỗ trợ. Bạn muốn bắt đầu với việc tìm lô, xem dịch vụ chăm sóc hay tìm hiểu quy trình mua và giữ chỗ?',
+          'Mình sẵn sàng hỗ trợ. Bạn muốn bắt đầu với việc tìm lô, xem dịch vụ chăm sóc hay tìm hiểu quy trình mua lô?',
         quickReplies: this.baseHelpQuickReplies(),
       };
     }
@@ -4706,8 +4660,8 @@ ${JSON.stringify(options)}
       },
       {
         id: 'help-process',
-        label: 'Hỏi quy trình giữ chỗ',
-        message: 'Giải thích giúp mình quy trình giữ chỗ và mua lô.',
+        label: 'Hỏi quy trình mua lô',
+        message: 'Giải thích giúp mình quy trình mua lô.',
       },
       {
         id: 'help-spiritual',
@@ -4747,11 +4701,11 @@ ${JSON.stringify(options)}
             'Gợi ý cho mình các lô khác theo tiêu chí hiện tại và không lặp lại những lô vừa đề xuất.',
         },
         {
-          id: `plot-hold-${best.optionId}`,
-          label: code ? `Giữ chỗ lô ${code}` : 'Giữ chỗ phương án đầu',
+          id: `plot-purchase-${best.optionId}`,
+          label: code ? `Mua lô ${code}` : 'Mua phương án đầu',
           message: code
-            ? `Mình muốn giữ chỗ lô ${code}.`
-            : 'Mình muốn bắt đầu giữ chỗ phương án đầu tiên.',
+            ? `Mình muốn gửi yêu cầu mua lô ${code}.`
+            : 'Mình muốn gửi yêu cầu mua phương án đầu tiên.',
           emphasis: 'strong',
         },
       ];
@@ -4866,7 +4820,7 @@ ${JSON.stringify(options)}
   }
 
   private outOfScopeResponse(_message: string) {
-    return 'Nội dung này nằm ngoài phạm vi hỗ trợ của trợ lý Vĩnh Phúc Viên. Mình có thể giúp bạn tra cứu và so sánh lô, xem giá và tình trạng hiện tại, tìm hiểu quy trình mua/giữ chỗ, dịch vụ chăm sóc hoặc phong thủy mang tính tham khảo.';
+    return 'Nội dung này nằm ngoài phạm vi hỗ trợ của trợ lý Vĩnh Phúc Viên. Mình có thể giúp bạn tra cứu và so sánh lô, xem giá và tình trạng hiện tại, tìm hiểu quy trình mua lô, dịch vụ chăm sóc hoặc phong thủy mang tính tham khảo.';
   }
 
   private isShortConfirmationFollowUp(
@@ -4900,43 +4854,46 @@ ${JSON.stringify(options)}
     return 'Ừ, mình xác nhận câu trả lời ngay trước đó theo ngữ cảnh hiện tại. Nếu bạn muốn kiểm tra một chi tiết cụ thể, cứ hỏi thẳng chi tiết đó để mình đối chiếu chính xác.';
   }
 
-  private isReservationHoldDurationQuestion(message: string) {
+  private isPurchaseRequestTimingQuestion(message: string) {
     const folded = this.foldForMemory(message);
-    const hold =
-      /\b(?:giu cho|dat cho|giu lo|khoa lo|reserved|reservation)\b/.test(
+    const purchaseRequest =
+      /\b(?:mua lo|yeu cau mua|gui yeu cau|giu cho|dat cho|giu lo|khoa lo|reserved|reservation)\b/.test(
         folded,
       );
     const duration =
       /\b(?:bao lau|bao nhieu ngay|bao nhieu gio|toi da|thoi gian|het han|thoi han)\b/.test(
         folded,
       );
-    return hold && duration;
+    return purchaseRequest && duration;
   }
 
-  private buildReservationHoldPolicyAnswer() {
-    const policy = this.knowledge.getReservationHoldPolicy();
-    return `Theo backend hiện tại, khi một yêu cầu được gửi và lô chuyển sang trạng thái chờ xử lý, lô chỉ được khóa tạm trong ${policy.temporaryPendingHoldMinutes} phút. Nếu hết thời gian đó mà yêu cầu vẫn ở trạng thái pending/submitted, hệ thống có cơ chế tự hủy yêu cầu và trả lô về trạng thái available. Sau khi quản trị viên duyệt yêu cầu giữ chỗ và lô chuyển sang reserved, source hiện tại không đặt giới hạn tự hết hạn theo số ngày. Vì vậy quy định “Khu A tối đa 7 ngày” không phải là quy tắc vận hành hiện có của backend.`;
+  private buildPurchaseRequestTimingAnswer() {
+    const policy = this.knowledge.getPurchaseRequestPolicy();
+    return `Hệ thống hiện chỉ tiếp nhận **yêu cầu mua lô**, không còn lựa chọn giữ chỗ. Khi yêu cầu mua được gửi và đang chờ xử lý, lô được khóa tạm trong ${policy.temporaryLockMinutes} phút để chống hai khách cùng gửi yêu cầu cho một lô. Nếu hết thời gian đó mà yêu cầu vẫn ở trạng thái pending/submitted, hệ thống có thể tự hủy yêu cầu và trả lô về trạng thái đang trống. Đây là khóa kỹ thuật khi gửi yêu cầu mua, không phải dịch vụ giữ lô cho khách hàng.`;
   }
 
-  private isReservationProcessQuestion(message: string) {
+  private isPurchaseProcessQuestion(message: string) {
     const folded = this.foldForMemory(message);
     return (
       /\b(?:quy trinh|thu tuc|cac buoc|lam sao|nhu the nao)\b/.test(folded) &&
-      /\b(?:giu cho|dat cho|giu lo)\b/.test(folded)
+      /\b(?:mua lo|yeu cau mua|gui yeu cau|giu cho|dat cho|giu lo)\b/.test(
+        folded,
+      )
     );
   }
 
-  private buildReservationProcessAnswer() {
-    const policy = this.knowledge.getReservationHoldPolicy();
-    return `**Quy trình giữ chỗ hiện tại:**
+  private buildPurchaseProcessAnswer() {
+    const policy = this.knowledge.getPurchaseRequestPolicy();
+    return `**Quy trình mua lô hiện tại:**
 
-1. Chọn lô đang trống và mở yêu cầu giữ chỗ.
+1. Chọn một hoặc nhiều lô đang trống và mở yêu cầu mua.
 2. Đăng nhập, kiểm tra đúng mã lô và xác nhận gửi yêu cầu.
 3. Hệ thống kiểm tra lại trạng thái lô để tránh hai khách cùng chọn một lô.
-4. Trong lúc yêu cầu chờ xử lý, lô được khóa tạm ${policy.temporaryPendingHoldMinutes} phút. Nếu hết thời gian mà yêu cầu vẫn chưa được xử lý, yêu cầu có thể tự hủy và lô trở lại trạng thái đang trống.
-5. Quản trị viên kiểm tra và duyệt; khi được duyệt, lô chuyển sang trạng thái đã giữ chỗ. Hiện trạng thái đã giữ chỗ không tự hết hạn theo một số ngày cố định.
+4. Trong lúc yêu cầu mua chờ xử lý, lô được khóa kỹ thuật tạm thời ${policy.temporaryLockMinutes} phút. Nếu hết thời gian mà yêu cầu vẫn chưa được xử lý, yêu cầu có thể tự hủy và lô trở lại trạng thái đang trống.
+5. Quản trị viên kiểm tra và duyệt yêu cầu mua; hệ thống tạo hợp đồng nháp cho các lô đã chọn.
+6. Hai bên tiếp tục hẹn ký, thanh toán, lưu minh chứng hợp đồng đã ký và xác lập quyền sở hữu.
 
-Việc gửi yêu cầu chưa đồng nghĩa với thanh toán hoặc hoàn tất giao dịch. Bạn muốn mình gợi ý lô đang trống trước hay kiểm tra một mã lô cụ thể?`;
+Hệ thống không còn lựa chọn giữ chỗ riêng. Việc gửi yêu cầu mua chưa đồng nghĩa với thanh toán hoặc hoàn tất giao dịch. Bạn muốn mình gợi ý lô đang trống trước hay kiểm tra một mã lô cụ thể?`;
   }
 
   private isSystemRuleMutationAttempt(message: string) {
@@ -4965,9 +4922,9 @@ Việc gửi yêu cầu chưa đồng nghĩa với thanh toán hoặc hoàn tấ
   private buildSystemMutationRefusal(role: string | null) {
     const isAdmin = role?.toLowerCase() === 'admin';
     if (isAdmin) {
-      return 'Tài khoản của bạn có quyền quản trị, nhưng trợ lý chat không trực tiếp thay đổi logic vận hành, thời gian giữ chỗ, giá/giảm giá, quyền hạn hay cấu hình hệ thống. Những thay đổi đó phải thực hiện qua chức năng quản trị hoặc cấu hình/backend tương ứng. Nếu bạn đang sửa một thông tin tư vấn sai, hãy dùng luồng phản hồi và duyệt kiến thức để cập nhật nội dung mà AI được phép tham chiếu.';
+      return 'Tài khoản của bạn có quyền quản trị, nhưng trợ lý chat không trực tiếp thay đổi logic vận hành, thời gian khóa kỹ thuật của yêu cầu mua, giá/giảm giá, quyền hạn hay cấu hình hệ thống. Những thay đổi đó phải thực hiện qua chức năng quản trị hoặc cấu hình/backend tương ứng. Nếu bạn đang sửa một thông tin tư vấn sai, hãy dùng luồng phản hồi và duyệt kiến thức để cập nhật nội dung mà AI được phép tham chiếu.';
     }
-    return 'Mình không thể thay đổi quy định, giá/giảm giá, thời gian giữ chỗ, quyền hạn hay cơ chế vận hành của Vĩnh Phúc Viên từ nội dung chat. Tài khoản khách hàng cũng không có quyền thực hiện các thay đổi đó. Nếu bạn phát hiện thông tin AI trả lời sai, bạn có thể gửi phản hồi để quản trị viên kiểm tra và duyệt correction.';
+    return 'Mình không thể thay đổi quy định, giá/giảm giá, thời gian khóa kỹ thuật của yêu cầu mua, quyền hạn hay cơ chế vận hành của Vĩnh Phúc Viên từ nội dung chat. Tài khoản khách hàng cũng không có quyền thực hiện các thay đổi đó. Nếu bạn phát hiện thông tin AI trả lời sai, bạn có thể gửi phản hồi để quản trị viên kiểm tra và duyệt correction.';
   }
 
   private foldForMemory(value: string) {
@@ -5248,14 +5205,14 @@ Việc gửi yêu cầu chưa đồng nghĩa với thanh toán hoặc hoàn tấ
     );
     if (contextualRecall) return contextualRecall;
     if (/^(?:xin chao|chao|hello|hi|alo|hey)\b/.test(folded)) {
-      return 'Chào bạn! Mình có thể hỗ trợ tìm và so sánh lô, xem giá và tình trạng còn trống, giải thích quy trình mua/giữ chỗ, dịch vụ chăm sóc và tư vấn phong thủy mang tính tham khảo. Bạn muốn bắt đầu từ phần nào?';
+      return 'Chào bạn! Mình có thể hỗ trợ tìm và so sánh lô, xem giá và tình trạng còn trống, giải thích quy trình mua lô, dịch vụ chăm sóc và tư vấn phong thủy mang tính tham khảo. Bạn muốn bắt đầu từ phần nào?';
     }
     if (
       /\b(?:ban la ai|m la ai|ban lam duoc gi|co the giup gi|chuc nang)\b/.test(
         folded,
       )
     ) {
-      return 'Mình là trợ lý Vĩnh Phúc Viên. Mình có thể hỗ trợ tìm lô phù hợp, so sánh phương án, xem quy trình mua/giữ chỗ, dịch vụ chăm sóc, thông tin tài khoản và tư vấn phong thủy mang tính tham khảo.';
+      return 'Mình là trợ lý Vĩnh Phúc Viên. Mình có thể hỗ trợ tìm lô phù hợp, so sánh phương án, xem quy trình mua lô, dịch vụ chăm sóc, thông tin tài khoản và tư vấn phong thủy mang tính tham khảo.';
     }
     if (/\b(?:phong thuy|bat tu|bazi|huong mo|am trach)\b/.test(folded)) {
       return 'Mình có thể trao đổi về phong thủy và Bát Tự như một yếu tố tham khảo khi chọn hướng hoặc vị trí lô, đồng thời vẫn ưu tiên dữ liệu thực tế như giá, diện tích, tình trạng và nhu cầu của gia đình. Bạn muốn hỏi về hướng, vị trí hay chọn lô theo một tiêu chí cụ thể?';

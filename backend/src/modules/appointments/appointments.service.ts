@@ -56,6 +56,7 @@ interface ReservationForAppointment extends QueryResultRow {
   user_id: number;
   request_type: string;
   status: string;
+  cancellationPending?: boolean;
 }
 
 @Injectable()
@@ -427,17 +428,30 @@ export class AppointmentsService {
     requestId: number,
   ) {
     const result = await client.query<ReservationForAppointment>(
-      `SELECT request_id, user_id, request_type, status
-       FROM reservation_requests
-       WHERE request_id = $1 AND is_deleted = FALSE
+       `SELECT request_id, user_id, request_type, status,
+               EXISTS (
+                 SELECT 1 FROM purchase_request_cancellations cancellation
+                 WHERE cancellation.request_id = reservation_requests.request_id
+                   AND cancellation.status = 'pending'
+               ) AS "cancellationPending"
+        FROM reservation_requests
+        WHERE request_id = $1 AND request_type = 'purchase'
+          AND is_deleted = FALSE
        FOR UPDATE`,
       [requestId],
     );
     const request = result.rows[0];
-    if (!request) throw new NotFoundException('Reservation not found');
+    if (!request || request.request_type !== 'purchase') {
+      throw new NotFoundException('Purchase request not found');
+    }
     if (request.status !== 'approved') {
       throw new BadRequestException(
         'Appointments can only be created for approved reservation requests',
+      );
+    }
+    if (request.cancellationPending) {
+      throw new BadRequestException(
+        'Cannot create an appointment while a purchase cancellation is pending review',
       );
     }
     return request;

@@ -16,7 +16,7 @@ Runner:
 
 Tên file đầy đủ là định danh migration. Repository còn một số prefix lịch sử
 trùng nhau, vì vậy không được chỉ dùng phần số để xác định migration. Migration
-mới tiếp theo dùng prefix `027`; không tạo thêm prefix trùng.
+mới tiếp theo dùng prefix `037`; không tạo thêm prefix trùng.
 
 Runner quản lý transaction và tự bỏ lớp `BEGIN`/`COMMIT` bao ngoài của các file
 legacy trong lúc thực thi, nhưng vẫn checksum nguyên văn file để tương thích
@@ -81,8 +81,20 @@ Thứ tự hiện tại:
 15. `021_remove_archived_pdf_and_e_signature.sql`
 16. `022_signed_contract_evidence_documents.sql`
 17. `023_service_order_payment_status.sql`
-18. `024_request_processing_workflow.sql`
-19. `025_appointment_customer_selected_time.sql`
-20. `026_repair_signed_evidence_filenames.sql`
+18. `024_ai_knowledge_embeddings.sql`
+19. `024_request_processing_workflow.sql`
+20. `025_appointment_customer_selected_time.sql`
+21. `025_switch_rag_to_nvidia_bge_m3.sql`
+22. `026_repair_signed_evidence_filenames.sql`
+23. `027_deceased_family_schema.sql`
+24. `028_reject_transient_consultation_memories.sql`
+25. `029_ai_conversation_memory.sql`
+26. `030_appointment_email_reminders.sql`
+27. `031_ai_knowledge_review_rejection_fix.sql`
+28. `032_ai_learning_signal_training_bridge.sql`
+29. `033_add_reminder_calendar_type.sql`
+30. `034_remove_plot_hold_requests.sql`
+31. `035_cancel_legacy_plot_hold_requests.sql`
+32. `036_purchase_request_cancellations.sql`
 
 `015` phải chạy trước `016`; thứ tự tên file của runner bảo đảm dependency này.

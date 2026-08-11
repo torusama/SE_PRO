@@ -4,7 +4,6 @@ export type AgentPendingAction =
       stage: 'collecting' | 'awaiting_confirmation';
       plotIds: number[];
       plotCodes: string[];
-      requestType?: 'reserve' | 'purchase';
       quotedTotal?: number;
       note?: string;
     }
@@ -101,7 +100,6 @@ export interface AgentRequirements {
   birthDate?: string;
   birthTime?: string;
   gender?: 'male' | 'female' | 'other';
-  requestType?: 'reserve' | 'purchase';
   serviceQuery?: string;
   serviceTypeId?: number;
   selectedPlotCode?: string;

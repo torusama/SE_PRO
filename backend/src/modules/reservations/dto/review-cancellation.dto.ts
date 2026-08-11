@@ -1,10 +1,10 @@
 import { Transform } from 'class-transformer';
-import { IsString, MaxLength, MinLength } from 'class-validator';
+import { IsOptional, IsString, MaxLength } from 'class-validator';
 
-export class CancelApprovedReservationDto {
+export class ReviewCancellationDto {
+  @IsOptional()
   @IsString()
-  @MinLength(1)
   @MaxLength(1000)
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
-  adminNote!: string;
+  adminNote?: string;
 }

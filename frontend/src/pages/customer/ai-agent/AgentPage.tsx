@@ -98,7 +98,7 @@ export function getContextualPrompts(
     });
     prompts.push({
       category: "Chi phí & Đặt cọc",
-      text: "Tư vấn chi tiết tổng chi phí và quy trình đặt giữ lô.",
+      text: "Tư vấn chi tiết tổng chi phí và quy trình mua lô.",
     });
     prompts.push({
       category: "Xem sơ đồ",

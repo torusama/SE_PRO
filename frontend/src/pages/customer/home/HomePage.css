@@ -519,7 +519,7 @@ body {
 .home-map-preview__legend .is-open {
   background: #00b89e;
 }
-.home-map-preview__legend .is-held {
+.home-map-preview__legend .is-transaction {
   background: #c9a84c;
 }
 .home-map-preview__legend .is-sold {

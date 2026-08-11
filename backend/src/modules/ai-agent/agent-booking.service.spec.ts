@@ -70,6 +70,30 @@ function createService() {
 }
 
 describe('AgentBookingService', () => {
+  it('converts a stored legacy hold draft back to the current purchase review flow', async () => {
+    const { service, database } = createService();
+    database.queryOne.mockResolvedValue({
+      pendingAction: {
+        kind: 'plot_request',
+        stage: 'awaiting_confirmation',
+        plotIds: [10],
+        plotCodes: ['A-01-001'],
+        requestType: 'reserve',
+        quotedTotal: 90_000_000,
+      },
+    });
+
+    const pending = await service.loadPendingAction(1);
+
+    expect(pending).toMatchObject({
+      kind: 'plot_request',
+      stage: 'collecting',
+      plotIds: [10],
+      plotCodes: ['A-01-001'],
+    });
+    expect(pending).not.toHaveProperty('requestType');
+  });
+
   it('asks for authentication before starting a protected request', async () => {
     const { service } = createService();
     const result = await service.handleTurn({
@@ -88,7 +112,7 @@ describe('AgentBookingService', () => {
     expect(result?.pendingAction).toBeUndefined();
   });
 
-  it('uses the selected recommendation and asks only for request type', async () => {
+  it('uses the selected recommendation and prepares a purchase request', async () => {
     const { service, database } = createService();
     database.query.mockImplementation((sql: string) => {
       if (sql.includes('FROM ai_messages')) {
@@ -118,6 +142,11 @@ describe('AgentBookingService', () => {
       }
       return Promise.resolve([]);
     });
+    database.queryOne.mockResolvedValue({
+      fullName: 'An Võ',
+      phone: '0900000000',
+      email: 'an@example.com',
+    });
 
     const result = await service.handleTurn({
       conversationId: 1,
@@ -131,10 +160,11 @@ describe('AgentBookingService', () => {
       },
     });
 
-    expect(result?.assistantMessage).toContain('giữ chỗ tạm thời');
+    expect(result?.assistantMessage).toContain('Gửi yêu cầu mua');
+    expect(result?.assistantMessage).not.toContain('giữ chỗ');
     expect(result?.pendingAction).toMatchObject({
       kind: 'plot_request',
-      stage: 'collecting',
+      stage: 'awaiting_confirmation',
       plotIds: [10],
       plotCodes: ['A-01-001'],
     });
@@ -156,7 +186,6 @@ describe('AgentBookingService', () => {
       stage: 'awaiting_confirmation',
       plotIds: [10],
       plotCodes: ['A-01-001'],
-      requestType: 'purchase',
       quotedTotal: 90_000_000,
     };
 
@@ -170,7 +199,6 @@ describe('AgentBookingService', () => {
     expect(reservations.create).toHaveBeenCalledWith(
       7,
       expect.objectContaining({
-        type: 'purchase',
         plotIds: [10],
       }),
       false,
@@ -195,7 +223,6 @@ describe('AgentBookingService', () => {
       stage: 'awaiting_confirmation',
       plotIds: [10],
       plotCodes: ['A-01-001'],
-      requestType: 'purchase',
       quotedTotal: 90_000_000,
     };
 
@@ -238,7 +265,6 @@ describe('AgentBookingService', () => {
         userId: 7,
         plan: plan('prepare_plot_request', 'plot_request', {
           selectedPlotCode: 'A-01-001',
-          requestType: 'purchase',
         }),
       }),
     ).rejects.toThrow(/đã được mua.*A-01-002/);

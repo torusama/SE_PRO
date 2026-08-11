@@ -47,7 +47,7 @@ function createService(
 }
 
 describe('ReservationsService', () => {
-  it.each(['approved', 'rejected', 'cancelled'])(
+  it.each(['rejected', 'cancelled'])(
     'does not allow a customer to cancel a %s request',
     async (status) => {
       const { client, service } = createService((sql) => {
@@ -57,7 +57,7 @@ describe('ReservationsService', () => {
         return result();
       });
 
-      await expect(service.cancel(7, 10)).rejects.toBeInstanceOf(
+      await expect(service.cancel(7, 10, 'Không còn nhu cầu')).rejects.toBeInstanceOf(
         BadRequestException,
       );
       expect(
@@ -68,7 +68,7 @@ describe('ReservationsService', () => {
     },
   );
 
-  it('paginates and filters admin requests by status, type and AI source', async () => {
+  it('paginates and filters purchase requests by status and AI source', async () => {
     const { database, service } = createService();
     database.queryOne.mockResolvedValue({ total: '1' });
     database.query.mockResolvedValue([{ id: 10, source: 'ai' }]);
@@ -78,17 +78,16 @@ describe('ReservationsService', () => {
         pageSize: 10,
         offset: 10,
         status: 'pending',
-        type: 'purchase',
         source: 'ai',
       } as never),
     ).resolves.toMatchObject({ total: 1, page: 2, items: [{ id: 10 }] });
     expect(database.query).toHaveBeenCalledWith(
       expect.stringContaining('is_ai_draft'),
-      ['pending', 'purchase', true, 10, 10],
+      ['pending', true, 10, 10],
     );
   });
   describe('create', () => {
-    it('creates a pending multi-plot reservation in a transaction', async () => {
+    it('creates a pending multi-plot purchase request in a transaction', async () => {
       const realtime = { publish: jest.fn() };
       const { client, database, service } = createService((sql) => {
         if (sql.includes('FROM plots') && sql.includes('FOR UPDATE')) {
@@ -107,10 +106,10 @@ describe('ReservationsService', () => {
           return result([
             {
               id: 10,
-              type: 'reserve',
+              type: 'purchase',
               status: 'pending',
               totalPrice: 250,
-              note: 'hold',
+              note: 'purchase',
               createdAt: new Date('2026-07-03T00:00:00Z'),
             },
           ]);
@@ -137,15 +136,14 @@ describe('ReservationsService', () => {
       });
 
       const created = await service.create(7, {
-        type: 'reserve',
         plotIds: [1, 2],
-        note: 'hold',
+        note: 'purchase',
       });
 
       expect(database.transaction).toHaveBeenCalledTimes(1);
       expect(client.query).toHaveBeenCalledWith(
         expect.stringContaining("VALUES ($1, $2, 'pending'"),
-        [7, 'reserve', 250, 'hold', false],
+        [7, 'purchase', 250, 'purchase', false],
       );
       expect(created).toMatchObject({
         id: 10,
@@ -165,7 +163,7 @@ describe('ReservationsService', () => {
       const { database, service } = createService();
 
       await expect(
-        service.create(7, { type: 'purchase', plotIds: [1, 1] }),
+        service.create(7, { plotIds: [1, 1] }),
       ).rejects.toBeInstanceOf(BadRequestException);
       expect(database.transaction).not.toHaveBeenCalled();
     });
@@ -181,7 +179,7 @@ describe('ReservationsService', () => {
       });
 
       await expect(
-        service.create(7, { type: 'purchase', plotIds: [1] }),
+        service.create(7, { plotIds: [1] }),
       ).rejects.toBeInstanceOf(BadRequestException);
       expect(
         client.query.mock.calls.some(([sql]) =>
@@ -201,7 +199,7 @@ describe('ReservationsService', () => {
         });
 
         await expect(
-          service.create(7, { type: 'purchase', plotIds: [1] }),
+          service.create(7, { plotIds: [1] }),
         ).rejects.toBeInstanceOf(BadRequestException);
         expect(
           client.query.mock.calls.some(([sql]) =>
@@ -220,7 +218,7 @@ describe('ReservationsService', () => {
       });
 
       await expect(
-        service.create(7, { type: 'purchase', plotIds: [1] }),
+        service.create(7, { plotIds: [1] }),
       ).rejects.toBeInstanceOf(BadRequestException);
       expect(
         client.query.mock.calls.some(([sql]) =>
@@ -240,7 +238,7 @@ describe('ReservationsService', () => {
       });
 
       await expect(
-        service.create(7, { type: 'purchase', plotIds: [1] }, false, 100),
+        service.create(7, { plotIds: [1] }, false, 100),
       ).rejects.toBeInstanceOf(ConflictException);
       expect(
         client.query.mock.calls.some(([sql]) =>
@@ -310,7 +308,6 @@ describe('ReservationsService', () => {
 
       await expect(
         service.createMultiple(7, {
-          type: 'purchase',
           plotIds: [1, 2],
           note: 'family',
         }),
@@ -349,7 +346,7 @@ describe('ReservationsService', () => {
       }, adjacency);
 
       await expect(
-        service.createMultiple(7, { type: 'reserve', plotIds: [1, 2] }),
+        service.createMultiple(7, { plotIds: [1, 2] }),
       ).rejects.toBeInstanceOf(BadRequestException);
       expect(
         client.query.mock.calls.some(([sql]) =>
@@ -362,13 +359,40 @@ describe('ReservationsService', () => {
       const { database, service } = createService();
 
       await expect(
-        service.createMultiple(7, { type: 'reserve', plotIds: [1] }),
+        service.createMultiple(7, { plotIds: [1] }),
       ).rejects.toBeInstanceOf(BadRequestException);
       expect(database.transaction).not.toHaveBeenCalled();
     });
   });
 
   describe('customer status mutations', () => {
+    it('submits an approved purchase cancellation for admin review', async () => {
+      const { client, service } = createService((sql) => {
+        if (sql.includes('FROM reservation_requests') && sql.includes('FOR UPDATE')) {
+          return result([{ request_id: 10, user_id: 7, request_type: 'purchase', status: 'approved' }]);
+        }
+        if (sql.includes('FROM purchase_request_cancellations') && sql.includes('ORDER BY')) return result([]);
+        if (sql.includes('FROM offline_appointments')) return result([]);
+        if (sql.includes('FROM contracts')) return result([{ id: 99, status: 'draft', paidAmount: 0, hasPayment: false, hasSignedEvidence: false }]);
+        if (sql.includes('FROM request_plots rp') && sql.includes('FOR UPDATE')) return result([{ id: 1, status: 'reserved', price: 100 }]);
+        if (sql.includes('FROM ownership_records')) return result([]);
+        if (sql.includes('INSERT INTO purchase_request_cancellations')) return result([{ id: 5, requestId: 10, status: 'pending', isImmediate: false }]);
+        return result();
+      });
+
+      await expect(service.cancel(7, 10, 'Không còn nhu cầu')).resolves.toMatchObject({
+        id: 10,
+        status: 'approved',
+        resolution: 'admin_review',
+        canCancel: false,
+        cancellation: { id: 5, status: 'pending' },
+      });
+      expect(client.query).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO purchase_request_cancellations'),
+        [10, 7, 'Không còn nhu cầu', 'pending', false],
+      );
+    });
+
     it('publishes submit to the admin and actor rooms', async () => {
       const realtime = { publish: jest.fn() };
       const { service } = createService((sql) => {
@@ -404,21 +428,20 @@ describe('ReservationsService', () => {
         if (sql.includes('FROM reservation_requests') && sql.includes('FOR UPDATE')) {
           return result([{ request_id: 10, user_id: 7, status: 'pending' }]);
         }
-        if (sql.includes("status = 'cancelled'")) {
-          return result([{ id: 10, status: 'cancelled' }]);
-        }
+        if (sql.includes('FROM purchase_request_cancellations') && sql.includes('ORDER BY')) return result([]);
+        if (sql.includes('FROM request_plots rp') && sql.includes('FOR UPDATE')) return result([{ id: 1, status: 'pending', price: 100 }]);
+        if (sql.includes('INSERT INTO purchase_request_cancellations')) return result([{ id: 5, requestId: 10, status: 'approved', isImmediate: true }]);
         return result();
       }, undefined, undefined, realtime);
       jest
         .spyOn((service as any).logger, 'warn')
         .mockImplementation(() => undefined);
 
-      await expect(service.cancel(7, 10)).resolves.toEqual({
-        id: 10,
-        status: 'cancelled',
+      await expect(service.cancel(7, 10, 'Không còn nhu cầu')).resolves.toMatchObject({
+        id: 10, status: 'cancelled', resolution: 'immediate', canCancel: false,
       });
       expect(realtime.publish).toHaveBeenCalledWith(
-        ['reservations', 'plots', 'dashboard'],
+        ['reservations', 'plots', 'contracts', 'appointments', 'notifications', 'dashboard'],
         ['admin', 'user:7'],
       );
     });
@@ -451,63 +474,6 @@ describe('ReservationsService', () => {
   });
 
   describe('approve', () => {
-    it('approves a reserve request, reserves plots, and creates a notification', async () => {
-      const realtime = { publish: jest.fn() };
-      const { client, service } = createService((sql) => {
-        if (
-          sql.includes('FROM reservation_requests') &&
-          sql.includes('FOR UPDATE')
-        ) {
-          return result([
-            {
-              request_id: 10,
-              user_id: 7,
-              request_type: 'reserve',
-              status: 'pending',
-            },
-          ]);
-        }
-        if (
-          sql.includes('FROM request_plots rp') &&
-          sql.includes('FOR UPDATE')
-        ) {
-          return result([
-            { id: 1, code: 'A-01-001', status: 'pending', price: 100 },
-            { id: 2, code: 'A-01-002', status: 'pending', price: 150 },
-          ]);
-        }
-        if (sql.includes('UPDATE plots')) {
-          return result([], 2);
-        }
-        return result();
-      }, undefined, undefined, realtime);
-
-      await expect(service.approve(1, 10, 'ok')).resolves.toEqual({
-        id: 10,
-        status: 'approved',
-        plotStatus: 'reserved',
-        notificationCreated: true,
-      });
-      expect(client.query).toHaveBeenCalledWith(
-        expect.stringContaining('UPDATE plots'),
-        [[1, 2], 'reserved'],
-      );
-      expect(client.query).toHaveBeenCalledWith(
-        expect.stringContaining('INSERT INTO notifications'),
-        expect.arrayContaining([7, 'request_approved']),
-      );
-      expect(realtime.publish).toHaveBeenCalledWith(
-        expect.arrayContaining([
-          'reservations',
-          'plots',
-          'notifications',
-          'dashboard',
-          'audit',
-        ]),
-        ['admin', 'user:7'],
-      );
-    });
-
     it('approves a purchase request as reserved until offline signing', async () => {
       const { client, service } = createService((sql) => {
         if (
@@ -605,135 +571,6 @@ describe('ReservationsService', () => {
     });
   });
 
-  describe('cancelApprovedReserve', () => {
-    it('cancels an approved reserve request and releases every plot', async () => {
-      const audit = { record: jest.fn() };
-      const realtime = { publish: jest.fn() };
-      const { client, service } = createService(
-        (sql) => {
-          if (
-            sql.includes('FROM reservation_requests') &&
-            sql.includes('FOR UPDATE')
-          ) {
-            return result([
-              {
-                request_id: 10,
-                user_id: 7,
-                request_type: 'reserve',
-                status: 'approved',
-              },
-            ]);
-          }
-          if (
-            sql.includes('FROM request_plots rp') &&
-            sql.includes('FOR UPDATE')
-          ) {
-            return result([
-              { id: 1, code: 'A-01-001', status: 'reserved', price: 100 },
-              { id: 2, code: 'A-01-002', status: 'reserved', price: 150 },
-            ]);
-          }
-          if (sql.includes('UPDATE plots')) return result([], 2);
-          return result();
-        },
-        undefined,
-        audit,
-        realtime,
-      );
-
-      await expect(
-        service.cancelApprovedReserve(9, 10, 'Khách không còn nhu cầu'),
-      ).resolves.toEqual({
-        id: 10,
-        status: 'cancelled',
-        plotStatus: 'available',
-        releasedPlotIds: [1, 2],
-        notificationCreated: true,
-      });
-      expect(client.query).toHaveBeenCalledWith(
-        expect.stringContaining("SET status = 'available'"),
-        [[1, 2]],
-      );
-      expect(client.query).toHaveBeenCalledWith(
-        expect.stringContaining('INSERT INTO notifications'),
-        expect.arrayContaining([7, 'reservation_cancelled_by_admin']),
-      );
-      expect(client.query).toHaveBeenCalledWith(
-        expect.stringContaining('UPDATE offline_appointments'),
-        [10, 'Hủy giữ chỗ: Khách không còn nhu cầu', 9],
-      );
-      expect(audit.record).toHaveBeenCalledWith(
-        client,
-        expect.objectContaining({
-          action: 'reservation.cancel_approved_reserve',
-          entityId: 10,
-        }),
-      );
-      expect(realtime.publish).toHaveBeenCalledWith(
-        expect.arrayContaining([
-          'reservations',
-          'plots',
-          'appointments',
-          'notifications',
-          'dashboard',
-          'audit',
-        ]),
-        ['admin', 'user:7'],
-      );
-    });
-
-    it('does not cancel an approved purchase request', async () => {
-      const { client, service } = createService((sql) => {
-        if (
-          sql.includes('FROM reservation_requests') &&
-          sql.includes('FOR UPDATE')
-        ) {
-          return result([
-            {
-              request_id: 10,
-              user_id: 7,
-              request_type: 'purchase',
-              status: 'approved',
-            },
-          ]);
-        }
-        return result();
-      });
-
-      await expect(
-        service.cancelApprovedReserve(9, 10, 'Không tiếp tục mua'),
-      ).rejects.toBeInstanceOf(BadRequestException);
-      expect(
-        client.query.mock.calls.some(([sql]) =>
-          String(sql).includes('UPDATE plots'),
-        ),
-      ).toBe(false);
-    });
-
-    it('only accepts approved reservation requests', async () => {
-      const { service } = createService((sql) => {
-        if (
-          sql.includes('FROM reservation_requests') &&
-          sql.includes('FOR UPDATE')
-        ) {
-          return result([
-            {
-              request_id: 10,
-              user_id: 7,
-              request_type: 'reserve',
-              status: 'pending',
-            },
-          ]);
-        }
-        return result();
-      });
-
-      await expect(
-        service.cancelApprovedReserve(9, 10),
-      ).rejects.toBeInstanceOf(BadRequestException);
-    });
-  });
-
   describe('reject', () => {
     it('rejects a pending request, releases plots, and creates a notification', async () => {
       const realtime = { publish: jest.fn() };
@@ -806,7 +643,7 @@ describe('ReservationsService', () => {
               {
                 request_id: 10,
                 user_id: 7,
-                request_type: 'reserve',
+                request_type: 'purchase',
                 status: 'pending',
               },
             ]);

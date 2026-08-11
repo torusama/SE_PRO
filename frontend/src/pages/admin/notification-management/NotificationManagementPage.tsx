@@ -3,6 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { ROUTES } from "@/constants/routes";
 import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
+import {
+  isRequestCancellationType,
+  notificationTargetRoute,
+} from "@/components/layout/shared/notification-menu-utils";
 import "../AdminCorePages.css";
 import "./NotificationManagementPage.css";
 
@@ -42,6 +46,7 @@ const FEED_TABS = [
 type FeedSectionValue =
   | "all"
   | "requests"
+  | "cancellations"
   | "services"
   | "appointments"
   | "reminders"
@@ -60,7 +65,12 @@ const FEED_SECTIONS: Array<{
   {
     value: "requests",
     label: "Yêu cầu lô & hợp đồng",
-    description: "Mua, giữ chỗ, thanh toán",
+    description: "Mua lô, thanh toán",
+  },
+  {
+    value: "cancellations",
+    label: "Hủy yêu cầu lô",
+    description: "Yêu cầu hủy cần theo dõi",
   },
   {
     value: "services",
@@ -89,6 +99,10 @@ const TYPE_LABELS: Record<string, string> = {
   request_approved: "Yêu cầu đã duyệt",
   request_rejected: "Yêu cầu bị từ chối",
   request_cancelled: "Yêu cầu đã hủy",
+  request_cancelled_by_customer: "Khách hàng đã hủy yêu cầu",
+  request_cancellation_submitted: "Yêu cầu hủy mới",
+  request_cancellation_approved: "Yêu cầu hủy đã được duyệt",
+  request_cancellation_rejected: "Yêu cầu hủy bị từ chối",
   appointment_response: "Phản hồi lịch hẹn",
   service_submitted: "Đặt dịch vụ mới",
   service_payment_reported: "Khách báo đã thanh toán",
@@ -99,6 +113,9 @@ function notificationSection(item: FeedNotification): FeedSectionValue {
   const type = item.type.toLowerCase();
   const entity = item.relatedEntityType?.toLowerCase() ?? "";
 
+  if (isRequestCancellationType(type)) {
+    return "cancellations";
+  }
   if (
     entity === "reservation_request" ||
     ["contract", "payment", "ownership", "transfer"].some((value) =>
@@ -161,7 +178,7 @@ function money(value?: number) {
 
 interface ReservationDetail {
   id: number;
-  type: "reserve" | "purchase";
+  type: "purchase";
   status: string;
   customerName?: string;
   customerPhone?: string;
@@ -237,6 +254,12 @@ function actionRoute(
 function notificationActionRoute(
   item?: FeedNotification | null,
 ): { label: string; to: string } | null {
+  if (item && isRequestCancellationType(item.type)) {
+    return {
+      label: "Đi tới Xử lý yêu cầu hủy",
+      to: notificationTargetRoute(item, "admin")!,
+    };
+  }
   if (!item?.relatedEntityType) return null;
   const entity = item.relatedEntityType.toLowerCase();
   const id = item.relatedEntityId;
@@ -288,6 +311,17 @@ function notificationActionRoute(
     };
   }
   return null;
+}
+
+function processingActionRoute(
+  detail: DetailState,
+  item?: FeedNotification | null,
+) {
+  const notificationRoute = notificationActionRoute(item);
+  if (item && isRequestCancellationType(item.type)) {
+    return notificationRoute;
+  }
+  return actionRoute(detail) ?? notificationRoute;
 }
 
 export default function NotificationManagementPage() {
@@ -498,8 +532,7 @@ export default function NotificationManagementPage() {
   }
 
   function goToProcessing() {
-    const target =
-      actionRoute(detail) ?? notificationActionRoute(activeNotification);
+    const target = processingActionRoute(detail, activeNotification);
     if (!target) return;
     closeDetail();
     navigate(target.to);
@@ -562,8 +595,7 @@ export default function NotificationManagementPage() {
     }
   }
 
-  const route =
-    actionRoute(detail) ?? notificationActionRoute(activeNotification);
+  const route = processingActionRoute(detail, activeNotification);
 
   return (
     <div className="admin-page admin-core-page admin-notification-page">
@@ -773,7 +805,7 @@ export default function NotificationManagementPage() {
                     <div>
                       <dt>Loại yêu cầu</dt>
                       <dd>
-                        {detail.data.type === "purchase" ? "Mua lô" : "Giữ chỗ"}
+                        Mua lô
                       </dd>
                     </div>
                     <div>

@@ -32,7 +32,6 @@ export interface DepositOption {
   label: string       // "Đặt cọc tối thiểu"
   amount: number
   percent: number
-  holdDays: number
 }
 
 export interface Amenity {

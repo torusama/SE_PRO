@@ -115,7 +115,11 @@ export class AiAgentService {
 
   async adminActivity(query: AdminAiActivityQueryDto) {
     const values: unknown[] = [];
-    const conditions = ['rr.is_ai_draft = TRUE', 'rr.is_deleted = FALSE'];
+    const conditions = [
+      'rr.is_ai_draft = TRUE',
+      "rr.request_type = 'purchase'",
+      'rr.is_deleted = FALSE',
+    ];
     const add = (value: unknown) => {
       values.push(value);
       return `$${values.length}`;
@@ -153,7 +157,7 @@ export class AiAgentService {
         recommendationTelemetry: false,
         promptHistory: false,
         modelUsage: false,
-        retainedData: 'ai_reservation_drafts',
+        retainedData: 'ai_purchase_request_drafts',
       },
     };
   }
@@ -165,7 +169,8 @@ export class AiAgentService {
               rr.created_at AS "createdAt", u.user_id AS "customerId",
               u.full_name AS "customerName", u.email AS "customerEmail"
        FROM reservation_requests rr JOIN users u ON u.user_id=rr.user_id
-       WHERE rr.request_id=$1 AND rr.is_ai_draft=TRUE AND rr.is_deleted=FALSE`,
+       WHERE rr.request_id=$1 AND rr.is_ai_draft=TRUE
+         AND rr.request_type='purchase' AND rr.is_deleted=FALSE`,
       [id],
     );
     if (!item) throw new NotFoundException('AI activity not found');

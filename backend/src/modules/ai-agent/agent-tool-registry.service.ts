@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  Injectable,
-} from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { BaziRuleService } from './bazi-rule.service';
 import { RecommendPlotsDto } from './dto/recommend-plots.dto';
 import { KnowledgeService } from './knowledge.service';
@@ -30,7 +26,6 @@ export class AgentToolRegistryService {
     'get_purchase_process',
     'analyze_plot_competitiveness',
     'get_customer_care_overview',
-    'create_draft_reservation',
     'propose_knowledge_update',
   ]);
 
@@ -221,10 +216,6 @@ export class AgentToolRegistryService {
       case 'get_customer_care_overview':
         this.rejectUntrustedContextFields(args);
         return this.insights.getCustomerCareOverview(context.userId ?? null);
-      case 'create_draft_reservation':
-        throw new ForbiddenException(
-          'Draft creation requires explicit confirmation through the protected endpoint',
-        );
     }
   }
 

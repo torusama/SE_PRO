@@ -3,7 +3,7 @@ type BadgeVariant = 'available' | 'reserved' | 'sold' | 'locked' | 'new' | 'pend
 
 const BADGE_COLORS: Record<BadgeVariant, { bg: string; color: string; label: string }> = {
   available: { bg: 'rgba(0,200,160,0.15)', color: '#00C8A0', label: 'Còn trống' },
-  reserved:  { bg: 'rgba(245,166,35,0.15)', color: '#F5A623', label: 'Đang giữ chỗ' },
+  reserved:  { bg: 'rgba(245,166,35,0.15)', color: '#F5A623', label: 'Đang giao dịch' },
   sold:      { bg: 'rgba(74,158,255,0.15)', color: '#4A9EFF', label: 'Đã bán' },
   locked:    { bg: 'rgba(255,92,92,0.15)', color: '#FF5C5C', label: 'Đã khóa' },
   new:       { bg: 'rgba(0,200,160,0.2)', color: '#00C8A0', label: 'Mới' },

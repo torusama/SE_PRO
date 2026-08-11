@@ -90,9 +90,17 @@ export class AgentBookingService {
        LIMIT 1`,
       [conversationId],
     );
-    return this.isPendingAction(row?.pendingAction)
-      ? row?.pendingAction
-      : undefined;
+    const pending = row?.pendingAction;
+    if (!this.isPendingAction(pending)) return undefined;
+    if (pending.kind === 'plot_request' && 'requestType' in pending) {
+      const currentPending = { ...pending } as Record<string, unknown>;
+      delete currentPending.requestType;
+      return {
+        ...currentPending,
+        stage: 'collecting',
+      } as AgentPendingAction;
+    }
+    return pending;
   }
 
   async handleTurn(input: {
@@ -204,7 +212,6 @@ export class AgentBookingService {
       stage: 'collecting',
       plotIds: selected?.plotIds ?? existing?.plotIds ?? [],
       plotCodes: selected?.plotCodes ?? existing?.plotCodes ?? [],
-      requestType: input.plan.requirements.requestType ?? existing?.requestType,
       note: input.plan.requirements.note ?? existing?.note,
     };
 
@@ -222,49 +229,17 @@ export class AgentBookingService {
       pending.plotCodes,
     );
     pending.plotCodes = plots.map((plot) => plot.plotCode);
-    if (!pending.requestType) {
-      const primaryCode = pending.plotCodes[0];
-      return {
-        handled: true,
-        intent: 'plot_request',
-        pendingAction: pending,
-        assistantMessage: `Mình đã ghi nhận phương án **${pending.plotCodes.join(', ')}** và sẽ dùng thông tin có sẵn trong tài khoản của bạn. Bạn muốn **giữ chỗ tạm thời** hay **gửi yêu cầu mua lô**?`,
-        quickReplies: [
-          {
-            id: 'plot-request-reserve',
-            label: 'Giữ chỗ tạm thời',
-            message: primaryCode
-              ? `Mình muốn giữ chỗ tạm thời cho lô ${primaryCode}.`
-              : 'Mình muốn giữ chỗ tạm thời cho phương án này.',
-            emphasis: 'strong',
-          },
-          {
-            id: 'plot-request-purchase',
-            label: 'Gửi yêu cầu mua lô',
-            message: primaryCode
-              ? `Mình muốn gửi yêu cầu mua lô ${primaryCode}.`
-              : 'Mình muốn gửi yêu cầu mua lô cho phương án này.',
-            emphasis: 'strong',
-          },
-        ],
-      };
-    }
-
     pending.stage = 'awaiting_confirmation';
     const profile = await this.profile(input.userId);
     const total = plots.reduce((sum, plot) => sum + plot.price, 0);
     pending.quotedTotal = total;
-    const requestLabel =
-      pending.requestType === 'reserve'
-        ? 'Giữ chỗ tạm thời'
-        : 'Gửi yêu cầu mua';
     return {
       handled: true,
       intent: 'plot_request',
       pendingAction: pending,
       assistantMessage: [
         'Mình đã chuẩn bị yêu cầu như sau:',
-        `- Hình thức: **${requestLabel}**`,
+        '- Hình thức: **Gửi yêu cầu mua**',
         `- Lô: **${pending.plotCodes.join(', ')}**`,
         `- Tổng giá niêm yết: **${total.toLocaleString('vi-VN')} VND**`,
         `- Người yêu cầu: **${profile.fullName || profile.email}** (lấy từ tài khoản hiện tại)`,
@@ -765,9 +740,6 @@ export class AgentBookingService {
     }
 
     if (pending.kind === 'plot_request') {
-      if (!pending.requestType) {
-        throw new BadRequestException('Reservation type is missing');
-      }
       const plots = await this.validateAvailablePlots(
         pending.plotIds,
         pending.plotCodes,
@@ -800,7 +772,6 @@ export class AgentBookingService {
       const result = await this.reservations.create(
         userId,
         {
-          type: pending.requestType,
           plotIds: pending.plotIds,
           note:
             pending.note ??
@@ -813,7 +784,7 @@ export class AgentBookingService {
       return {
         handled: true,
         intent: 'plot_request',
-        assistantMessage: `Đã gửi yêu cầu ${pending.requestType === 'reserve' ? 'giữ chỗ' : 'mua lô'}${id ? ` **#${id}**` : ''} cho **${pending.plotCodes.join(', ')}**. Bạn có thể theo dõi trạng thái trong mục yêu cầu của tài khoản. Nếu bạn muốn, mình có thể tư vấn thêm lô khác, dịch vụ chăm sóc hoặc giải thích bước tiếp theo ngay bây giờ.`,
+        assistantMessage: `Đã gửi yêu cầu mua lô${id ? ` **#${id}**` : ''} cho **${pending.plotCodes.join(', ')}**. Bạn có thể theo dõi trạng thái trong mục yêu cầu của tài khoản. Nếu bạn muốn, mình có thể tư vấn thêm lô khác, dịch vụ chăm sóc hoặc giải thích bước tiếp theo ngay bây giờ.`,
         quickReplies: [
           {
             id: 'after-plot-request-other-options',
@@ -1026,8 +997,8 @@ export class AgentBookingService {
     );
     const statusLabel: Record<string, string> = {
       sold: 'đã được mua',
-      pending: 'đang được giữ trong một yêu cầu khác',
-      reserved: 'đã được giữ chỗ',
+      pending: 'đang được khóa tạm khi xử lý một yêu cầu mua khác',
+      reserved: 'đang trong quy trình hoàn tất mua',
       locked: 'đang tạm khóa',
     };
     const alternativeText = alternatives.length

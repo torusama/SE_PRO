@@ -77,6 +77,7 @@ export class AgentInsightsService {
                 JOIN reservation_requests rr ON rr.request_id = rp.request_id
                 WHERE rp.plot_id = p.plot_id
                   AND rr.is_deleted = FALSE
+                  AND rr.request_type = 'purchase'
                   AND rr.status IN ('submitted', 'pending')
               ) AS "activeRequestCount",
               (
@@ -85,6 +86,7 @@ export class AgentInsightsService {
                 JOIN reservation_requests rr ON rr.request_id = rp.request_id
                 WHERE rp.plot_id = p.plot_id
                   AND rr.is_deleted = FALSE
+                  AND rr.request_type = 'purchase'
                   AND rr.status IN ('submitted', 'pending', 'approved')
                   AND rr.created_at >= NOW() - INTERVAL '30 days'
               ) AS "recentInterestCount",
@@ -94,6 +96,7 @@ export class AgentInsightsService {
                 JOIN reservation_requests rr ON rr.request_id = rp.request_id
                 WHERE rp.plot_id = p.plot_id
                   AND rr.is_deleted = FALSE
+                  AND rr.request_type = 'purchase'
                   AND rr.status IN ('submitted', 'pending', 'approved')
               ) AS "latestInterestAt"
        FROM plots p
@@ -173,9 +176,9 @@ export class AgentInsightsService {
         excludedRequestStatuses: ['draft', 'rejected', 'cancelled'],
       },
       caveats: [
-        'This is an internal point-in-time signal from current inventory and reservation-request activity.',
+        'This is an internal point-in-time signal from current inventory and plot-purchase-request activity.',
         'It is not an external market appraisal, an investment forecast, or a guarantee that availability will change.',
-        'Availability must be checked again before a reservation or purchase request is submitted.',
+        'Availability must be checked again before a purchase request is submitted.',
       ],
     };
   }
@@ -211,6 +214,7 @@ export class AgentInsightsService {
                AS "activeContractCount",
              (SELECT COUNT(*)::int FROM reservation_requests
                WHERE user_id = $1 AND status IN ('draft', 'submitted', 'pending')
+                 AND request_type = 'purchase'
                  AND is_deleted = FALSE) AS "activeRequestCount",
              (SELECT COUNT(*)::int FROM service_orders
                WHERE user_id = $1
@@ -251,6 +255,7 @@ export class AgentInsightsService {
            LEFT JOIN request_plots rp ON rp.request_id = rr.request_id
            LEFT JOIN plots p ON p.plot_id = rp.plot_id
            WHERE rr.user_id = $1 AND rr.is_deleted = FALSE
+             AND rr.request_type = 'purchase'
            GROUP BY rr.request_id
            ORDER BY
              CASE WHEN rr.status IN ('draft', 'submitted', 'pending')

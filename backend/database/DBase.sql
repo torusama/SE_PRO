@@ -159,7 +159,7 @@ CREATE TABLE reservation_requests (
     request_id          SERIAL          PRIMARY KEY,
     user_id             INT             NOT NULL REFERENCES users(user_id),
     request_type        VARCHAR(20)     NOT NULL DEFAULT 'purchase'
-                        CHECK (request_type IN ('reserve', 'purchase')),
+                        CHECK (request_type = 'purchase'),
     status              VARCHAR(20)     NOT NULL DEFAULT 'draft'
                         CHECK (status IN ('draft', 'submitted', 'pending', 'approved', 'rejected', 'cancelled')),
 
@@ -212,6 +212,34 @@ CREATE TABLE request_plots (
 
 CREATE INDEX idx_rp_request     ON request_plots(request_id);
 CREATE INDEX idx_rp_plot        ON request_plots(plot_id);
+
+-- ----------------------------------------------------------------
+-- 4c. PURCHASE REQUEST CANCELLATIONS
+-- ----------------------------------------------------------------
+CREATE TABLE purchase_request_cancellations (
+    cancellation_id SERIAL PRIMARY KEY,
+    request_id      INT NOT NULL REFERENCES reservation_requests(request_id),
+    requested_by    INT NOT NULL REFERENCES users(user_id),
+    reason          TEXT NOT NULL
+                    CHECK (CHAR_LENGTH(BTRIM(reason)) BETWEEN 3 AND 1000),
+    status          VARCHAR(20) NOT NULL DEFAULT 'pending'
+                    CHECK (status IN ('pending', 'approved', 'rejected')),
+    is_immediate    BOOLEAN NOT NULL DEFAULT FALSE,
+    reviewed_by     INT REFERENCES users(user_id),
+    reviewed_at     TIMESTAMPTZ,
+    admin_note      TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CHECK (NOT is_immediate OR status = 'approved')
+);
+
+CREATE UNIQUE INDEX idx_purchase_cancellations_one_pending
+    ON purchase_request_cancellations(request_id)
+    WHERE status = 'pending';
+CREATE INDEX idx_purchase_cancellations_status_created
+    ON purchase_request_cancellations(status, created_at DESC);
+CREATE INDEX idx_purchase_cancellations_requested_by
+    ON purchase_request_cancellations(requested_by, created_at DESC);
 
 -- ================================================================
 -- 5. CONTRACTS (FR-12)
@@ -653,6 +681,10 @@ CREATE TRIGGER trg_plots_updated_at
 
 CREATE TRIGGER trg_rr_updated_at
     BEFORE UPDATE ON reservation_requests
+    FOR EACH ROW EXECUTE FUNCTION fn_update_updated_at();
+
+CREATE TRIGGER trg_purchase_cancellations_updated_at
+    BEFORE UPDATE ON purchase_request_cancellations
     FOR EACH ROW EXECUTE FUNCTION fn_update_updated_at();
 
 CREATE TRIGGER trg_contracts_updated_at

@@ -11,7 +11,7 @@ Use the same customer account/session for context tests unless the step explicit
 1. **Greeting typo**
    - Chat: `helo bgbi`
    - Expect: natural greeting, short introduction to Vĩnh Phúc Viên, no robotic "Mình hiểu ý bạn..." template.
-   - Expect `quickReplies`: Gợi ý lô phù hợp / Xem dịch vụ chăm sóc / Hỏi quy trình giữ chỗ / Tư vấn phong thủy.
+   - Expect `quickReplies`: Gợi ý lô phù hợp / Xem dịch vụ chăm sóc / Hỏi quy trình mua lô / Tư vấn phong thủy.
 
 2. **Normal Vietnamese greeting**
    - `chào bạn`
@@ -84,12 +84,12 @@ Use the same customer account/session for context tests unless the step explicit
 
 19. `gợi ý vài lô`
     - Expect real currently-available inventory options when data exists.
-    - Expect quick replies: `Xem lô <code>`, `Giữ chỗ lô <code>`, and when multiple options exist `So sánh các phương án`.
+    - Expect quick replies: `Xem lô <code>`, `Mua lô <code>`, and when multiple options exist `So sánh các phương án`.
 
 20. Click/send `Xem lô <code>`.
     - Expect detail/context for that actual code, no invented plot.
 
-21. Click/send `Giữ chỗ lô <code>`.
+21. Click/send `Mua lô <code>`.
     - Expect normal protected booking flow and confirmation; a click does not bypass auth/confirmation.
 
 22. `ok vậy gợi ý dùm i` after a plot discussion.
@@ -106,7 +106,7 @@ Use the same customer account/session for context tests unless the step explicit
 25. Click/send `Đặt <service name>`.
     - Expect protected service-order flow; ask only genuinely missing required fields.
 
-26. `quy trình giữ chỗ với mua lô khác nhau sao?`
+26. `quy trình mua lô diễn ra như thế nào?`
     - Expect grounded process explanation.
 
 27. `tình trạng yêu cầu/dịch vụ của tôi sao rồi?`

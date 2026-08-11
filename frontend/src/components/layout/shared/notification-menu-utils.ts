@@ -16,6 +16,10 @@ const TYPE_LABELS: Record<string, string> = {
   request_approved: "Yêu cầu đã duyệt",
   request_rejected: "Yêu cầu bị từ chối",
   request_cancelled: "Yêu cầu đã hủy",
+  request_cancelled_by_customer: "Khách hàng đã hủy yêu cầu",
+  request_cancellation_submitted: "Yêu cầu hủy mới",
+  request_cancellation_approved: "Yêu cầu hủy đã được duyệt",
+  request_cancellation_rejected: "Yêu cầu hủy bị từ chối",
   appointment_created: "Lịch hẹn cần xác nhận",
   appointment_updated: "Lịch hẹn đã cập nhật",
   appointment_response: "Phản hồi lịch hẹn",
@@ -36,6 +40,18 @@ const TYPE_LABELS: Record<string, string> = {
   announcement: "Thông báo chung",
 };
 
+const REQUEST_CANCELLATION_TYPES = new Set([
+  "request_cancelled",
+  "request_cancelled_by_customer",
+  "request_cancellation_submitted",
+  "request_cancellation_approved",
+  "request_cancellation_rejected",
+]);
+
+export function isRequestCancellationType(type: string) {
+  return REQUEST_CANCELLATION_TYPES.has(type);
+}
+
 export function notificationTypeLabel(type: string) {
   if (TYPE_LABELS[type]) return TYPE_LABELS[type];
 
@@ -52,6 +68,18 @@ export function notificationTargetRoute(
   item: NotificationItem,
   audience: "customer" | "admin" = "customer",
 ) {
+  if (isRequestCancellationType(item.type)) {
+    const id = item.relatedEntityId;
+    if (audience === "admin") {
+      return id
+        ? `${ROUTES.ADMIN_REQUESTS}?view=cancellations&request=${id}`
+        : `${ROUTES.ADMIN_REQUESTS}?view=cancellations`;
+    }
+    return id
+      ? `${ROUTES.MY_LOTS}?request=${id}#requests`
+      : `${ROUTES.MY_LOTS}#requests`;
+  }
+
   if (item.type === "appointment_response") {
     return `${ROUTES.ADMIN_REQUESTS}?appointment=${item.relatedEntityId ?? ""}`;
   }

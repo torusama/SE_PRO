@@ -1,6 +1,6 @@
 // src/components/ui/Stepper.tsx
-// Dùng trong customer flow: Chọn lô → Giữ chỗ & Đặt cọc → Thanh toán → Xác nhận hợp đồng
-const STEPS = ['Chọn lô', 'Giữ chỗ & Đặt cọc', 'Thanh toán', 'Xác nhận hợp đồng']
+// Dùng trong customer flow: Chọn lô → Gửi yêu cầu mua → Thanh toán → Xác nhận hợp đồng
+const STEPS = ['Chọn lô', 'Gửi yêu cầu mua', 'Thanh toán', 'Xác nhận hợp đồng']
 
 interface StepperProps { currentStep: 1 | 2 | 3 | 4 }
 

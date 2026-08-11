@@ -25,8 +25,6 @@ interface ReservationResult {
   totalPrice: number;
 }
 
-type ReservationType = "reserve" | "purchase";
-
 function formatVnd(value?: number) {
   if (!value) return "Liên hệ";
   return new Intl.NumberFormat("vi-VN").format(value) + " ₫";
@@ -45,7 +43,6 @@ export default function BookingPage() {
   const [reservation, setReservation] = useState<ReservationResult | null>(
     null,
   );
-  const [requestType, setRequestType] = useState<ReservationType>("reserve");
 
   const loadPlot = useCallback(
     async (silent = false) => {
@@ -73,16 +70,15 @@ export default function BookingPage() {
 
   useRealtimeRefresh(["plots", "reservations"], () => loadPlot(true));
 
-  async function confirmReservation() {
+  async function submitPurchaseRequest() {
     if (!plot || !token) return;
 
     setSubmitting(true);
     setError("");
     try {
       const createResponse = await api.post("/reservations", {
-        type: requestType,
         plotIds: [plot.id],
-        note: `Customer selected plot ${plot.plotCode} for ${requestType} from booking page`,
+        note: `Khách hàng đã chọn lô ${plot.plotCode} để mua từ trang chi tiết`,
       });
       const created = createResponse.data.data as ReservationResult;
       setReservation(created);
@@ -91,7 +87,7 @@ export default function BookingPage() {
       );
     } catch (err: any) {
       setError(
-        err?.response?.data?.message ?? "Không thể tạo yêu cầu giữ chỗ.",
+        err?.response?.data?.message ?? "Không thể tạo yêu cầu mua lô.",
       );
     } finally {
       setSubmitting(false);
@@ -113,7 +109,7 @@ export default function BookingPage() {
           Quay lại bản đồ
         </button>
 
-        <p style={styles.kicker}>Đặt chỗ lô đất</p>
+        <p style={styles.kicker}>Yêu cầu mua lô đất</p>
         <h1 style={styles.title}>{plot?.plotCode ?? lotId}</h1>
 
         {error && <div style={styles.error}>{error}</div>}
@@ -133,51 +129,25 @@ export default function BookingPage() {
 
             <div style={styles.note}>
               {plot.description ??
-                "Yêu cầu giữ chỗ sẽ được lưu vào tài khoản của bạn và chờ nhân viên duyệt."}
-            </div>
-
-            <div style={styles.typeSwitch}>
-              <button
-                type="button"
-                style={{
-                  ...styles.typeButton,
-                  ...(requestType === "reserve" ? styles.typeButtonActive : {}),
-                }}
-                onClick={() => setRequestType("reserve")}
-              >
-                Giữ chỗ
-              </button>
-              <button
-                type="button"
-                style={{
-                  ...styles.typeButton,
-                  ...(requestType === "purchase"
-                    ? styles.typeButtonActive
-                    : {}),
-                }}
-                onClick={() => setRequestType("purchase")}
-              >
-                Mua lô
-              </button>
+                "Yêu cầu mua lô sẽ được lưu vào tài khoản của bạn và chờ nhân viên duyệt."}
             </div>
 
             {!token && (
               <div style={styles.warning}>
-                Bạn cần đăng nhập trước khi tạo yêu cầu giữ chỗ.
+                Bạn cần đăng nhập trước khi tạo yêu cầu mua lô.
               </div>
             )}
 
             {plot.status !== "available" && (
               <div style={styles.warning}>
-                Lô này hiện không còn khả dụng để giữ chỗ.
+                Lô này hiện không còn khả dụng để mua.
               </div>
             )}
 
             {reservation && (
               <div style={styles.success}>
-                Đã lưu yêu cầu{" "}
-                {requestType === "purchase" ? "mua lô" : "giữ chỗ"} #
-                {reservation.id} cho {user?.name ?? "tài khoản của bạn"}.
+                Đã lưu yêu cầu mua lô #{reservation.id} cho{" "}
+                {user?.name ?? "tài khoản của bạn"}.
               </div>
             )}
 
@@ -191,13 +161,9 @@ export default function BookingPage() {
               }}
               type="button"
               disabled={!token || plot.status !== "available" || submitting}
-              onClick={confirmReservation}
+              onClick={submitPurchaseRequest}
             >
-              {submitting
-                ? "Đang lưu yêu cầu..."
-                : requestType === "purchase"
-                  ? "Gửi yêu cầu mua lô"
-                  : "Xác nhận giữ chỗ"}
+              {submitting ? "Đang lưu yêu cầu..." : "Gửi yêu cầu mua lô"}
             </button>
           </>
         )}
@@ -281,26 +247,6 @@ const styles: Record<string, CSSProperties> = {
     color: "#7dffe8",
     background: "rgba(201,168,76,0.06)",
     lineHeight: 1.6,
-  },
-  typeSwitch: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: 8,
-    marginTop: 16,
-  },
-  typeButton: {
-    border: "1px solid rgba(0,229,196,0.18)",
-    borderRadius: 8,
-    background: "rgba(4,6,14,0.42)",
-    color: "#7a9a90",
-    padding: "11px 12px",
-    fontWeight: 700,
-    cursor: "pointer",
-  },
-  typeButtonActive: {
-    borderColor: "rgba(201,168,76,0.55)",
-    background: "rgba(201,168,76,0.12)",
-    color: "#7dffe8",
   },
   warning: {
     marginTop: 14,

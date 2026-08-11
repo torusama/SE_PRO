@@ -189,7 +189,7 @@ export const AGENT_TOOL_DEFINITIONS = [
     function: {
       name: 'get_purchase_process',
       description:
-        'Get the current versioned reservation and purchase process.',
+        'Get the current versioned plot-purchase request process.',
       parameters: { type: 'object', additionalProperties: false },
     },
   },

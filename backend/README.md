@@ -165,7 +165,7 @@ directly in `.env` without printing the token to the terminal.
 - Role guards for `admin` and `customer`
 - Users admin/customer endpoints
 - Plots endpoints and `/plots/map` for the 2D map
-- Reservations with draft, submit, cancel, admin approve/reject transactions
+- Purchase requests with draft/submit, immediate pre-approval cancellation, and post-approval cancellation review transactions; a pending review locks appointment and contract workflow until an admin approves or rejects it.
 - Contracts and payment recording
 - Cemetery service types/orders
 - Notifications for polling
@@ -215,7 +215,7 @@ Prompt version: `cemetery-agent-v14-context-first`.
 - High-confidence out-of-scope requests (news/politics/sports/programming/etc.) are refused locally before an external LLM call so provider timeouts cannot accidentally turn them into cemetery-memory replies.
 - Short confirmation follow-ups such as `sure?`, `chắc không?`, `đúng không?` are resolved from the immediately preceding assistant turn instead of restarting the consultation.
 - Natural-language chat is not an operational admin console. Customer/admin chat cannot change reservation TTLs, discounts, prices, roles, permissions, or runtime configuration.
-- Runtime reservation timing is grounded to the backend implementation: submitted/pending plot requests temporarily lock the plot for **30 minutes**; if they remain pending/submitted past that lock, the expiration job releases the plot. Once an approved reserve request moves a plot to `reserved`, the current backend has no automatic N-day expiry rule.
+- Runtime purchase-request timing is grounded to the backend implementation: submitted/pending requests temporarily lock the plot for **30 minutes** to prevent concurrent purchases; if they remain pending/submitted past that lock, the expiration job releases the plot. An approved purchase then uses `reserved` only as an internal pre-ownership workflow status.
 - Admin knowledge moderation endpoints:
   - `GET /admin/ai-agent/knowledge?status=quarantined`
   - `GET /admin/ai-agent/knowledge/:id`
@@ -239,7 +239,7 @@ The customer consultation flow now treats persistent memory as silent working co
 - Conversation continuity now looks at the latest meaningful domain intent and the preceding assistant turn, so colloquial Vietnamese follow-ups do not reset to `general_question`.
 - A successful backend tool result is formatted directly and returned to the customer. The old second LLM "composer" call is skipped for tool actions, removing one major source of latency/timeouts.
 - If every LLM provider fails, plot discovery still executes from local trusted context and PostgreSQL inventory. Generic failure handling no longer dumps saved preference summaries.
-- Operational/process requests (`giữ chỗ`, `đặt mua`, `quy trình`, `hợp đồng`, etc.) are intentionally excluded from the deterministic inventory router so they continue through the protected booking/process workflow.
+- Operational/process requests (`đặt mua`, `quy trình`, `hợp đồng`, etc.) are intentionally excluded from the deterministic inventory router so they continue through the protected purchase workflow.
 
 Prompt version: `cemetery-agent-v16-consultation-state`.
 
@@ -249,6 +249,6 @@ Prompt version: `cemetery-agent-v16-consultation-state`.
 - Mixed frustration + a real cemetery question still goes through semantic planning so the assistant can acknowledge the tone **and** answer the actual question.
 - The prompt now explicitly handles Vietnamese chat slang/misspellings and treats vague `tâm linh` requests as in-scope cultural/phong-thủy consultation.
 - Relevant responses now include `quickReplies`. A quick reply contains `{ id, label, message, emphasis }`; the frontend should render `label` as underlined text and submit `message` through the normal chat endpoint when clicked.
-- Recommendation responses can expose quick replies such as `Xem lô <code>`, `Giữ chỗ lô <code>`, and `So sánh các phương án`. Service/Bazi responses expose context-specific next steps.
+- Recommendation responses can expose quick replies such as `Xem lô <code>`, `Mua lô <code>`, and `So sánh các phương án`. Service/Bazi responses expose context-specific next steps.
 - Conversation history preserves `quickReplies` after reload.
 - See `frontend-integration/AI_QUICK_REPLIES_PATCH.md` and `AI_AGENT_V17_TEST_GUIDE.md`.

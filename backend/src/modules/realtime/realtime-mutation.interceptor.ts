@@ -119,7 +119,11 @@ export function classifyRealtimeMutation(
     };
   }
 
-  if (lower.startsWith('/reservations') || lower.startsWith('/admin/reservations')) {
+  if (
+    lower.startsWith('/reservations') ||
+    lower.startsWith('/admin/reservations') ||
+    lower.startsWith('/admin/reservation-cancellations')
+  ) {
     return {
       topics: [
         'reservations',

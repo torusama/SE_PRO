@@ -19,6 +19,7 @@ import {
 } from './contract-content';
 import { RealtimeService } from '../realtime/realtime.service';
 import type { RealtimeTopic } from '../realtime/realtime.types';
+import type { PoolClient } from 'pg';
 
 const money = new Intl.NumberFormat('vi-VN', {
   style: 'currency',
@@ -214,7 +215,7 @@ export class ContractsService {
   async updateInheritance(id: number, content: string, adminId: number) {
     const contract = await this.database.transaction(async (client) => {
       const locked = await client.query<any>(
-        `SELECT contract_id AS id, contract_code AS "contractCode",
+        `SELECT contract_id AS id, request_id AS "requestId", contract_code AS "contractCode",
                 user_id AS "userId", status, contract_content AS "contractContent",
                 contract_base_content AS "contractBaseContent",
                 inheritance_content AS "inheritanceContent",
@@ -229,6 +230,7 @@ export class ContractsService {
       );
       const before = locked.rows[0];
       if (!before) throw new NotFoundException('Contract not found');
+      await this.assertNoPendingPurchaseCancellation(client, before.requestId);
       const canEditLegacyActive =
         before.status === 'active' &&
         !before.hasSignedEvidence;
@@ -302,6 +304,13 @@ export class ContractsService {
     context?: AdminRequestContext,
   ) {
     const contract = await this.database.transaction(async (client) => {
+      const locked = await client.query<{ requestId: number | null }>(
+        `SELECT request_id AS "requestId" FROM contracts
+         WHERE contract_id = $1 AND is_deleted = FALSE FOR UPDATE`,
+        [id],
+      );
+      if (!locked.rows[0]) throw new NotFoundException('Contract not found');
+      await this.assertNoPendingPurchaseCancellation(client, locked.rows[0].requestId);
       const updated = await client.query<{
         id: number;
         contractCode: string;
@@ -356,16 +365,18 @@ export class ContractsService {
     const saved = await this.database.transaction(async (client) => {
       const contract = await client.query<{
         id: number;
+        requestId: number | null;
         status: string;
         paymentStatus: string;
       }>(
-        `SELECT contract_id AS id, status, payment_status AS "paymentStatus"
+        `SELECT contract_id AS id, request_id AS "requestId", status, payment_status AS "paymentStatus"
          FROM contracts
          WHERE contract_id = $1 AND is_deleted = FALSE
          FOR UPDATE`,
         [id],
       );
       if (!contract.rows[0]) throw new NotFoundException('Contract not found');
+      await this.assertNoPendingPurchaseCancellation(client, contract.rows[0].requestId);
       if (contract.rows[0].status !== 'draft') {
         throw new BadRequestException(
           'Signed evidence cannot be added to this contract status',
@@ -444,13 +455,14 @@ export class ContractsService {
     const result = await this.database.transaction(async (client) => {
       const locked = await client.query<{
         id: number;
+        requestId: number | null;
         contractCode: string;
         userId: number;
         status: string;
         paymentStatus: string;
         generatedPdfAt: Date | string | null;
       }>(
-        `SELECT contract_id AS id, contract_code AS "contractCode",
+        `SELECT contract_id AS id, request_id AS "requestId", contract_code AS "contractCode",
                 user_id AS "userId", status,
                 payment_status AS "paymentStatus",
                 generated_pdf_at AS "generatedPdfAt"
@@ -461,6 +473,7 @@ export class ContractsService {
       );
       const contract = locked.rows[0];
       if (!contract) throw new NotFoundException('Contract not found');
+      await this.assertNoPendingPurchaseCancellation(client, contract.requestId);
       if (contract.status !== 'draft') {
         throw new BadRequestException(
           'Only draft contracts can activate ownership',
@@ -593,7 +606,7 @@ export class ContractsService {
   ) {
     const result = await this.database.transaction(async (client) => {
       const locked = await client.query<any>(
-        `SELECT contract_id AS id, contract_code AS "contractCode",
+        `SELECT contract_id AS id, request_id AS "requestId", contract_code AS "contractCode",
                 user_id AS "userId", total_amount::float AS "totalAmount",
                 paid_amount::float AS "paidAmount",
                 payment_status AS "paymentStatus", status,
@@ -605,6 +618,7 @@ export class ContractsService {
       );
       const before = locked.rows[0];
       if (!before) throw new NotFoundException('Contract not found');
+      await this.assertNoPendingPurchaseCancellation(client, before.requestId);
       if (before.status !== 'draft' || !before.generatedPdfAt) {
         throw new BadRequestException(
           'Generate the draft contract PDF before recording payment',
@@ -697,6 +711,26 @@ export class ContractsService {
     } catch (error) {
       this.logger.warn(
         `Realtime contract publication failed: ${(error as Error).message}`,
+      );
+    }
+  }
+
+  private async assertNoPendingPurchaseCancellation(
+    client: PoolClient,
+    requestId: number | null | undefined,
+  ) {
+    if (!requestId) return;
+    const pending = await client.query(
+      `SELECT cancellation_id
+       FROM purchase_request_cancellations
+       WHERE request_id = $1 AND status = 'pending'
+       LIMIT 1
+       FOR UPDATE`,
+      [requestId],
+    );
+    if (pending.rows.length) {
+      throw new BadRequestException(
+        'Contract workflow is locked while the purchase cancellation is pending review',
       );
     }
   }

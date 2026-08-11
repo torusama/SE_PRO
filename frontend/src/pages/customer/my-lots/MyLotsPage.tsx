@@ -5,7 +5,6 @@ import { api } from "@/lib/api";
 import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
 import NavyStarfield from "@/components/decor/NavyStarfield";
 
-type ReservationType = "reserve" | "purchase";
 type ReservationStatus =
   | "draft"
   | "submitted"
@@ -25,13 +24,31 @@ interface ApiResponse<T> {
 
 interface Reservation {
   id: number;
-  type: ReservationType;
+  type?: string;
   status: ReservationStatus;
   totalPrice?: number;
   plotCodes?: string[];
   plotCount?: number;
   createdAt?: string;
   reviewedAt?: string | null;
+  canCancel?: boolean;
+  cancellationMode?: "immediate" | "admin_review" | null;
+  cancellationId?: number | null;
+  cancellationStatus?: "pending" | "approved" | "rejected" | null;
+  cancellationIsImmediate?: boolean | null;
+  cancellation?: {
+    id: number;
+    status: "pending" | "approved" | "rejected";
+    reason: string;
+    isImmediate: boolean;
+    adminNote?: string | null;
+    requestedAt: string;
+    reviewedAt?: string | null;
+  } | null;
+}
+
+interface CancelReservationResult {
+  resolution: "immediate" | "admin_review";
 }
 
 interface Appointment {
@@ -82,11 +99,6 @@ interface ServiceOrder {
   serviceName: string;
   plotCode?: string | null;
 }
-
-const typeLabel: Record<ReservationType, string> = {
-  reserve: "Giữ chỗ",
-  purchase: "Mua lô",
-};
 
 const statusLabel: Record<string, string> = {
   draft: "Nháp",
@@ -233,6 +245,7 @@ function StatusPill({ status }: { status: string }) {
 export default function MyLotsPage() {
   const [searchParams] = useSearchParams();
   const targetAppointmentId = Number(searchParams.get("appointment")) || null;
+  const targetRequestId = Number(searchParams.get("request")) || null;
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
@@ -247,6 +260,11 @@ export default function MyLotsPage() {
     Record<number, string>
   >({});
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [successMessage, setSuccessMessage] = useState("");
+  const [cancelTarget, setCancelTarget] = useState<Reservation | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelError, setCancelError] = useState("");
+  const [cancellingId, setCancellingId] = useState<number | null>(null);
 
   const appointmentByRequest = useMemo(() => {
     const latest = new Map<number, Appointment>();
@@ -372,7 +390,23 @@ export default function MyLotsPage() {
           api.get<ApiResponse<ServiceOrder[]>>("/my/service-orders"),
         ]);
 
-      setReservations(reservationRes.data.data ?? []);
+      const baseReservations = (reservationRes.data.data ?? []).filter(
+        (request) => request.type === "purchase",
+      );
+      const hydratedReservations = await Promise.all(
+        baseReservations.map(async (request) => {
+          if (request.cancellation || !request.cancellationId) return request;
+          try {
+            const detailResponse = await api.get<ApiResponse<Reservation>>(
+              `/my/reservations/${request.id}`,
+            );
+            return { ...request, ...detailResponse.data.data };
+          } catch {
+            return request;
+          }
+        }),
+      );
+      setReservations(hydratedReservations);
       setAppointments(appointmentRes.data.data ?? []);
       setContracts(contractRes.data.data ?? []);
       setServiceOrders(serviceRes.data.data ?? []);
@@ -419,6 +453,34 @@ export default function MyLotsPage() {
     }, 80);
     return () => window.clearTimeout(scrollId);
   }, [appointments.length, loading, targetAppointmentId]);
+
+  useEffect(() => {
+    if (loading || !targetRequestId) return;
+    const scrollId = window.setTimeout(() => {
+      const target = document.getElementById(`request-${targetRequestId}`);
+      target?.scrollIntoView({ behavior: "smooth", block: "center" });
+      target?.focus({ preventScroll: true });
+    }, 80);
+    return () => window.clearTimeout(scrollId);
+  }, [loading, reservations.length, targetRequestId]);
+
+  useEffect(() => {
+    if (!cancelTarget) return;
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && cancellingId === null) {
+        setCancelTarget(null);
+        setCancelReason("");
+        setCancelError("");
+      }
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [cancelTarget, cancellingId]);
 
   useEffect(() => {
     const nodes = document.querySelectorAll<HTMLElement>("[data-lots-reveal]");
@@ -513,6 +575,52 @@ export default function MyLotsPage() {
     }
   }
 
+  function openCancellation(request: Reservation) {
+    setSuccessMessage("");
+    setCancelError("");
+    setCancelReason("");
+    setCancelTarget(request);
+  }
+
+  function closeCancellation() {
+    if (cancellingId !== null) return;
+    setCancelTarget(null);
+    setCancelReason("");
+    setCancelError("");
+  }
+
+  async function submitCancellation() {
+    if (!cancelTarget) return;
+    const reason = cancelReason.trim();
+    if (reason.length < 3 || reason.length > 1000) {
+      setCancelError("Lý do hủy phải có từ 3 đến 1000 ký tự.");
+      return;
+    }
+
+    setCancellingId(cancelTarget.id);
+    setCancelError("");
+    setError("");
+    try {
+      const response = await api.post<ApiResponse<CancelReservationResult>>(
+        `/reservations/${cancelTarget.id}/cancel`,
+        { reason },
+      );
+      setSuccessMessage(
+        response.data.data?.resolution === "admin_review"
+          ? "Đã gửi yêu cầu hủy. Admin sẽ xem xét trước khi cập nhật lô và hợp đồng."
+          : "Yêu cầu mua lô đã được hủy thành công.",
+      );
+      setCancelTarget(null);
+      setCancelReason("");
+      setCancelError("");
+      await loadData(true);
+    } catch (err) {
+      setCancelError(getErrorMessage(err));
+    } finally {
+      setCancellingId(null);
+    }
+  }
+
   return (
     <main className="lots-page">
       <style>{pageStyles}</style>
@@ -524,7 +632,7 @@ export default function MyLotsPage() {
             <p className="lots-eyebrow">Khu vực khách hàng</p>
             <h1>Hồ sơ lô đất của tôi</h1>
             <p>
-              Quản lý yêu cầu giữ chỗ, lịch hẹn, hợp đồng sở hữu và các dịch vụ
+              Quản lý yêu cầu mua lô, lịch hẹn, hợp đồng sở hữu và các dịch vụ
               đã đặt trong cùng một nơi.
             </p>
           </div>
@@ -547,6 +655,11 @@ export default function MyLotsPage() {
               <strong>Không thể cập nhật hồ sơ</strong>
               <span>{error}</span>
             </div>
+          </div>
+        ) : null}
+        {successMessage ? (
+          <div className="lots-success" role="status" data-lots-reveal>
+            <strong>{successMessage}</strong>
           </div>
         ) : null}
 
@@ -603,7 +716,7 @@ export default function MyLotsPage() {
         <section id="requests" className="lots-section" data-lots-reveal>
           <SectionHeader
             eyebrow="Yêu cầu của tôi"
-            title="Giữ chỗ và mua lô"
+            title="Yêu cầu mua lô"
             description="Theo dõi hồ sơ từ lúc gửi yêu cầu đến khi có lịch hẹn ký hợp đồng."
             count={reservations.length}
           />
@@ -613,12 +726,40 @@ export default function MyLotsPage() {
           ) : reservations.length === 0 ? (
             <EmptyState
               title="Chưa có yêu cầu nào"
-              description="Yêu cầu giữ chỗ hoặc mua lô mới sẽ được hiển thị tại đây."
+              description="Yêu cầu mua lô mới sẽ được hiển thị tại đây."
             />
           ) : (
             <div className="lots-request-list">
               {reservations.map((request, index) => {
                 const appointment = appointmentByRequest.get(request.id);
+                const cancellation =
+                  request.cancellation ??
+                  (request.cancellationId && request.cancellationStatus
+                    ? {
+                        id: request.cancellationId,
+                        status: request.cancellationStatus,
+                        reason: "Thông tin chi tiết đang được đồng bộ.",
+                        isImmediate: Boolean(
+                          request.cancellationIsImmediate,
+                        ),
+                        requestedAt: "",
+                      }
+                    : null);
+                const cancellationBlocksWorkflow =
+                  cancellation?.status === "pending" ||
+                  (cancellation?.status === "approved" &&
+                    request.status === "cancelled");
+                const cancellationMode =
+                  request.cancellationMode ??
+                  (request.status === "approved" ? "admin_review" : "immediate");
+                const canCancel =
+                  request.canCancel ??
+                  (["draft", "submitted", "pending", "approved"].includes(
+                    request.status,
+                  ) &&
+                    cancellation?.status !== "pending" &&
+                    !(cancellation?.status === "approved" &&
+                      request.status === "cancelled"));
                 const plotText =
                   (request.plotCodes ?? []).join(", ") ||
                   `${request.plotCount ?? 0} lô`;
@@ -627,11 +768,18 @@ export default function MyLotsPage() {
                   <article
                     key={request.id}
                     id={
-                      appointment ? `appointment-${appointment.id}` : undefined
+                      targetRequestId === request.id
+                        ? `request-${request.id}`
+                        : appointment
+                          ? `appointment-${appointment.id}`
+                          : `request-${request.id}`
                     }
-                    className={`lots-request-card${appointment?.id === targetAppointmentId ? " is-target-appointment" : ""}`}
+                    className={`lots-request-card${appointment?.id === targetAppointmentId ? " is-target-appointment" : ""}${targetRequestId === request.id ? " is-target-request" : ""}`}
                     tabIndex={
-                      appointment?.id === targetAppointmentId ? -1 : undefined
+                      appointment?.id === targetAppointmentId ||
+                      targetRequestId === request.id
+                        ? -1
+                        : undefined
                     }
                     data-lots-reveal
                     style={
@@ -649,7 +797,7 @@ export default function MyLotsPage() {
                       <div className="lots-request-content">
                         <div className="lots-card-heading">
                           <div>
-                            <h3>{typeLabel[request.type]}</h3>
+                            <h3>Mua lô</h3>
                             <p>Lô: {plotText}</p>
                           </div>
                           <StatusPill status={request.status} />
@@ -672,10 +820,56 @@ export default function MyLotsPage() {
                             emphasize
                           />
                         </div>
+                        {canCancel && !cancellationBlocksWorkflow ? (
+                          <div className="lots-request-actions">
+                            <button
+                              type="button"
+                              onClick={() => openCancellation(request)}
+                              disabled={cancellingId === request.id}
+                            >
+                              {cancellationMode === "admin_review"
+                                ? "Gửi yêu cầu hủy"
+                                : "Hủy yêu cầu"}
+                            </button>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
 
-                    {appointment ? (
+                    {cancellation ? (
+                      <div
+                        className={`lots-cancellation-state is-${cancellation.status}`}
+                      >
+                        <div>
+                          <span>Yêu cầu hủy</span>
+                          <strong>
+                            {cancellation.status === "pending"
+                              ? "Đang chờ admin xem xét"
+                              : cancellation.status === "approved"
+                                ? "Đã được chấp thuận"
+                                : "Không được chấp thuận"}
+                          </strong>
+                        </div>
+                        <p>
+                          <b>Lý do:</b> {cancellation.reason}
+                        </p>
+                        {cancellation.adminNote ? (
+                          <p>
+                            <b>Phản hồi của admin:</b> {cancellation.adminNote}
+                          </p>
+                        ) : null}
+                        <small>
+                          {cancellation.requestedAt
+                            ? `Gửi lúc ${formatDate(cancellation.requestedAt)}`
+                            : "Đang đồng bộ thời gian gửi"}
+                          {cancellation.reviewedAt
+                            ? ` · Xử lý lúc ${formatDate(cancellation.reviewedAt)}`
+                            : ""}
+                        </small>
+                      </div>
+                    ) : null}
+
+                    {appointment && !cancellationBlocksWorkflow ? (
                       <div className="lots-next-step lots-appointment-card">
                         <section className="lots-appointment-summary">
                           <div className="lots-appointment-kicker">
@@ -814,7 +1008,8 @@ export default function MyLotsPage() {
                           ) : null}
                         </section>
                       </div>
-                    ) : request.status === "approved" ? (
+                    ) : request.status === "approved" &&
+                      !cancellationBlocksWorkflow ? (
                       <div className="lots-next-step lots-next-step-muted">
                         <div className="lots-step-marker" aria-hidden="true" />
                         <div className="lots-step-copy">
@@ -1006,6 +1201,97 @@ export default function MyLotsPage() {
           )}
         </section>
       </div>
+      {cancelTarget ? (
+        <div
+          className="lots-cancel-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeCancellation();
+          }}
+        >
+          <section
+            className="lots-cancel-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="lots-cancel-title"
+          >
+            <header>
+              <div>
+                <span>Yêu cầu #{String(cancelTarget.id).padStart(4, "0")}</span>
+                <h2 id="lots-cancel-title">
+                  {cancelTarget.cancellationMode === "admin_review" ||
+                  cancelTarget.status === "approved"
+                    ? "Gửi yêu cầu hủy mua lô"
+                    : "Hủy yêu cầu mua lô"}
+                </h2>
+              </div>
+              <button
+                type="button"
+                aria-label="Đóng"
+                onClick={closeCancellation}
+                disabled={cancellingId !== null}
+              >
+                ×
+              </button>
+            </header>
+            <p className="lots-cancel-guidance">
+              {cancelTarget.cancellationMode === "admin_review" ||
+              cancelTarget.status === "approved"
+                ? "Yêu cầu mua đã được duyệt. Nội dung hủy sẽ được gửi tới admin và quy trình mua sẽ tạm dừng trong thời gian chờ xem xét."
+                : "Yêu cầu chưa được admin duyệt. Khi xác nhận hủy, yêu cầu sẽ được khóa ngay để admin không thể duyệt nhầm."}
+            </p>
+            <label>
+              <span>Lý do hủy</span>
+              <textarea
+                autoFocus
+                rows={5}
+                minLength={3}
+                maxLength={1000}
+                value={cancelReason}
+                onChange={(event) => {
+                  setCancelReason(event.target.value);
+                  if (cancelError) setCancelError("");
+                }}
+                placeholder="Nhập lý do bạn muốn hủy yêu cầu mua lô..."
+                disabled={cancellingId !== null}
+              />
+              <small>{cancelReason.trim().length}/1000 ký tự</small>
+            </label>
+            {cancelError ? (
+              <p className="lots-cancel-error" role="alert">
+                {cancelError}
+              </p>
+            ) : null}
+            <footer>
+              <button
+                type="button"
+                className="secondary"
+                onClick={closeCancellation}
+                disabled={cancellingId !== null}
+              >
+                Quay lại
+              </button>
+              <button
+                type="button"
+                className="danger"
+                onClick={() => void submitCancellation()}
+                disabled={
+                  cancellingId !== null ||
+                  cancelReason.trim().length < 3 ||
+                  cancelReason.trim().length > 1000
+                }
+              >
+                {cancellingId !== null
+                  ? "Đang gửi..."
+                  : cancelTarget.cancellationMode === "admin_review" ||
+                      cancelTarget.status === "approved"
+                    ? "Gửi yêu cầu hủy"
+                    : "Xác nhận hủy"}
+              </button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
     </main>
   );
 }
@@ -1433,6 +1719,16 @@ const pageStyles = `
     font-size: 12px;
   }
 
+  .lots-success {
+    margin-top: 20px;
+    padding: 14px 16px;
+    border: 1px solid rgba(105, 199, 173, 0.28);
+    border-radius: 10px;
+    color: #a7ead7;
+    background: rgba(24, 112, 89, 0.13);
+    font-size: 13px;
+  }
+
   .lots-error button {
     padding: 8px 12px;
     border: 1px solid rgba(232, 136, 136, 0.3);
@@ -1669,7 +1965,8 @@ const pageStyles = `
       background-color 200ms ease;
   }
 
-  .lots-request-card.is-target-appointment {
+  .lots-request-card.is-target-appointment,
+  .lots-request-card.is-target-request {
     border-color: rgba(0, 229, 196, 0.72);
     box-shadow: 0 0 0 2px rgba(0, 229, 196, 0.16), 0 16px 42px rgba(0, 229, 196, 0.12);
   }
@@ -1776,6 +2073,247 @@ const pageStyles = `
 
   .lots-info strong.is-emphasized {
     color: #71eccf;
+  }
+
+  .lots-request-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 20px;
+  }
+
+  .lots-request-actions button {
+    min-height: 38px;
+    padding: 8px 13px;
+    border: 1px solid rgba(232, 136, 136, 0.34);
+    border-radius: 8px;
+    color: #efb0b0;
+    background: rgba(133, 44, 44, 0.08);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease;
+  }
+
+  .lots-request-actions button:hover:not(:disabled) {
+    border-color: rgba(232, 136, 136, 0.58);
+    color: #ffd0d0;
+    background: rgba(151, 48, 48, 0.16);
+  }
+
+  .lots-request-actions button:disabled {
+    opacity: 0.5;
+    cursor: wait;
+  }
+
+  .lots-cancellation-state {
+    display: grid;
+    gap: 8px;
+    margin: 0 18px 18px;
+    padding: 15px 17px;
+    border: 1px solid rgba(230, 185, 92, 0.24);
+    border-radius: 10px;
+    color: #cdbb8c;
+    background: rgba(145, 105, 31, 0.09);
+  }
+
+  .lots-cancellation-state > div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .lots-cancellation-state span {
+    color: #9f8d61;
+    font-size: 10px;
+    font-weight: 750;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .lots-cancellation-state strong {
+    color: #ead49b;
+    font-size: 12px;
+  }
+
+  .lots-cancellation-state p,
+  .lots-cancellation-state small {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  .lots-cancellation-state small {
+    color: #8d8060;
+  }
+
+  .lots-cancellation-state.is-approved {
+    border-color: rgba(105, 199, 173, 0.22);
+    color: #9fcfbe;
+    background: rgba(37, 115, 93, 0.08);
+  }
+
+  .lots-cancellation-state.is-approved strong {
+    color: #91dec8;
+  }
+
+  .lots-cancellation-state.is-rejected {
+    border-color: rgba(232, 136, 136, 0.24);
+    color: #c69c9c;
+    background: rgba(133, 44, 44, 0.08);
+  }
+
+  .lots-cancellation-state.is-rejected strong {
+    color: #ecb0b0;
+  }
+
+  .lots-cancel-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1400;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    background: rgba(1, 5, 10, 0.76);
+    backdrop-filter: blur(5px);
+  }
+
+  .lots-cancel-dialog {
+    width: min(560px, 100%);
+    overflow: hidden;
+    border: 1px solid rgba(96, 130, 189, 0.24);
+    border-radius: 14px;
+    color: #dce9e5;
+    background: #0a1019;
+    box-shadow: 0 26px 80px rgba(0, 0, 0, 0.5);
+  }
+
+  .lots-cancel-dialog > header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 20px 22px 15px;
+    border-bottom: 1px solid rgba(96, 130, 189, 0.13);
+  }
+
+  .lots-cancel-dialog > header span {
+    color: #7fcab7;
+    font-size: 10px;
+    font-weight: 750;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+  }
+
+  .lots-cancel-dialog h2 {
+    margin: 5px 0 0;
+    color: #f0f6f4;
+    font-size: 21px;
+  }
+
+  .lots-cancel-dialog > header button {
+    display: grid;
+    width: 34px;
+    height: 34px;
+    place-items: center;
+    flex: 0 0 auto;
+    border: 1px solid rgba(96, 130, 189, 0.2);
+    border-radius: 50%;
+    color: #a8bbb5;
+    background: transparent;
+    font-size: 22px;
+    cursor: pointer;
+  }
+
+  .lots-cancel-guidance {
+    margin: 0;
+    padding: 14px 22px;
+    color: #a99471;
+    background: rgba(171, 120, 38, 0.08);
+    font-size: 13px;
+    line-height: 1.65;
+  }
+
+  .lots-cancel-dialog > label {
+    display: grid;
+    gap: 8px;
+    padding: 19px 22px 10px;
+  }
+
+  .lots-cancel-dialog > label > span {
+    color: #dbe6e3;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .lots-cancel-dialog textarea {
+    width: 100%;
+    box-sizing: border-box;
+    resize: vertical;
+    border: 1px solid rgba(105, 199, 173, 0.24);
+    border-radius: 9px;
+    outline: none;
+    color: #eef6f4;
+    background: rgba(255, 255, 255, 0.045);
+    padding: 11px 12px;
+    font: inherit;
+    line-height: 1.55;
+  }
+
+  .lots-cancel-dialog textarea:focus {
+    border-color: rgba(0, 229, 196, 0.52);
+    box-shadow: 0 0 0 3px rgba(0, 229, 196, 0.08);
+  }
+
+  .lots-cancel-dialog label small {
+    color: #70847e;
+    font-size: 11px;
+    text-align: right;
+  }
+
+  .lots-cancel-error {
+    margin: 0 22px 4px;
+    padding: 9px 11px;
+    border-radius: 8px;
+    color: #efb0b0;
+    background: rgba(151, 48, 48, 0.13);
+    font-size: 12px;
+  }
+
+  .lots-cancel-dialog > footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 9px;
+    padding: 14px 22px 20px;
+  }
+
+  .lots-cancel-dialog > footer button {
+    min-height: 40px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 750;
+    cursor: pointer;
+  }
+
+  .lots-cancel-dialog > footer .secondary {
+    border: 1px solid rgba(96, 130, 189, 0.22);
+    color: #b7c5c1;
+    background: rgba(255, 255, 255, 0.035);
+  }
+
+  .lots-cancel-dialog > footer .danger {
+    border: 1px solid rgba(232, 136, 136, 0.42);
+    color: #fff;
+    background: #9a3f3a;
+  }
+
+  .lots-cancel-dialog button:disabled,
+  .lots-cancel-dialog textarea:disabled {
+    opacity: 0.52;
+    cursor: not-allowed;
   }
 
   .lots-next-step:not(.lots-appointment-card) {

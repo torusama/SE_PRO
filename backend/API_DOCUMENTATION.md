@@ -184,25 +184,28 @@ Map item sample:
 | GET    | `/my/reservations/:id`            | Yes  | customer |
 | POST   | `/reservations/:id/submit`        | Yes  | customer |
 | POST   | `/reservations/:id/cancel`        | Yes  | customer |
+| GET    | `/admin/reservation-cancellations` | Yes | admin |
+| GET    | `/admin/reservation-cancellations/:id` | Yes | admin |
+| PATCH  | `/admin/reservation-cancellations/:id/approve` | Yes | admin |
+| PATCH  | `/admin/reservation-cancellations/:id/reject` | Yes | admin |
 | GET    | `/admin/reservations`             | Yes  | admin    |
 | GET    | `/admin/reservations/:id`         | Yes  | admin    |
 | PATCH  | `/admin/reservations/:id/approve` | Yes  | admin    |
 | PATCH  | `/admin/reservations/:id/reject`  | Yes  | admin    |
-| PATCH  | `/admin/reservations/:id/cancel`  | Yes  | admin    |
 
-### Create reservation
+### Create purchase request
 
 `POST /reservations`
 
 Body:
 
 ```json
-{ "type": "purchase", "plotIds": [1, 2], "note": "Muon mua khu gia dinh" }
+{ "plotIds": [1, 2], "note": "Muon mua khu gia dinh" }
 ```
 
-`type` must be `reserve` or `purchase`. `plotIds` must be a non-empty array of unique positive integers. All selected plots must currently be `available`; otherwise the request is rejected and no partial reservation data is kept.
+Only purchase requests are supported. `plotIds` must be a non-empty array of unique positive integers. All selected plots must currently be `available`; otherwise the request is rejected and no partial request data is kept.
 
-Successful creation immediately creates a `pending` reservation request and updates all selected plots to `pending`.
+Successful creation immediately creates a `pending` purchase request and temporarily updates all selected plots to `pending` to prevent concurrent purchases.
 
 Sample response:
 
@@ -230,14 +233,14 @@ Common errors:
 - Unavailable/missing plot: `{ "success": false, "message": "All plots must be available", "data": null, "error": "BAD_REQUEST" }`
 - Duplicate plot ID: `{ "success": false, "message": "Duplicate plot IDs are not allowed", "data": null, "error": "BAD_REQUEST" }`
 
-### Create multi-plot family reservation
+### Create multi-plot family purchase request
 
 `POST /reservations/multiple`
 
 Body:
 
 ```json
-{ "type": "purchase", "plotIds": [1, 2, 3], "note": "Khu gia dinh" }
+{ "plotIds": [1, 2, 3], "note": "Khu gia dinh" }
 ```
 
 This endpoint is stricter than `POST /reservations`: it requires at least two unique plots, all plots must be `available`, and the selected plots must be adjacent/nearby. Backend validates adjacency using plot map rectangles first (`mapX`, `mapY`, `mapWidth`, `mapHeight`) and falls back to same-zone row/column adjacency when map data cannot be used.
@@ -271,6 +274,21 @@ Additional common errors:
 `GET /my/reservations` returns only the authenticated customer's reservation summaries.
 
 `GET /my/reservations/:id` returns only the authenticated customer's reservation detail with selected plots. Requests owned by another customer are returned as not found.
+The summary/detail payload includes `cancellation` (or `null`) and `canCancel` so clients do not infer workflow state from the request status alone.
+
+### Customer cancellation and admin review
+
+`POST /reservations/:id/cancel` accepts:
+
+```json
+{ "reason": "Gia đình thay đổi kế hoạch" }
+```
+
+`reason` is required after trimming and must be 3–1000 characters. A customer cancellation made while the purchase request is `draft`, `pending`, or legacy `submitted` immediately changes that request to `cancelled`, safely releases its still-locked plots, and cannot be submitted again. The cancellation is retained as approved history.
+
+For an `approved` request, the endpoint creates a `pending` cancellation review instead. While it is pending, appointment creation and all contract workflow mutations (inheritance, PDF generation, payment, signed evidence, and ownership activation) are locked. Admins review it with `PATCH /admin/reservation-cancellations/:id/approve` or `/reject`; both accept optional `{ "adminNote": "..." }`.
+
+Approval is one transaction: it cancels scheduled signing appointments and draft contracts, marks the purchase request `cancelled`, and releases the plots only if no valid request still claims them. It is rejected before any destructive change if there is a payment, signed evidence, a non-draft contract, or active ownership. Rejection leaves the approved purchase workflow intact. Notifications use `request_cancelled_by_customer`, `request_cancellation_submitted`, `request_cancellation_approved`, and `request_cancellation_rejected`, all related to the purchase request.
 
 ### Admin reservation review
 
@@ -280,15 +298,9 @@ Additional common errors:
 
 Admin approve/reject body: `{ "adminNote": "OK" }`
 
-Admin cancel body: `{ "adminNote": "Khách không còn nhu cầu" }`. Chỉ yêu cầu
-`reserve` đã được duyệt mới có thể hủy theo cách này. Thao tác trả toàn bộ lô
-`reserved` của yêu cầu về `available`, ghi audit và thông báo cho khách hàng.
-Lịch hẹn đang `scheduled` gắn với yêu cầu cũng được chuyển sang `cancelled`.
-
 Approval/rejection are transaction-safe:
 
-- Approve `reserve`: request becomes `approved`; related plots become `reserved`; one `request_approved` notification is created for the customer.
-- Approve `purchase`: request becomes `approved`; related plots become `reserved` and one draft contract is created with all selected plots and their agreed prices. The plots become `sold` only after an admin uploads signed-contract evidence and explicitly activates ownership.
+- Approve: the purchase request becomes `approved`; related plots use the internal `reserved` workflow status and one draft contract is created with all selected plots and their agreed prices. The plots become `sold` only after an admin uploads signed-contract evidence and explicitly activates ownership.
 - Reject: request becomes `rejected`; related pending plots return to `available` only when no other valid request still claims them; one `request_rejected` notification is created for the customer.
 
 Only `pending` requests are valid for new decisions. Existing `submitted` records are also tolerated for backward compatibility. Already approved/rejected requests return an error and do not create duplicate notifications.
@@ -357,7 +369,7 @@ Body:
 }
 ```
 
-The reservation request must be an approved hold or purchase request. The start date cannot be
+The reservation request must be an approved purchase request. The start date cannot be
 earlier than the current date in `Asia/Ho_Chi_Minh`, and the end must be after the start.
 The admin UI accepts date-only values with a four-digit year. Creation is transactional, sets `customerStatus` to `pending` and creates
 an `appointment_created` notification for the customer.

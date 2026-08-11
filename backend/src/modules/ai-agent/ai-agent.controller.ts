@@ -162,7 +162,7 @@ export class AiAgentController {
   ) {
     return {
       success: true,
-      message: 'AI draft reservation created',
+      message: 'AI draft purchase request created',
       data: await this.aiAgentService.createDraftReservation(user.id, dto),
     };
   }

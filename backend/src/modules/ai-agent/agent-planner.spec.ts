@@ -355,4 +355,22 @@ describe('agent planner', () => {
       memoryKey: 'consultation_topic_preference',
     });
   });
+
+  it('does not preserve a legacy hold choice from planner output', () => {
+    const plan = parseAgentPlan(
+      JSON.stringify({
+        intent: 'plot_request',
+        action: 'prepare_plot_request',
+        contextMode: 'continue',
+        needsClarification: false,
+        clarificationQuestion: '',
+        requestType: 'reserve',
+        selectedPlotCode: 'A-01-001',
+      }),
+    );
+
+    expect(plan.requirements).toEqual({
+      selectedPlotCode: 'A-01-001',
+    });
+  });
 });

@@ -775,8 +775,8 @@ export function HomeMapPreview() {
           Còn trống
         </span>
         <span>
-          <i className="is-held" />
-          Đang giữ chỗ
+          <i className="is-transaction" />
+          Đang giao dịch
         </span>
         <span>
           <i className="is-sold" />

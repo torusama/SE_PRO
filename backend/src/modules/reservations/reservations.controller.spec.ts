@@ -5,20 +5,24 @@ describe('ReservationsController admin contract', () => {
   const service = {
     adminList: jest.fn().mockResolvedValue({ items: [] }),
     adminOne: jest.fn().mockResolvedValue({ id: 1 }),
+    adminCancellationList: jest.fn().mockResolvedValue({ items: [] }),
+    adminCancellationOne: jest.fn().mockResolvedValue({ id: 1 }),
+    approveCancellation: jest.fn().mockResolvedValue({ id: 1, status: 'approved' }),
+    rejectCancellation: jest.fn().mockResolvedValue({ id: 1, status: 'rejected' }),
     approve: jest.fn().mockResolvedValue({ id: 1, status: 'approved' }),
     reject: jest.fn().mockResolvedValue({ id: 1, status: 'rejected' }),
-    cancelApprovedReserve: jest
-      .fn()
-      .mockResolvedValue({ id: 1, status: 'cancelled' }),
   };
   const controller = new ReservationsController(service as never);
 
   it.each([
     'adminList',
     'adminOne',
+    'adminCancellationList',
+    'adminCancellationOne',
+    'approveCancellation',
+    'rejectCancellation',
     'approve',
     'reject',
-    'cancelApprovedReserve',
   ] as const)(
     '%s requires the admin role',
     (method) => {
@@ -28,9 +32,13 @@ describe('ReservationsController admin contract', () => {
     },
   );
 
-  it('binds list/detail/approve/reject to the service contract', async () => {
+  it('binds list/detail/review routes to the service contract', async () => {
     await controller.adminList({ page: 1, pageSize: 20 } as never);
     await controller.adminOne('1');
+    await controller.adminCancellationList({ page: 1, pageSize: 20 } as never);
+    await controller.adminCancellationOne('1');
+    await controller.approveCancellation({ id: 9 }, '1', { adminNote: 'ok' }, { adminId: 9, ipAddress: null, userAgent: null });
+    await controller.rejectCancellation({ id: 9 }, '1', { adminNote: 'no' }, { adminId: 9, ipAddress: null, userAgent: null });
     await controller.approve(
       { id: 9 },
       '1',
@@ -43,21 +51,11 @@ describe('ReservationsController admin contract', () => {
       { adminNote: 'no' },
       { adminId: 9, ipAddress: null, userAgent: null },
     );
-    await controller.cancelApprovedReserve(
-      { id: 9 },
-      '1',
-      { adminNote: 'Khách không còn nhu cầu' },
-      { adminId: 9, ipAddress: null, userAgent: null },
-    );
     expect(service.adminList).toHaveBeenCalled();
     expect(service.adminOne).toHaveBeenCalledWith(1);
     expect(service.approve).toHaveBeenCalled();
     expect(service.reject).toHaveBeenCalled();
-    expect(service.cancelApprovedReserve).toHaveBeenCalledWith(
-      9,
-      1,
-      'Khách không còn nhu cầu',
-      { adminId: 9, ipAddress: null, userAgent: null },
-    );
+    expect(service.approveCancellation).toHaveBeenCalled();
+    expect(service.rejectCancellation).toHaveBeenCalled();
   });
 });

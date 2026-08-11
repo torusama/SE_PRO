@@ -6,7 +6,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { ROUTES } from "@/constants/routes";
-import { notificationTargetRoute } from "@/components/layout/shared/notification-menu-utils";
+import {
+  isRequestCancellationType,
+  notificationTargetRoute,
+} from "@/components/layout/shared/notification-menu-utils";
 import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
 import "./NotificationPage.css";
 
@@ -31,6 +34,7 @@ type FilterKey =
   | "all"
   | "unread"
   | "request"
+  | "cancellation"
   | "contract"
   | "service"
   | "reminder";
@@ -61,7 +65,7 @@ const TYPE_META: Record<
     icon: "🚫",
     iconClass: "type-alert",
     tagClass: "tag-urgent",
-    group: "request",
+    group: "cancellation",
   },
   appointment_created: {
     icon: "📅",
@@ -162,6 +166,7 @@ const TYPE_META: Record<
 };
 
 function metaFor(type: string) {
+  if (isRequestCancellationType(type)) return TYPE_META.request_cancelled;
   if (TYPE_META[type]) return TYPE_META[type];
   if (type.startsWith("service_")) return TYPE_META.service_submitted;
   if (type.startsWith("request_")) return TYPE_META.request_submitted;
@@ -179,7 +184,7 @@ function metaFor(type: string) {
 // (vd. "reservation_request", "offline_appointment"...) đang được backend
 // lưu ở relatedEntityType. Đây là danh mục thực thể liên quan tới thông báo.
 const ENTITY_TYPE_LABELS: Record<string, string> = {
-  reservation_request: "Yêu cầu giữ chỗ / mua lô",
+  reservation_request: "Yêu cầu mua lô",
   offline_appointment: "Lịch hẹn tại nghĩa trang",
   service_order: "Đơn dịch vụ",
   contract: "Hợp đồng",
@@ -193,12 +198,16 @@ const GROUP_FALLBACK_LABELS: Record<FilterKey, string> = {
   all: "Thông báo hệ thống",
   unread: "Thông báo hệ thống",
   request: "Yêu cầu của bạn",
+  cancellation: "Hủy yêu cầu mua lô",
   contract: "Hợp đồng",
   service: "Dịch vụ",
   reminder: "Nhắc lịch tưởng niệm",
 };
 
 function entityLabelFor(item: NotificationItem) {
+  if (isRequestCancellationType(item.type)) {
+    return GROUP_FALLBACK_LABELS.cancellation;
+  }
   const key = item.relatedEntityType ?? item.type;
   if (ENTITY_TYPE_LABELS[key]) return ENTITY_TYPE_LABELS[key];
   return GROUP_FALLBACK_LABELS[metaFor(item.type).group];
@@ -288,6 +297,9 @@ export default function NotificationPage() {
   const counts = useMemo(
     () => ({
       request: items.filter((n) => metaFor(n.type).group === "request").length,
+      cancellation: items.filter(
+        (n) => metaFor(n.type).group === "cancellation",
+      ).length,
       contract: items.filter((n) => metaFor(n.type).group === "contract")
         .length,
       service: items.filter((n) => metaFor(n.type).group === "service").length,
@@ -436,6 +448,15 @@ export default function NotificationPage() {
             Yêu cầu
             {counts.request > 0 && (
               <span className="tab-badge">{counts.request}</span>
+            )}
+          </button>
+          <button
+            className={`filter-tab ${filter === "cancellation" ? "active" : ""}`}
+            onClick={() => changeFilter("cancellation")}
+          >
+            Hủy yêu cầu lô
+            {counts.cancellation > 0 && (
+              <span className="tab-badge">{counts.cancellation}</span>
             )}
           </button>
           <button

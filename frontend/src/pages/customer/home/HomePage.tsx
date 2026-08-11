@@ -463,7 +463,7 @@ export default function HomePage() {
             </h2>
             <p className="home-section-lead" data-reveal>
               Xem toàn bộ nghĩa trang qua sơ đồ trực quan. Mỗi lô đất hiển thị
-              trạng thái rõ ràng — còn trống, đã giữ chỗ, hay đã bán — chỉ với
+              trạng thái rõ ràng — còn trống, đang giao dịch, hay đã bán — chỉ với
               một cái nhìn.
             </p>
             <div
@@ -513,7 +513,7 @@ export default function HomePage() {
                     opacity: 0.8,
                   }}
                 ></span>
-                Đang giữ chỗ
+                Đang giao dịch
               </div>
               <div
                 style={{
@@ -1849,9 +1849,9 @@ export default function HomePage() {
               style={{ cursor: "pointer" }}
             >
               <div className="feature-num">01</div>
-              <div className="feature-name">Xem bản đồ & Giữ chỗ</div>
+              <div className="feature-name">Xem bản đồ & Mua lô</div>
               <div className="feature-desc">
-                Xem sơ đồ nghĩa trang, gửi yêu cầu giữ chỗ đơn lẻ hoặc nhiều lô
+                Xem sơ đồ nghĩa trang, gửi yêu cầu mua một hoặc nhiều lô
                 liền kề cho gia đình, dòng họ.
               </div>
             </div>

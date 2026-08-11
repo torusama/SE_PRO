@@ -9,7 +9,6 @@ import {
 } from "@/lib/contractPdf";
 import "./RequestsPage.css";
 
-type RequestType = "reserve" | "purchase";
 type RequestStatus =
   | "draft"
   | "submitted"
@@ -17,13 +16,14 @@ type RequestStatus =
   | "approved"
   | "rejected"
   | "cancelled";
+type CancellationStatus = "pending" | "approved" | "rejected";
+type RequestView = "purchases" | "cancellations";
 
 interface PageData<T> {
   items: T[];
 }
 interface RequestItem {
   id: number;
-  type: RequestType;
   status: RequestStatus;
   customerName?: string;
   customerEmail?: string;
@@ -55,6 +55,34 @@ interface RequestItem {
   }>;
   createdAt?: string;
   reviewedAt?: string;
+  canCancel?: boolean;
+  cancellationMode?: "immediate" | "admin_review" | null;
+  cancellation?: {
+    id: number;
+    status: CancellationStatus;
+    reason: string;
+    isImmediate: boolean;
+    adminNote?: string | null;
+    requestedAt: string;
+    reviewedAt?: string | null;
+  } | null;
+}
+interface CancellationItem {
+  id: number;
+  requestId: number;
+  status: CancellationStatus;
+  isImmediate: boolean;
+  reason: string;
+  adminNote?: string | null;
+  createdAt: string;
+  reviewedAt?: string | null;
+  customerName?: string;
+  customerEmail?: string;
+  customerPhone?: string;
+  purchaseRequestStatus?: RequestStatus;
+  plotCodes?: string[];
+  plotCount?: number;
+  totalPrice?: number;
 }
 interface Appointment {
   id: number;
@@ -130,6 +158,11 @@ const statusLabels: Record<string, string> = {
   declined: "Khách từ chối",
   paid: "Đã thanh toán",
 };
+const cancellationStatusLabels: Record<CancellationStatus, string> = {
+  pending: "Chờ duyệt hủy",
+  approved: "Đã chấp thuận",
+  rejected: "Đã từ chối",
+};
 const paymentMethods = [
   ["cash", "Tiền mặt"],
   ["bank_transfer", "Chuyển khoản ngân hàng"],
@@ -149,7 +182,7 @@ const plotTypeLabels: Record<string, string> = {
 const plotStatusLabels: Record<string, string> = {
   available: "Còn trống",
   pending: "Chờ duyệt",
-  reserved: "Đã giữ chỗ",
+  reserved: "Chờ hoàn tất mua",
   sold: "Đã bán",
   locked: "Đã khóa",
 };
@@ -394,21 +427,29 @@ function RequestReviewInfo({ request }: { request: RequestItem }) {
 }
 
 export default function RequestsPage() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const requestedAppointmentId =
     Number(searchParams.get("appointment")) || undefined;
   const requestedRequestId = Number(searchParams.get("request")) || undefined;
-  const [tab, setTab] = useState<RequestType>("reserve");
+  const requestedView: RequestView =
+    searchParams.get("view") === "cancellations"
+      ? "cancellations"
+      : "purchases";
+  const [view, setView] = useState<RequestView>(requestedView);
   const [requests, setRequests] = useState<RequestItem[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
+  const [cancellations, setCancellations] = useState<CancellationItem[]>([]);
   const [selectedId, setSelectedId] = useState<number>();
+  const [selectedCancellationId, setSelectedCancellationId] =
+    useState<number>();
   const [detail, setDetail] = useState<RequestItem>();
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [adminNote, setAdminNote] = useState("");
+  const [cancellationAdminNote, setCancellationAdminNote] = useState("");
   const [appointmentForm, setAppointmentForm] = useState({
     scheduledAt: "",
     scheduledEndAt: "",
@@ -430,7 +471,12 @@ export default function RequestsPage() {
     if (!silent) setLoading(true);
     setError("");
     try {
-      const [requestResponse, appointmentResponse, contractResponse] =
+      const [
+        requestResponse,
+        appointmentResponse,
+        contractResponse,
+        cancellationResponse,
+      ] =
         await Promise.all([
           api.get<{ data: PageData<RequestItem> }>("/admin/reservations", {
             params: { page: 1, pageSize: 100 },
@@ -441,10 +487,15 @@ export default function RequestsPage() {
           api.get<{ data: PageData<Contract> }>("/admin/contracts", {
             params: { page: 1, pageSize: 100 },
           }),
+          api.get<{ data: PageData<CancellationItem> }>(
+            "/admin/reservation-cancellations",
+            { params: { page: 1, pageSize: 100 } },
+          ),
         ]);
       setRequests(requestResponse.data.data?.items ?? []);
       setAppointments(appointmentResponse.data.data?.items ?? []);
       setContracts(contractResponse.data.data?.items ?? []);
+      setCancellations(cancellationResponse.data.data?.items ?? []);
     } catch (caught) {
       setError(getError(caught));
     } finally {
@@ -455,16 +506,38 @@ export default function RequestsPage() {
   useEffect(() => {
     queueMicrotask(() => void load());
   }, [load]);
-  const tabRequests = useMemo(
+  const visibleRequests = useMemo(
+    () => requests.filter((item) => item.status !== "draft"),
+    [requests],
+  );
+  const visibleCancellations = useMemo(
     () =>
-      requests.filter((item) => item.type === tab && item.status !== "draft"),
-    [requests, tab],
+      [...cancellations].sort((first, second) => {
+        if (first.status === "pending" && second.status !== "pending") return -1;
+        if (first.status !== "pending" && second.status === "pending") return 1;
+        return (
+          new Date(second.createdAt).getTime() -
+          new Date(first.createdAt).getTime()
+        );
+      }),
+    [cancellations],
   );
   useEffect(() => {
-    if (!tabRequests.some((item) => item.id === selectedId)) {
-      queueMicrotask(() => setSelectedId(tabRequests[0]?.id));
+    if (view !== "purchases") return;
+    if (!visibleRequests.some((item) => item.id === selectedId)) {
+      queueMicrotask(() => setSelectedId(visibleRequests[0]?.id));
     }
-  }, [selectedId, tabRequests]);
+  }, [selectedId, view, visibleRequests]);
+  useEffect(() => {
+    if (view !== "cancellations") return;
+    if (
+      !visibleCancellations.some((item) => item.id === selectedCancellationId)
+    ) {
+      queueMicrotask(() =>
+        setSelectedCancellationId(visibleCancellations[0]?.id),
+      );
+    }
+  }, [selectedCancellationId, view, visibleCancellations]);
   useEffect(() => {
     if (!requestedAppointmentId) return;
 
@@ -477,21 +550,32 @@ export default function RequestsPage() {
     if (!requestedRequest) return;
 
     queueMicrotask(() => {
-      setTab(requestedRequest.type);
+      setView("purchases");
       setSelectedId(requestedRequest.id);
     });
   }, [appointments, requestedAppointmentId, requests]);
   // Đến từ thông báo "Yêu cầu duyệt lô": nhảy thẳng tới yêu cầu tương ứng.
   useEffect(() => {
     if (!requestedRequestId) return;
+    if (requestedView === "cancellations") {
+      const cancellation = cancellations.find(
+        (item) => item.requestId === requestedRequestId,
+      );
+      if (!cancellation) return;
+      queueMicrotask(() => {
+        setView("cancellations");
+        setSelectedCancellationId(cancellation.id);
+      });
+      return;
+    }
     const target = requests.find((item) => item.id === requestedRequestId);
     if (!target) return;
 
     queueMicrotask(() => {
-      setTab(target.type);
+      setView("purchases");
       setSelectedId(target.id);
     });
-  }, [requestedRequestId, requests]);
+  }, [cancellations, requestedRequestId, requestedView, requests]);
   const loadDetail = useCallback(async (id: number) => {
     try {
       const response =
@@ -503,18 +587,31 @@ export default function RequestsPage() {
     }
   }, []);
   useEffect(() => {
-    if (selectedId) queueMicrotask(() => void loadDetail(selectedId));
-  }, [loadDetail, selectedId]);
+    if (view === "purchases" && selectedId) {
+      queueMicrotask(() => void loadDetail(selectedId));
+    }
+  }, [loadDetail, selectedId, view]);
 
   useRealtimeRefresh(
     ["reservations", "appointments", "contracts", "ownership", "plots"],
     async () => {
       await load(true);
-      if (selectedId) await loadDetail(selectedId);
+      if (view === "purchases" && selectedId) await loadDetail(selectedId);
     },
   );
 
   const current = detail?.id === selectedId ? detail : undefined;
+  const currentCancellation = visibleCancellations.find(
+    (item) => item.id === selectedCancellationId,
+  );
+  const currentCancellationRequest = requests.find(
+    (item) => item.id === currentCancellation?.requestId,
+  );
+  useEffect(() => {
+    queueMicrotask(() =>
+      setCancellationAdminNote(currentCancellation?.adminNote ?? ""),
+    );
+  }, [currentCancellation?.adminNote, currentCancellation?.id]);
   const requestAppointments = appointments
     .filter((item) => item.reservationRequestId === current?.id)
     .sort((a, b) => b.id - a.id);
@@ -547,23 +644,75 @@ export default function RequestsPage() {
   const paymentDone = contract?.paymentStatus === "paid";
   const ownershipDone =
     contract?.status === "active" || contract?.status === "completed";
+  const pendingCancellationForCurrent = cancellations.find(
+    (item) => item.requestId === current?.id && item.status === "pending",
+  );
+  const cancellationPending = Boolean(
+    current?.cancellation?.status === "pending" ||
+      pendingCancellationForCurrent,
+  );
   const terminal =
-    current?.status === "rejected" || current?.status === "cancelled";
+    current?.status === "rejected" ||
+    current?.status === "cancelled" ||
+    cancellationPending;
   const completed = terminal
     ? 1
     : [
         decisionDone,
         appointmentDone,
-        ...(tab === "purchase" ? [pdfDone, paymentDone, ownershipDone] : []),
+        pdfDone,
+        paymentDone,
+        ownershipDone,
       ].filter(Boolean).length;
-  const labels =
-    tab === "reserve"
-      ? ["Duyệt yêu cầu", "Lịch hẹn offline"]
-      : ["Duyệt yêu cầu", "Lịch hẹn", "Tạo PDF", "Thanh toán", "Ký & sở hữu"];
+  const labels = [
+    "Duyệt yêu cầu",
+    "Lịch hẹn",
+    "Tạo PDF",
+    "Thanh toán",
+    "Ký & sở hữu",
+  ];
 
   function resetFeedback() {
     setError("");
     setMessage("");
+  }
+  function changeView(nextView: RequestView) {
+    setView(nextView);
+    setDetail(undefined);
+    setContractPreviewUrl("");
+    resetFeedback();
+    setSearchParams((currentParams) => {
+      const nextParams = new URLSearchParams(currentParams);
+      nextParams.delete("appointment");
+      nextParams.delete("request");
+      if (nextView === "cancellations") {
+        nextParams.set("view", "cancellations");
+      } else {
+        nextParams.delete("view");
+      }
+      return nextParams;
+    });
+  }
+  async function reviewCancellation(action: "approve" | "reject") {
+    if (!currentCancellation || currentCancellation.status !== "pending") return;
+    resetFeedback();
+    setBusy(`cancellation-${action}`);
+    try {
+      await api.patch(
+        `/admin/reservation-cancellations/${currentCancellation.id}/${action}`,
+        { adminNote: cancellationAdminNote.trim() || undefined },
+      );
+      setMessage(
+        action === "approve"
+          ? "Đã chấp thuận yêu cầu hủy và dừng quy trình mua lô."
+          : "Đã từ chối yêu cầu hủy. Quy trình mua có thể tiếp tục.",
+      );
+      await load(true);
+    } catch (caught) {
+      setError(getError(caught));
+    } finally {
+      setBusy("");
+    }
   }
   async function decide(action: "approve" | "reject") {
     if (!current) return;
@@ -578,35 +727,6 @@ export default function RequestsPage() {
           ? "Đã duyệt yêu cầu. Bây giờ có thể gửi lịch hẹn cho khách hàng."
           : "Đã từ chối yêu cầu.",
       );
-      await load();
-      const response = await api.get<{ data: RequestItem }>(
-        `/admin/reservations/${current.id}`,
-      );
-      setDetail(response.data.data);
-    } catch (caught) {
-      setError(getError(caught));
-    } finally {
-      setBusy("");
-    }
-  }
-  async function cancelApprovedReserve() {
-    if (!current || current.type !== "reserve" || current.status !== "approved")
-      return;
-    const reason = window.prompt(
-      "Nhập lý do hủy giữ chỗ. Các lô sẽ trở về trạng thái còn trống:",
-    );
-    if (reason === null) return;
-    if (!reason.trim()) {
-      setError("Vui lòng nhập lý do hủy giữ chỗ.");
-      return;
-    }
-    resetFeedback();
-    setBusy("cancel-reserve");
-    try {
-      await api.patch(`/admin/reservations/${current.id}/cancel`, {
-        adminNote: reason.trim(),
-      });
-      setMessage("Đã hủy giữ chỗ và trả các lô về trạng thái còn trống.");
       await load();
       const response = await api.get<{ data: RequestItem }>(
         `/admin/reservations/${current.id}`,
@@ -864,44 +984,40 @@ export default function RequestsPage() {
           </p>
         </div>
       </header>
-      <div className="request-type-tabs">
-        <button
-          className={tab === "reserve" ? "active" : ""}
-          onClick={() => setTab("reserve")}
-        >
-          Yêu cầu giữ chỗ{" "}
-          <b>
-            {
-              requests.filter(
-                (item) => item.type === "reserve" && item.status !== "draft",
-              ).length
-            }
-          </b>
-        </button>
-        <button
-          className={tab === "purchase" ? "active" : ""}
-          onClick={() => setTab("purchase")}
-        >
-          Yêu cầu mua lô{" "}
-          <b>
-            {
-              requests.filter(
-                (item) => item.type === "purchase" && item.status !== "draft",
-              ).length
-            }
-          </b>
-        </button>
-      </div>
       {error && <div className="workflow-alert error">{error}</div>}
       {message && <div className="workflow-alert success">{message}</div>}
-      <div className="request-workspace">
+      <nav className="request-view-tabs" aria-label="Loại yêu cầu cần xử lý">
+        <button
+          type="button"
+          className={view === "purchases" ? "active" : ""}
+          onClick={() => changeView("purchases")}
+        >
+          Yêu cầu mua
+          <b>{visibleRequests.length}</b>
+        </button>
+        <button
+          type="button"
+          className={view === "cancellations" ? "active" : ""}
+          onClick={() => changeView("cancellations")}
+        >
+          Yêu cầu hủy
+          <b>
+            {
+              visibleCancellations.filter((item) => item.status === "pending")
+                .length
+            }
+          </b>
+        </button>
+      </nav>
+      {view === "purchases" ? (
+        <div className="request-workspace">
         <aside className="request-list">
           {loading ? (
             <p className="empty">Đang tải...</p>
-          ) : tabRequests.length === 0 ? (
+          ) : visibleRequests.length === 0 ? (
             <p className="empty">Chưa có yêu cầu.</p>
           ) : (
-            tabRequests.map((item) => (
+            visibleRequests.map((item) => (
               <button
                 key={item.id}
                 className={item.id === selectedId ? "selected" : ""}
@@ -958,6 +1074,31 @@ export default function RequestsPage() {
                   {statusLabels[current.status]}
                 </em>
               </section>
+              {cancellationPending && (
+                <div className="workflow-alert cancellation-lock">
+                  <div>
+                    <strong>Quy trình mua đang tạm khóa</strong>
+                    <span>
+                      Khách hàng đã gửi yêu cầu hủy. Không thể tiếp tục lịch
+                      hẹn, hợp đồng, thanh toán hoặc kích hoạt sở hữu trước khi
+                      xử lý yêu cầu này.
+                    </span>
+                  </div>
+                  {pendingCancellationForCurrent && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        changeView("cancellations");
+                        setSelectedCancellationId(
+                          pendingCancellationForCurrent.id,
+                        );
+                      }}
+                    >
+                      Xem yêu cầu hủy
+                    </button>
+                  )}
+                </div>
+              )}
               {decisionDone && (
                 <CompletedStep title="Duyệt yêu cầu">
                   <div className="decision-result">
@@ -975,20 +1116,6 @@ export default function RequestsPage() {
                     </span>
                   </div>
                   <RequestReviewInfo request={current} />
-                  {current.type === "reserve" &&
-                    current.status === "approved" && (
-                      <div className="step-actions">
-                        <button
-                          className="danger-button"
-                          disabled={!!busy}
-                          onClick={() => void cancelApprovedReserve()}
-                        >
-                          {busy === "cancel-reserve"
-                            ? "Đang hủy giữ chỗ..."
-                            : "Hủy giữ chỗ"}
-                        </button>
-                      </div>
-                    )}
                 </CompletedStep>
               )}
               {!decisionDone && (
@@ -1137,7 +1264,7 @@ export default function RequestsPage() {
                   )}
                 </section>
               )}
-              {tab === "purchase" && appointmentDone && contract && (
+              {appointmentDone && contract && (
                 <>
                   {pdfDone && (
                     <CompletedStep title="Tạo PDF hợp đồng">
@@ -1430,9 +1557,9 @@ export default function RequestsPage() {
                   )}
                 </>
               )}
-              {tab === "purchase" &&
-                current.status === "approved" &&
-                !contract && (
+              {current.status === "approved" &&
+                !contract &&
+                !cancellationPending && (
                   <div className="workflow-alert error">
                     Không tìm thấy hợp đồng được tạo tự động cho yêu cầu này.
                   </div>
@@ -1440,7 +1567,206 @@ export default function RequestsPage() {
             </>
           )}
         </main>
-      </div>
+        </div>
+      ) : (
+        <div className="request-workspace cancellation-workspace">
+          <aside className="request-list cancellation-list">
+            {loading ? (
+              <p className="empty">Đang tải...</p>
+            ) : visibleCancellations.length === 0 ? (
+              <p className="empty">Chưa có yêu cầu hủy nào.</p>
+            ) : (
+              visibleCancellations.map((item) => (
+                <button
+                  key={item.id}
+                  className={
+                    item.id === selectedCancellationId ? "selected" : ""
+                  }
+                  onClick={() => {
+                    setSelectedCancellationId(item.id);
+                    resetFeedback();
+                  }}
+                >
+                  <span>
+                    <strong>Hủy #{String(item.id).padStart(4, "0")}</strong>
+                    <em className={`status-${item.status}`}>
+                      {cancellationStatusLabels[item.status]}
+                    </em>
+                  </span>
+                  <b>{item.customerName || "Khách hàng"}</b>
+                  <small>
+                    {(item.plotCodes ?? []).join(", ") || "Chưa có mã lô"} ·
+                    Yêu cầu #{String(item.requestId).padStart(4, "0")}
+                  </small>
+                </button>
+              ))
+            )}
+          </aside>
+          <main className="request-detail cancellation-detail">
+            {!currentCancellation ? (
+              <p className="empty">
+                {selectedCancellationId
+                  ? "Đang tải thông tin yêu cầu hủy..."
+                  : "Chọn một yêu cầu hủy để xử lý."}
+              </p>
+            ) : (
+              <>
+                <section className="request-heading">
+                  <div>
+                    <span>
+                      Yêu cầu hủy #{String(currentCancellation.id).padStart(4, "0")}
+                    </span>
+                    <h2>
+                      {currentCancellation.customerName ||
+                        currentCancellationRequest?.customerName ||
+                        "Khách hàng"}
+                    </h2>
+                    <p>
+                      {(currentCancellation.plotCodes ??
+                        currentCancellationRequest?.plotCodes ??
+                        []).join(", ") || "Chưa có mã lô"}{" "}
+                      · Yêu cầu mua #{String(currentCancellation.requestId).padStart(4, "0")}
+                    </p>
+                  </div>
+                  <em className={`status-${currentCancellation.status}`}>
+                    {cancellationStatusLabels[currentCancellation.status]}
+                  </em>
+                </section>
+
+                <section className="review-section cancellation-summary">
+                  <div className="review-section-heading">
+                    <h4>Thông tin yêu cầu hủy</h4>
+                    <b>
+                      {currentCancellation.isImmediate
+                        ? "Hủy ngay trước khi duyệt"
+                        : "Cần admin xem xét"}
+                    </b>
+                  </div>
+                  <div className="review-info-grid">
+                    <span>
+                      <small>Ngày gửi</small>
+                      <strong>{dateTime(currentCancellation.createdAt)}</strong>
+                    </span>
+                    <span>
+                      <small>Ngày xử lý</small>
+                      <strong>{dateTime(currentCancellation.reviewedAt ?? undefined)}</strong>
+                    </span>
+                    <span>
+                      <small>Trạng thái yêu cầu mua</small>
+                      <strong>
+                        {statusLabels[
+                          currentCancellation.purchaseRequestStatus ??
+                            currentCancellationRequest?.status ??
+                            "approved"
+                        ]}
+                      </strong>
+                    </span>
+                    <span>
+                      <small>Email</small>
+                      <strong>
+                        {currentCancellation.customerEmail ||
+                          currentCancellationRequest?.customerEmail ||
+                          "—"}
+                      </strong>
+                    </span>
+                    <span>
+                      <small>Điện thoại</small>
+                      <strong>
+                        {currentCancellation.customerPhone ||
+                          currentCancellationRequest?.customerPhone ||
+                          "—"}
+                      </strong>
+                    </span>
+                    <span>
+                      <small>Tổng giá trị</small>
+                      <strong>
+                        {money.format(
+                          Number(
+                            currentCancellation.totalPrice ??
+                              currentCancellationRequest?.totalPrice ??
+                              0,
+                          ),
+                        )}
+                      </strong>
+                    </span>
+                  </div>
+                  <div className="cancellation-reason">
+                    <small>Lý do khách hàng yêu cầu hủy</small>
+                    <p>{currentCancellation.reason}</p>
+                  </div>
+                </section>
+
+                {currentCancellation.status === "pending" ? (
+                  <section className="active-step cancellation-decision-step">
+                    <div className="step-title">
+                      <span>!</span>
+                      <div>
+                        <h3>Xem xét yêu cầu hủy</h3>
+                        <p>
+                          Chấp thuận sẽ dừng quy trình mua và giải phóng dữ liệu
+                          liên quan theo quy tắc của hệ thống.
+                        </p>
+                      </div>
+                    </div>
+                    <label>
+                      Ghi chú phản hồi khách hàng
+                      <textarea
+                        rows={4}
+                        value={cancellationAdminNote}
+                        onChange={(event) =>
+                          setCancellationAdminNote(event.target.value)
+                        }
+                        placeholder="Nhập lý do chấp thuận hoặc từ chối hủy..."
+                      />
+                    </label>
+                    <div className="step-actions">
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        disabled={!!busy}
+                        onClick={() => void reviewCancellation("reject")}
+                      >
+                        {busy === "cancellation-reject"
+                          ? "Đang từ chối..."
+                          : "Từ chối hủy"}
+                      </button>
+                      <button
+                        type="button"
+                        className="danger-button solid"
+                        disabled={!!busy}
+                        onClick={() => void reviewCancellation("approve")}
+                      >
+                        {busy === "cancellation-approve"
+                          ? "Đang duyệt..."
+                          : "Chấp thuận hủy"}
+                      </button>
+                    </div>
+                  </section>
+                ) : (
+                  <section className="request-step-completed cancellation-result">
+                    <div className="decision-result">
+                      <span>
+                        <small>Kết quả xử lý</small>
+                        <strong>
+                          {cancellationStatusLabels[currentCancellation.status]}
+                        </strong>
+                      </span>
+                      <span>
+                        <small>Ngày xử lý</small>
+                        <strong>{dateTime(currentCancellation.reviewedAt ?? undefined)}</strong>
+                      </span>
+                      <span>
+                        <small>Ghi chú admin</small>
+                        <strong>{currentCancellation.adminNote || "Không có"}</strong>
+                      </span>
+                    </div>
+                  </section>
+                )}
+              </>
+            )}
+          </main>
+        </div>
+      )}
       {contractPreviewUrl && (
         <div
           className="contract-preview-backdrop"

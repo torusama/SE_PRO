@@ -10,7 +10,7 @@ export const ROUTES = {
   HOME:         '/',
   MAP:          '/ban-do',
   LOT_DETAIL:   '/ban-do/:lotId',
-  BOOKING:      '/dat-cho/:lotId',
+  BOOKING:      '/mua-lo/:lotId',
   PAYMENT:      '/thanh-toan/:bookingId',
   MY_LOTS:      '/lo-cua-toi',
   MY_LOTS_DETAIL: '/lo-cua-toi/:lotId',

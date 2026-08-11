@@ -1262,31 +1262,6 @@
   margin-top: 16px;
 }
 
-.map-page .request-type-switch {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-top: 14px;
-}
-
-.map-page .request-type-btn {
-  min-height: 38px;
-  border: 0.5px solid var(--border-dim);
-  border-radius: 8px;
-  background: rgba(0, 229, 196, 0.03);
-  color: var(--text-muted);
-  font-family: "Be Vietnam Pro", sans-serif;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.map-page .request-type-btn.active {
-  border-color: var(--border-gold);
-  background: rgba(10, 255, 212, 0.12);
-  color: var(--gold-bright);
-}
-
 .map-page .btn-primary {
   width: 100%;
   padding: 12px;
@@ -1325,6 +1300,119 @@
 .map-page .btn-secondary:hover {
   border-color: var(--border-soft);
   color: var(--text-main);
+}
+
+.map-page .btn-cancel-request {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid rgba(232, 136, 136, 0.55);
+  border-radius: 8px;
+  color: #ffd0d0;
+  background: rgba(151, 48, 48, 0.12);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.map-page .btn-cancel-request:hover:not(:disabled) {
+  background: rgba(151, 48, 48, 0.22);
+}
+
+.map-page .btn-cancel-request:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.map-cancel-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(1, 5, 10, 0.78);
+  backdrop-filter: blur(5px);
+}
+
+.map-cancel-dialog {
+  width: min(540px, 100%);
+  padding: 22px;
+  border: 1px solid rgba(96, 130, 189, 0.28);
+  border-radius: 12px;
+  color: var(--text-main);
+  background: #08111d;
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.45);
+}
+
+.map-cancel-dialog header,
+.map-cancel-dialog footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.map-cancel-dialog header span {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.map-cancel-dialog h2 {
+  margin: 5px 0 0;
+  color: var(--text-main);
+  font-size: 20px;
+}
+
+.map-cancel-dialog header > button {
+  border: 0;
+  color: var(--text-muted);
+  background: transparent;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.map-cancel-dialog > p {
+  margin: 17px 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.map-cancel-dialog label {
+  display: grid;
+  gap: 8px;
+  color: var(--text-main);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.map-cancel-dialog textarea {
+  width: 100%;
+  resize: vertical;
+  padding: 11px;
+  border: 1px solid var(--border-dim);
+  border-radius: 8px;
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.04);
+  font: inherit;
+}
+
+.map-cancel-error {
+  margin-top: 10px;
+  color: #efb6b6;
+  font-size: 12px;
+}
+
+.map-cancel-dialog footer {
+  justify-content: flex-end;
+  margin-top: 18px;
+}
+
+.map-cancel-dialog footer .btn-secondary,
+.map-cancel-dialog footer .btn-cancel-request {
+  width: auto;
+  min-width: 130px;
 }
 
 /* ---------- cluster panel (Family/Clan mode) ---------- */

@@ -114,7 +114,7 @@ export default function AgentContextMap({
       : selectedPlot?.status === "pending"
         ? "Đang chờ xử lý"
         : selectedPlot?.status === "reserved"
-          ? "Đã giữ chỗ"
+          ? "Đang giao dịch"
           : selectedPlot?.status === "sold"
             ? "Đã bán"
             : "Tạm khóa";

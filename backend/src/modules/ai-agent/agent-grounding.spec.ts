@@ -96,7 +96,7 @@ describe('agent recommendation consultation depth', () => {
       B-01-001 là phương án thay thế để gia đình cân nhắc nếu muốn đổi khu vực.
       So với A-01-001, phương án này có tiêu chí khác biệt nhưng không nên được chọn chỉ dựa trên điểm số.
       Mình nghiêng về A-01-001 nếu ưu tiên giữ ngân sách, còn B-01-001 phù hợp hơn khi khu vực là yếu tố quan trọng.
-      Trạng thái còn trống chỉ phản ánh thời điểm tìm kiếm và chưa phải là giữ chỗ hay xác nhận mua.
+      Trạng thái còn trống chỉ phản ánh thời điểm tìm kiếm và chưa phải là yêu cầu mua đã được duyệt.
       Gia đình nên xem cả hai vị trí, đối chiếu phần chênh lệch và chỉ tạo yêu cầu sau khi đã xác nhận lựa chọn.
     `;
     expect(isConsultativeRecommendationNarrative(noFollowUp, result)).toBe(

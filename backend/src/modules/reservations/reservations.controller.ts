@@ -17,7 +17,9 @@ import { CreateReservationDto } from './dto/create-reservation.dto';
 import { UpdateReservationStatusDto } from './dto/update-reservation-status.dto';
 import { ReservationsService } from './reservations.service';
 import { AdminReservationQueryDto } from './dto/admin-reservation-query.dto';
-import { CancelApprovedReservationDto } from './dto/cancel-approved-reservation.dto';
+import { AdminCancellationQueryDto } from './dto/admin-cancellation-query.dto';
+import { CancelReservationDto } from './dto/cancel-reservation.dto';
+import { ReviewCancellationDto } from './dto/review-cancellation.dto';
 import {
   CurrentAdminContext,
   type AdminRequestContext,
@@ -40,7 +42,7 @@ export class ReservationsController {
   ) {
     return {
       success: true,
-      message: 'Đã tạo yêu cầu giữ chỗ hoặc mua lô',
+      message: 'Đã tạo yêu cầu mua lô',
       data: await this.reservationsService.create(user.id, dto),
     };
   }
@@ -96,11 +98,76 @@ export class ReservationsController {
   async cancel(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
+    @Body() dto: CancelReservationDto,
   ) {
     return {
       success: true,
-      message: 'Đã hủy yêu cầu',
-      data: await this.reservationsService.cancel(user.id, Number(id)),
+      message: 'Đã ghi nhận yêu cầu hủy',
+      data: await this.reservationsService.cancel(
+        user.id,
+        Number(id),
+        dto.reason,
+      ),
+    };
+  }
+
+  @Get('admin/reservation-cancellations')
+  @Roles('admin')
+  async adminCancellationList(@Query() query: AdminCancellationQueryDto) {
+    return {
+      success: true,
+      message: 'Đã tải danh sách yêu cầu hủy',
+      data: await this.reservationsService.adminCancellationList(query),
+    };
+  }
+
+  @Get('admin/reservation-cancellations/:id')
+  @Roles('admin')
+  async adminCancellationOne(@Param('id') id: string) {
+    return {
+      success: true,
+      message: 'Đã tải chi tiết yêu cầu hủy',
+      data: await this.reservationsService.adminCancellationOne(Number(id)),
+    };
+  }
+
+  @Patch('admin/reservation-cancellations/:id/approve')
+  @Roles('admin')
+  async approveCancellation(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: ReviewCancellationDto,
+    @CurrentAdminContext() context: AdminRequestContext,
+  ) {
+    return {
+      success: true,
+      message: 'Đã duyệt yêu cầu hủy',
+      data: await this.reservationsService.approveCancellation(
+        user.id,
+        Number(id),
+        dto.adminNote,
+        context,
+      ),
+    };
+  }
+
+  @Patch('admin/reservation-cancellations/:id/reject')
+  @Roles('admin')
+  async rejectCancellation(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: ReviewCancellationDto,
+    @CurrentAdminContext() context: AdminRequestContext,
+  ) {
+    return {
+      success: true,
+      message: 'Đã từ chối yêu cầu hủy',
+      data: await this.reservationsService.rejectCancellation(
+        user.id,
+        Number(id),
+        dto.adminNote,
+        context,
+      ),
     };
   }
 
@@ -164,23 +231,4 @@ export class ReservationsController {
     };
   }
 
-  @Patch('admin/reservations/:id/cancel')
-  @Roles('admin')
-  async cancelApprovedReserve(
-    @CurrentUser() user: AuthenticatedUser,
-    @Param('id') id: string,
-    @Body() dto: CancelApprovedReservationDto,
-    @CurrentAdminContext() context: AdminRequestContext,
-  ) {
-    return {
-      success: true,
-      message: 'Đã hủy giữ chỗ và trả lô về trạng thái còn trống',
-      data: await this.reservationsService.cancelApprovedReserve(
-        user.id,
-        Number(id),
-        dto.adminNote,
-        context,
-      ),
-    };
-  }
 }

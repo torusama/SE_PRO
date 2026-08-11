@@ -54,7 +54,6 @@ import "./MapPage.css";
 type PlotStatus = "available" | "pending" | "reserved" | "sold" | "locked";
 type StatusFilter = "all" | PlotStatus;
 type SelectionMode = "single" | "cluster";
-type ReservationType = "reserve" | "purchase";
 type PlotIntroductionView = {
   status: "loading" | "ai" | "fallback";
   text: string;
@@ -107,12 +106,24 @@ interface MapPlot {
 
 interface CustomerReservation {
   id: number;
-  type: ReservationType;
   status: CustomerReservationStatus;
   plotCodes?: string[];
   plotCount?: number;
   createdAt?: string;
   reviewedAt?: string | null;
+  canCancel?: boolean;
+  cancellationMode?: "immediate" | "admin_review" | null;
+  cancellationId?: number | null;
+  cancellationStatus?: "pending" | "approved" | "rejected" | null;
+  cancellation?: {
+    id: number;
+    status: "pending" | "approved" | "rejected";
+    reason: string;
+    isImmediate: boolean;
+    adminNote?: string | null;
+    requestedAt: string;
+    reviewedAt?: string | null;
+  } | null;
 }
 
 interface ApiErrorResponse {
@@ -174,10 +185,7 @@ const T = {
   directionGuide: "H\u01b0\u1edbng d\u1eabn \u0111\u01b0\u1eddng \u0111i",
   findRoute: "T\u00ecm \u0111\u01b0\u1eddng",
   hideRoute: "\u1ea8n \u0111\u01b0\u1eddng \u0111i",
-  continuePlot: "G\u1eedi y\u00eau c\u1ea7u gi\u1eef ch\u1ed7",
-  submitSelected:
-    "G\u1eedi y\u00eau c\u1ea7u cho c\u00e1c l\u00f4 \u0111\u00e3 ch\u1ecdn",
-  reserveAction: "Gi\u1eef ch\u1ed7",
+  continuePlot: "G\u1eedi y\u00eau c\u1ea7u mua l\u00f4",
   purchaseAction: "Mua l\u00f4",
   purchaseSelected:
     "G\u1eedi y\u00eau c\u1ea7u mua c\u00e1c l\u00f4 \u0111\u00e3 ch\u1ecdn",
@@ -186,14 +194,14 @@ const T = {
   clusterMin:
     "Vui l\u00f2ng ch\u1ecdn \u00edt nh\u1ea5t 2 l\u00f4 li\u1ec1n k\u1ec1 cho nh\u00f3m gia \u0111\u00ecnh.",
   loginRequired:
-    "B\u1ea1n c\u1ea7n \u0111\u0103ng nh\u1eadp \u0111\u1ec3 g\u1eedi y\u00eau c\u1ea7u gi\u1eef ch\u1ed7.",
+    "B\u1ea1n c\u1ea7n \u0111\u0103ng nh\u1eadp \u0111\u1ec3 g\u1eedi y\u00eau c\u1ea7u mua l\u00f4.",
   submitFailed:
-    "Kh\u00f4ng th\u1ec3 g\u1eedi y\u00eau c\u1ea7u gi\u1eef ch\u1ed7.",
+    "Kh\u00f4ng th\u1ec3 g\u1eedi y\u00eau c\u1ea7u mua l\u00f4.",
   unavailable: "L\u00f4 n\u00e0y hi\u1ec7n kh\u00f4ng th\u1ec3 ch\u1ecdn.",
   pendingUnavailable:
     "L\u00f4 n\u00e0y \u0111ang ch\u1edd duy\u1ec7t y\u00eau c\u1ea7u, kh\u00f4ng th\u1ec3 g\u1eedi th\u00eam y\u00eau c\u1ea7u.",
   reservedUnavailable:
-    "L\u00f4 n\u00e0y \u0111\u00e3 \u0111\u01b0\u1ee3c gi\u1eef ch\u1ed7.",
+    "L\u00f4 n\u00e0y \u0111ang trong qu\u00e1 tr\u00ecnh ho\u00e0n t\u1ea5t mua.",
   soldUnavailable:
     "L\u00f4 n\u00e0y \u0111\u00e3 \u0111\u01b0\u1ee3c b\u00e1n.",
   lockedUnavailable: "L\u00f4 n\u00e0y \u0111ang b\u1ecb kh\u00f3a.",
@@ -208,10 +216,10 @@ const T = {
   myPlot: "L\u00f4 c\u1ee7a t\u00f4i",
   myPending:
     "Y\u00eau c\u1ea7u c\u1ee7a b\u1ea1n \u0111ang ch\u1edd duy\u1ec7t",
-  myApprovedReserve:
-    "L\u00f4 n\u00e0y \u0111\u00e3 \u0111\u01b0\u1ee3c gi\u1eef cho b\u1ea1n",
   myApprovedPurchase:
     "L\u00f4 n\u00e0y \u0111\u00e3 \u0111\u01b0\u1ee3c duy\u1ec7t mua cho b\u1ea1n",
+  myCancellationPending:
+    "Y\u00eau c\u1ea7u h\u1ee7y mua l\u00f4 \u0111ang ch\u1edd admin xem x\u00e9t",
 };
 
 const MAP_GUIDE_STORAGE_KEY = "hideGuide_mapPage";
@@ -221,8 +229,8 @@ const MAP_GUIDE_STEPS: GuideStep[] = [
     desc: "Người dùng lựa chọn lô đất còn trống trên bản đồ quy hoạch của dự án. Hệ thống hiển thị đầy đủ thông tin của lô đất để xem trước.",
   },
   {
-    title: "Bước 2: Đăng ký giữ chỗ",
-    desc: "Người dùng nhấn 'Giữ chỗ' để gửi yêu cầu giữ lô đất đã chọn. Hệ thống xác nhận yêu cầu và chuyển sang bước tiếp theo.",
+    title: "Bước 2: Gửi yêu cầu mua",
+    desc: "Người dùng gửi yêu cầu mua một hoặc nhiều lô đã chọn. Hệ thống ghi nhận yêu cầu để quản trị viên kiểm tra.",
   },
   {
     title: "Bước 3: Xem hồ sơ pháp lý và đặt lịch",
@@ -238,7 +246,7 @@ const STATUS_OPTIONS: Array<{ value: StatusFilter; label: string }> = [
   { value: "all", label: "T\u1ea5t c\u1ea3" },
   { value: "available", label: "C\u00f2n tr\u1ed1ng" },
   { value: "pending", label: "\u0110ang ch\u1edd" },
-  { value: "reserved", label: "\u0110\u00e3 gi\u1eef ch\u1ed7" },
+  { value: "reserved", label: "Chờ hoàn tất mua" },
   { value: "sold", label: "\u0110\u00e3 b\u00e1n" },
   { value: "locked", label: "\u0110\u00e3 kh\u00f3a" },
 ];
@@ -246,7 +254,7 @@ const STATUS_OPTIONS: Array<{ value: StatusFilter; label: string }> = [
 const STATUS_LABEL: Record<PlotStatus, string> = {
   available: "C\u00f2n tr\u1ed1ng",
   pending: "\u0110ang ch\u1edd",
-  reserved: "\u0110\u00e3 gi\u1eef ch\u1ed7",
+  reserved: "Chờ hoàn tất mua",
   sold: "\u0110\u00e3 b\u00e1n",
   locked: "\u0110\u00e3 kh\u00f3a",
 };
@@ -284,14 +292,26 @@ const STATUS_COLOR: Record<
 
 function getMyReservationLabel(reservation?: CustomerReservation) {
   if (!reservation) return "";
+  if (
+    reservation.cancellation?.status === "pending" ||
+    reservation.cancellationStatus === "pending"
+  )
+    return T.myCancellationPending;
   if (["pending", "submitted", "draft"].includes(reservation.status))
     return T.myPending;
-  if (reservation.status === "approved") {
-    return reservation.type === "purchase"
-      ? T.myApprovedPurchase
-      : T.myApprovedReserve;
-  }
+  if (reservation.status === "approved") return T.myApprovedPurchase;
   return T.myPlot;
+}
+
+function canCancelMapReservation(reservation: CustomerReservation) {
+  if (typeof reservation.canCancel === "boolean") return reservation.canCancel;
+  if (reservation.status === "cancelled") return false;
+  const cancellationStatus =
+    reservation.cancellation?.status ?? reservation.cancellationStatus;
+  if (cancellationStatus === "pending") return false;
+  return ["draft", "pending", "submitted", "approved"].includes(
+    reservation.status,
+  );
 }
 
 const ZONES = CEMETERY_ZONES;
@@ -682,10 +702,14 @@ export default function MapPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitMessage, setSubmitMessage] = useState("");
   const [submitError, setSubmitError] = useState("");
-  const [requestType, setRequestType] = useState<ReservationType>("reserve");
   const [myReservations, setMyReservations] = useState<CustomerReservation[]>(
     [],
   );
+  const [cancelTarget, setCancelTarget] =
+    useState<CustomerReservation | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelError, setCancelError] = useState("");
+  const [cancelBusy, setCancelBusy] = useState(false);
   const mapRequestRef = useRef<AbortController | null>(null);
   const reservationRequestRef = useRef(0);
 
@@ -1066,6 +1090,58 @@ export default function MapPage() {
     ? myPlotByCode.get(selectedPlot.plotCode)
     : undefined;
 
+  function openMapCancellation() {
+    if (!selectedMyReservation || !canCancelMapReservation(selectedMyReservation)) {
+      return;
+    }
+    setCancelTarget(selectedMyReservation);
+    setCancelReason("");
+    setCancelError("");
+  }
+
+  function closeMapCancellation() {
+    if (cancelBusy) return;
+    setCancelTarget(null);
+    setCancelReason("");
+    setCancelError("");
+  }
+
+  async function submitMapCancellation() {
+    if (!cancelTarget) return;
+    const reason = cancelReason.trim();
+    if (reason.length < 3 || reason.length > 1000) {
+      setCancelError("Lý do hủy phải có từ 3 đến 1000 ký tự.");
+      return;
+    }
+    setCancelBusy(true);
+    setCancelError("");
+    try {
+      const response = await api.post<{
+        data?: { resolution?: "immediate" | "admin_review" };
+      }>(`/reservations/${cancelTarget.id}/cancel`, { reason });
+      const resolution = response.data.data?.resolution;
+      setSubmitMessage(
+        resolution === "admin_review"
+          ? "Đã gửi yêu cầu hủy tới admin để xem xét."
+          : "Đã hủy yêu cầu mua lô và giải phóng lô liên quan.",
+      );
+      setCancelTarget(null);
+      setCancelReason("");
+      setCancelError("");
+      await loadMyReservations();
+    } catch (error) {
+      if (isApiErrorResponse(error)) {
+        setCancelError(
+          error.response?.data?.message ?? "Không thể hủy yêu cầu.",
+        );
+      } else {
+        setCancelError("Không thể hủy yêu cầu. Vui lòng thử lại.");
+      }
+    } finally {
+      setCancelBusy(false);
+    }
+  }
+
   function handleModeChange(mode: SelectionMode) {
     setSelectionMode(mode);
     setAdjacencyWarning("");
@@ -1170,7 +1246,6 @@ export default function MapPage() {
   async function submitReservation(
     targetPlots: MapPlot[],
     multiPlot = false,
-    type: ReservationType = requestType,
   ) {
     const realAvailablePlots = targetPlots.filter(
       (plot) => !plot.isPlaceholder && plot.status === "available",
@@ -1194,11 +1269,10 @@ export default function MapPage() {
       const createResponse = await api.post(
         multiPlot ? "/reservations/multiple" : "/reservations",
         {
-          type,
           plotIds,
           note: multiPlot
-            ? `Khách hàng đã chọn ${plotIds.length} lô liền kề cho gia đình để ${type === "purchase" ? "mua" : "giữ chỗ"} từ bản đồ 2D`
-            : `Khách hàng đã chọn ${plotIds.length} lô để ${type === "purchase" ? "mua" : "giữ chỗ"} từ bản đồ 2D`,
+            ? `Khách hàng đã chọn ${plotIds.length} lô liền kề cho gia đình để mua từ bản đồ 2D`
+            : `Khách hàng đã chọn ${plotIds.length} lô để mua từ bản đồ 2D`,
         },
       );
       const created = createResponse.data.data;
@@ -1290,7 +1364,7 @@ export default function MapPage() {
       <GuidePopup
         open={guideOpen}
         onClose={() => setGuideOpen(false)}
-        title="Quy trình giữ chỗ và mua lô đất"
+        title="Quy trình mua lô đất"
         steps={MAP_GUIDE_STEPS}
         storageKey={MAP_GUIDE_STORAGE_KEY}
         finishLabel="Bắt đầu chọn lô đất"
@@ -1426,7 +1500,7 @@ export default function MapPage() {
               onClick={() => setStatusFilter("reserved")}
             >
               <span className="stat-num yellow">{stats.reserved}</span>
-              <span className="stat-label">Đã giữ chỗ</span>
+              <span className="stat-label">Chờ hoàn tất mua</span>
             </div>
             <div
               className={`stat-card ${statusFilter === "sold" ? "active" : ""}`}
@@ -1987,16 +2061,26 @@ export default function MapPage() {
                     Yêu cầu #{selectedMyReservation.id}
                   </div>
                   <div className="my-plot-note">
-                    {selectedMyReservation.type === "purchase"
-                      ? T.purchaseAction
-                      : T.reserveAction}{" "}
-                    · {getMyReservationLabel(selectedMyReservation)}
+                    {T.purchaseAction} ·{" "}
+                    {getMyReservationLabel(selectedMyReservation)}
                   </div>
                 </div>
               )}
 
               {!selectedPlot.isPlaceholder && (
                 <div className="detail-actions route-actions">
+                  {selectedMyReservation &&
+                    canCancelMapReservation(selectedMyReservation) && (
+                    <button
+                      className="btn-cancel-request"
+                      type="button"
+                      onClick={openMapCancellation}
+                    >
+                      {selectedMyReservation.status === "approved"
+                        ? "Gửi yêu cầu hủy"
+                        : "Hủy yêu cầu mua lô"}
+                    </button>
+                  )}
                   <button
                     className="btn-secondary"
                     type="button"
@@ -2110,23 +2194,6 @@ export default function MapPage() {
                 </div>
               )}
 
-              <div className="request-type-switch" aria-label="Loại yêu cầu">
-                <button
-                  type="button"
-                  className={`request-type-btn ${requestType === "reserve" ? "active" : ""}`}
-                  onClick={() => setRequestType("reserve")}
-                >
-                  {T.reserveAction}
-                </button>
-                <button
-                  type="button"
-                  className={`request-type-btn ${requestType === "purchase" ? "active" : ""}`}
-                  onClick={() => setRequestType("purchase")}
-                >
-                  {T.purchaseAction}
-                </button>
-              </div>
-
               {selectionMode === "single" && (
                 <div className="detail-actions">
                   {selectedPlot.isPlaceholder ? (
@@ -2144,9 +2211,7 @@ export default function MapPage() {
                         >
                           {submitting
                             ? T.submitting
-                            : requestType === "purchase"
-                              ? T.purchaseAction
-                              : T.continuePlot}
+                            : T.continuePlot}
                         </button>
                       ) : (
                         <div className="selection-message">
@@ -2223,9 +2288,7 @@ export default function MapPage() {
                     >
                       {submitting
                         ? T.submitting
-                        : requestType === "purchase"
-                          ? T.purchaseSelected
-                          : T.submitSelected}
+                        : T.purchaseSelected}
                     </button>
                     <button
                       className="btn-secondary"
@@ -2241,6 +2304,81 @@ export default function MapPage() {
           )}
         </aside>
       </div>
+
+      {cancelTarget && (
+        <div
+          className="map-cancel-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeMapCancellation();
+          }}
+        >
+          <section
+            className="map-cancel-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="map-cancel-title"
+          >
+            <header>
+              <div>
+                <span>Yêu cầu #{String(cancelTarget.id).padStart(4, "0")}</span>
+                <h2 id="map-cancel-title">
+                  {cancelTarget.status === "approved"
+                    ? "Gửi yêu cầu hủy mua lô"
+                    : "Hủy yêu cầu mua lô"}
+                </h2>
+              </div>
+              <button
+                type="button"
+                aria-label="Đóng"
+                onClick={closeMapCancellation}
+                disabled={cancelBusy}
+              >
+                ×
+              </button>
+            </header>
+            <p>
+              {cancelTarget.status === "approved"
+                ? "Yêu cầu đã được duyệt. Admin sẽ xem xét việc hủy và quy trình sẽ tạm dừng trong thời gian chờ."
+                : "Yêu cầu chưa được duyệt. Khi xác nhận, yêu cầu sẽ bị khóa ngay để không thể được duyệt nhầm."}
+            </p>
+            <label>
+              <span>Lý do hủy</span>
+              <textarea
+                rows={5}
+                minLength={3}
+                maxLength={1000}
+                value={cancelReason}
+                onChange={(event) => {
+                  setCancelReason(event.target.value);
+                  if (cancelError) setCancelError("");
+                }}
+                placeholder="Nhập lý do bạn muốn hủy yêu cầu mua lô..."
+                disabled={cancelBusy}
+              />
+            </label>
+            {cancelError && <div className="map-cancel-error">{cancelError}</div>}
+            <footer>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={closeMapCancellation}
+                disabled={cancelBusy}
+              >
+                Quay lại
+              </button>
+              <button
+                type="button"
+                className="btn-cancel-request"
+                onClick={() => void submitMapCancellation()}
+                disabled={cancelBusy || cancelReason.trim().length < 3}
+              >
+                {cancelBusy ? "Đang gửi..." : "Xác nhận hủy"}
+              </button>
+            </footer>
+          </section>
+        </div>
+      )}
 
       <div className="map-tooltip" ref={tooltipRef}>
         <div className="tooltip-id">{hoverPlot?.plotCode}</div>

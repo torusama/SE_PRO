@@ -54,7 +54,8 @@ Repository hiện tại đã phát triển xa hơn bản MVP ban đầu và gồ
 
 - Đăng ký, đăng nhập, hoàn thiện hồ sơ và phân quyền truy cập.
 - **Bản đồ nghĩa trang 2D** tương tác, xem thông tin chi tiết từng lô.
-- Gửi yêu cầu giữ chỗ / mua lô và quản lý các lô của mình.
+- Gửi yêu cầu mua lô; hủy ngay khi chưa được duyệt hoặc gửi yêu cầu hủy để
+  admin xử lý sau khi đã duyệt.
 - Xem, đặt và theo dõi dịch vụ nghĩa trang; nhận minh chứng hoàn thành dịch vụ.
 - Xem lịch rảnh và đặt lịch hẹn.
 - Tạo nhắc lịch tưởng niệm và xem trung tâm thông báo.
@@ -67,7 +68,7 @@ Repository hiện tại đã phát triển xa hơn bản MVP ban đầu và gồ
 
 - Dashboard và thống kê hoạt động.
 - CRUD lô đất, trạng thái, giá và quản lý bản đồ nghĩa trang.
-- Xử lý yêu cầu giữ chỗ / mua lô.
+- Xử lý yêu cầu mua lô và các yêu cầu hủy mua lô riêng biệt.
 - Quản lý hợp đồng và hồ sơ sở hữu.
 - Quản lý đơn dịch vụ nghĩa trang.
 - Quản lý chuyển nhượng.
@@ -147,7 +148,7 @@ SE_PRO-main/
 ├── backend/                          # NestJS REST API
 │   ├── src/modules/ai-agent/         # Concierge, RAG, feedback, learning
 │   ├── src/modules/plots/            # Lô đất và logic bản đồ
-│   ├── src/modules/reservations/     # Yêu cầu giữ chỗ/mua
+│   ├── src/modules/reservations/     # Yêu cầu mua lô
 │   ├── src/modules/contracts/        # Hợp đồng và sở hữu
 │   ├── src/modules/cemetery-services/# Dịch vụ nghĩa trang
 │   ├── src/modules/reminders/        # Nhắc lịch tưởng niệm
