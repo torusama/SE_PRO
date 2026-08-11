@@ -224,6 +224,7 @@ const SERVICE_GUIDE_STEPS: GuideStep[] = [
 export default function ServicePage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const focusedOrderId = Number(searchParams.get("order")) || null;
   const token = useAuthStore((s) => s.token);
   const isAuthenticated = Boolean(token);
 
@@ -390,12 +391,14 @@ export default function ServicePage() {
       setOwnedPlots(plots);
       if (plots.length && selectedPlotId === null)
         setSelectedPlotId(plots[0].plotId);
-      const requestedOrderId = Number(searchParams.get("order"));
+      const requestedOrderId = focusedOrderId ?? 0;
       const requestedIndex = loadedOrders.findIndex(
         (order) => order.id === requestedOrderId,
       );
       if (requestedIndex >= 0) {
         setTab("track");
+        setStatusFilter("all");
+        setSearch("");
         setExpandedId(requestedOrderId);
         setPage(Math.floor(requestedIndex / PAGE_SIZE) + 1);
         void loadOrderDetail(requestedOrderId);
@@ -473,6 +476,16 @@ export default function ServicePage() {
     (page - 1) * PAGE_SIZE,
     page * PAGE_SIZE,
   );
+
+  useEffect(() => {
+    if (!focusedOrderId || loading || tab !== "track") return;
+    const timer = window.setTimeout(() => {
+      document
+        .getElementById(`service-order-${focusedOrderId}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [focusedOrderId, loading, page, pagedOrders.length, tab]);
 
   const selectedServiceType =
     serviceTypes.find((s) => s.id === selectedServiceId) ?? null;
@@ -801,6 +814,7 @@ export default function ServicePage() {
             pageCount={pageCount}
             setPage={setPage}
             onLoadOrderDetail={(id) => void loadOrderDetail(id)}
+            focusedOrderId={focusedOrderId}
           />
         )}
       </main>
@@ -1345,6 +1359,7 @@ function TrackTab(props: {
   pageCount: number;
   setPage: (p: number) => void;
   onLoadOrderDetail: (id: number) => void;
+  focusedOrderId: number | null;
 }) {
   const {
     loading,
@@ -1364,6 +1379,7 @@ function TrackTab(props: {
     pageCount,
     setPage,
     onLoadOrderDetail,
+    focusedOrderId,
   } = props;
 
   return (
@@ -1471,7 +1487,8 @@ function TrackTab(props: {
               return (
                 <article
                   key={order.id}
-                  className={`service-item status-${group}`}
+                  id={`service-order-${order.id}`}
+                  className={`service-item status-${group}${order.id === focusedOrderId ? " is-agent-highlighted" : ""}`}
                   data-reveal
                   style={
                     {

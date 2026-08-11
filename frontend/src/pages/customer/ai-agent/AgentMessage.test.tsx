@@ -40,6 +40,7 @@ const response: AgentResponse = {
     knowledgeVersion: "test",
     fallbackUsed: false,
     traceId: "trace",
+    recommendationRunId: "REC-TEST-1",
   },
 };
 
@@ -77,7 +78,7 @@ describe("AgentMessage actions", () => {
 
     expect(onViewMap).toHaveBeenCalledWith(option);
     expect(onToggleCompare).toHaveBeenCalledWith(option);
-    expect(onStartRequest).toHaveBeenCalledWith(option);
+    expect(onStartRequest).toHaveBeenCalledWith(option, "REC-TEST-1");
   });
 
   it("edits a sent user message and sends the revised content", () => {

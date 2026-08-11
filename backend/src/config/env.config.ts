@@ -44,9 +44,12 @@ export const envConfig = () => ({
     },
     rag: {
       enabled: (process.env.AI_RAG_ENABLED ?? 'true') === 'true',
-      // Dedicated Llama embedding pool. Mistral reads a separate namespace.
-      apiKey: process.env.AI_EMBEDDING_API_KEY,
-      apiKeys: process.env.AI_EMBEDDING_API_KEYS,
+      // A dedicated embedding pool is optional. When it is not configured,
+      // reuse the existing NVIDIA NIM keys so semantic RAG does not silently
+      // stay disabled in deployments that already configured the LLM pool.
+      apiKey: process.env.AI_EMBEDDING_API_KEY ?? process.env.NVIDIA_API_KEY,
+      apiKeys:
+        process.env.AI_EMBEDDING_API_KEYS ?? process.env.NVIDIA_API_KEYS,
       baseUrl:
         process.env.AI_EMBEDDING_API_BASE_URL ??
         process.env.NVIDIA_API_BASE_URL ??
@@ -69,6 +72,8 @@ export const envConfig = () => ({
       backfillOnStartup:
         (process.env.AI_RAG_BACKFILL_ON_STARTUP ?? 'true') === 'true',
       backfillBatchSize: Number(process.env.AI_RAG_BACKFILL_BATCH_SIZE) || 5,
+      backfillMaxEntries:
+        Number(process.env.AI_RAG_BACKFILL_MAX_ENTRIES) || 25,
     },
     openai: {
       apiKey: process.env.OPENAI_API_KEY,

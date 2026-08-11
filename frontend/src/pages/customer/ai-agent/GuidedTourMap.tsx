@@ -133,6 +133,16 @@ function GuidedTourMap({
     setReloadKey((current) => current + 1),
   );
 
+  useEffect(() => {
+    if (!loadError) return;
+    const retryInterval = window.setInterval(() => {
+      setLoading(true);
+      setLoadError("");
+      setReloadKey((current) => current + 1);
+    }, 10_000);
+    return () => window.clearInterval(retryInterval);
+  }, [loadError]);
+
   const activeIds = useMemo(
     () => new Set(activeStep.plotIds),
     [activeStep.plotIds],
@@ -565,16 +575,6 @@ function GuidedTourMap({
       {loadError && (
         <div className="guided-map-state is-error">
           <span>{loadError}</span>
-          <button
-            type="button"
-            onClick={() => {
-              setLoading(true);
-              setLoadError("");
-              setReloadKey((key) => key + 1);
-            }}
-          >
-            Thử lại
-          </button>
         </div>
       )}
       {activeMissing && !loadError && (

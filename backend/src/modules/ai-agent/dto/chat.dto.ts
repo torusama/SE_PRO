@@ -25,6 +25,11 @@ export class AgentClientActionDto {
   optionId?: string;
 
   @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  recommendationRunId?: string;
+
+  @IsOptional()
   @IsArray()
   @ArrayMinSize(1)
   @ArrayMaxSize(10)

@@ -652,6 +652,11 @@ export class KnowledgeService {
           'Only quarantined knowledge can be reviewed',
         );
       }
+      if (action === 'approve' && (reviewNote?.trim().length ?? 0) < 5) {
+        throw new BadRequestException(
+          'Approval requires a review note of at least 5 characters',
+        );
+      }
 
       const oldSnapshot = {
         category: current.category,

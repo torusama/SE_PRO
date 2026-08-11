@@ -82,10 +82,10 @@ describe("AgentWorkflowPanel", () => {
     );
 
     await waitFor(() => expect(screen.getByText("Thắp hương")).toBeInTheDocument());
-    expect(screen.getByText("Dịch vụ đã đặt & thanh toán")).toBeInTheDocument();
+    expect(screen.getByText("Đơn dịch vụ & thanh toán")).toBeInTheDocument();
     expect(screen.getByText("VPV00045")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Tôi đã thanh toán" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tôi đã chuyển khoản" }));
 
     await waitFor(() =>
       expect(apiMock.post).toHaveBeenCalledWith("/service-orders/45/pay"),
@@ -220,5 +220,77 @@ describe("AgentWorkflowPanel", () => {
       ),
     );
     expect(screen.getByRole("button", { name: selected.accessibleName })).toHaveClass("is-selected");
+  });
+
+  it("lets the customer choose appointment date/time inside the AI panel", async () => {
+    const selected = futureDate(14);
+    const onSendMessage = vi.fn().mockResolvedValue(undefined);
+    apiMock.get.mockResolvedValue({ data: { data: [] } });
+
+    render(
+      <MemoryRouter>
+        <AgentWorkflowPanel
+          directive={{
+            type: "OPEN_APPOINTMENT_CALENDAR",
+            mode: "collecting",
+            appointmentDate: selected.iso,
+            topic: "Tham quan lô A-01-001",
+          }}
+          onClose={vi.fn()}
+          onSendMessage={onSendMessage}
+        />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() =>
+      expect(apiMock.get).toHaveBeenCalledWith("/schedule/appointments/me"),
+    );
+    fireEvent.change(screen.getByLabelText(/Bắt đầu/i), {
+      target: { value: "14:30" },
+    });
+    fireEvent.change(screen.getByLabelText(/Kết thúc/i), {
+      target: { value: "15:30" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Tiếp tục với lịch này" }));
+
+    await waitFor(() =>
+      expect(onSendMessage).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `ngày ${selected.iso}, từ 14:30 đến 15:30`,
+        ),
+      ),
+    );
+  });
+
+  it("keeps explicit confirmation inside the appointment review panel", async () => {
+    const selected = futureDate(15);
+    const onSendMessage = vi.fn().mockResolvedValue(undefined);
+    apiMock.get.mockResolvedValue({ data: { data: [] } });
+
+    render(
+      <MemoryRouter>
+        <AgentWorkflowPanel
+          directive={{
+            type: "OPEN_APPOINTMENT_CALENDAR",
+            mode: "review",
+            appointmentDate: selected.iso,
+            startTime: "09:00",
+            endTime: "10:00",
+            topic: "Trao đổi với ban quản lý",
+          }}
+          onClose={vi.fn()}
+          onSendMessage={onSendMessage}
+        />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Xác nhận đặt lịch" })).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Xác nhận đặt lịch" }));
+
+    await waitFor(() =>
+      expect(onSendMessage).toHaveBeenCalledWith("Mình xác nhận đặt lịch này."),
+    );
   });
 });

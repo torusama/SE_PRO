@@ -216,9 +216,11 @@
 
 .service-page .service-assurance {
   padding: 26px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius-lg);
-  background: rgba(11, 17, 20, 0.84);
+  background: var(--surface-soft);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   box-shadow: var(--shadow);
 }
 
@@ -2154,4 +2156,37 @@
 
 .service-page .tracking-filters {
   margin-bottom: 16px;
+}
+
+/* Deep links opened by the AI agent focus the exact service order once. */
+.service-page .service-item.is-agent-highlighted {
+  border-color: rgba(66, 190, 161, 0.5);
+  box-shadow:
+    0 0 0 1px rgba(66, 190, 161, 0.12),
+    0 14px 34px rgba(0, 0, 0, 0.16);
+  animation: service-agent-focus 1.15s ease-out 1;
+}
+
+@keyframes service-agent-focus {
+  0% {
+    transform: scale(0.992);
+    box-shadow: 0 0 0 0 rgba(66, 190, 161, 0.28);
+  }
+  55% {
+    transform: scale(1.004);
+    box-shadow: 0 0 0 7px rgba(66, 190, 161, 0.07);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow:
+      0 0 0 1px rgba(66, 190, 161, 0.12),
+      0 14px 34px rgba(0, 0, 0, 0.16);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .service-page .service-item.is-agent-highlighted {
+    animation: none !important;
+    transform: none !important;
+  }
 }

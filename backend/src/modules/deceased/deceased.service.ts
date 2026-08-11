@@ -124,7 +124,6 @@ export class DeceasedService {
   }
 
   async update(user: AuthUser, id: number, dto: UpdateDeceasedProfileDto) {
-    this.validateDates(dto);
     return this.database.transaction(async (client) => {
       const current = (
         await client.query(
@@ -133,6 +132,13 @@ export class DeceasedService {
         )
       ).rows[0];
       if (!current) throw new NotFoundException('Không tìm thấy hồ sơ');
+      this.validateDates({
+        dateOfBirth: dto.dateOfBirth ?? current.date_of_birth,
+        dateOfDeath: dto.dateOfDeath ?? current.date_of_death,
+        burialDate: dto.burialDate ?? current.burial_date,
+        anniversaryMonth: dto.anniversaryMonth ?? current.anniversary_month,
+        anniversaryDay: dto.anniversaryDay ?? current.anniversary_day,
+      });
       await this.access.assertPlotOwner(user, current.plot_id, client);
       const plotId = dto.plotId ?? current.plot_id;
       if (plotId !== current.plot_id) {
@@ -253,8 +259,7 @@ export class DeceasedService {
       )
     ).rows[0];
     if (!plot) throw new NotFoundException('Không tìm thấy lô');
-    if (plot.deceased_profile_capacity == null)
-      throw new ConflictException('Lô chưa cấu hình capacity');
+    const capacity = Number(plot.deceased_profile_capacity ?? 1);
     const count = Number(
       (
         await client.query(
@@ -263,14 +268,28 @@ export class DeceasedService {
         )
       ).rows[0].count,
     );
-    if (count >= Number(plot.deceased_profile_capacity))
+    if (count >= capacity)
       throw new ConflictException('Lô đã đạt capacity');
   }
   private validateDates(dto: Partial<CreateDeceasedProfileDto>) {
+    const today = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+    if (dto.dateOfBirth && dto.dateOfBirth > today)
+      throw new BadRequestException('Ngày sinh không được sau ngày hiện tại');
+    if (dto.dateOfDeath && dto.dateOfDeath > today)
+      throw new BadRequestException('Ngày mất không được sau ngày hiện tại');
+    if (dto.burialDate && dto.burialDate > today)
+      throw new BadRequestException('Ngày an táng không được sau ngày hiện tại');
     if (dto.dateOfBirth && dto.dateOfDeath && dto.dateOfDeath < dto.dateOfBirth)
       throw new BadRequestException('Ngày mất không được trước ngày sinh');
     if (dto.dateOfDeath && dto.burialDate && dto.burialDate < dto.dateOfDeath)
       throw new BadRequestException('Ngày chôn cất không được trước ngày mất');
+    if (dto.dateOfBirth && dto.burialDate && dto.burialDate < dto.dateOfBirth)
+      throw new BadRequestException('Ngày an táng không được trước ngày sinh');
     if ((dto.anniversaryMonth == null) !== (dto.anniversaryDay == null))
       throw new BadRequestException('Ngày giỗ không hợp lệ');
   }

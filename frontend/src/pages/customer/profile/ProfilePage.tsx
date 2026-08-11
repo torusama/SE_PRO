@@ -1133,15 +1133,6 @@ export default function ProfilePage() {
                 {T.navContact}
               </button>
               <button
-                className={`side-nav-item ${activeTab === "lots" ? "active" : ""}`}
-                onClick={() => switchTab("lots")}
-              >
-                <span className="icon">
-                  <ProfileIcon name="pin" />
-                </span>
-                {T.navLots}
-              </button>
-              <button
                 className={`side-nav-item ${activeTab === "security" ? "active" : ""}`}
                 onClick={() => switchTab("security")}
               >
@@ -2577,20 +2568,30 @@ function ModalShell({
   sub,
   onClose,
   children,
+  overlayClassName,
+  boxClassName,
+  decoration,
 }: {
   title: string;
   sub: string;
   onClose: () => void;
   children: React.ReactNode;
+  /** Class phụ thêm vào .modal-overlay — dùng khi 1 modal cụ thể cần vị trí/nền riêng. */
+  overlayClassName?: string;
+  /** Class phụ thêm vào .modal-box — dùng khi 1 modal cụ thể cần giao diện riêng. */
+  boxClassName?: string;
+  /** Lớp trang trí tuỳ chọn (vd. hiệu ứng đốm sáng), render trước nội dung modal. */
+  decoration?: React.ReactNode;
 }) {
   return (
     <div
-      className="modal-overlay open"
+      className={`modal-overlay open${overlayClassName ? ` ${overlayClassName}` : ""}`}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="modal-box">
+      <div className={`modal-box${boxClassName ? ` ${boxClassName}` : ""}`}>
+        {decoration}
         <button className="modal-close" onClick={onClose} aria-label="Đóng">
           <ProfileIcon name="close" size={18} />
         </button>
@@ -2598,6 +2599,39 @@ function ModalShell({
         <div className="modal-sub">{sub}</div>
         {children}
       </div>
+    </div>
+  );
+}
+
+/** Các đốm sáng vàng bay nhẹ (đom đóm) — chỉ dùng cho modal đổi ảnh đại diện. */
+const AVATAR_FIREFLIES = [
+  { top: "8%", left: "10%", size: 3, delay: "0s", dur: "6.5s" },
+  { top: "18%", left: "82%", size: 2.4, delay: "-1.4s", dur: "7.2s" },
+  { top: "40%", left: "6%", size: 2, delay: "-3s", dur: "5.8s" },
+  { top: "62%", left: "90%", size: 3.2, delay: "-2.1s", dur: "6.9s" },
+  { top: "78%", left: "16%", size: 2.6, delay: "-4.2s", dur: "6.1s" },
+  { top: "88%", left: "70%", size: 2, delay: "-0.6s", dur: "7.6s" },
+  { top: "30%", left: "94%", size: 2.2, delay: "-2.8s", dur: "6.4s" },
+  { top: "6%", left: "48%", size: 2.8, delay: "-3.6s", dur: "7.9s" },
+];
+
+function AvatarFireflies() {
+  return (
+    <div className="avatar-modal-fireflies" aria-hidden="true">
+      {AVATAR_FIREFLIES.map((f, i) => (
+        <span
+          key={i}
+          className="avatar-modal-firefly"
+          style={{
+            top: f.top,
+            left: f.left,
+            width: f.size,
+            height: f.size,
+            animationDelay: f.delay,
+            animationDuration: f.dur,
+          }}
+        />
+      ))}
     </div>
   );
 }
@@ -2781,6 +2815,9 @@ function AvatarModal({
       title="Đổi Ảnh Đại Diện"
       sub="Ảnh JPG hoặc PNG, tối đa 5MB — kéo để di chuyển, dùng thanh trượt để zoom"
       onClose={onClose}
+      overlayClassName="avatar-modal-overlay"
+      boxClassName="avatar-modal-box"
+      decoration={<AvatarFireflies />}
     >
       {error && (
         <div
@@ -2922,7 +2959,10 @@ function AvatarModal({
         </div>
       </div>
 
-      <div className="modal-btn-row" style={{ marginTop: 20 }}>
+      <div
+        className="modal-btn-row avatar-modal-btn-row"
+        style={{ marginTop: 20 }}
+      >
         <button className="modal-btn-ghost" onClick={onClose}>
           Hủy
         </button>

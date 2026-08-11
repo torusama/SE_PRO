@@ -91,18 +91,18 @@ export class FamilyService {
       return { removed: true };
     });
   }
-  async invite(user: AuthUser, familyId: number, inviteeId: number) {
+  async invite(user: AuthUser, familyId: number, inviteeEmail: string) {
+    const invitee = await this.database.queryOne<{ id: number }>(
+      `SELECT user_id AS id FROM users
+       WHERE LOWER(email)=LOWER($1) AND is_active=TRUE AND is_deleted=FALSE`,
+      [inviteeEmail.trim()],
+    );
+    if (!invitee) throw new NotFoundException('Không tìm thấy người dùng với email này');
+    const inviteeId = invitee.id;
     if (user.id === inviteeId)
       throw new BadRequestException('Không thể tự mời chính mình');
     return this.database.transaction(async (client) => {
       await this.access.assertFamilyManager(user, familyId, client);
-      const active = (
-        await client.query(
-          `SELECT 1 FROM users WHERE user_id=$1 AND is_active=TRUE AND is_deleted=FALSE`,
-          [inviteeId],
-        )
-      ).rows[0];
-      if (!active) throw new NotFoundException('Không tìm thấy người dùng');
       const member = (
         await client.query(
           `SELECT 1 FROM family_memberships WHERE family_id=$1 AND user_id=$2 AND is_active=TRUE`,
@@ -120,6 +120,7 @@ export class FamilyService {
         await this.audit(client, user.id, 'family.invitation.create', row.id, {
           familyId,
           inviteeId,
+          inviteeEmail: inviteeEmail.trim().toLowerCase(),
         });
         return row;
       } catch (error) {

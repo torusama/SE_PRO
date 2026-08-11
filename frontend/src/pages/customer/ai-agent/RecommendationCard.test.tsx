@@ -47,7 +47,7 @@ describe('RecommendationCard', () => {
       />,
     )
 
-    expect(screen.getByText('Nhận định tư vấn')).toBeInTheDocument()
+    expect(screen.getByText('Tóm tắt đối chiếu dữ liệu')).toBeInTheDocument()
     expect(screen.getByText(option.analysisSummary!)).toBeInTheDocument()
     expect(screen.getByText('Điểm phù hợp')).toBeInTheDocument()
     for (const reason of option.reasons) {

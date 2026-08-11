@@ -298,16 +298,11 @@ describe("AgentAdminPage learning analytics", () => {
     );
 
     await screen.findByLabelText("Căn cứ kiểm duyệt");
-    fireEvent.change(screen.getByLabelText("Căn cứ kiểm duyệt"), {
-      target: { value: "Nguồn cung cấp chưa đủ căn cứ xác minh" },
-    });
     fireEvent.click(screen.getByRole("button", { name: /chối/i }));
     await waitFor(() =>
       expect(apiMock.patch).toHaveBeenCalledWith(
         "/admin/ai-agent/knowledge/73/reject",
-        {
-          reviewNote: "Nguồn cung cấp chưa đủ căn cứ xác minh",
-        },
+        {},
       ),
     );
   });

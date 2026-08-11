@@ -512,7 +512,11 @@ describe('AgentBookingService', () => {
       intent: 'appointment_booking',
       uiDirective: {
         type: 'OPEN_APPOINTMENT_CALENDAR',
+        mode: 'review',
         appointmentDate: '2099-08-20',
+        startTime: '09:00',
+        endTime: '10:00',
+        topic: 'Tham quan lô A-01-001',
       },
       pendingAction: {
         kind: 'appointment',
@@ -554,8 +558,12 @@ describe('AgentBookingService', () => {
     );
     expect(result?.uiDirective).toEqual({
       type: 'OPEN_APPOINTMENT_CALENDAR',
+      mode: 'summary',
       appointmentId: 71,
       appointmentDate: '2099-08-20',
+      startTime: '09:00',
+      endTime: '10:00',
+      topic: 'Tham quan lô A-01-001',
     });
   });
 

@@ -845,3 +845,33 @@
     animation: none;
   }
 }
+
+/* Deep links from the AI booking panel focus the exact appointment request. */
+.appointment-card.is-agent-highlighted {
+  position: relative;
+  background: rgba(66, 190, 161, 0.045);
+  box-shadow: inset 3px 0 0 rgba(66, 190, 161, 0.62);
+  animation: appointment-agent-focus 1.15s ease-out 1;
+}
+
+@keyframes appointment-agent-focus {
+  0% {
+    transform: scale(0.992);
+    box-shadow: inset 3px 0 0 rgba(66, 190, 161, 0.62), 0 0 0 0 rgba(66, 190, 161, 0.25);
+  }
+  55% {
+    transform: scale(1.004);
+    box-shadow: inset 3px 0 0 rgba(66, 190, 161, 0.72), 0 0 0 7px rgba(66, 190, 161, 0.06);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: inset 3px 0 0 rgba(66, 190, 161, 0.62);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .appointment-card.is-agent-highlighted {
+    animation: none !important;
+    transform: none !important;
+  }
+}

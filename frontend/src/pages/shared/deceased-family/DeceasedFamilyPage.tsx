@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
+import NavyStarfield from "@/components/decor/NavyStarfield";
 import "./DeceasedFamilyPage.css";
 
 type Profile = {
@@ -9,7 +10,11 @@ type Profile = {
   plotId: number;
   plotCode?: string;
   fullName: string;
+  dateOfBirth?: string;
   dateOfDeath?: string;
+  burialDate?: string;
+  hometown?: string;
+  biography?: string;
   verificationStatus: string;
   rejectionReason?: string;
 };
@@ -22,6 +27,14 @@ type Permission = {
   resourceType: string;
   resourceId: number;
   action: string;
+};
+type OwnedPlot = { plotId: number; plotCode: string; zoneName?: string };
+type Contract = {
+  status: string;
+  plotId: number;
+  plotCode: string;
+  zoneName?: string;
+  plots?: Array<{ id: number; code: string; zoneName?: string | null }>;
 };
 
 const unwrap = <T,>(response: { data: unknown }): T => {
@@ -83,6 +96,7 @@ export default function DeceasedFamilyPage() {
   const [families, setFamilies] = useState<Family[]>([]);
   const [invites, setInvites] = useState<Invitation[]>([]);
   const [permissions, setPermissions] = useState<Permission[]>([]);
+  const [ownedPlots, setOwnedPlots] = useState<OwnedPlot[]>([]);
   const [familyId, setFamilyId] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -108,10 +122,31 @@ export default function DeceasedFamilyPage() {
   const load = useCallback(async () => {
     setError("");
     try {
-      const response = await api.get(admin ? "/admin/deceased" : "/deceased");
+      const [response, contractsResponse] = await Promise.all([
+        api.get(admin ? "/admin/deceased" : "/deceased"),
+        admin ? Promise.resolve(null) : api.get("/my/contracts"),
+      ]);
       const data = unwrap<{ items?: Profile[] } | Profile[]>(response);
       setProfiles(Array.isArray(data) ? data : (data.items ?? []));
       if (!admin) {
+        const contracts = contractsResponse ? unwrap<Contract[]>(contractsResponse) : [];
+        const plots = contracts
+          .filter((contract) => ["active", "completed"].includes(contract.status))
+          .flatMap((contract) => contract.plots?.length
+            ? contract.plots.map((plot) => ({
+                plotId: plot.id,
+                plotCode: plot.code,
+                zoneName: plot.zoneName ?? undefined,
+              }))
+            : [{
+                plotId: contract.plotId,
+                plotCode: contract.plotCode,
+                zoneName: contract.zoneName,
+              }])
+          .filter((plot) => plot.plotId && plot.plotCode);
+        setOwnedPlots(plots.filter((plot, index) =>
+          plots.findIndex((candidate) => candidate.plotId === plot.plotId) === index,
+        ));
         const [familyResponse, inviteResponse] = await Promise.all([
           api.get("/families"),
           api.get("/my/family-invitations"),
@@ -155,152 +190,165 @@ export default function DeceasedFamilyPage() {
 
   return (
     <main className="df-page">
-      <header className="df-hero">
-        <div className="df-hero-copy">
-          <span className="df-eyebrow">
-            {admin ? "Quản trị hồ sơ" : "Gia đình tưởng niệm"}
-          </span>
-          <h1>
-            {admin ? "Hồ sơ người đã khuất" : "Gìn giữ ký ức, kết nối gia đình"}
-          </h1>
-          <p>
-            {admin
-              ? "Xác minh hồ sơ và quản lý sức chứa của từng lô trong một khu vực tập trung."
-              : "Lưu thông tin người thân, cùng gia đình chăm sóc hồ sơ và chia sẻ quyền truy cập an toàn."}
-          </p>
-        </div>
-      </header>
+      <NavyStarfield />
+      <div className="df-shell">
+        <header className="df-hero">
+          <div className="df-hero-copy">
+            <span className="df-eyebrow">
+              {admin ? "Quản trị hồ sơ" : "Gia đình tưởng niệm"}
+            </span>
+            <h1>
+              {admin
+                ? "Hồ sơ người đã khuất"
+                : "Gìn giữ ký ức, kết nối gia đình"}
+            </h1>
+            <p>
+              {admin
+                ? "Xác minh hồ sơ và quản lý sức chứa của từng lô trong một khu vực tập trung."
+                : "Lưu thông tin người thân, cùng gia đình chăm sóc hồ sơ và chia sẻ quyền truy cập an toàn."}
+            </p>
+          </div>
+        </header>
 
-      <section
-        className={`df-summary ${admin ? "is-admin" : ""}`}
-        aria-label="Tổng quan không gian tưởng niệm"
-      >
-        <SummaryItem
-          label={admin ? "Tổng hồ sơ" : "Hồ sơ người thân"}
-          value={profiles.length}
-          note={admin ? "Trong toàn hệ thống" : "Đang được gia đình lưu giữ"}
-        />
-        <SummaryItem
-          label={admin ? "Chờ xác minh" : "Nhóm gia đình"}
-          value={admin ? pendingProfiles : families.length}
-          note={admin ? "Cần quản trị viên xử lý" : "Không gian đang tham gia"}
-        />
-        {!admin && (
+        <section
+          className={`df-summary ${admin ? "is-admin" : ""}`}
+          aria-label="Tổng quan không gian tưởng niệm"
+        >
           <SummaryItem
-            label="Lời mời mới"
-            value={pendingInvites}
-            note="Đang chờ bạn phản hồi"
+            label={admin ? "Tổng hồ sơ" : "Hồ sơ người thân"}
+            value={profiles.length}
+            note={admin ? "Trong toàn hệ thống" : "Đang được gia đình lưu giữ"}
           />
-        )}
-      </section>
-
-      {error && <div className="df-alert error">{error}</div>}
-      {message && <div className="df-alert ok">{message}</div>}
-
-      {admin ? (
-        <section className="df-admin-layout">
-          <SimpleForm
-            title="Cập nhật sức chứa lô"
-            description="Thiết lập số hồ sơ tối đa có thể liên kết với một lô."
-            fields={[
-              ["plotId", "Mã số lô", "number"],
-              ["capacity", "Sức chứa tối đa", "number"],
-            ]}
-            onSubmit={(data, form) =>
-              run(async () => {
-                await api.patch(
-                  `/admin/plots/${Number(data.get("plotId"))}/deceased-capacity`,
-                  { capacity: Number(data.get("capacity")) },
-                );
-                form.reset();
-              }, "Đã cập nhật sức chứa của lô.")
+          <SummaryItem
+            label={admin ? "Chờ xác minh" : "Nhóm gia đình"}
+            value={admin ? pendingProfiles : families.length}
+            note={
+              admin ? "Cần quản trị viên xử lý" : "Không gian đang tham gia"
             }
           />
-          <ProfileList
-            profiles={profiles}
-            admin
-            busy={busy}
-            onVerify={(id) =>
-              void run(async () => {
-                await api.patch(`/admin/deceased/${id}/verify`);
-                await load();
-              }, "Đã xác minh hồ sơ.")
-            }
-            onReject={(id) => {
-              const reason = window.prompt("Nhập lý do từ chối hồ sơ:");
-              if (!reason?.trim()) return;
-              void run(async () => {
-                await api.patch(`/admin/deceased/${id}/reject`, {
-                  reason: reason.trim(),
-                });
-                await load();
-              }, "Đã từ chối hồ sơ.");
-            }}
-          />
+          {!admin && (
+            <SummaryItem
+              label="Lời mời mới"
+              value={pendingInvites}
+              note="Đang chờ bạn phản hồi"
+            />
+          )}
         </section>
-      ) : (
-        <>
-          <section className="df-section">
-            <SectionHeading
-              eyebrow="Hồ sơ tưởng niệm"
-              title="Người thân trong gia đình"
-              description="Mỗi hồ sơ là một nơi lưu giữ thông tin nền tảng trước khi gia đình cùng chia sẻ và chăm sóc."
-            />
-            <div className="df-profile-layout">
-              <ProfileList
-                profiles={profiles}
-                busy={busy}
-                onDelete={(id) =>
-                  void run(async () => {
-                    await api.delete(`/deceased/${id}`);
-                    await load();
-                  }, "Đã xóa hồ sơ.")
-                }
-              />
-              <CreateProfileForm busy={busy} run={run} reload={load} />
-            </div>
-          </section>
 
-          <section className="df-section df-family-section">
-            <SectionHeading
-              eyebrow="Cùng nhau gìn giữ"
-              title="Chia sẻ với gia đình"
-              description="Tạo nhóm, mời người thân và chỉ cấp đúng quyền cần thiết cho từng hồ sơ hoặc dịch vụ."
+        {error && <div className="df-alert error">{error}</div>}
+        {message && <div className="df-alert ok">{message}</div>}
+
+        {admin ? (
+          <section className="df-admin-layout">
+            <SimpleForm
+              title="Cập nhật sức chứa lô"
+              description="Thiết lập số hồ sơ tối đa có thể liên kết với một lô."
+              fields={[
+                ["plotId", "Mã số lô", "number"],
+                ["capacity", "Sức chứa tối đa", "number"],
+              ]}
+              onSubmit={(data, form) =>
+                run(async () => {
+                  await api.patch(
+                    `/admin/plots/${Number(data.get("plotId"))}/deceased-capacity`,
+                    { capacity: Number(data.get("capacity")) },
+                  );
+                  form.reset();
+                }, "Đã cập nhật sức chứa của lô.")
+              }
             />
-            <div className="df-family-layout">
-              <FamilyList
-                families={families}
-                selectedId={familyId}
-                busy={busy}
-                onSelect={(id) => void selectFamily(id)}
-                onCreate={(name, form) =>
-                  run(async () => {
-                    await api.post("/families", { name });
-                    form.reset();
-                    await load();
-                  }, "Đã tạo nhóm gia đình.")
-                }
-              />
-              <FamilyPanel
-                familyId={familyId}
-                permissions={permissions}
-                busy={busy}
-                run={run}
-                reload={async () => {
+            <ProfileList
+              profiles={profiles}
+              admin
+              busy={busy}
+              onVerify={(id) =>
+                void run(async () => {
+                  await api.patch(`/admin/deceased/${id}/verify`);
                   await load();
-                  if (familyId) await selectFamily(familyId);
-                }}
-              />
-              <InvitationList
-                invites={invites}
-                busy={busy}
-                run={run}
-                reload={load}
-              />
-            </div>
+                }, "Đã xác minh hồ sơ.")
+              }
+              onReject={(id) => {
+                const reason = window.prompt("Nhập lý do từ chối hồ sơ:");
+                if (!reason?.trim()) return;
+                void run(async () => {
+                  await api.patch(`/admin/deceased/${id}/reject`, {
+                    reason: reason.trim(),
+                  });
+                  await load();
+                }, "Đã từ chối hồ sơ.");
+              }}
+            />
           </section>
-        </>
-      )}
+        ) : (
+          <>
+            <section className="df-section">
+              <SectionHeading
+                eyebrow="Hồ sơ tưởng niệm"
+                title="Người thân trong gia đình"
+                description="Mỗi hồ sơ là một nơi lưu giữ thông tin nền tảng trước khi gia đình cùng chia sẻ và chăm sóc."
+              />
+              <div className="df-profile-layout">
+                <ProfileList
+                  profiles={profiles}
+                  busy={busy}
+                  onDelete={(id) =>
+                    void run(async () => {
+                      await api.delete(`/deceased/${id}`);
+                      await load();
+                    }, "Đã xóa hồ sơ.")
+                  }
+                />
+                <CreateProfileForm
+                  busy={busy}
+                  ownedPlots={ownedPlots}
+                  run={run}
+                  reload={load}
+                />
+              </div>
+            </section>
+
+            <section className="df-section df-family-section">
+              <SectionHeading
+                eyebrow="Cùng nhau gìn giữ"
+                title="Chia sẻ với gia đình"
+                description="Tạo nhóm, mời người thân và chỉ cấp đúng quyền cần thiết cho từng hồ sơ hoặc dịch vụ."
+              />
+              <div className="df-family-layout">
+                <FamilyList
+                  families={families}
+                  selectedId={familyId}
+                  busy={busy}
+                  onSelect={(id) => void selectFamily(id)}
+                  onCreate={(name, form) =>
+                    run(async () => {
+                      await api.post("/families", { name });
+                      form.reset();
+                      await load();
+                    }, "Đã tạo nhóm gia đình.")
+                  }
+                />
+                <FamilyPanel
+                  familyId={familyId}
+                  ownedPlots={ownedPlots}
+                  permissions={permissions}
+                  busy={busy}
+                  run={run}
+                  reload={async () => {
+                    await load();
+                    if (familyId) await selectFamily(familyId);
+                  }}
+                />
+                <InvitationList
+                  invites={invites}
+                  busy={busy}
+                  run={run}
+                  reload={load}
+                />
+              </div>
+            </section>
+          </>
+        )}
+      </div>
     </main>
   );
 }
@@ -405,13 +453,22 @@ function SimpleForm({
 
 function CreateProfileForm({
   busy,
+  ownedPlots,
   run,
   reload,
 }: {
   busy: boolean;
+  ownedPlots: OwnedPlot[];
   run: (operation: () => Promise<void>, message: string) => Promise<void>;
   reload: () => Promise<void>;
 }) {
+  const today = new Date().toLocaleDateString("en-CA", {
+    timeZone: "Asia/Ho_Chi_Minh",
+  });
+  const [dateOfBirth, setDateOfBirth] = useState("");
+  const [dateOfDeath, setDateOfDeath] = useState("");
+  const [burialDate, setBurialDate] = useState("");
+
   return (
     <form
       className="df-panel df-form df-create-profile"
@@ -430,6 +487,9 @@ function CreateProfileForm({
             biography: data.get("biography") || undefined,
           });
           form.reset();
+          setDateOfBirth("");
+          setDateOfDeath("");
+          setBurialDate("");
           await reload();
         }, "Đã tạo hồ sơ và gửi chờ xác minh.");
       }}
@@ -440,11 +500,26 @@ function CreateProfileForm({
         <p>Điền thông tin nền tảng; bạn có thể bổ sung nội dung sau.</p>
       </div>
       <div className="df-form-grid">
-        <Field name="plotId" label="Mã số lô đang sở hữu" type="number" />
+        <label className="df-field">
+          <span>Mã số lô đang sở hữu</span>
+          <select name="plotId" required defaultValue="">
+            <option value="" disabled>
+              {ownedPlots.length ? "Chọn lô đang sở hữu" : "Bạn chưa có lô đủ điều kiện"}
+            </option>
+            {ownedPlots.map((plot) => (
+              <option key={plot.plotId} value={plot.plotId}>
+                {plot.plotCode}{plot.zoneName ? ` · ${plot.zoneName}` : ""}
+              </option>
+            ))}
+          </select>
+        </label>
         <Field name="fullName" label="Họ và tên" />
-        <Field name="dateOfBirth" label="Ngày sinh" type="date" optional />
-        <Field name="dateOfDeath" label="Ngày mất" type="date" optional />
-        <Field name="burialDate" label="Ngày an táng" type="date" optional />
+        <DateField name="dateOfBirth" label="Ngày sinh" value={dateOfBirth}
+          max={dateOfDeath || burialDate || today} onChange={setDateOfBirth} />
+        <DateField name="dateOfDeath" label="Ngày mất" value={dateOfDeath}
+          min={dateOfBirth || undefined} max={burialDate || today} onChange={setDateOfDeath} />
+        <DateField name="burialDate" label="Ngày an táng" value={burialDate}
+          min={dateOfDeath || dateOfBirth || undefined} max={today} onChange={setBurialDate} />
         <Field name="hometown" label="Quê quán" optional />
       </div>
       <label className="df-field">
@@ -457,10 +532,27 @@ function CreateProfileForm({
           placeholder="Ghi lại đôi nét về cuộc đời và những điều gia đình muốn lưu giữ..."
         />
       </label>
-      <button className="df-primary-button" disabled={busy} type="submit">
+      <button className="df-primary-button" disabled={busy || ownedPlots.length === 0} type="submit">
         Tạo hồ sơ tưởng niệm
       </button>
     </form>
+  );
+}
+
+function DateField({ name, label, value, min, max, onChange }: {
+  name: string;
+  label: string;
+  value: string;
+  min?: string;
+  max: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="df-field">
+      <span>{label}<small>Không bắt buộc</small></span>
+      <input name={name} type="date" value={value} min={min} max={max}
+        onChange={(event) => onChange(event.target.value)} />
+    </label>
   );
 }
 
@@ -479,6 +571,10 @@ function ProfileList({
   onReject?: (id: number) => void;
   onDelete?: (id: number) => void;
 }) {
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const toggleProfile = (id: number) =>
+    setExpandedId((current) => current === id ? null : id);
+
   return (
     <section className="df-panel df-profile-panel">
       <div className="df-panel-heading df-panel-heading-row">
@@ -504,7 +600,20 @@ function ProfileList({
       ) : (
         <div className="df-profile-list">
           {profiles.map((profile) => (
-            <article className="df-profile-item" key={profile.id}>
+            <article
+              aria-expanded={expandedId === profile.id}
+              className={`df-profile-item ${expandedId === profile.id ? "expanded" : ""}`}
+              key={profile.id}
+              onClick={() => toggleProfile(profile.id)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  toggleProfile(profile.id);
+                }
+              }}
+              role="button"
+              tabIndex={0}
+            >
               <div className="df-profile-monogram" aria-hidden="true">
                 {profile.fullName.trim().charAt(0).toLocaleUpperCase("vi")}
               </div>
@@ -553,13 +662,27 @@ function ProfileList({
                   <button
                     className="df-text-danger"
                     disabled={busy}
-                    onClick={() => onDelete?.(profile.id)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onDelete?.(profile.id);
+                    }}
                     type="button"
                   >
                     Xóa hồ sơ
                   </button>
                 )}
               </div>
+              {expandedId === profile.id && (
+                <div className="df-profile-detail">
+                  <div><span>Ngày sinh</span><strong>{formatDate(profile.dateOfBirth)}</strong></div>
+                  <div><span>Ngày mất</span><strong>{formatDate(profile.dateOfDeath)}</strong></div>
+                  <div><span>Ngày an táng</span><strong>{formatDate(profile.burialDate)}</strong></div>
+                  <div><span>Quê quán</span><strong>{profile.hometown || "Chưa cập nhật"}</strong></div>
+                  <div className="df-profile-biography">
+                    <span>Tiểu sử</span><p>{profile.biography || "Chưa có tiểu sử."}</p>
+                  </div>
+                </div>
+              )}
             </article>
           ))}
         </div>
@@ -633,12 +756,14 @@ function FamilyList({
 
 function FamilyPanel({
   familyId,
+  ownedPlots,
   permissions,
   busy,
   run,
   reload,
 }: {
   familyId: number | null;
+  ownedPlots: OwnedPlot[];
   permissions: Permission[];
   busy: boolean;
   run: (operation: () => Promise<void>, message: string) => Promise<void>;
@@ -677,28 +802,36 @@ function FamilyPanel({
         <details className="df-tool" open>
           <summary>Liên kết lô đất</summary>
           <p>Đưa một lô thuộc sở hữu hợp lệ vào không gian chung.</p>
-          <CompactForm
-            button="Thêm lô"
-            fields={[["plotId", "Mã số lô", "number"]]}
-            onSubmit={(data) =>
-              post(
-                `/families/${familyId}/plots`,
-                { plotId: Number(data.get("plotId")) },
-                "Đã thêm lô vào nhóm.",
-              )
-            }
-          />
+          <form className="df-compact-form" onSubmit={(event) => {
+            event.preventDefault();
+            const data = new FormData(event.currentTarget);
+            void post(`/families/${familyId}/plots`,
+              { plotId: Number(data.get("plotId")) }, "Đã thêm lô vào nhóm.");
+          }}>
+            <label className="df-field">
+              <span>Mã số lô</span>
+              <select name="plotId" required defaultValue="">
+                <option value="" disabled>Chọn lô đang sở hữu</option>
+                {ownedPlots.map((plot) => (
+                  <option key={plot.plotId} value={plot.plotId}>
+                    {plot.plotCode}{plot.zoneName ? ` · ${plot.zoneName}` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button disabled={busy || ownedPlots.length === 0} type="submit">Thêm lô</button>
+          </form>
         </details>
         <details className="df-tool">
           <summary>Mời thành viên</summary>
-          <p>Gửi lời mời đến tài khoản người thân bằng mã người dùng.</p>
+          <p>Gửi lời mời đến tài khoản người thân bằng địa chỉ email đã đăng ký.</p>
           <CompactForm
             button="Gửi lời mời"
-            fields={[["userId", "Mã người dùng", "number"]]}
+            fields={[["email", "Email người dùng", "email"]]}
             onSubmit={(data) =>
               post(
                 `/families/${familyId}/invitations`,
-                { inviteeUserId: Number(data.get("userId")) },
+                { inviteeEmail: String(data.get("email") ?? "").trim() },
                 "Đã gửi lời mời.",
               )
             }

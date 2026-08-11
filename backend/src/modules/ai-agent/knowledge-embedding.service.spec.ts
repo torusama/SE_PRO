@@ -146,7 +146,14 @@ describe('KnowledgeEmbeddingService RAG resilience', () => {
   it('embeds only active validated entries and stores passage vectors', async () => {
     const { database, service } = createService();
     jest.spyOn(service, 'supportsPgVector').mockResolvedValue(true);
-    database.queryOne.mockResolvedValue({ content: 'Approved FAQ content' });
+    database.queryOne.mockResolvedValue({
+      id: 73,
+      category: 'Dịch vụ',
+      title: 'Chăm sóc từ xa',
+      content: 'Approved FAQ content',
+      knowledgeType: 'faq',
+      memoryKey: null,
+    });
     jest.spyOn(service, 'embed').mockResolvedValue(vector());
     database.query.mockResolvedValue([]);
 
@@ -157,7 +164,12 @@ describe('KnowledgeEmbeddingService RAG resilience', () => {
       [73],
     );
     expect(service.embed).toHaveBeenCalledWith(
-      'Approved FAQ content',
+      [
+        '[faq]',
+        'Category: Dịch vụ',
+        'Title: Chăm sóc từ xa',
+        'Content: Approved FAQ content',
+      ].join('\n'),
       'passage',
     );
     expect(database.query).toHaveBeenCalledWith(
@@ -179,8 +191,22 @@ describe('KnowledgeEmbeddingService RAG resilience', () => {
     backfill.database.query.mockImplementation((sql: string) =>
       sql.includes('SELECT knowledge_entry_id AS id')
         ? [
-            { id: 1, content: 'first' },
-            { id: 2, content: 'second' },
+            {
+              id: 1,
+              category: 'FAQ',
+              title: 'First',
+              content: 'first',
+              knowledgeType: 'faq',
+              memoryKey: null,
+            },
+            {
+              id: 2,
+              category: 'FAQ',
+              title: 'Second',
+              content: 'second',
+              knowledgeType: 'faq',
+              memoryKey: null,
+            },
           ]
         : [],
     );
