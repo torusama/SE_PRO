@@ -422,6 +422,51 @@
   border: 1px solid var(--df-line);
   border-radius: 11px;
   background: rgba(3, 9, 18, 0.46);
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+
+.df-profile-item:hover,
+.df-profile-item:focus-visible,
+.df-profile-item.expanded {
+  border-color: rgba(10, 255, 212, 0.3);
+  outline: none;
+  background: rgba(5, 18, 29, 0.72);
+}
+
+.df-profile-detail {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--df-line);
+  cursor: default;
+}
+
+.df-profile-detail > div {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.df-profile-detail span {
+  color: var(--df-muted);
+  font-size: 9px;
+}
+
+.df-profile-detail strong,
+.df-profile-detail p {
+  margin: 0;
+  color: #dce8ea;
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.df-profile-detail .df-profile-biography {
+  grid-column: 1 / -1;
 }
 
 .df-profile-monogram {

@@ -65,7 +65,7 @@ export class FamilyController {
     @Param('id') id: string,
     @Body() d: InviteFamilyMemberDto,
   ) {
-    return this.families.invite(u, +id, d.inviteeUserId);
+    return this.families.invite(u, +id, d.inviteeEmail);
   }
   @Get('my/family-invitations') myInvites(@CurrentUser() u: AuthUser) {
     return this.families.invitations(u.id);

@@ -34,32 +34,41 @@ export class DeceasedAdminController {
     @CurrentUser() u: AuthUser,
     @Query() q: DeceasedProfileQueryDto,
   ) {
-    return this.service.list(u, q, true);
+    return this.service.list(u, q, true).then((data) => ({
+      success: true,
+      data,
+    }));
   }
   @Post('deceased') create(
     @CurrentUser() u: AuthUser,
     @Body() d: CreateDeceasedProfileDto,
   ) {
-    return this.service.create(u, d);
+    return this.service.create(u, d).then((data) => ({ success: true, data }));
   }
   @Patch('deceased/:id/verify') verify(
     @CurrentUser() u: AuthUser,
     @Param('id') id: string,
   ) {
-    return this.verification.verify(+id, u.id);
+    return this.verification
+      .verify(+id, u.id)
+      .then((data) => ({ success: true, data }));
   }
   @Patch('deceased/:id/reject') reject(
     @CurrentUser() u: AuthUser,
     @Param('id') id: string,
     @Body() d: RejectDeceasedProfileDto,
   ) {
-    return this.verification.reject(+id, u.id, d.reason);
+    return this.verification
+      .reject(+id, u.id, d.reason)
+      .then((data) => ({ success: true, data }));
   }
   @Patch('plots/:id/deceased-capacity') capacity(
     @CurrentUser() u: AuthUser,
     @Param('id') id: string,
     @Body() d: ConfigurePlotCapacityDto,
   ) {
-    return this.service.configureCapacity(+id, d.capacity, u.id);
+    return this.service
+      .configureCapacity(+id, d.capacity, u.id)
+      .then((data) => ({ success: true, data }));
   }
 }

@@ -31,26 +31,30 @@ export class DeceasedController {
     private readonly permissions: ResourcePermissionService,
   ) {}
   @Get() list(@CurrentUser() u: AuthUser, @Query() q: DeceasedProfileQueryDto) {
-    return this.service.list(u, q);
+    return this.service.list(u, q).then((data) => ({ success: true, data }));
   }
   @Get('map') map(@CurrentUser() u: AuthUser) {
     return this.mapService.visible(u);
   }
   @Get(':id') one(@CurrentUser() u: AuthUser, @Param('id') id: string) {
-    return this.service.findOne(u, +id);
+    return this.service
+      .findOne(u, +id)
+      .then((data) => ({ success: true, data }));
   }
   @Post() create(
     @CurrentUser() u: AuthUser,
     @Body() d: CreateDeceasedProfileDto,
   ) {
-    return this.service.create(u, d);
+    return this.service.create(u, d).then((data) => ({ success: true, data }));
   }
   @Patch(':id') update(
     @CurrentUser() u: AuthUser,
     @Param('id') id: string,
     @Body() d: UpdateDeceasedProfileDto,
   ) {
-    return this.service.update(u, +id, d);
+    return this.service
+      .update(u, +id, d)
+      .then((data) => ({ success: true, data }));
   }
   @Delete(':id') remove(@CurrentUser() u: AuthUser, @Param('id') id: string) {
     return this.service.remove(u, +id);

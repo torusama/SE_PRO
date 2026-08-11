@@ -1,14 +1,18 @@
-import { ConflictException } from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
 import { DeceasedService } from './deceased.service';
 
 describe('DeceasedService capacity', () => {
-  it('locks the plot and rejects missing capacity', async () => {
+  it('uses a capacity of one when the plot has not been configured', async () => {
     const client = {
       query: jest.fn((sql: string) => {
         if (sql.includes('FOR UPDATE'))
           return Promise.resolve({
             rows: [{ deceased_profile_capacity: null }],
           });
+        if (sql.includes('COUNT(*)'))
+          return Promise.resolve({ rows: [{ count: 0 }] });
+        if (sql.includes('INSERT INTO deceased_profiles'))
+          return Promise.resolve({ rows: [{ id: 11 }] });
         return Promise.resolve({ rows: [] });
       }),
     };
@@ -21,7 +25,7 @@ describe('DeceasedService capacity', () => {
     const service = new DeceasedService(database as never, access as never);
     await expect(
       service.create({ id: 1, role: 'customer' }, { plotId: 2, fullName: 'A' }),
-    ).rejects.toBeInstanceOf(ConflictException);
+    ).resolves.toEqual({ id: 11 });
     expect(client.query).toHaveBeenCalledWith(
       expect.stringContaining('FOR UPDATE'),
       [2],
@@ -41,6 +45,17 @@ describe('DeceasedService capacity', () => {
         },
       ),
     ).rejects.toThrow('Ngày mất');
+    expect(database.transaction).not.toHaveBeenCalled();
+  });
+  it('rejects future dates before mutation', async () => {
+    const database = { transaction: jest.fn() };
+    const service = new DeceasedService(database as never, {} as never);
+    await expect(
+      service.create(
+        { id: 1, role: 'customer' },
+        { plotId: 2, fullName: 'A', burialDate: '2999-01-01' },
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
     expect(database.transaction).not.toHaveBeenCalled();
   });
 });

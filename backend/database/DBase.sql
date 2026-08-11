@@ -537,6 +537,8 @@ CREATE TABLE reminders (
     reminder_type       VARCHAR(20)     NOT NULL DEFAULT 'death_anniversary'
                         CHECK (reminder_type IN ('death_anniversary', 'memorial', 'maintenance', 'other')),
     is_recurring        BOOLEAN         NOT NULL DEFAULT TRUE,  -- HÃ ng nÄƒm?
+    calendar_type       VARCHAR(10)     NOT NULL DEFAULT 'solar'
+                        CHECK (calendar_type IN ('solar', 'lunar')),
     notify_days_before  INT             NOT NULL DEFAULT 3,     -- Nháº¯c trÆ°á»›c bao nhiÃªu ngÃ y
 
     is_active           BOOLEAN         NOT NULL DEFAULT TRUE,

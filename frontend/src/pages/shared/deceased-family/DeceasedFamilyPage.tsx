@@ -10,7 +10,11 @@ type Profile = {
   plotId: number;
   plotCode?: string;
   fullName: string;
+  dateOfBirth?: string;
   dateOfDeath?: string;
+  burialDate?: string;
+  hometown?: string;
+  biography?: string;
   verificationStatus: string;
   rejectionReason?: string;
 };
@@ -23,6 +27,14 @@ type Permission = {
   resourceType: string;
   resourceId: number;
   action: string;
+};
+type OwnedPlot = { plotId: number; plotCode: string; zoneName?: string };
+type Contract = {
+  status: string;
+  plotId: number;
+  plotCode: string;
+  zoneName?: string;
+  plots?: Array<{ id: number; code: string; zoneName?: string | null }>;
 };
 
 const unwrap = <T,>(response: { data: unknown }): T => {
@@ -84,6 +96,7 @@ export default function DeceasedFamilyPage() {
   const [families, setFamilies] = useState<Family[]>([]);
   const [invites, setInvites] = useState<Invitation[]>([]);
   const [permissions, setPermissions] = useState<Permission[]>([]);
+  const [ownedPlots, setOwnedPlots] = useState<OwnedPlot[]>([]);
   const [familyId, setFamilyId] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -109,10 +122,31 @@ export default function DeceasedFamilyPage() {
   const load = useCallback(async () => {
     setError("");
     try {
-      const response = await api.get(admin ? "/admin/deceased" : "/deceased");
+      const [response, contractsResponse] = await Promise.all([
+        api.get(admin ? "/admin/deceased" : "/deceased"),
+        admin ? Promise.resolve(null) : api.get("/my/contracts"),
+      ]);
       const data = unwrap<{ items?: Profile[] } | Profile[]>(response);
       setProfiles(Array.isArray(data) ? data : (data.items ?? []));
       if (!admin) {
+        const contracts = contractsResponse ? unwrap<Contract[]>(contractsResponse) : [];
+        const plots = contracts
+          .filter((contract) => ["active", "completed"].includes(contract.status))
+          .flatMap((contract) => contract.plots?.length
+            ? contract.plots.map((plot) => ({
+                plotId: plot.id,
+                plotCode: plot.code,
+                zoneName: plot.zoneName ?? undefined,
+              }))
+            : [{
+                plotId: contract.plotId,
+                plotCode: contract.plotCode,
+                zoneName: contract.zoneName,
+              }])
+          .filter((plot) => plot.plotId && plot.plotCode);
+        setOwnedPlots(plots.filter((plot, index) =>
+          plots.findIndex((candidate) => candidate.plotId === plot.plotId) === index,
+        ));
         const [familyResponse, inviteResponse] = await Promise.all([
           api.get("/families"),
           api.get("/my/family-invitations"),
@@ -264,7 +298,12 @@ export default function DeceasedFamilyPage() {
                     }, "Đã xóa hồ sơ.")
                   }
                 />
-                <CreateProfileForm busy={busy} run={run} reload={load} />
+                <CreateProfileForm
+                  busy={busy}
+                  ownedPlots={ownedPlots}
+                  run={run}
+                  reload={load}
+                />
               </div>
             </section>
 
@@ -290,6 +329,7 @@ export default function DeceasedFamilyPage() {
                 />
                 <FamilyPanel
                   familyId={familyId}
+                  ownedPlots={ownedPlots}
                   permissions={permissions}
                   busy={busy}
                   run={run}
@@ -413,13 +453,22 @@ function SimpleForm({
 
 function CreateProfileForm({
   busy,
+  ownedPlots,
   run,
   reload,
 }: {
   busy: boolean;
+  ownedPlots: OwnedPlot[];
   run: (operation: () => Promise<void>, message: string) => Promise<void>;
   reload: () => Promise<void>;
 }) {
+  const today = new Date().toLocaleDateString("en-CA", {
+    timeZone: "Asia/Ho_Chi_Minh",
+  });
+  const [dateOfBirth, setDateOfBirth] = useState("");
+  const [dateOfDeath, setDateOfDeath] = useState("");
+  const [burialDate, setBurialDate] = useState("");
+
   return (
     <form
       className="df-panel df-form df-create-profile"
@@ -438,6 +487,9 @@ function CreateProfileForm({
             biography: data.get("biography") || undefined,
           });
           form.reset();
+          setDateOfBirth("");
+          setDateOfDeath("");
+          setBurialDate("");
           await reload();
         }, "Đã tạo hồ sơ và gửi chờ xác minh.");
       }}
@@ -448,11 +500,26 @@ function CreateProfileForm({
         <p>Điền thông tin nền tảng; bạn có thể bổ sung nội dung sau.</p>
       </div>
       <div className="df-form-grid">
-        <Field name="plotId" label="Mã số lô đang sở hữu" type="number" />
+        <label className="df-field">
+          <span>Mã số lô đang sở hữu</span>
+          <select name="plotId" required defaultValue="">
+            <option value="" disabled>
+              {ownedPlots.length ? "Chọn lô đang sở hữu" : "Bạn chưa có lô đủ điều kiện"}
+            </option>
+            {ownedPlots.map((plot) => (
+              <option key={plot.plotId} value={plot.plotId}>
+                {plot.plotCode}{plot.zoneName ? ` · ${plot.zoneName}` : ""}
+              </option>
+            ))}
+          </select>
+        </label>
         <Field name="fullName" label="Họ và tên" />
-        <Field name="dateOfBirth" label="Ngày sinh" type="date" optional />
-        <Field name="dateOfDeath" label="Ngày mất" type="date" optional />
-        <Field name="burialDate" label="Ngày an táng" type="date" optional />
+        <DateField name="dateOfBirth" label="Ngày sinh" value={dateOfBirth}
+          max={dateOfDeath || burialDate || today} onChange={setDateOfBirth} />
+        <DateField name="dateOfDeath" label="Ngày mất" value={dateOfDeath}
+          min={dateOfBirth || undefined} max={burialDate || today} onChange={setDateOfDeath} />
+        <DateField name="burialDate" label="Ngày an táng" value={burialDate}
+          min={dateOfDeath || dateOfBirth || undefined} max={today} onChange={setBurialDate} />
         <Field name="hometown" label="Quê quán" optional />
       </div>
       <label className="df-field">
@@ -465,10 +532,27 @@ function CreateProfileForm({
           placeholder="Ghi lại đôi nét về cuộc đời và những điều gia đình muốn lưu giữ..."
         />
       </label>
-      <button className="df-primary-button" disabled={busy} type="submit">
+      <button className="df-primary-button" disabled={busy || ownedPlots.length === 0} type="submit">
         Tạo hồ sơ tưởng niệm
       </button>
     </form>
+  );
+}
+
+function DateField({ name, label, value, min, max, onChange }: {
+  name: string;
+  label: string;
+  value: string;
+  min?: string;
+  max: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="df-field">
+      <span>{label}<small>Không bắt buộc</small></span>
+      <input name={name} type="date" value={value} min={min} max={max}
+        onChange={(event) => onChange(event.target.value)} />
+    </label>
   );
 }
 
@@ -487,6 +571,10 @@ function ProfileList({
   onReject?: (id: number) => void;
   onDelete?: (id: number) => void;
 }) {
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const toggleProfile = (id: number) =>
+    setExpandedId((current) => current === id ? null : id);
+
   return (
     <section className="df-panel df-profile-panel">
       <div className="df-panel-heading df-panel-heading-row">
@@ -512,7 +600,20 @@ function ProfileList({
       ) : (
         <div className="df-profile-list">
           {profiles.map((profile) => (
-            <article className="df-profile-item" key={profile.id}>
+            <article
+              aria-expanded={expandedId === profile.id}
+              className={`df-profile-item ${expandedId === profile.id ? "expanded" : ""}`}
+              key={profile.id}
+              onClick={() => toggleProfile(profile.id)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  toggleProfile(profile.id);
+                }
+              }}
+              role="button"
+              tabIndex={0}
+            >
               <div className="df-profile-monogram" aria-hidden="true">
                 {profile.fullName.trim().charAt(0).toLocaleUpperCase("vi")}
               </div>
@@ -561,13 +662,27 @@ function ProfileList({
                   <button
                     className="df-text-danger"
                     disabled={busy}
-                    onClick={() => onDelete?.(profile.id)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onDelete?.(profile.id);
+                    }}
                     type="button"
                   >
                     Xóa hồ sơ
                   </button>
                 )}
               </div>
+              {expandedId === profile.id && (
+                <div className="df-profile-detail">
+                  <div><span>Ngày sinh</span><strong>{formatDate(profile.dateOfBirth)}</strong></div>
+                  <div><span>Ngày mất</span><strong>{formatDate(profile.dateOfDeath)}</strong></div>
+                  <div><span>Ngày an táng</span><strong>{formatDate(profile.burialDate)}</strong></div>
+                  <div><span>Quê quán</span><strong>{profile.hometown || "Chưa cập nhật"}</strong></div>
+                  <div className="df-profile-biography">
+                    <span>Tiểu sử</span><p>{profile.biography || "Chưa có tiểu sử."}</p>
+                  </div>
+                </div>
+              )}
             </article>
           ))}
         </div>
@@ -641,12 +756,14 @@ function FamilyList({
 
 function FamilyPanel({
   familyId,
+  ownedPlots,
   permissions,
   busy,
   run,
   reload,
 }: {
   familyId: number | null;
+  ownedPlots: OwnedPlot[];
   permissions: Permission[];
   busy: boolean;
   run: (operation: () => Promise<void>, message: string) => Promise<void>;
@@ -685,28 +802,36 @@ function FamilyPanel({
         <details className="df-tool" open>
           <summary>Liên kết lô đất</summary>
           <p>Đưa một lô thuộc sở hữu hợp lệ vào không gian chung.</p>
-          <CompactForm
-            button="Thêm lô"
-            fields={[["plotId", "Mã số lô", "number"]]}
-            onSubmit={(data) =>
-              post(
-                `/families/${familyId}/plots`,
-                { plotId: Number(data.get("plotId")) },
-                "Đã thêm lô vào nhóm.",
-              )
-            }
-          />
+          <form className="df-compact-form" onSubmit={(event) => {
+            event.preventDefault();
+            const data = new FormData(event.currentTarget);
+            void post(`/families/${familyId}/plots`,
+              { plotId: Number(data.get("plotId")) }, "Đã thêm lô vào nhóm.");
+          }}>
+            <label className="df-field">
+              <span>Mã số lô</span>
+              <select name="plotId" required defaultValue="">
+                <option value="" disabled>Chọn lô đang sở hữu</option>
+                {ownedPlots.map((plot) => (
+                  <option key={plot.plotId} value={plot.plotId}>
+                    {plot.plotCode}{plot.zoneName ? ` · ${plot.zoneName}` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button disabled={busy || ownedPlots.length === 0} type="submit">Thêm lô</button>
+          </form>
         </details>
         <details className="df-tool">
           <summary>Mời thành viên</summary>
-          <p>Gửi lời mời đến tài khoản người thân bằng mã người dùng.</p>
+          <p>Gửi lời mời đến tài khoản người thân bằng địa chỉ email đã đăng ký.</p>
           <CompactForm
             button="Gửi lời mời"
-            fields={[["userId", "Mã người dùng", "number"]]}
+            fields={[["email", "Email người dùng", "email"]]}
             onSubmit={(data) =>
               post(
                 `/families/${familyId}/invitations`,
-                { inviteeUserId: Number(data.get("userId")) },
+                { inviteeEmail: String(data.get("email") ?? "").trim() },
                 "Đã gửi lời mời.",
               )
             }

@@ -401,6 +401,14 @@ export default function MyLotsPage() {
   );
 
   useEffect(() => {
+    if (!error) return;
+    const retryInterval = window.setInterval(() => void loadData(true), 10_000);
+    return () => window.clearInterval(retryInterval);
+    // loadData intentionally reads the latest page state on every retry.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [error]);
+
+  useEffect(() => {
     if (loading || !targetAppointmentId) return;
     const scrollId = window.setTimeout(() => {
       const target = document.getElementById(
@@ -539,9 +547,6 @@ export default function MyLotsPage() {
               <strong>Không thể cập nhật hồ sơ</strong>
               <span>{error}</span>
             </div>
-            <button type="button" onClick={() => void loadData()}>
-              Thử lại
-            </button>
           </div>
         ) : null}
 
