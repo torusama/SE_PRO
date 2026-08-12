@@ -28,7 +28,9 @@ export interface OwnedPlotContext {
   plotType: string;
 }
 
-type ApprovedAppointmentPlot = OwnedPlotContext;
+type ApprovedAppointmentPlot = OwnedPlotContext & {
+  hasActiveAppointment: boolean;
+};
 
 interface ServiceType {
   id: number;
@@ -98,9 +100,20 @@ export class AgentBookingService {
     const row = await this.database.queryOne<{
       pendingAction: AgentPendingAction | null;
     }>(
-      `SELECT extracted_data->'pendingAction' AS "pendingAction"
-       FROM ai_messages
-       WHERE conversation_id = $1 AND role = 'assistant'
+      `WITH reset_boundary AS (
+         SELECT MAX(message_id) AS reset_message_id
+         FROM ai_messages
+         WHERE conversation_id = $1
+           AND metadata ->> 'memoryResetBoundary' = 'true'
+       )
+       SELECT extracted_data->'pendingAction' AS "pendingAction"
+       FROM ai_messages, reset_boundary
+       WHERE conversation_id = $1
+         AND role = 'assistant'
+         AND (
+           reset_boundary.reset_message_id IS NULL
+           OR message_id > reset_boundary.reset_message_id
+         )
        ORDER BY created_at DESC, message_id DESC
        LIMIT 1`,
       [conversationId],
@@ -793,33 +806,86 @@ export class AgentBookingService {
     userMessage?: string;
     pendingAction?: AgentPendingAction;
   }): Promise<AgentBookingTurn> {
-    const approvedPlots = await this.getApprovedAppointmentPlots(input.userId);
+    const approvedPurchasePlots = await this.getApprovedAppointmentPlots(
+      input.userId,
+    );
+    const approvedPlots = approvedPurchasePlots.filter(
+      (plot) => !plot.hasActiveAppointment,
+    );
     const existing =
       input.pendingAction?.kind === 'appointment'
         ? input.pendingAction
         : undefined;
+    if (!approvedPurchasePlots.length) {
+      return {
+        handled: true,
+        intent: 'appointment_booking',
+        assistantMessage:
+          'Hiện tài khoản của bạn chưa có yêu cầu **mua lô** nào đã được ban quản lý duyệt, nên mình chưa thể mở bước đặt lịch. Khi yêu cầu mua lô được duyệt, bạn quay lại đây hoặc nhắn “đặt lịch”; mình sẽ kiểm tra lại trước khi hỏi ngày/giờ.',
+        quickReplies: [
+          {
+            id: 'appointment-view-plot-requests',
+            label: 'Xem yêu cầu lô của tôi',
+            message: 'Cho mình xem tình trạng các yêu cầu mua lô của mình.',
+            emphasis: 'strong',
+          },
+        ],
+      };
+    }
     if (!approvedPlots.length) {
       return {
         handled: true,
         intent: 'appointment_booking',
         assistantMessage:
-          'Hiện tài khoản của bạn chưa có yêu cầu lô nào đã được ban quản lý duyệt, nên mình chưa thể mở bước đặt lịch. Khi một yêu cầu lô được duyệt, bạn quay lại đây và mình sẽ giúp chọn đúng lô rồi đặt lịch với ban quản lý.',
+          'Các lô mua đã được duyệt trong tài khoản của bạn hiện đều đã có lịch hẹn đang chờ hoặc đã được xác nhận, nên mình không tạo thêm lịch trùng. Nếu bạn muốn đổi/hủy lịch hiện có, hãy nói rõ lịch nào để mình hướng dẫn đúng bước.',
         quickReplies: [
           {
-            id: 'appointment-view-plot-requests',
-            label: 'Xem yêu cầu lô của tôi',
-            message: 'Cho mình xem tình trạng các yêu cầu lô của mình.',
+            id: 'appointment-view-existing',
+            label: 'Xem lịch hẹn của tôi',
+            message: 'Cho mình xem các lịch hẹn hiện có của mình.',
             emphasis: 'strong',
           },
         ],
       };
     }
 
-    // Never treat an old recommendation or remembered plot as consent. The
-    // customer must explicitly name each approved plot they want to visit.
+    // If the customer explicitly names a plot that is approved but already
+    // has a live appointment, explain that state instead of silently switching
+    // them to another eligible plot.
+    const explicitlyMentionedApprovedPlots =
+      !existing?.selectedPlotCode && !existing?.appointmentItems
+        ? this.findPlotMentions(input.userMessage, approvedPurchasePlots)
+        : [];
+    const mentionedAlreadyScheduled = explicitlyMentionedApprovedPlots.filter(
+      (plot) => plot.hasActiveAppointment,
+    );
+    if (mentionedAlreadyScheduled.length) {
+      return {
+        handled: true,
+        intent: 'appointment_booking',
+        assistantMessage: [
+          `Lô **${mentionedAlreadyScheduled.map((plot) => plot.plotCode).join(', ')}** đã có lịch hẹn đang chờ hoặc đã được xác nhận, nên mình không tạo lịch trùng.`,
+          approvedPlots.length
+            ? `Các lô đã duyệt vẫn còn cần đặt lịch: **${approvedPlots.map((plot) => plot.plotCode).join(', ')}**. Bạn muốn đặt cho lô nào?`
+            : 'Hiện không còn lô đã duyệt nào cần tạo lịch mới.',
+        ].join(' '),
+        quickReplies: approvedPlots.slice(0, 6).map((plot) => ({
+          id: `appointment-eligible-plot-${plot.plotId}`,
+          label: `Đặt lịch lô ${plot.plotCode}`,
+          message: `Mình muốn đặt lịch hẹn xem lô ${plot.plotCode}.`,
+          emphasis: 'strong' as const,
+        })),
+      };
+    }
+
+    // Never treat an old recommendation or remembered plot as consent. Read
+    // plot codes only from the current appointment request. The sole eligible
+    // approved plot is the one safe exception because there is no ambiguity.
     const explicitlySelectedPlots =
-      existing && !existing.selectedPlotCode && !existing.appointmentItems
-        ? this.findPlotMentions(input.userMessage, approvedPlots)
+      !existing?.selectedPlotCode && !existing?.appointmentItems
+        ? this.wantsAllApprovedAppointmentPlots(input.userMessage)
+          ? approvedPlots
+          : this.findPlotMentions(input.userMessage, approvedPlots)
         : [];
     if (explicitlySelectedPlots.length > 1 || existing?.appointmentItems) {
       return this.prepareQueuedAppointments({
@@ -831,11 +897,25 @@ export class AgentBookingService {
       });
     }
     const explicitlySelectedPlot = explicitlySelectedPlots[0];
+    // A generic "đặt lịch" request is unambiguous when the account has only
+    // one approved purchase plot. In that case go straight to collecting the
+    // date/time instead of asking the customer to select the only possible
+    // plot again. With multiple approved plots we still require an explicit
+    // selection (or an explicit list) before any appointment is prepared.
+    const onlyEligiblePlot =
+      !existing?.selectedPlotCode &&
+      !existing?.appointmentItems &&
+      approvedPlots.length === 1
+        ? approvedPlots[0]
+        : undefined;
     const selectedPlot = approvedPlots.find(
       (plot) =>
         this.normalize(plot.plotCode) ===
         this.normalize(
-          existing?.selectedPlotCode ?? explicitlySelectedPlot?.plotCode ?? '',
+          existing?.selectedPlotCode ??
+            explicitlySelectedPlot?.plotCode ??
+            onlyEligiblePlot?.plotCode ??
+            '',
         ),
     );
     const startTime =
@@ -1088,21 +1168,44 @@ export class AgentBookingService {
       if (pending.appointmentItems?.length) {
         return this.confirmQueuedAppointments(userId, pending);
       }
-      const approvedPlots = await this.getApprovedAppointmentPlots(userId);
+      const approvedPurchasePlots = await this.getApprovedAppointmentPlots(userId);
+      const approvedPlots = approvedPurchasePlots.filter(
+        (plot) => !plot.hasActiveAppointment,
+      );
       const approvedPlot = approvedPlots.find(
         (plot) =>
           this.normalize(plot.plotCode) ===
           this.normalize(pending.selectedPlotCode ?? ''),
       );
       if (!approvedPlot) {
+        const selectedApprovedPlot = approvedPurchasePlots.find(
+          (plot) =>
+            this.normalize(plot.plotCode) ===
+            this.normalize(pending.selectedPlotCode ?? ''),
+        );
         pending.stage = 'collecting';
         pending.selectedPlotCode = undefined;
+        if (selectedApprovedPlot?.hasActiveAppointment) {
+          return {
+            handled: true,
+            intent: 'appointment_booking',
+            assistantMessage: `Lô **${selectedApprovedPlot.plotCode}** vừa có một lịch hẹn đang chờ hoặc đã được xác nhận, nên mình không gửi thêm lịch trùng. Bạn có thể xem lịch hiện có hoặc chọn một lô đã duyệt khác chưa có lịch.`,
+          };
+        }
+        if (!approvedPurchasePlots.length) {
+          return {
+            handled: true,
+            intent: 'appointment_booking',
+            assistantMessage:
+              'Yêu cầu mua lô dùng cho lịch hẹn này hiện không còn ở trạng thái đã duyệt, nên mình chưa gửi lịch. Bạn vui lòng kiểm tra lại tình trạng yêu cầu mua lô trước.',
+          };
+        }
         if (!approvedPlots.length) {
           return {
             handled: true,
             intent: 'appointment_booking',
             assistantMessage:
-              'Yêu cầu lô dùng cho lịch hẹn này hiện không còn ở trạng thái đã duyệt, nên mình chưa gửi lịch. Bạn vui lòng kiểm tra lại tình trạng yêu cầu lô trước.',
+              'Các lô mua đã được duyệt hiện đều đã có lịch hẹn đang chờ hoặc đã xác nhận, nên mình chưa tạo thêm lịch trùng.',
           };
         }
         return this.askForAppointmentPlot(pending, approvedPlots);
@@ -1445,27 +1548,43 @@ export class AgentBookingService {
       };
     }
 
-    const approved = await this.getApprovedAppointmentPlots(userId);
-    const approvedCodes = new Set(approved.map((plot) => this.normalize(plot.plotCode)));
-    const invalid = items.find((item) => !approvedCodes.has(this.normalize(item.plotCode)));
+    const approvedPurchasePlots = await this.getApprovedAppointmentPlots(userId);
+    const eligibleCodes = new Set(
+      approvedPurchasePlots
+        .filter((plot) => !plot.hasActiveAppointment)
+        .map((plot) => this.normalize(plot.plotCode)),
+    );
+    const invalid = items.find(
+      (item) => !eligibleCodes.has(this.normalize(item.plotCode)),
+    );
     if (invalid) {
+      const current = approvedPurchasePlots.find(
+        (plot) =>
+          this.normalize(plot.plotCode) === this.normalize(invalid.plotCode),
+      );
       return {
         handled: true,
         intent: 'appointment_booking',
-        assistantMessage: `Lô **${invalid.plotCode}** không còn ở trạng thái đã duyệt nên mình chưa gửi các lịch. Bạn kiểm tra lại yêu cầu mua lô trước nhé.`,
+        assistantMessage: current?.hasActiveAppointment
+          ? `Lô **${invalid.plotCode}** vừa có lịch hẹn đang chờ hoặc đã được xác nhận, nên mình không gửi thêm bộ lịch để tránh tạo trùng. Bạn kiểm tra lịch hiện có trước nhé.`
+          : `Lô **${invalid.plotCode}** không còn là lô mua đã được duyệt đủ điều kiện đặt lịch, nên mình chưa gửi các lịch. Bạn kiểm tra lại yêu cầu mua lô trước nhé.`,
       };
     }
 
-    const appointments: Array<{ id?: number; item: AgentPendingAppointmentItem }> = [];
-    for (const item of items) {
-      const result = await this.schedule.bookAppointment(userId, {
+    const created = await this.schedule.bookAppointments(
+      userId,
+      items.map((item) => ({
         appointmentDate: item.appointmentDate!,
         startTime: item.startTime!,
         endTime: item.endTime!,
         note: this.appointmentPurpose(item.plotCode),
-      });
-      appointments.push({ id: this.resultId(result), item });
-    }
+      })),
+    );
+    const appointments: Array<{ id?: number; item: AgentPendingAppointmentItem }> =
+      items.map((item, itemIndex) => ({
+        id: this.resultId(created[itemIndex]),
+        item,
+      }));
     const first = appointments[0];
     return {
       handled: true,
@@ -1981,14 +2100,35 @@ export class AgentBookingService {
     return this.database.query<ApprovedAppointmentPlot>(
       `SELECT DISTINCT p.plot_id AS "plotId", p.plot_code AS "plotCode",
               z.zone_name AS "zoneName", p.direction,
-              p.area_sqm::float AS "areaSqm", p.plot_type AS "plotType"
+              p.area_sqm::float AS "areaSqm", p.plot_type AS "plotType",
+              EXISTS (
+                SELECT 1
+                FROM schedule_appointments appointment
+                WHERE appointment.requester_id = $1
+                  AND appointment.status IN ('pending', 'confirmed')
+                  AND (
+                    BTRIM(COALESCE(appointment.note, '')) =
+                      CONCAT('Hẹn xem lô đất ', p.plot_code)
+                    OR (
+                      appointment.note ILIKE '%Tư vấn và chọn lô đất%'
+                      AND appointment.note ILIKE CONCAT('%', p.plot_code, '%')
+                    )
+                  )
+              ) AS "hasActiveAppointment"
        FROM reservation_requests rr
        JOIN request_plots rp ON rp.request_id = rr.request_id
        JOIN plots p ON p.plot_id = rp.plot_id AND p.is_deleted = FALSE
        JOIN cemetery_zones z ON z.zone_id = p.zone_id
        WHERE rr.user_id = $1
+         AND rr.request_type = 'purchase'
          AND rr.status = 'approved'
          AND rr.is_deleted = FALSE
+         AND NOT EXISTS (
+           SELECT 1
+           FROM purchase_request_cancellations cancellation
+           WHERE cancellation.request_id = rr.request_id
+             AND cancellation.status IN ('pending', 'approved')
+         )
        ORDER BY p.plot_code`,
       [userId],
     );
@@ -2005,13 +2145,32 @@ export class AgentBookingService {
       intent: 'appointment_booking',
       pendingAction: pending,
       assistantMessage: `Tài khoản của bạn có ${plots.length === 1 ? 'lô đã được duyệt' : 'các lô đã được duyệt'}: **${plots.map((plot) => plot.plotCode).join(', ')}**. Bạn muốn hẹn xem lô nào? Nếu muốn xem nhiều lô, hãy nêu các mã lô; mình sẽ hỏi và xác nhận ngày riêng từng lô. Mình không tự chọn thay bạn.`,
-      quickReplies: plots.slice(0, 6).map((plot) => ({
-        id: `appointment-plot-${plot.plotId}`,
-        label: `Chọn lô ${plot.plotCode}`,
-        message: `Mình muốn đặt lịch hẹn xem lô ${plot.plotCode}.`,
-        emphasis: 'strong' as const,
-      })),
+      quickReplies: [
+        ...(plots.length > 1
+          ? [
+              {
+                id: 'appointment-all-approved-plots',
+                label: `Đặt lịch cho tất cả ${plots.length} lô`,
+                message:
+                  'Mình muốn đặt lịch cho tất cả các lô đã được duyệt. Hãy hỏi ngày và giờ riêng cho từng lô.',
+                emphasis: 'strong' as const,
+              },
+            ]
+          : []),
+        ...plots.slice(0, 6).map((plot) => ({
+          id: `appointment-plot-${plot.plotId}`,
+          label: `Chọn lô ${plot.plotCode}`,
+          message: `Mình muốn đặt lịch hẹn xem lô ${plot.plotCode}.`,
+          emphasis: 'strong' as const,
+        })),
+      ],
     };
+  }
+
+  private wantsAllApprovedAppointmentPlots(userMessage?: string) {
+    const message = this.normalize(userMessage ?? '');
+    if (!message) return false;
+    return /\b(?:tat ca|toan bo|het cac lo|ca cac lo|all)\b/.test(message);
   }
 
   private findPlotMention(

@@ -1,4 +1,4 @@
-import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Pool, PoolClient, QueryResultRow, types } from 'pg';
 import { MigrationRunnerService } from './migration-runner.service';
@@ -19,17 +19,17 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   private migrationPromise?: Promise<void>;
 
   constructor(
-    config: ConfigService,
-    private readonly migrationRunner: MigrationRunnerService,
+    @Optional() private readonly config?: ConfigService,
+    @Optional() private readonly migrationRunner?: MigrationRunnerService,
   ) {
     const connectionString =
-      config.get<string>('databaseUrl') ||
-      config.get<string>('DATABASE_URL') ||
+      config?.get<string>('databaseUrl') ||
+      config?.get<string>('DATABASE_URL') ||
       process.env.DATABASE_URL;
     this.pool = new Pool({
       connectionString,
       ssl:
-        config.get<string>('nodeEnv') === 'production'
+        (config?.get<string>('nodeEnv') || process.env.NODE_ENV) === 'production'
           ? { rejectUnauthorized: false }
           : undefined,
     });
@@ -79,6 +79,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   }
 
   private waitUntilReady(): Promise<void> {
+    if (!this.migrationRunner) return Promise.resolve();
     this.migrationPromise ??= this.migrationRunner
       .run(this.pool)
       .then(() => undefined);

@@ -287,6 +287,47 @@ function setup(
 }
 
 describe('AiAgentOrchestratorService application-level learning', () => {
+  it('asks for clarification on meaningless input even when production LLM conversational turns are enabled', async () => {
+    const { service, nvidia, config } = setup();
+    config.get.mockImplementation((key: string) => {
+      if (key === 'ai.maxHistoryMessages') return 20;
+      if (key === 'ai.fallbackRuleBased') return true;
+      if (key === 'ai.llmWritesConversationalTurns') return true;
+      return undefined;
+    });
+    nvidia.chat.mockReset();
+
+    const result = await service.chat(
+      { sessionId: 'SES-GARBAGE', message: 'asdfasdf' },
+      { id: 7, role: 'customer' },
+    );
+
+    expect(result.intent).toBe('clarification');
+    expect(result.assistantMessage).toContain('chưa có đủ thông tin');
+    expect(result.metadata.llmModel).toBe('local-conversation-response');
+    expect(nvidia.chat).not.toHaveBeenCalled();
+  });
+
+  it('does not let the production LLM guess the meaning of a bare ambiguous cemetery topic', async () => {
+    const { service, nvidia, config } = setup();
+    config.get.mockImplementation((key: string) => {
+      if (key === 'ai.maxHistoryMessages') return 20;
+      if (key === 'ai.fallbackRuleBased') return true;
+      if (key === 'ai.llmWritesConversationalTurns') return true;
+      return undefined;
+    });
+    nvidia.chat.mockReset();
+
+    const result = await service.chat(
+      { sessionId: 'SES-AMBIGUOUS', message: 'lô' },
+      { id: 7, role: 'customer' },
+    );
+
+    expect(result.intent).toBe('clarification');
+    expect(result.assistantMessage).toContain('Bạn đang muốn hỏi về lô đất');
+    expect(nvidia.chat).not.toHaveBeenCalled();
+  });
+
   it('lets the LLM answer an ordinary age/zodiac question in the production semantic flow', async () => {
     const { service, nvidia, config } = setup();
     config.get.mockImplementation((key: string) => {

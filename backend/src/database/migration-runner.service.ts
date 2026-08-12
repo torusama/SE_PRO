@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash } from 'crypto';
 import { Dirent, promises as fs } from 'fs';
@@ -88,7 +88,7 @@ export function migrationExecutionSql(sql: string): string {
 export class MigrationRunnerService {
   private readonly logger = new Logger(MigrationRunnerService.name);
 
-  constructor(private readonly config: ConfigService) {}
+  constructor(@Optional() private readonly config?: ConfigService) {}
 
   async run(pool: Pool): Promise<MigrationRunSummary> {
     if (!this.isEnabled()) {
@@ -98,7 +98,11 @@ export class MigrationRunnerService {
       return { applied: [], skipped: [], deferred: [] };
     }
 
-    if (!this.config.get<string>('databaseUrl')) {
+    const dbUrl =
+      this.config?.get<string>('databaseUrl') ||
+      this.config?.get<string>('DATABASE_URL') ||
+      process.env.DATABASE_URL;
+    if (!dbUrl) {
       throw new Error(
         'DATABASE_URL is required when automatic database migrations are enabled',
       );
@@ -217,11 +221,13 @@ export class MigrationRunnerService {
   }
 
   private isEnabled(): boolean {
-    return this.config.get<boolean>('migrations.enabled') ?? true;
+    const flag = this.config?.get<boolean>('migrations.enabled');
+    if (flag !== undefined) return flag;
+    return process.env.DB_MIGRATIONS_ENABLED !== 'false';
   }
 
   private migrationsDirectory(): string {
-    const configured = this.config.get<string>('migrations.directory');
+    const configured = this.config?.get<string>('migrations.directory');
     return configured
       ? resolve(configured)
       : resolve(__dirname, '../../database/migrations');

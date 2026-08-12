@@ -1004,7 +1004,7 @@ export class AiAgentOrchestratorService {
         conversation,
         sessionId,
         userMessageId,
-        assistantMessage: `Mình đã xóa bộ nhớ cá nhân của bạn: ${preferencesCleared} sở thích/thông tin đã lưu và ${summariesCleared} tóm tắt hội thoại. Đơn hàng, lô đất, lịch hẹn, hợp đồng và lịch sử giao dịch của bạn vẫn giữ nguyên. Từ các cuộc trò chuyện mới, mình sẽ không dùng các ghi nhớ cũ nữa.`,
+        assistantMessage: `Mình đã xóa bộ nhớ cá nhân của bạn: ${preferencesCleared} sở thích/thông tin đã lưu và ${summariesCleared} tóm tắt hội thoại. Đơn hàng, lô đất, lịch hẹn, hợp đồng và lịch sử giao dịch của bạn vẫn giữ nguyên. Lịch sử chat cũ vẫn hiển thị để bạn xem, nhưng từ tin nhắn tiếp theo mình sẽ không dùng nội dung, sở thích hay ngữ cảnh có trước lần reset này để cá nhân hóa câu trả lời nữa.`,
         intent: 'general_question',
         requirements: {},
         recommendationResult: null,
@@ -1012,6 +1012,8 @@ export class AiAgentOrchestratorService {
         fallbackUsed: false,
         llmModel: 'local-memory-reset',
         skipSuggestedFollowUps: true,
+        skipConversationMemorySnapshot: true,
+        memoryResetBoundary: true,
         learningResults,
       });
     }
@@ -1019,11 +1021,7 @@ export class AiAgentOrchestratorService {
     // A bare domain noun is a topic signal, not authorization to run a search.
     // Ask one useful question instead of silently reusing old filters and
     // producing a full recommendation the customer did not request.
-    if (
-      !this.shouldUseLlmForSemanticTurns() &&
-      ambiguousDomainTurn &&
-      !baziTopicRefinement
-    ) {
+    if (ambiguousDomainTurn && !baziTopicRefinement) {
       await saveUserMessage();
       const assistantMessage = history.length
         ? ambiguousDomainTurn.assistantMessage
@@ -1073,11 +1071,7 @@ export class AiAgentOrchestratorService {
       });
     }
 
-    if (
-      !this.shouldUseLlmForSemanticTurns() &&
-      lowInformationTurn &&
-      !contextReferenceTurn
-    ) {
+    if (lowInformationTurn && !contextReferenceTurn) {
       await saveUserMessage();
       return this.finish({
         conversation,
@@ -4116,6 +4110,8 @@ ${JSON.stringify(options)}
     fallbackReason?: string;
     llmModel?: string;
     skipSuggestedFollowUps?: boolean;
+    skipConversationMemorySnapshot?: boolean;
+    memoryResetBoundary?: boolean;
     learningResults?: AutonomousLearningResult[];
   }) {
     const knowledgeVersion = await this.safeKnowledgeVersion();
@@ -4225,6 +4221,9 @@ ${JSON.stringify(options)}
           input.requirements,
           {
             agentMetadata: metadata,
+            ...(input.memoryResetBoundary
+              ? { memoryResetBoundary: true }
+              : {}),
             recommendations,
             suggestedServices,
             baziSuggestion,
@@ -4242,7 +4241,12 @@ ${JSON.stringify(options)}
         );
       }
     }
-    if (input.conversation && messageId && this.conversationMemory) {
+    if (
+      input.conversation &&
+      messageId &&
+      this.conversationMemory &&
+      !input.skipConversationMemorySnapshot
+    ) {
       await this.withTimeout(
         this.conversationMemory.recordTurnSnapshot({
           conversationId: input.conversation.id,
@@ -5255,11 +5259,12 @@ ${JSON.stringify(options)}
 
   private isResetPersonalMemoryRequest(message: string) {
     const folded = this.foldForMemory(message);
-    const resetVerb = /\b(?:xoa|reset|lam moi|clear|quen|bo het|bo nho lai)\b/.test(
-      folded,
-    );
+    const resetVerb =
+      /\b(?:xoa|reset|lam moi|clear|quen|quen het|bo het|bo nho lai|dung nho|khong nho nua)\b/.test(
+        folded,
+      );
     const personalMemory =
-      /\b(?:bo nho|memory|so thich|uu tien|thong tin ca nhan|tri nho|nho ve toi|nho minh|nho tui|intelligence ca nhan)\b/.test(
+      /\b(?:bo nho|memory|so thich|uu tien|thong tin ca nhan|tri nho|tri thong minh ca nhan|intelligence ca nhan|ca nhan hoa|personalization|nho ve toi|nho minh|nho tui|nho ve tao|nhung gi (?:ban|m|may) (?:da )?(?:hoc|nho) ve (?:toi|minh|tui|tao|t))\b/.test(
         folded,
       );
     return resetVerb && personalMemory;
@@ -7006,11 +7011,22 @@ Hệ thống không còn lựa chọn giữ chỗ riêng. Việc gửi yêu cầ
   private async loadHistory(conversationId: number) {
     const limit = this.config.get<number>('ai.maxHistoryMessages') ?? 40;
     const rows = await this.database.query<PersistedMessage>(
-      `SELECT message_id AS id, role, content, intent,
+      `WITH reset_boundary AS (
+         SELECT MAX(message_id) AS reset_message_id
+         FROM ai_messages
+         WHERE conversation_id = $1
+           AND metadata ->> 'memoryResetBoundary' = 'true'
+       )
+       SELECT message_id AS id, role, content, intent,
               extracted_data AS "extractedData", metadata
-       FROM ai_messages
-       WHERE conversation_id = $1 AND role IN ('user', 'assistant')
-       ORDER BY created_at DESC
+       FROM ai_messages, reset_boundary
+       WHERE conversation_id = $1
+         AND role IN ('user', 'assistant')
+         AND (
+           reset_boundary.reset_message_id IS NULL
+           OR message_id > reset_boundary.reset_message_id
+         )
+       ORDER BY created_at DESC, message_id DESC
        LIMIT $2`,
       [conversationId, limit],
     );

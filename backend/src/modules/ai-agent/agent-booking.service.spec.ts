@@ -49,6 +49,7 @@ function createService() {
   };
   const schedule = {
     bookAppointment: jest.fn(),
+    bookAppointments: jest.fn(),
   };
   const memorialDrafts = {
     generate: jest.fn().mockImplementation(({ fallback }) => fallback),
@@ -821,14 +822,14 @@ describe('AgentBookingService', () => {
     });
   });
 
-  it('requires an approved plot and explicit customer selection before opening the appointment calendar', async () => {
+  it('uses an explicitly named approved plot from the same appointment request without asking twice', async () => {
     const { service, schedule, database } = createService();
     database.query.mockResolvedValue([
       { plotId: 10, plotCode: 'A-01-001', zoneName: 'Khu A' },
       { plotId: 11, plotCode: 'B-01-002', zoneName: 'Khu B' },
     ]);
 
-    const selectionTurn = await service.handleTurn({
+    const result = await service.handleTurn({
       conversationId: 1,
       userId: 7,
       plan: plan('prepare_appointment', 'appointment_booking', {
@@ -842,26 +843,6 @@ describe('AgentBookingService', () => {
     });
 
     expect(schedule.bookAppointment).not.toHaveBeenCalled();
-    expect(selectionTurn?.uiDirective).toBeUndefined();
-    expect(selectionTurn?.assistantMessage).toContain('không tự chọn thay bạn');
-    expect(selectionTurn?.quickReplies).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ label: 'Chọn lô A-01-001' }),
-        expect.objectContaining({ label: 'Chọn lô B-01-002' }),
-      ]),
-    );
-
-    const result = await service.handleTurn({
-      conversationId: 1,
-      userId: 7,
-      plan: plan('prepare_appointment', 'appointment_booking', {
-        appointmentDate: '2099-08-20',
-        appointmentStartTime: '09:00',
-      }),
-      userMessage: 'Mình chọn lô A-01-001.',
-      pendingAction: selectionTurn?.pendingAction,
-    });
-
     expect(result).toMatchObject({
       intent: 'appointment_booking',
       uiDirective: {
@@ -882,6 +863,29 @@ describe('AgentBookingService', () => {
     expect(result?.assistantMessage).toContain('A-01-001');
   });
 
+  it('goes straight to asking the date when there is only one approved purchase plot', async () => {
+    const { service, schedule, database } = createService();
+    database.query.mockResolvedValue([
+      { plotId: 10, plotCode: 'A-01-001', zoneName: 'Khu A' },
+    ]);
+
+    const result = await service.handleTurn({
+      conversationId: 1,
+      userId: 7,
+      plan: plan('prepare_appointment', 'appointment_booking'),
+      userMessage: 'Mình muốn đặt lịch.',
+    });
+
+    expect(schedule.bookAppointment).not.toHaveBeenCalled();
+    expect(result?.pendingAction).toMatchObject({
+      kind: 'appointment',
+      stage: 'collecting',
+      selectedPlotCode: 'A-01-001',
+    });
+    expect(result?.assistantMessage).toContain('ngày nào');
+    expect(result?.assistantMessage).not.toContain('Bạn muốn hẹn xem lô nào');
+  });
+
   it('does not open appointment booking when the customer has no approved plot request', async () => {
     const { service, schedule, database } = createService();
     database.query.mockResolvedValue([]);
@@ -896,7 +900,91 @@ describe('AgentBookingService', () => {
     expect(schedule.bookAppointment).not.toHaveBeenCalled();
     expect(result?.uiDirective).toBeUndefined();
     expect(result?.pendingAction).toBeUndefined();
-    expect(result?.assistantMessage).toContain('chưa có yêu cầu lô nào');
+    expect(result?.assistantMessage).toContain('chưa có yêu cầu **mua lô** nào');
+  });
+
+  it('does not create a duplicate appointment for an approved plot that already has an active appointment', async () => {
+    const { service, schedule, database } = createService();
+    database.query.mockResolvedValue([
+      {
+        plotId: 10,
+        plotCode: 'A-01-001',
+        zoneName: 'Khu A',
+        hasActiveAppointment: true,
+      },
+    ]);
+
+    const result = await service.handleTurn({
+      conversationId: 1,
+      userId: 7,
+      plan: plan('prepare_appointment', 'appointment_booking'),
+      userMessage: 'Mình muốn đặt lịch.',
+    });
+
+    expect(schedule.bookAppointment).not.toHaveBeenCalled();
+    expect(schedule.bookAppointments).not.toHaveBeenCalled();
+    expect(result?.uiDirective).toBeUndefined();
+    expect(result?.pendingAction).toBeUndefined();
+    expect(result?.assistantMessage).toContain('không tạo thêm lịch trùng');
+  });
+
+  it('does not silently switch to another plot when the named approved plot already has an appointment', async () => {
+    const { service, schedule, database } = createService();
+    database.query.mockResolvedValue([
+      {
+        plotId: 10,
+        plotCode: 'A-01-001',
+        zoneName: 'Khu A',
+        hasActiveAppointment: true,
+      },
+      {
+        plotId: 11,
+        plotCode: 'A-01-002',
+        zoneName: 'Khu A',
+        hasActiveAppointment: false,
+      },
+    ]);
+
+    const result = await service.handleTurn({
+      conversationId: 1,
+      userId: 7,
+      plan: plan('prepare_appointment', 'appointment_booking'),
+      userMessage: 'Đặt lịch cho lô A-01-001.',
+    });
+
+    expect(schedule.bookAppointment).not.toHaveBeenCalled();
+    expect(result?.uiDirective).toBeUndefined();
+    expect(result?.assistantMessage).toContain('A-01-001');
+    expect(result?.assistantMessage).toContain('không tạo lịch trùng');
+    expect(result?.assistantMessage).toContain('A-01-002');
+  });
+
+  it('lets the customer explicitly choose all eligible approved plots but still collects each date separately', async () => {
+    const { service, schedule, database } = createService();
+    database.query.mockResolvedValue([
+      { plotId: 10, plotCode: 'A-01-001', zoneName: 'Khu A' },
+      { plotId: 11, plotCode: 'A-01-002', zoneName: 'Khu A' },
+    ]);
+
+    const result = await service.handleTurn({
+      conversationId: 1,
+      userId: 7,
+      plan: plan('prepare_appointment', 'appointment_booking'),
+      userMessage: 'Đặt lịch cho tất cả các lô đã được duyệt.',
+    });
+
+    expect(schedule.bookAppointment).not.toHaveBeenCalled();
+    expect(schedule.bookAppointments).not.toHaveBeenCalled();
+    expect(result?.pendingAction).toMatchObject({
+      kind: 'appointment',
+      stage: 'collecting',
+      activeAppointmentItemIndex: 0,
+      appointmentItems: [
+        { plotCode: 'A-01-001' },
+        { plotCode: 'A-01-002' },
+      ],
+    });
+    expect(result?.assistantMessage).toContain('lô 1/2');
   });
 
   it('books an appointment only after explicit confirmation', async () => {
@@ -949,9 +1037,7 @@ describe('AgentBookingService', () => {
       { plotId: 10, plotCode: 'A-01-001', zoneName: 'Khu A' },
       { plotId: 11, plotCode: 'A-01-002', zoneName: 'Khu A' },
     ]);
-    schedule.bookAppointment
-      .mockResolvedValueOnce({ id: 201 })
-      .mockResolvedValueOnce({ id: 202 });
+    schedule.bookAppointments.mockResolvedValue([{ id: 201 }, { id: 202 }]);
 
     const choosePlots = await service.handleTurn({
       conversationId: 1,
@@ -1007,22 +1093,19 @@ describe('AgentBookingService', () => {
       pendingAction: secondDate?.pendingAction,
     });
 
-    expect(schedule.bookAppointment).toHaveBeenCalledTimes(2);
-    expect(schedule.bookAppointment).toHaveBeenNthCalledWith(
-      1,
+    expect(schedule.bookAppointment).not.toHaveBeenCalled();
+    expect(schedule.bookAppointments).toHaveBeenCalledWith(
       7,
-      expect.objectContaining({
-        appointmentDate: '2099-08-20',
-        note: 'Hẹn xem lô đất A-01-001',
-      }),
-    );
-    expect(schedule.bookAppointment).toHaveBeenNthCalledWith(
-      2,
-      7,
-      expect.objectContaining({
-        appointmentDate: '2099-08-21',
-        note: 'Hẹn xem lô đất A-01-002',
-      }),
+      [
+        expect.objectContaining({
+          appointmentDate: '2099-08-20',
+          note: 'Hẹn xem lô đất A-01-001',
+        }),
+        expect.objectContaining({
+          appointmentDate: '2099-08-21',
+          note: 'Hẹn xem lô đất A-01-002',
+        }),
+      ],
     );
     expect(completed?.assistantMessage).toContain('2 yêu cầu lịch hẹn');
   });

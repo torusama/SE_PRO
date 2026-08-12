@@ -400,6 +400,7 @@ export default function AgentPage() {
       const notifications = (response.data?.data ?? []) as Array<{
         id?: number;
         type?: string;
+        isRead?: boolean;
       }>;
       const approved = notifications.filter(
         (item) =>
@@ -407,16 +408,21 @@ export default function AgentPage() {
           typeof item.id === "number",
       );
       const known = knownApprovedRequestNotificationsRef.current;
+      let newlyApproved: typeof approved;
       if (known === null) {
         knownApprovedRequestNotificationsRef.current = new Set(
           approved.map((item) => item.id!),
         );
-        return;
+        // If approval happened while the customer was away from the AI page,
+        // announce the still-unread approval the first time they come back.
+        // Read historical notifications are intentionally not replayed.
+        newlyApproved = approved.filter((item) => !item.isRead);
+      } else {
+        newlyApproved = approved.filter((item) => !known.has(item.id!));
+        knownApprovedRequestNotificationsRef.current = new Set(
+          approved.map((item) => item.id!),
+        );
       }
-      const newlyApproved = approved.filter((item) => !known.has(item.id!));
-      knownApprovedRequestNotificationsRef.current = new Set(
-        approved.map((item) => item.id!),
-      );
       if (!newlyApproved.length) return;
       setMessages((current) => [
         ...current,
@@ -424,7 +430,9 @@ export default function AgentPage() {
           localId: createLocalId(),
           role: "assistant",
           content:
-            "Ban quản lý vừa duyệt yêu cầu mua lô của bạn. Khi cần, bạn có thể nhắn “đặt lịch” để mình kiểm tra các lô đã duyệt và hỗ trợ đặt lịch xem lô.",
+            newlyApproved.length === 1
+              ? "Ban quản lý đã duyệt yêu cầu mua lô của bạn. Khi bạn muốn đặt lịch, cứ nhắn “đặt lịch”; mình sẽ kiểm tra đúng các lô đã duyệt trong tài khoản rồi mới hỏi ngày/giờ, không tự tạo lịch trước."
+              : `Ban quản lý đã duyệt ${newlyApproved.length} yêu cầu mua lô của bạn. Khi bạn muốn đặt lịch, cứ nhắn “đặt lịch”; mình sẽ kiểm tra từng lô đủ điều kiện và hỏi lại ngày/giờ cần thiết trước khi gửi lịch.`,
           createdAt: new Date(),
         },
       ]);
@@ -432,7 +440,7 @@ export default function AgentPage() {
       // Notification bell remains the fallback when this passive chat update
       // cannot be loaded; never interrupt the active conversation.
     }
-  }, [role]);
+  }, [role, user?.id]);
 
   useEffect(() => {
     knownApprovedRequestNotificationsRef.current = null;

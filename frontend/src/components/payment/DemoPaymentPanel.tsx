@@ -1,11 +1,15 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { Check, CheckCircle2, Copy, Landmark, QrCode, ShieldCheck, WalletCards, X } from 'lucide-react'
 import { api } from '@/lib/api'
 import './DemoPaymentPanel.css'
 
-const money = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 })
+const money = new Intl.NumberFormat('vi-VN', {
+  style: 'currency',
+  currency: 'VND',
+  maximumFractionDigits: 0,
+})
 
-// PRNG đơn giản (mulberry32) để "mã QR" luôn giống nhau với cùng 1 mã giao dịch,
-// thay vì random lại mỗi lần render.
 function mulberry32(seed: number) {
   return function () {
     seed |= 0
@@ -15,13 +19,14 @@ function mulberry32(seed: number) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296
   }
 }
+
 function hashString(value: string) {
   let hash = 0
-  for (let i = 0; i < value.length; i++) hash = (Math.imul(31, hash) + value.charCodeAt(i)) | 0
+  for (let i = 0; i < value.length; i += 1) hash = (Math.imul(31, hash) + value.charCodeAt(i)) | 0
   return hash
 }
 
-/** Mã QR minh hoạ — chỉ là hình vẽ mô phỏng, không mã hoá dữ liệu thật, không quét được. */
+/** QR demo: giữ hành vi cũ, chỉ thay layout hiển thị. */
 function FakeQrCode({ seed }: { seed: string }) {
   const grid = 21
   const cell = 8
@@ -30,14 +35,12 @@ function FakeQrCode({ seed }: { seed: string }) {
 
   const modules = useMemo(() => {
     const cells: boolean[][] = Array.from({ length: grid }, () => Array(grid).fill(false))
-    for (let y = 0; y < grid; y++) {
-      for (let x = 0; x < grid; x++) {
-        cells[y][x] = rand() > 0.55
-      }
+    for (let y = 0; y < grid; y += 1) {
+      for (let x = 0; x < grid; x += 1) cells[y][x] = rand() > 0.55
     }
-    const drawFinder = (ox: number, oy: number) => {
-      for (let y = 0; y < 7; y++) {
-        for (let x = 0; x < 7; x++) {
+    function drawFinder(ox: number, oy: number) {
+      for (let y = 0; y < 7; y += 1) {
+        for (let x = 0; x < 7; x += 1) {
           const border = x === 0 || x === 6 || y === 0 || y === 6
           const core = x >= 2 && x <= 4 && y >= 2 && y <= 4
           cells[oy + y][ox + x] = border || core
@@ -61,19 +64,16 @@ function FakeQrCode({ seed }: { seed: string }) {
     >
       <rect width={size} height={size} fill="#ffffff" />
       {modules.map((row, y) =>
-        row.map(
-          (on, x) =>
-            on && <rect key={`${x}-${y}`} x={x * cell} y={y * cell} width={cell} height={cell} fill="#0b0f1a" />
-        )
+        row.map((on, x) =>
+          on ? (
+            <rect key={`${x}-${y}`} x={x * cell} y={y * cell} width={cell} height={cell} fill="#081320" />
+          ) : null,
+        ),
       )}
     </svg>
   )
 }
 
-/** Diễn giải lỗi chi tiết ngay trên giao diện (không cần mở DevTools):
- * phân biệt rõ 3 trường hợp — không kết nối được server, server trả lỗi có
- * thông điệp cụ thể, hoặc server trả lỗi không rõ nguyên nhân (kèm mã lỗi
- * HTTP để dễ tra log backend). */
 function describeError(err: unknown, action: string): string {
   const axiosErr = err as {
     message?: string
@@ -98,9 +98,7 @@ interface DemoPaymentPanelProps {
   paymentCode?: string | null
   paidAt?: string | null
   paymentConfirmedAt?: string | null
-  /** 'customer': khách xem & bấm "đã thanh toán". 'admin': admin xem & xác nhận nhận tiền. */
   variant: 'customer' | 'admin'
-  /** Gọi lại khi thao tác thành công (thanh toán / xác nhận) để cha tải lại dữ liệu đơn. */
   onChanged?: () => void | Promise<void>
 }
 
@@ -116,7 +114,33 @@ export default function DemoPaymentPanel({
 }: DemoPaymentPanelProps) {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [isQrOpen, setIsQrOpen] = useState(false)
+  const [copied, setCopied] = useState(false)
   const code = paymentCode || `VPV${String(orderId).padStart(5, '0')}`
+
+  useEffect(() => {
+    if (!isQrOpen) return
+    const oldOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !submitting) setIsQrOpen(false)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.body.style.overflow = oldOverflow
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [isQrOpen, submitting])
+
+  async function copyPaymentCode() {
+    try {
+      await navigator.clipboard.writeText(code)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1600)
+    } catch {
+      setCopied(false)
+    }
+  }
 
   async function handleMarkPaid() {
     setSubmitting(true)
@@ -129,15 +153,12 @@ export default function DemoPaymentPanel({
       return
     }
     try {
-      // Thanh toán đã ghi nhận thành công ở backend. Nếu bước tải lại dữ
-      // liệu mới nhất này lỗi thì KHÔNG báo "thanh toán thất bại" (gây hiểu
-      // lầm) — chỉ log để debug, giao diện sẽ tự đúng khi người dùng tải
-      // lại trang.
       await onChanged?.()
     } catch (err) {
       console.error('Thanh toán đã ghi nhận nhưng tải lại dữ liệu thất bại:', err)
     } finally {
       setSubmitting(false)
+      setIsQrOpen(false)
     }
   }
 
@@ -160,50 +181,48 @@ export default function DemoPaymentPanel({
     }
   }
 
-  // ---------- ADMIN ----------
   if (variant === 'admin') {
     return (
       <section className="demo-payment demo-payment--admin">
-        <h3>Thanh toán</h3>
+        <div className="demo-payment-heading">
+          <span className="demo-payment-icon"><WalletCards aria-hidden="true" /></span>
+          <div><span className="demo-payment-kicker">Giao dịch dịch vụ</span><h3>Thanh toán</h3></div>
+        </div>
         {error && <div className="demo-payment-status demo-payment-status--waiting">{error}</div>}
         {paymentStatus === 'unpaid' && (
-          <div className="demo-payment-status demo-payment-status--waiting">
-            Đang chờ khách hàng thanh toán (mã <strong>{code}</strong>).
-          </div>
+          <div className="demo-payment-status demo-payment-status--waiting">Đang chờ khách hàng thanh toán · Mã <strong>{code}</strong></div>
         )}
         {paymentStatus === 'awaiting_confirmation' && (
           <>
             <div className="demo-payment-status demo-payment-status--paid">
-              Khách hàng báo đã thanh toán lúc{' '}
-              {paidAt ? new Date(paidAt).toLocaleString('vi-VN') : '—'} · Mã: <strong>{code}</strong> ·
-              Số tiền: <strong>{money.format(amount)}</strong>
+              Khách hàng báo đã thanh toán lúc {paidAt ? new Date(paidAt).toLocaleString('vi-VN') : '—'} · Mã <strong>{code}</strong> · <strong>{money.format(amount)}</strong>
             </div>
-            <p className="demo-payment-hint">
-              Kiểm tra đã nhận được tiền trong tài khoản ngân hàng thật rồi mới bấm xác nhận bên dưới. Sau khi
-              xác nhận, đơn sẽ tự chuyển sang trạng thái <strong>Đã thanh toán - đang thực hiện</strong>.
-            </p>
-            <button className="service-primary" onClick={() => void handleConfirm()} disabled={submitting}>
+            <p className="demo-payment-hint">Chỉ xác nhận sau khi đã đối soát tiền trong tài khoản ngân hàng.</p>
+            <button className="payment-primary" onClick={() => void handleConfirm()} disabled={submitting}>
               {submitting ? 'Đang xác nhận…' : 'Xác nhận đã nhận thanh toán'}
             </button>
           </>
         )}
         {paymentStatus === 'paid' && (
           <div className="demo-payment-status demo-payment-status--confirmed">
-            Đã xác nhận thanh toán lúc{' '}
-            {paymentConfirmedAt ? new Date(paymentConfirmedAt).toLocaleString('vi-VN') : '—'}.
+            <CheckCircle2 aria-hidden="true" />
+            <span>Đã xác nhận thanh toán lúc {paymentConfirmedAt ? new Date(paymentConfirmedAt).toLocaleString('vi-VN') : '—'}.</span>
           </div>
         )}
       </section>
     )
   }
 
-  // ---------- CUSTOMER ----------
   if (paymentStatus === 'paid') {
     return (
-      <section className="demo-payment demo-payment--customer">
-        <h3>Thanh toán</h3>
+      <section className="demo-payment demo-payment--customer demo-payment--settled">
+        <div className="demo-payment-heading">
+          <span className="demo-payment-icon success"><CheckCircle2 aria-hidden="true" /></span>
+          <div><span className="demo-payment-kicker">Thanh toán hoàn tất</span><h3>Đơn đang được thực hiện</h3></div>
+        </div>
         <div className="demo-payment-status demo-payment-status--confirmed">
-          Đã thanh toán - đang thực hiện. Đơn của bạn đang được thực hiện.
+          <Check aria-hidden="true" />
+          <span>Khoản thanh toán đã được xác nhận. Bạn có thể tiếp tục theo dõi lịch thực hiện bên dưới.</span>
         </div>
       </section>
     )
@@ -211,52 +230,105 @@ export default function DemoPaymentPanel({
 
   if (paymentStatus === 'awaiting_confirmation') {
     return (
-      <section className="demo-payment demo-payment--customer">
-        <h3>Thanh toán</h3>
-        <div className="demo-payment-status demo-payment-status--paid">
-          Đã thanh toán - đang chờ duyệt. Ban quản lý sẽ xác nhận trong thời gian sớm nhất.
+      <section className="demo-payment demo-payment--customer demo-payment--reported">
+        <div className="demo-payment-heading">
+          <span className="demo-payment-icon"><ShieldCheck aria-hidden="true" /></span>
+          <div><span className="demo-payment-kicker">Đã báo thanh toán</span><h3>Đang chờ ban quản lý đối soát</h3></div>
         </div>
+        <div className="demo-payment-status demo-payment-status--paid">Hệ thống đã ghi nhận thông báo thanh toán. Bạn không cần thao tác lại trong lúc chờ xác nhận.</div>
       </section>
     )
   }
 
+  const modal = isQrOpen ? (
+    <div
+      className="payment-modal-backdrop"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !submitting) setIsQrOpen(false)
+      }}
+    >
+      <section
+        className="payment-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={`payment-modal-title-${orderId}`}
+        aria-describedby={`payment-modal-desc-${orderId}`}
+      >
+        <button className="payment-modal-close" type="button" aria-label="Đóng cửa sổ thanh toán" onClick={() => setIsQrOpen(false)} disabled={submitting}>
+          <X aria-hidden="true" />
+        </button>
+
+        <div className="payment-modal-heading">
+          <span className="payment-modal-icon"><QrCode aria-hidden="true" /></span>
+          <div>
+            <span>Thanh toán dịch vụ</span>
+            <h2 id={`payment-modal-title-${orderId}`}>Quét mã QR để chuyển khoản</h2>
+            <p id={`payment-modal-desc-${orderId}`}>Kiểm tra đúng số tiền và nội dung chuyển khoản trước khi xác nhận.</p>
+          </div>
+        </div>
+
+        {error && <div className="demo-payment-status demo-payment-status--waiting payment-modal-error">{error}</div>}
+
+        <div className="payment-modal-content">
+          <div className="payment-qr-stage">
+            <div className="payment-qr-frame"><FakeQrCode seed={code} /></div>
+            <span>Mã QR minh hoạ</span>
+          </div>
+
+          <div className="payment-transfer-card">
+            <div className="payment-transfer-bank">
+              <span className="payment-transfer-bank-icon"><Landmark aria-hidden="true" /></span>
+              <div><small>Ngân hàng thụ hưởng</small><strong>VPV BANK</strong></div>
+            </div>
+            <dl className="payment-transfer-list">
+              <div><dt>Số tài khoản</dt><dd>0000 1234 5678</dd></div>
+              <div><dt>Chủ tài khoản</dt><dd>VINH PHUC VIEN</dd></div>
+              <div className="payment-transfer-amount"><dt>Số tiền</dt><dd>{money.format(amount)}</dd></div>
+              <div>
+                <dt>Nội dung chuyển khoản</dt>
+                <dd className="payment-code-line">
+                  <span>{code}</span>
+                  <button type="button" onClick={() => void copyPaymentCode()} aria-label="Sao chép nội dung chuyển khoản">
+                    {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+                    {copied ? 'Đã chép' : 'Sao chép'}
+                  </button>
+                </dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+
+        <div className="payment-security-note"><ShieldCheck aria-hidden="true" /><span>Chỉ bấm “Tôi đã thanh toán” sau khi giao dịch ngân hàng đã hoàn tất.</span></div>
+        <div className="payment-modal-actions">
+          <button type="button" className="payment-secondary" onClick={() => setIsQrOpen(false)} disabled={submitting}>Để sau</button>
+          <button type="button" className="payment-primary" onClick={() => void handleMarkPaid()} disabled={submitting}>
+            {submitting ? 'Đang ghi nhận…' : 'Tôi đã thanh toán'}
+          </button>
+        </div>
+      </section>
+    </div>
+  ) : null
+
   return (
-    <section className="demo-payment demo-payment--customer">
-      <h3>Thanh toán</h3>
-      {error && <div className="demo-payment-status demo-payment-status--waiting">{error}</div>}
-
-      <div className="demo-payment-body">
-        <div className="demo-payment-qr">
-          <FakeQrCode seed={code} />
-          <span className="demo-payment-qr-badge">Mã QR minh hoạ</span>
+    <>
+      <section className="demo-payment demo-payment--customer demo-payment--unpaid">
+        <div className="demo-payment-toolbar">
+          <div className="demo-payment-heading">
+            <span className="demo-payment-icon"><WalletCards aria-hidden="true" /></span>
+            <div><span className="demo-payment-kicker">Bước tiếp theo</span><h3>Thanh toán dịch vụ</h3></div>
+          </div>
+          <button className="payment-primary payment-open-qr" type="button" onClick={() => setIsQrOpen(true)}>
+            <QrCode aria-hidden="true" /> Thanh toán bằng QR
+          </button>
         </div>
-        <div className="demo-payment-info">
-          <div className="demo-payment-row">
-            <span>Ngân hàng</span>
-            <strong>VPV BANK</strong>
-          </div>
-          <div className="demo-payment-row">
-            <span>Số tài khoản</span>
-            <strong>0000 1234 5678</strong>
-          </div>
-          <div className="demo-payment-row">
-            <span>Chủ tài khoản</span>
-            <strong>VINH PHUC VIEN</strong>
-          </div>
-          <div className="demo-payment-row">
-            <span>Số tiền</span>
-            <strong>{money.format(amount)}</strong>
-          </div>
-          <div className="demo-payment-row">
-            <span>Nội dung chuyển khoản</span>
-            <strong>{code}</strong>
-          </div>
+        {error && <div className="demo-payment-status demo-payment-status--waiting">{error}</div>}
+        <div className="payment-summary-row">
+          <div><span>Số tiền cần thanh toán</span><strong>{money.format(amount)}</strong></div>
+          <div><span>Mã giao dịch</span><strong>{code}</strong></div>
         </div>
-      </div>
-
-      <button className="service-primary" onClick={() => void handleMarkPaid()} disabled={submitting}>
-        {submitting ? 'Đang ghi nhận…' : 'Tôi đã thanh toán'}
-      </button>
-    </section>
+      </section>
+      {modal && typeof document !== 'undefined' ? createPortal(modal, document.body) : null}
+    </>
   )
 }

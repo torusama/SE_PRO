@@ -3,7 +3,6 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Search,
   RotateCcw,
-  Bell,
   ChevronRight,
   ChevronLeft,
   ShieldCheck,
@@ -12,6 +11,11 @@ import {
   Check,
   AlertCircle,
   HelpCircle,
+  Calendar,
+  MapPin,
+  Clock,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
@@ -142,10 +146,21 @@ function displayStatusLabel(
   if (status === "confirmed" && paymentStatus === "awaiting_confirmation") {
     return "Đã thanh toán - đang chờ duyệt";
   }
-  if (status === "in_progress" && paymentStatus === "paid") {
-    return "Đã thanh toán - đang thực hiện";
+  if (status === "in_progress") {
+    return "Đang thực hiện";
   }
   return STATUS_LABEL[status];
+}
+function paymentStatusLabel(status?: PaymentStatus) {
+  if (status === "paid") return "Đã xác nhận thanh toán";
+  if (status === "awaiting_confirmation") return "Đang chờ đối soát";
+  return "Chưa thanh toán";
+}
+
+function paymentStatusTone(status?: PaymentStatus) {
+  if (status === "paid") return "paid";
+  if (status === "awaiting_confirmation") return "waiting";
+  return "unpaid";
 }
 function statusGroup(
   status: OrderStatus,
@@ -647,17 +662,6 @@ export default function ServicePage() {
               độ ngay trên một trang. Mỗi yêu cầu đều được ban quản lý xác nhận
               trước khi triển khai.
             </p>
-            <div className="header-cta">
-              <button
-                className="btn-primary-inline"
-                onClick={() => openBooking()}
-              >
-                Đặt dịch vụ mới <ArrowRight className="inline-icon" />
-              </button>
-              <button className="btn-text" onClick={openTrack}>
-                Theo dõi đơn đã đặt
-              </button>
-            </div>
           </div>
 
           <aside className="service-assurance" aria-label="Cam kết dịch vụ">
@@ -829,7 +833,6 @@ export default function ServicePage() {
             orderDetails={orderDetails}
             detailLoadingId={detailLoadingId}
             detailError={detailError}
-            onOpenNotifications={() => navigate(ROUTES.NOTIFICATION)}
             page={page}
             pageCount={pageCount}
             setPage={setPage}
@@ -1374,7 +1377,6 @@ function TrackTab(props: {
   orderDetails: Record<number, ServiceOrder>;
   detailLoadingId: number | null;
   detailError: string;
-  onOpenNotifications: () => void;
   page: number;
   pageCount: number;
   setPage: (p: number) => void;
@@ -1394,7 +1396,6 @@ function TrackTab(props: {
     orderDetails,
     detailLoadingId,
     detailError,
-    onOpenNotifications,
     page,
     pageCount,
     setPage,
@@ -1412,11 +1413,6 @@ function TrackTab(props: {
             Kiểm tra lịch thực hiện, người phụ trách, thanh toán và kết quả
             nghiệm thu của từng yêu cầu.
           </p>
-        </div>
-        <div className="tracking-heading-actions">
-          <button className="btn-text bordered" onClick={onOpenNotifications}>
-            <Bell className="inline-icon" /> Thông báo
-          </button>
         </div>
       </div>
 
@@ -1508,7 +1504,7 @@ function TrackTab(props: {
                 <article
                   key={order.id}
                   id={`service-order-${order.id}`}
-                  className={`service-item status-${group}${order.id === focusedOrderId ? " is-agent-highlighted" : ""}`}
+                  className={`service-item order-state-${group}${order.id === focusedOrderId ? " is-agent-highlighted" : ""}`}
                   data-reveal
                   style={
                     {
@@ -1516,36 +1512,41 @@ function TrackTab(props: {
                     } as CSSProperties
                   }
                 >
-                  <button
-                    className="service-item-summary"
-                    type="button"
-                    onClick={() => toggleOrder(order.id)}
-                    aria-expanded={isExpanded}
-                  >
+                  <div className="service-item-summary">
                     <div className="service-item-main">
                       <div className="service-item-title-row">
-                        <div>
+                        <div className="service-item-title-copy">
                           <span className="order-code">
                             #DV-{String(order.id).padStart(4, "0")}
                           </span>
                           <h3 className="s-name">{order.serviceName}</h3>
                         </div>
-                        <span className={`status-badge ${group}`}>
-                          {displayStatusLabel(
-                            order.status,
-                            order.paymentStatus,
-                          )}
-                        </span>
                       </div>
+
                       <div className="s-meta">
-                        {order.plotCode && <span>Lô {order.plotCode}</span>}
-                        {order.requestedDate && (
-                          <span>
-                            Ngày mong muốn: {formatDate(order.requestedDate)}
+                        {order.plotCode && (
+                          <span className="s-meta-chip">
+                            <MapPin aria-hidden="true" />
+                            Lô {order.plotCode}
                           </span>
                         )}
-                        <span>Chi phí: {money.format(order.amount)}</span>
+                        {order.requestedDate && (
+                          <span className="s-meta-chip">
+                            <Calendar aria-hidden="true" />
+                            Mong muốn {formatDate(order.requestedDate)}
+                          </span>
+                        )}
+                        <span className="s-meta-chip">
+                          <Clock aria-hidden="true" />
+                          {order.scheduledDate
+                            ? `Lịch ${formatDate(order.scheduledDate)}`
+                            : "Đang chờ xếp lịch"}
+                        </span>
+                        <span className="s-meta-chip s-meta-amount">
+                          {money.format(order.amount)}
+                        </span>
                       </div>
+
                       {group !== "cancelled" && (
                         <div
                           className="progress-track"
@@ -1568,116 +1569,186 @@ function TrackTab(props: {
                         </div>
                       )}
                     </div>
-                    <span className="s-action">
-                      {isExpanded ? "Thu gọn" : "Xem chi tiết"}
-                    </span>
-                  </button>
+
+                    <div className="service-item-actions">
+                      <button
+                        className={`service-detail-toggle ${isExpanded ? "expanded" : ""}`}
+                        type="button"
+                        onClick={() => toggleOrder(order.id)}
+                        aria-expanded={isExpanded}
+                        aria-controls={`service-order-detail-${order.id}`}
+                      >
+                        <span>{isExpanded ? "Thu gọn" : "Xem chi tiết"}</span>
+                        {isExpanded ? (
+                          <ChevronUp aria-hidden="true" />
+                        ) : (
+                          <ChevronDown aria-hidden="true" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
 
                   {isExpanded && (
-                    <div className="detail-panel" data-reveal>
+                    <div
+                      className="detail-panel"
+                      id={`service-order-detail-${order.id}`}
+                    >
                       {detailLoadingId === order.id &&
                       !orderDetails[order.id] ? (
                         <div className="detail-loading">
-                          Đang tải lịch sử cập nhật...
+                          Đang tải thông tin đơn dịch vụ...
                         </div>
                       ) : (
-                        <>
-                          <div className="detail-block">
-                            <div className="detail-block-head">
-                              <h4>Thông tin đơn</h4>
-                              <span className="detail-updated">
-                                Cập nhật{" "}
-                                {formatDate(
-                                  detail.updatedAt || detail.createdAt,
-                                )}
-                              </span>
+                        <div className="detail-surface">
+                          <div className="detail-header">
+                            <div>
+                              <span className="detail-eyebrow">Chi tiết yêu cầu</span>
+                              <h4>Thông tin đơn dịch vụ</h4>
+                              <p>
+                                Thông tin được chia theo từng nhóm để bạn dễ kiểm tra
+                                trước khi theo dõi hoặc thanh toán.
+                              </p>
                             </div>
-                            <div className="detail-info-grid">
-                              <div>
-                                <span>Ngày gửi yêu cầu</span>
-                                <strong>{formatDate(detail.createdAt)}</strong>
-                              </div>
-                              <div>
-                                <span>Ngày mong muốn</span>
-                                <strong>
-                                  {formatDate(detail.requestedDate)}
-                                </strong>
-                              </div>
-                              <div>
-                                <span>Lịch thực hiện</span>
-                                <strong>
-                                  {formatDate(detail.scheduledDate)}
-                                </strong>
-                              </div>
-                              <div>
-                                <span>Người phụ trách</span>
-                                <strong>
-                                  {detail.assignedToName || "Đang phân công"}
-                                </strong>
-                              </div>
-                            </div>
-                            <div className="customer-note">
-                              <strong>Ghi chú của gia đình</strong>
-                              <p>{detail.note || "Không có ghi chú thêm."}</p>
-                            </div>
+                            <span className="detail-updated">
+                              Cập nhật {formatDate(detail.updatedAt || detail.createdAt)}
+                            </span>
                           </div>
 
-                          {detail.status !== "completed" &&
-                            detail.status !== "cancelled" && (
-                            <DemoPaymentPanel
-                              orderId={detail.id}
-                              amount={detail.amount}
-                              paymentStatus={detail.paymentStatus ?? "unpaid"}
-                              paymentCode={detail.paymentCode}
-                              paidAt={detail.paidAt}
-                              paymentConfirmedAt={detail.paymentConfirmedAt}
-                              variant="customer"
-                              onChanged={() => onLoadOrderDetail(detail.id)}
-                            />
-                          )}
+                          <div className="detail-overview-grid">
+                            <section className="detail-card">
+                              <div className="detail-card-heading">
+                                <span>01</span>
+                                <h5>Yêu cầu dịch vụ</h5>
+                              </div>
+                              <dl className="detail-data-list">
+                                <div>
+                                  <dt>Ngày gửi yêu cầu</dt>
+                                  <dd>{formatDate(detail.createdAt)}</dd>
+                                </div>
+                                <div>
+                                  <dt>Ngày mong muốn</dt>
+                                  <dd>{formatDate(detail.requestedDate)}</dd>
+                                </div>
+                                <div>
+                                  <dt>Lô áp dụng</dt>
+                                  <dd>{detail.plotCode ? `Lô ${detail.plotCode}` : "—"}</dd>
+                                </div>
+                                <div>
+                                  <dt>Chi phí dịch vụ</dt>
+                                  <dd className="detail-money">{money.format(detail.amount)}</dd>
+                                </div>
+                              </dl>
+                            </section>
 
-                          {detail.paymentStatus === "paid" && (
-                            <ServiceScheduleCalendar
-                              requestedDate={detail.requestedDate}
-                              scheduledDate={detail.scheduledDate}
-                              serviceName={detail.serviceName}
-                              plotCode={detail.plotCode}
-                            />
-                          )}
-
-                          <div className="detail-block history-block">
-                            <h4>Lịch sử tiến độ</h4>
-                            <div className="customer-history">
-                              {(detail.history ?? []).length === 0 ? (
-                                <p className="history-empty">
-                                  Chưa có cập nhật mới.
-                                </p>
-                              ) : (
-                                (detail.history ?? []).map(
-                                  (history, historyIndex) => (
-                                    <div
-                                      className={`customer-history-item ${historyIndex === (detail.history?.length ?? 0) - 1 ? "latest" : ""}`}
-                                      key={history.id}
+                            <section className="detail-card">
+                              <div className="detail-card-heading">
+                                <span>02</span>
+                                <h5>Xử lý & thanh toán</h5>
+                              </div>
+                              <dl className="detail-data-list">
+                                <div>
+                                  <dt>Lịch thực hiện</dt>
+                                  <dd>{formatDate(detail.scheduledDate)}</dd>
+                                </div>
+                                <div>
+                                  <dt>Người phụ trách</dt>
+                                  <dd>{detail.assignedToName || "Đang phân công"}</dd>
+                                </div>
+                                <div>
+                                  <dt>Trạng thái đơn</dt>
+                                  <dd>{displayStatusLabel(detail.status, detail.paymentStatus)}</dd>
+                                </div>
+                                <div>
+                                  <dt>Thanh toán</dt>
+                                  <dd>
+                                    <span
+                                      className={`detail-payment-state ${paymentStatusTone(detail.paymentStatus)}`}
                                     >
-                                      <div
-                                        className="history-marker"
-                                        aria-hidden="true"
-                                      />
-                                      <div>
-                                        <strong>
-                                          {history.newStatus
-                                            ? STATUS_LABEL[history.newStatus]
-                                            : "Đã gửi yêu cầu"}
-                                        </strong>
-                                        <span>
-                                          {formatDate(history.createdAt)}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  ),
-                                )
-                              )}
+                                      {paymentStatusLabel(detail.paymentStatus)}
+                                    </span>
+                                  </dd>
+                                </div>
+                              </dl>
+                            </section>
+                          </div>
+
+                          <section className="detail-note-card">
+                            <div>
+                              <span className="detail-note-label">Ghi chú của gia đình</span>
+                              <p>{detail.note || "Không có ghi chú thêm."}</p>
                             </div>
+                            {detail.paymentCode && (
+                              <div className="detail-transaction-code">
+                                <span>Mã giao dịch</span>
+                                <strong>{detail.paymentCode}</strong>
+                              </div>
+                            )}
+                          </section>
+
+                          {detail.status !== "completed" &&
+                            detail.status !== "cancelled" &&
+                            detail.paymentStatus !== "paid" && (
+                              <div className="detail-payment-zone">
+                                <DemoPaymentPanel
+                                  orderId={detail.id}
+                                  amount={detail.amount}
+                                  paymentStatus={detail.paymentStatus ?? "unpaid"}
+                                  paymentCode={detail.paymentCode}
+                                  paidAt={detail.paidAt}
+                                  paymentConfirmedAt={detail.paymentConfirmedAt}
+                                  variant="customer"
+                                  onChanged={() => onLoadOrderDetail(detail.id)}
+                                />
+                              </div>
+                            )}
+
+                          <div
+                            className={`detail-activity-grid ${detail.paymentStatus === "paid" ? "with-calendar" : ""}`}
+                          >
+                            {detail.paymentStatus === "paid" && (
+                              <ServiceScheduleCalendar
+                                requestedDate={detail.requestedDate}
+                                scheduledDate={detail.scheduledDate}
+                                serviceName={detail.serviceName}
+                                plotCode={detail.plotCode}
+                              />
+                            )}
+
+                            <section className="detail-card history-block">
+                              <div className="detail-card-heading">
+                                <span>03</span>
+                                <h5>Lịch sử tiến độ</h5>
+                              </div>
+                              <div className="customer-history">
+                                {(detail.history ?? []).length === 0 ? (
+                                  <p className="history-empty">
+                                    Chưa có cập nhật mới.
+                                  </p>
+                                ) : (
+                                  (detail.history ?? []).map(
+                                    (history, historyIndex) => (
+                                      <div
+                                        className={`customer-history-item ${historyIndex === (detail.history?.length ?? 0) - 1 ? "latest" : ""}`}
+                                        key={history.id}
+                                      >
+                                        <div
+                                          className="history-marker"
+                                          aria-hidden="true"
+                                        />
+                                        <div>
+                                          <strong>
+                                            {history.newStatus
+                                              ? STATUS_LABEL[history.newStatus]
+                                              : "Đã gửi yêu cầu"}
+                                          </strong>
+                                          <span>{formatDate(history.createdAt)}</span>
+                                        </div>
+                                      </div>
+                                    ),
+                                  )
+                                )}
+                              </div>
+                            </section>
                           </div>
 
                           {detail.status === "completed" && (
@@ -1708,7 +1779,7 @@ function TrackTab(props: {
                               )}
                             </div>
                           )}
-                        </>
+                        </div>
                       )}
                       {detailError && (
                         <div className="detail-error">{detailError}</div>
