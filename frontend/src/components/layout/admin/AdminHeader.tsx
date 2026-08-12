@@ -6,7 +6,7 @@ export default function AdminHeader() {
     <header className="admin-header">
       <BrandWordmark />
 
-      <AccountActions variant="light" className="admin-account" />
+      <AccountActions variant="light" className="admin-account" showNotification={false} />
     </header>
   );
 }

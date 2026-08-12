@@ -52,7 +52,7 @@ describe("Admin Header", () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByRole("button", { name: "Thông báo" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Thông báo" })).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", {
         name: "Mở menu tài khoản của Nguyễn An",
