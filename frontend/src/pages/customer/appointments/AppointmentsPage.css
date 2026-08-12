@@ -196,11 +196,14 @@
   display: grid;
   grid-template-columns: minmax(0, 1.02fr) minmax(390px, 0.98fr);
   gap: 22px;
-  align-items: start;
+  align-items: stretch;
   margin-top: 22px;
 }
 
 .appointment-list-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
   border: 1px solid rgba(96, 130, 189, 0.16);
   border-radius: 12px;
   background: linear-gradient(
@@ -208,11 +211,6 @@
     rgba(13, 27, 56, 0.92) 0%,
     rgba(5, 7, 26, 0.96) 100%
   );
-}
-
-.appointment-list-panel {
-  position: sticky;
-  top: 90px;
   overflow: hidden;
 }
 
@@ -271,8 +269,9 @@
 }
 
 .my-appointments {
+  flex: 1;
   display: grid;
-  max-height: 720px;
+  align-content: start;
   overflow-y: auto;
 }
 
