@@ -36,6 +36,7 @@ const recommendation: RecommendationResult = {
       isAdjacent: true,
       reasons: ['Near entrance'],
       tradeOffs: [],
+      analysisSummary: 'Near the main entrance',
       highlightPlotIds: [1, 2],
       accessSummary: 'Near the main entrance',
       entranceDistanceMapUnits: 100,
@@ -93,7 +94,7 @@ function setup(
 ) {
   let messageId = 100;
   const database = {
-    queryOne: jest.fn((sql: string) => {
+    queryOne: jest.fn<any, any>((sql: string) => {
       if (sql.includes('INSERT INTO ai_conversations')) {
         return { id: 10, sessionId: 'SES-1', userId: 7 };
       }
@@ -109,10 +110,10 @@ function setup(
       }
       return null;
     }),
-    query: jest.fn(() => []),
+    query: jest.fn<any, any>(() => []),
   };
   const config = {
-    get: jest.fn((key: string) => {
+    get: jest.fn<any, any>((key: string) => {
       if (key === 'ai.maxHistoryMessages') return 20;
       if (key === 'ai.fallbackRuleBased') return true;
       // Most legacy local-gate tests exercise the explicit emergency mode.
@@ -124,9 +125,9 @@ function setup(
   const plan = plannerPlan();
   const nvidia = {
     model: 'frozen-foundation-model',
-    isConfigured: jest.fn(() => true),
+    isConfigured: jest.fn<any, any>(() => true),
     chat: jest
-      .fn()
+      .fn<any, any>()
       .mockResolvedValueOnce({
         choices: [
           {
@@ -166,64 +167,66 @@ function setup(
       }),
   };
   const tools = {
-    isAllowed: jest.fn(() => true),
-    execute: jest.fn((name: string, args?: { memoryType?: string }) => {
-      if (name === 'propose_knowledge_update') {
-        if (memoryFailure) throw new Error('memory unavailable');
-        if (args?.memoryType === 'faq') {
+    isAllowed: jest.fn<any, any>(() => true),
+    execute: jest.fn<any, any>(
+      (name: string, args?: { memoryType?: string }) => {
+        if (name === 'propose_knowledge_update') {
+          if (memoryFailure) throw new Error('memory unavailable');
+          if (args?.memoryType === 'faq') {
+            return {
+              status: 'stored_for_validation',
+              message: 'queued for review',
+              knowledgeEntryId: 56,
+            };
+          }
           return {
-            status: 'stored_for_validation',
-            message: 'queued for review',
-            knowledgeEntryId: 56,
+            status: 'saved_user_memory',
+            message: 'saved',
+            knowledgeEntryId: 55,
           };
         }
-        return {
-          status: 'saved_user_memory',
-          message: 'saved',
-          knowledgeEntryId: 55,
-        };
-      }
-      if (name === 'get_service_suggestions') {
-        return {
-          services: [
-            {
-              id: 1,
-              name: 'Chăm sóc mộ định kỳ',
-              description: 'Vệ sinh và chăm sóc phần mộ hằng tháng.',
-              basePrice: 500_000,
-              unit: 'tháng',
-              category: 'Chăm sóc',
-            },
-          ],
-        };
-      }
-      if (name === 'analyze_plot_competitiveness') {
-        return {
-          found: true,
-          plotCode: 'A-01-001',
-          plot: {
+        if (name === 'get_service_suggestions') {
+          return {
+            services: [
+              {
+                id: 1,
+                name: 'Chăm sóc mộ định kỳ',
+                description: 'Vệ sinh và chăm sóc phần mộ hằng tháng.',
+                basePrice: 500_000,
+                unit: 'tháng',
+                category: 'Chăm sóc',
+              },
+            ],
+          };
+        }
+        if (name === 'analyze_plot_competitiveness') {
+          return {
+            found: true,
             plotCode: 'A-01-001',
-            status: 'sold',
-            listedPrice: 50_000_000,
-            zoneName: 'Khu A - Cao cấp',
-            plotType: 'single',
-            areaSqm: 4,
-            direction: 'Nam',
-          },
-        };
-      }
-      if (name === 'get_purchase_process') {
-        return {
-          title: 'Quy trình mua lô',
-          content:
-            'Chọn lô, gửi yêu cầu, chờ quản trị viên duyệt rồi hoàn tất hồ sơ và thanh toán.',
-        };
-      }
-      return recommendation;
-    }),
+            plot: {
+              plotCode: 'A-01-001',
+              status: 'sold',
+              listedPrice: 50_000_000,
+              zoneName: 'Khu A - Cao cấp',
+              plotType: 'single',
+              areaSqm: 4,
+              direction: 'Nam',
+            },
+          };
+        }
+        if (name === 'get_purchase_process') {
+          return {
+            title: 'Quy trình mua lô',
+            content:
+              'Chọn lô, gửi yêu cầu, chờ quản trị viên duyệt rồi hoàn tất hồ sơ và thanh toán.',
+          };
+        }
+        return recommendation;
+      },
+    ),
   };
   const knowledge = {
-    getUserPromptContext: jest.fn(() =>
+    getUserPromptContext: jest.fn<any, any>(() =>
       [
         '<PERSISTENT_USER_PREFERENCES>',
         '- [preferred_plot_location] Near entrance',
@@ -233,33 +236,33 @@ function setup(
         '</VERIFIED_GLOBAL_KNOWLEDGE>',
       ].join('\n'),
     ),
-    getActiveUserPreferences: jest.fn(() => []),
-    getPurchaseProcess: jest.fn(() => ({
+    getActiveUserPreferences: jest.fn<any, any>(() => []),
+    getPurchaseProcess: jest.fn<any, any>(() => ({
       title: 'Quy trình mua lô',
       content:
         'Chọn lô, gửi yêu cầu, chờ quản trị viên duyệt rồi hoàn tất hồ sơ và thanh toán.',
     })),
-    getCurrentVersion: jest.fn(() => 'kb-test'),
+    getCurrentVersion: jest.fn<any, any>(() => 'kb-test'),
   };
   const booking = {
-    loadPendingAction: jest.fn(() => null),
-    handleTurn: jest.fn(() => null),
-    getOwnedPlots: jest.fn(() => ownedPlots),
+    loadPendingAction: jest.fn<any, any>(() => null as any),
+    handleTurn: jest.fn<any, any>(() => null as any),
+    getOwnedPlots: jest.fn<any, any>(() => ownedPlots as any),
   };
   const comparisonAi = {
     model: 'nvidia/nemotron-3-nano-30b-a3b',
-    isConfigured: jest.fn(() => true),
-    chat: jest.fn(),
+    isConfigured: jest.fn<any, any>(() => true),
+    chat: jest.fn<any, any>(),
   };
   const decisionComparisonAi = {
     model: 'mistralai/mistral-medium-3.5-128b',
-    isConfigured: jest.fn(() => false),
-    chat: jest.fn(),
+    isConfigured: jest.fn<any, any>(() => false),
+    chat: jest.fn<any, any>(),
   };
   const recommendations = {
-    recommend: jest.fn(() => recommendation),
-    browseAvailablePlots: jest.fn(() => recommendation),
-    getServiceSuggestions: jest.fn(() => []),
+    recommend: jest.fn<any, any>(() => recommendation as any),
+    browseAvailablePlots: jest.fn<any, any>(() => recommendation as any),
+    getServiceSuggestions: jest.fn<any, any>(() => [] as any),
   };
   const service = new AiAgentOrchestratorService(
     database as unknown as DatabaseService,
@@ -386,16 +389,10 @@ describe('AiAgentOrchestratorService application-level learning', () => {
       ],
     });
     const createPlan = (
-      service as unknown as {
-        createAgentPlan: (
-          history: unknown[],
-          message: string,
-          knowledge: string,
-          routingKey: string,
-          bookingContext: { trustedRequirements: Record<string, never> },
-        ) => Promise<AgentPlan>;
-      }
-    ).createAgentPlan.bind(service);
+      service as unknown as Record<string, CallableFunction>
+    ).createAgentPlan.bind(service) as (
+      ...args: unknown[]
+    ) => Promise<AgentPlan>;
 
     await expect(
       createPlan([], 'người tuổi chó nằm đâu ok', '', 'test-route', {
@@ -461,6 +458,40 @@ describe('AiAgentOrchestratorService application-level learning', () => {
     expect(nvidia.chat).not.toHaveBeenCalled();
   });
 
+  it('understands a bare numeric date reply like 13/02/2010 after a zodiac plot question', async () => {
+    const { service, config, tools } = setup();
+    config.get.mockImplementation((key: string) => {
+      if (key === 'ai.maxHistoryMessages') return 20;
+      if (key === 'ai.fallbackRuleBased') return true;
+      if (key === 'ai.llmWritesConversationalTurns') return true;
+      return undefined;
+    });
+
+    await service.chat(
+      {
+        sessionId: 'SES-BARE-DATE-ZODIAC',
+        message: 'tuổi rồng nằm lô nào',
+      },
+      { id: 7, role: 'customer' },
+    );
+
+    const result = await service.chat(
+      {
+        sessionId: 'SES-BARE-DATE-ZODIAC',
+        message: '13/02/2010',
+      },
+      { id: 7, role: 'customer' },
+    );
+
+    expect(result.intent).toBe('recommend_plots');
+    expect(result.requirements).toEqual(
+      expect.objectContaining({
+        birthDate: '2010-02-13',
+      }),
+    );
+    expect(tools.execute).toHaveBeenCalled();
+  });
+
   it('does not dump generic plots when every LLM provider fails during zodiac consultation', async () => {
     const { service, nvidia, config, tools, recommendations } = setup();
     config.get.mockImplementation((key: string) => {
@@ -469,7 +500,9 @@ describe('AiAgentOrchestratorService application-level learning', () => {
       if (key === 'ai.llmWritesConversationalTurns') return true;
       return undefined;
     });
-    nvidia.chat.mockReset().mockRejectedValue(new Error('all providers timeout'));
+    nvidia.chat
+      .mockReset()
+      .mockRejectedValue(new Error('all providers timeout'));
 
     const result = await service.chat(
       {
@@ -540,7 +573,9 @@ describe('AiAgentOrchestratorService application-level learning', () => {
       if (key === 'ai.llmWritesConversationalTurns') return true;
       return undefined;
     });
-    nvidia.chat.mockReset().mockRejectedValue(new Error('all providers timeout'));
+    nvidia.chat
+      .mockReset()
+      .mockRejectedValue(new Error('all providers timeout'));
 
     const result = await service.chat(
       {
@@ -573,7 +608,9 @@ describe('AiAgentOrchestratorService application-level learning', () => {
       if (key === 'ai.llmWritesConversationalTurns') return true;
       return undefined;
     });
-    nvidia.chat.mockReset().mockRejectedValue(new Error('all providers timeout'));
+    nvidia.chat
+      .mockReset()
+      .mockRejectedValue(new Error('all providers timeout'));
     booking.handleTurn.mockResolvedValue({
       handled: true,
       intent: 'service_booking',
@@ -616,7 +653,9 @@ describe('AiAgentOrchestratorService application-level learning', () => {
       if (key === 'ai.llmWritesConversationalTurns') return true;
       return undefined;
     });
-    nvidia.chat.mockReset().mockRejectedValue(new Error('all providers timeout'));
+    nvidia.chat
+      .mockReset()
+      .mockRejectedValue(new Error('all providers timeout'));
 
     const result = await service.chat(
       {
@@ -722,7 +761,9 @@ describe('AiAgentOrchestratorService application-level learning', () => {
       if (key === 'ai.llmWritesConversationalTurns') return true;
       return undefined;
     });
-    nvidia.chat.mockReset().mockRejectedValue(new Error('all providers timeout'));
+    nvidia.chat
+      .mockReset()
+      .mockRejectedValue(new Error('all providers timeout'));
 
     const process = await service.chat(
       {
@@ -765,7 +806,9 @@ describe('AiAgentOrchestratorService application-level learning', () => {
       if (key === 'ai.llmWritesConversationalTurns') return true;
       return undefined;
     });
-    nvidia.chat.mockReset().mockRejectedValue(new Error('all providers timeout'));
+    nvidia.chat
+      .mockReset()
+      .mockRejectedValue(new Error('all providers timeout'));
 
     const result = await service.chat(
       { sessionId: 'SES-ZODIAC-FALLBACK', message: 'tuổi Mão là con gì?' },
@@ -805,7 +848,10 @@ describe('AiAgentOrchestratorService application-level learning', () => {
       badDirections: [
         { direction: 'Tây', star: 'Tuyệt Mệnh', meaning: 'Nên hạn chế' },
       ],
-      elementRelations: { supporting: 'Hỏa sinh Thổ', weakening: 'Mộc khắc Thổ' },
+      elementRelations: {
+        supporting: 'Hỏa sinh Thổ',
+        weakening: 'Mộc khắc Thổ',
+      },
       detailedAnalysis: 'Hướng Đông là tín hiệu tham khảo chính.',
     };
     tools.execute.mockImplementation((name: string) =>
@@ -943,13 +989,10 @@ describe('AiAgentOrchestratorService application-level learning', () => {
       ],
     });
     const generate = (
-      service as unknown as {
-        generateSuggestedFollowUps: (
-          userMessage: string,
-          assistantMessage: string,
-        ) => Promise<Array<{ category: string; text: string }>>;
-      }
-    ).generateSuggestedFollowUps.bind(service);
+      service as unknown as Record<string, CallableFunction>
+    ).generateSuggestedFollowUps.bind(service) as (
+      ...args: unknown[]
+    ) => Promise<Array<{ category: string; text: string }>>;
 
     await expect(
       generate('Tư vấn lô đất', 'Có ba phương án phù hợp.'),
@@ -968,13 +1011,10 @@ describe('AiAgentOrchestratorService application-level learning', () => {
     const { service, nvidia } = setup();
     nvidia.chat.mockReset().mockRejectedValue(new Error('provider busy'));
     const generate = (
-      service as unknown as {
-        generateSuggestedFollowUps: (
-          userMessage: string,
-          assistantMessage: string,
-        ) => Promise<Array<{ category: string; text: string }>>;
-      }
-    ).generateSuggestedFollowUps.bind(service);
+      service as unknown as Record<string, CallableFunction>
+    ).generateSuggestedFollowUps.bind(service) as (
+      ...args: unknown[]
+    ) => Promise<Array<{ category: string; text: string }>>;
 
     await expect(
       generate('Tư vấn lô đất', 'Có ba phương án phù hợp.'),
@@ -1463,8 +1503,8 @@ describe('AiAgentOrchestratorService application-level learning', () => {
 
       expect(
         planner.buildDeterministicAgentPlan(
-          message as string,
-          intent as string,
+          message,
+          intent,
           requirements as Record<string, unknown>,
           [],
         )?.action,
@@ -1708,7 +1748,13 @@ describe('AiAgentOrchestratorService application-level learning', () => {
   });
 
   it('saves memory and still executes the primary recommendation with the trusted role', async () => {
-    const { service, tools, nvidia, knowledge } = setup();
+    const { service, tools, nvidia, knowledge, config } = setup();
+    config.get.mockImplementation((key: string) => {
+      if (key === 'ai.maxHistoryMessages') return 20;
+      if (key === 'ai.fallbackRuleBased') return true;
+      if (key === 'ai.llmWritesConversationalTurns') return true;
+      return undefined;
+    });
 
     const result = await service.chat(
       {
@@ -1758,7 +1804,13 @@ describe('AiAgentOrchestratorService application-level learning', () => {
   });
 
   it('uses the LLM to write the grounded plot consultation after the authoritative tool succeeds', async () => {
-    const { service, nvidia } = setup();
+    const { service, nvidia, config } = setup();
+    config.get.mockImplementation((key: string) => {
+      if (key === 'ai.maxHistoryMessages') return 20;
+      if (key === 'ai.fallbackRuleBased') return true;
+      if (key === 'ai.llmWritesConversationalTurns') return true;
+      return undefined;
+    });
     const plan = plannerPlan();
     const consultation = `
       Mình đã ghi nhớ ưu tiên gần cổng và đã đối chiếu phương án từ dữ liệu lô còn trống hiện tại.
@@ -1826,7 +1878,13 @@ describe('AiAgentOrchestratorService application-level learning', () => {
   });
 
   it('continues the primary action and does not claim storage when memory persistence fails', async () => {
-    const { service, tools } = setup(true);
+    const { service, tools, config } = setup(true);
+    config.get.mockImplementation((key: string) => {
+      if (key === 'ai.maxHistoryMessages') return 20;
+      if (key === 'ai.fallbackRuleBased') return true;
+      if (key === 'ai.llmWritesConversationalTurns') return true;
+      return undefined;
+    });
 
     const result = await service.chat(
       {

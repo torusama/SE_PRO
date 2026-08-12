@@ -223,12 +223,11 @@ export function extractDeterministicRequirements(
   // with accent-folded "năm" (year). Accept a natural standalone answer in
   // any position, for example "sinh 12/03/1999, nữ, lúc 8 giờ".
   const rawGenderText = message.toLocaleLowerCase('vi-VN');
-  const gender =
-    /(?:^|[\s,;])(?:nữ|nu|female)(?=$|[\s,;.])/.test(rawGenderText)
-      ? 'female'
-      : /(?:^|[\s,;])(?:nam|male)(?=$|[\s,;.])/.test(rawGenderText)
-        ? 'male'
-        : undefined;
+  const gender = /(?:^|[\s,;])(?:nữ|nu|female)(?=$|[\s,;.])/.test(rawGenderText)
+    ? 'female'
+    : /(?:^|[\s,;])(?:nam|male)(?=$|[\s,;.])/.test(rawGenderText)
+      ? 'male'
+      : undefined;
   const birthTimeMatch = isAppointmentContext
     ? null
     : message.match(
@@ -369,7 +368,7 @@ function extractStandaloneClockTime(message: string): string | undefined {
 function extractBirthDate(message: string): string | undefined {
   const iso = message.match(/\b(\d{4})-(\d{1,2})-(\d{1,2})\b/);
   const vietnamese = message.match(
-    /\b(?:ngay\s+)?(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})\b/i,
+    /\b(?:ngay\s+)?(\d{1,2})[/-](\d{1,2})[/-](\d{4})\b/i,
   );
   const words = message.match(
     /\bng[aà]y\s+(\d{1,2})\s+th[aá]ng\s+(\d{1,2})\s+n[aă]m\s+(\d{4})\b/i,
@@ -692,8 +691,9 @@ export class AiAgentOrchestratorService {
     let directIntent = ambiguousDomainTurn
       ? 'general_question'
       : this.detectIntent(dto.message);
-    const directZodiacPlotConsultation =
-      this.resolveZodiacPlotConsultation(dto.message);
+    const directZodiacPlotConsultation = this.resolveZodiacPlotConsultation(
+      dto.message,
+    );
     if (directZodiacPlotConsultation) {
       // A current explicit zodiac statement is stronger than an old profile.
       // Ask for the actual subject's birth facts before applying Bát Tự instead
@@ -866,13 +866,13 @@ export class AiAgentOrchestratorService {
     );
     const profileRequirements =
       baziContextActive && !directZodiacPlotConsultation
-      ? this.requirementsFromCustomerProfile(
-          customerProfile,
-          historyRequirements,
-          directRequirements,
-          dto.message,
-        )
-      : {};
+        ? this.requirementsFromCustomerProfile(
+            customerProfile,
+            historyRequirements,
+            directRequirements,
+            dto.message,
+          )
+        : {};
     let trustedRequirements = this.mergeDefinedRequirements(
       profileRequirements,
       conversationMemoryRequirements,
@@ -1801,14 +1801,12 @@ export class AiAgentOrchestratorService {
           conversationId: conversation?.id ?? null,
           sourceMessageId: userMessageId,
         };
-        const {
-          requirements: plotRequirements,
-          result: baziRecommendation,
-        } = await this.recommendPlotsAcrossBaziDirections(
-          requirements,
-          bazi,
-          recommendationContext,
-        );
+        const { requirements: plotRequirements, result: baziRecommendation } =
+          await this.recommendPlotsAcrossBaziDirections(
+            requirements,
+            bazi,
+            recommendationContext,
+          );
         baziRecommendation.baziSuggestion ??= bazi;
         execution.toolOutput = baziRecommendation;
         execution.recommendationResult = baziRecommendation;
@@ -2235,20 +2233,16 @@ Today: ${new Date().toISOString().slice(0, 10)}`,
     // stall when forced into function-calling mode. Ask for compact JSON in a
     // regular completion, validate it, then fail over across models as needed.
     const response = await this.nvidia.chat(messages, [], 'auto', {
-        temperature: 0,
-        routingKey,
-        maxTokens: 1_100,
-        timeoutMs: 10_000,
-        totalTimeoutMs: 22_000,
-        preferredProviderId: 'openai-primary',
-        enableThinking: false,
-        validateResponse: (candidate) =>
-          this.isUsablePlannerResponse(
-            candidate,
-            userMessage,
-            false,
-          ),
-      });
+      temperature: 0,
+      routingKey,
+      maxTokens: 1_100,
+      timeoutMs: 10_000,
+      totalTimeoutMs: 22_000,
+      preferredProviderId: 'openai-primary',
+      enableThinking: false,
+      validateResponse: (candidate) =>
+        this.isUsablePlannerResponse(candidate, userMessage, false),
+    });
     const assistant = response.choices[0].message;
     const plannerCall = assistant.tool_calls?.find(
       (call) => call.function.name === AGENT_PLANNER_TOOL_NAME,
@@ -2855,10 +2849,9 @@ Write the final helpful, highly consultative response now.
   }) {
     if (input.recommendationResult) {
       const zodiacContext =
-        input.plan.requirements.zodiacSign &&
-        !input.plan.requirements.birthDate
-        ? `Mình đã hiểu bạn đang chọn lô cho **tuổi ${input.plan.requirements.zodiacSign}**. Con giáp được dùng làm ngữ cảnh tư vấn ban đầu; vì chưa có năm sinh cụ thể nên mình chưa tự gán một hướng là “hợp tuổi”, nhưng vẫn giới thiệu ngay các lô đang trống để bạn có phương án thực tế trước.\n\n`
-        : '';
+        input.plan.requirements.zodiacSign && !input.plan.requirements.birthDate
+          ? `Mình đã hiểu bạn đang chọn lô cho **tuổi ${input.plan.requirements.zodiacSign}**. Con giáp được dùng làm ngữ cảnh tư vấn ban đầu; vì chưa có năm sinh cụ thể nên mình chưa tự gán một hướng là “hợp tuổi”, nhưng vẫn giới thiệu ngay các lô đang trống để bạn có phương án thực tế trước.\n\n`
+          : '';
       return `${input.prefix}${zodiacContext}${this.describeRecommendations(input.recommendationResult)}`;
     }
     if (input.suggestedServices.length) {
@@ -2938,14 +2931,15 @@ ${goodDirs}
 **3. Các hướng nên hạn chế**
 ${badDirs}
 
-**4. Quan hệ ngũ hành để tham khảo**
-- Yếu tố hỗ trợ: ${bazi.elementRelations?.supporting || 'chưa có dữ liệu'}.
-- Yếu tố làm suy yếu/xung khắc cần cân nhắc: ${bazi.elementRelations?.weakening || 'chưa có dữ liệu'}.
+**4. Quan hệ Ngũ Hành — lớp tham khảo phụ**
+- Tương sinh/hỗ trợ: ${bazi.elementRelations?.supporting || 'chưa có dữ liệu'}.
+- Tương khắc/cần lưu ý: ${bazi.elementRelations?.weakening || 'chưa có dữ liệu'}.
+- Khi Ngũ Hành Nạp Âm và Bát Trạch cho cảm giác khác nhau, **không dùng Nạp Âm để phủ định hướng Bát Trạch**. Mình sẽ nói rõ sự khác nhau thay vì vừa khuyên vừa cấm cùng một hướng.
 
 **5. Ý nghĩa khi áp dụng vào chọn lô**
-${bazi.detailedAnalysis || bazi.explanation} Hướng chỉ là **một tiêu chí mềm**; lựa chọn thực tế vẫn phải đối chiếu tình trạng, giá, diện tích, khu vực và nhu cầu gia đình.
+${bazi.detailedAnalysis || bazi.explanation} Hướng chỉ là **một tiêu chí mềm**; lựa chọn thực tế vẫn phải đối chiếu tình trạng, giá, diện tích, khu vực, khả năng tiếp cận và nhu cầu gia đình bằng dữ liệu xác thực.
 
-**Lưu ý:** Phần hiện tại dùng năm sinh/cung mệnh và giờ sinh như dữ liệu bổ sung, chưa phải phép lập đầy đủ Tứ Trụ với can-chi của cả năm, tháng, ngày và giờ. ${bazi.disclaimer}${nextStep}`;
+**Giới hạn phép tính:** ${bazi.methodology?.scope || 'Phần hiện tại dùng Can Chi năm sinh, Nạp Âm, Cung Mệnh/Bát Trạch và giờ sinh như dữ liệu bổ sung; chưa phải phép lập đầy đủ Tứ Trụ.'} ${bazi.disclaimer}${nextStep}`;
   }
 
   private describePlotCompetitiveness(toolOutput: unknown) {
@@ -3129,11 +3123,12 @@ Bạn muốn mình đi sâu vào yêu cầu lô, đơn dịch vụ hay lịch ch
     let suggestedServices: SuggestedService[] = [];
     let baziSuggestion: BaziSuggestion | null = null;
     let resolvedIntent = input.intent;
-    const directZodiacPlotConsultation =
-      this.resolveZodiacPlotConsultation(input.message);
+    const directZodiacPlotConsultation = this.resolveZodiacPlotConsultation(
+      input.message,
+    );
     const baziThenPlotsActive = Boolean(
       directZodiacPlotConsultation ||
-        input.requirements.consultationGoal === 'bazi_then_plots',
+      input.requirements.consultationGoal === 'bazi_then_plots',
     );
     if (baziThenPlotsActive) {
       input.requirements = {
@@ -3522,7 +3517,10 @@ Bạn muốn mình đi sâu vào yêu cầu lô, đơn dịch vụ hay lịch ch
             },
             context,
           )
-        : await this.recommendations.browseAvailablePlots(requirements, context);
+        : await this.recommendations.browseAvailablePlots(
+            requirements,
+            context,
+          );
       lastRequirements = requirements;
       lastResult = result;
       if (result.recommendations.length > 0) {
@@ -4221,9 +4219,7 @@ ${JSON.stringify(options)}
           input.requirements,
           {
             agentMetadata: metadata,
-            ...(input.memoryResetBoundary
-              ? { memoryResetBoundary: true }
-              : {}),
+            ...(input.memoryResetBoundary ? { memoryResetBoundary: true } : {}),
             recommendations,
             suggestedServices,
             baziSuggestion,
@@ -5234,17 +5230,18 @@ ${JSON.stringify(options)}
     const folded = this.foldForMemory(message);
     if (!folded) return true;
     return (
-      folded.length <= 16 &&
-      /^(?:gi|ha|he|a|ua|help|test|thu|sao|roi sao|tiep di|noi di|khong biet)$/.test(
-        folded,
-      )
-    ) || this.isUnintelligibleTurn(folded);
+      (folded.length <= 16 &&
+        /^(?:gi|ha|he|a|ua|help|test|thu|sao|roi sao|tiep di|noi di|khong biet)$/.test(
+          folded,
+        )) ||
+      this.isUnintelligibleTurn(folded)
+    );
   }
 
   private isUnintelligibleTurn(folded: string) {
     if (!folded) return true;
     const compact = folded.replace(/\s+/g, '');
-    if (/(.)\1{3,}/.test(compact)) return true;
+    if (/([a-z])\1{3,}/i.test(compact)) return true;
     if (/^(?:asdf|qwer|qwerty|zxcv|lolol|hahaha|kkkk|hehehe)+$/.test(compact)) {
       return true;
     }
@@ -5252,6 +5249,7 @@ ${JSON.stringify(options)}
     return (
       words.length <= 3 &&
       compact.length >= 5 &&
+      /[a-z]/.test(compact) &&
       !/[aeiouy]/.test(compact) &&
       /^[a-z0-9]+$/.test(compact)
     );
@@ -6862,7 +6860,9 @@ Hệ thống không còn lựa chọn giữ chỗ riêng. Việc gửi yêu cầ
       return 'service_booking';
     }
     if (
-      /\b(?:nhac lich|nhac nho|nhac gio|dam gio|gui email nhac)\b/.test(folded) ||
+      /\b(?:nhac lich|nhac nho|nhac gio|dam gio|gui email nhac)\b/.test(
+        folded,
+      ) ||
       /\b(?:tuong niem|ngay gio)\b.{0,45}\b(?:ngay|nhac|email|hang nam|moi nam)\b/.test(
         folded,
       )

@@ -243,6 +243,13 @@ export interface BaziSuggestion {
     supporting: string;
     weakening: string;
   };
+  methodology?: {
+    primaryFramework: string;
+    secondaryFramework: string;
+    scope: string;
+  };
+  applicationPrinciples?: string[];
+  limitations?: string[];
   detailedAnalysis: string;
 }
 

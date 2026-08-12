@@ -649,28 +649,28 @@ const ELEMENT_RELATIONS: Record<
 > = {
   Kim: {
     supporting:
-      'Thổ sinh Kim (Đất sinh kim loại, chọn hướng thuộc Thổ hoặc Kim)',
-    weakening: 'Hỏa khắc Kim (Lửa nung chảy kim loại, tránh hướng Nam)',
+      'Theo vòng tương sinh Ngũ Hành: Thổ sinh Kim (đây là lớp diễn giải biểu tượng, không tự động quyết định hướng lô)',
+    weakening: 'Theo vòng tương khắc Ngũ Hành: Hỏa khắc Kim (chỉ dùng như lớp tham khảo phụ, không tự động loại hướng Nam)',
   },
   Mộc: {
     supporting:
-      'Thủy sinh Mộc (Nước tưới cây cối, chọn hướng thuộc Thủy hoặc Mộc)',
-    weakening: 'Kim khắc Mộc (Dao rìu chặt cây, tránh hướng Tây/Tây Bắc)',
+      'Theo vòng tương sinh Ngũ Hành: Thủy sinh Mộc (đây là lớp diễn giải biểu tượng, không tự động quyết định hướng lô)',
+    weakening: 'Theo vòng tương khắc Ngũ Hành: Kim khắc Mộc (không dùng riêng quan hệ này để loại hướng Tây/Tây Bắc nếu Bát Trạch xếp các hướng đó vào nhóm cát)',
   },
   Thủy: {
     supporting:
-      'Kim sinh Thủy (Kim loại nung chảy sinh Thủy, chọn hướng Kim hoặc Thủy)',
+      'Theo vòng tương sinh Ngũ Hành: Kim sinh Thủy (đây là lớp diễn giải biểu tượng, không tự động quyết định hướng lô)',
     weakening:
-      'Thổ khắc Thủy (Đất đắp đập chặn nước, tránh hướng Đông Bắc/Tây Nam)',
+      'Theo vòng tương khắc Ngũ Hành: Thổ khắc Thủy (không tự động loại Đông Bắc/Tây Nam nếu Bát Trạch xếp chúng vào nhóm cát)',
   },
   Hỏa: {
-    supporting: 'Mộc sinh Hỏa (Gỗ bùng cháy sinh Hỏa, chọn hướng Mộc hoặc Hỏa)',
-    weakening: 'Thủy khắc Hỏa (Nước dập tắt lửa, tránh hướng Bắc)',
+    supporting: 'Theo vòng tương sinh Ngũ Hành: Mộc sinh Hỏa (đây là lớp diễn giải biểu tượng, không tự động quyết định hướng lô)',
+    weakening: 'Theo vòng tương khắc Ngũ Hành: Thủy khắc Hỏa (không tự động loại hướng Bắc nếu Bát Trạch xếp Bắc vào nhóm cát)',
   },
   Thổ: {
     supporting:
-      'Hỏa sinh Thổ (Lửa thiêu rụi thành tro đất, chọn hướng Hỏa hoặc Thổ)',
-    weakening: 'Mộc khắc Thổ (Rễ cây đâm xuyên đất, tránh hướng Đông/Đông Nam)',
+      'Theo vòng tương sinh Ngũ Hành: Hỏa sinh Thổ (đây là lớp diễn giải biểu tượng, không tự động quyết định hướng lô)',
+    weakening: 'Theo vòng tương khắc Ngũ Hành: Mộc khắc Thổ (không tự động loại Đông/Đông Nam nếu Bát Trạch xếp các hướng đó vào nhóm cát)',
   },
 };
 
@@ -775,13 +775,13 @@ export class BaziRuleService {
     const explanation = `Gia chủ tuổi ${yearPillar} (${year}${hourText}), Mệnh Nạp Âm ${napAm.name} (${napAm.meaning}, thuộc hành ${napAm.element}). Cung mệnh ${batTrach.cung} (${batTrach.group}, giới tính ${genderText}).`;
 
     const detailedAnalysis = [
-      `Theo hệ quy tắc Bát Trạch đang dùng, gia chủ mệnh ${napAm.name} (${napAm.element}) thuộc ${batTrach.group}, Cung ${batTrach.cung}.`,
-      `Nhóm hướng thuận gồm ${batTrach.good.map((item) => `${item.direction} (${item.star})`).join(', ')}; trong đó ${batTrach.good[0].direction} được xếp ưu tiên cao nhất theo bảng cung hiện tại.`,
-      `Nhóm hướng cần hạn chế gồm ${batTrach.bad.map((item) => `${item.direction} (${item.star})`).join(', ')}.`,
-      `Về ngũ hành, yếu tố hỗ trợ được mô tả là: ${elementRel.supporting}; yếu tố làm suy yếu/xung khắc cần cân nhắc là: ${elementRel.weakening}.`,
+      `Khung chính để xếp hướng là Bát Trạch/Mệnh Quái: gia chủ thuộc ${batTrach.group}, Cung ${batTrach.cung}. Bốn hướng cát hiện tại là ${batTrach.good.map((item) => `${item.direction} (${item.star})`).join(', ')} và bốn hướng hung là ${batTrach.bad.map((item) => `${item.direction} (${item.star})`).join(', ')}.`,
+      `Ý nghĩa bốn sao cát nên được giải thích theo mục đích thay vì coi một hướng luôn tốt nhất cho mọi việc: Sinh Khí thiên về sinh lực/phát triển, Thiên Y thiên về sức khỏe và sự nâng đỡ, Diên Niên thiên về hòa hợp/bền lâu, Phục Vị thiên về ổn định và tĩnh tại. Với âm trạch, đây chỉ là ngôn ngữ tham khảo văn hóa chứ không phải bảo đảm kết quả.`,
+      `Nạp Âm ${napAm.name} thuộc hành ${napAm.element}. ${elementRel.supporting}; ${elementRel.weakening}. Ngũ Hành ở đây là lớp diễn giải phụ: không dùng Nạp Âm để phủ định bảng hướng Bát Trạch. Nếu hai lớp cho tín hiệu khác nhau, hệ thống phải nói rõ xung đột thay vì vừa khuyên vừa cấm cùng một hướng.`,
+      `Khi áp dụng vào lô mộ, hướng cá nhân không thay thế việc xem dữ liệu thực tế của lô. Chỉ được nói về hướng, khu, giá, diện tích, khả năng tiếp cận hoặc cảnh quan khi backend có dữ liệu xác thực; không được tự suy đoán thế đất, nước, núi, long mạch hay mức độ cát-hung của địa hình.`,
       birthHourBranch
-        ? `Giờ sinh quy về chi ${birthHourBranch}; hệ thống chỉ dùng dữ liệu này như tín hiệu bổ sung, không tự suy ra đầy đủ Tứ Trụ.`
-        : 'Không có giờ sinh nên hệ thống không suy đoán phần giờ.',
+        ? `Giờ sinh hiện chỉ được quy về chi ${birthHourBranch}. Công cụ chưa lập đủ Can Chi của trụ tháng, trụ ngày và Can của trụ giờ, chưa xác định Nhật Chủ hay cân bằng toàn bộ Tứ Trụ, vì vậy không được gọi kết quả này là lá số Bát Tự đầy đủ.`
+        : 'Không có giờ sinh. Công cụ hiện cũng chưa lập đủ trụ tháng, trụ ngày và trụ giờ, nên kết quả chỉ là Can Chi năm sinh + Nạp Âm + Bát Trạch/Mệnh Quái tham khảo, không phải lá số Bát Tự đầy đủ.',
     ].join(' ');
 
     return {
@@ -802,6 +802,22 @@ export class BaziRuleService {
       goodDirections: batTrach.good,
       badDirections: batTrach.bad,
       elementRelations: elementRel,
+      methodology: {
+        primaryFramework: 'Bát Trạch/Mệnh Quái để xếp 4 hướng cát và 4 hướng hung',
+        secondaryFramework: 'Can Chi năm sinh, Nạp Âm và Ngũ Hành để diễn giải bổ sung',
+        scope: 'Tư vấn văn hóa âm trạch ở mức tham khảo; không phải lá số Bát Tự/Tứ Trụ đầy đủ',
+      },
+      applicationPrinciples: [
+        'Ưu tiên bảng hướng Bát Trạch khi đang trả lời câu hỏi về hướng; Ngũ Hành Nạp Âm chỉ là lớp bổ sung và không được tự động phủ định hướng Bát Trạch.',
+        'Giải thích Sinh Khí, Thiên Y, Diên Niên và Phục Vị theo nhu cầu thay vì tuyên bố một hướng tốt tuyệt đối cho mọi trường hợp.',
+        'Khi tư vấn lô mộ, luôn tách lớp văn hóa/tâm linh khỏi dữ liệu thực tế của lô như giá, diện tích, trạng thái, khu vực và khả năng tiếp cận.',
+        'Không suy đoán long mạch, thủy khẩu, thế đất, núi, nước hoặc cảnh quan nếu hệ thống không có dữ liệu địa hình xác thực.',
+      ],
+      limitations: [
+        'Chưa tính đầy đủ bốn trụ năm-tháng-ngày-giờ và chưa xác định Nhật Chủ/Day Master.',
+        'Can Chi năm có thể phụ thuộc quy ước mốc năm của trường phái; công cụ hiện dùng năm dương lịch từ ngày sinh đã nhập.',
+        'Kết quả phong thủy là tham khảo văn hóa, không phải kết luận khoa học hoặc bảo đảm may-rủi.',
+      ],
       detailedAnalysis,
     };
   }

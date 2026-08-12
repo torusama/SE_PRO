@@ -83,6 +83,16 @@ export default function AgentMessage({
           label: item.category,
           message: item.text,
         }));
+  const baziSuggestion = message.response?.baziSuggestion;
+  const baziElementGlyph = baziSuggestion?.element
+    ? ({
+        Kim: "金",
+        Mộc: "木",
+        Thủy: "水",
+        Hỏa: "火",
+        Thổ: "土",
+      } as Record<string, string>)[baziSuggestion.element] || "命"
+    : "命";
 
   async function copyMessage() {
     try {
@@ -162,149 +172,170 @@ export default function AgentMessage({
         )}
 
         {/* Bazi Phong Thủy Section */}
-        {message.response?.baziSuggestion && (
+        {baziSuggestion && (
           <div className="agent-bazi-card">
+            <span className="agent-bazi-corner agent-bazi-corner-tr" />
+            <span className="agent-bazi-corner agent-bazi-corner-bl" />
+
             <div className="agent-bazi-head">
               <div className="agent-bazi-title">
-                <strong>La Bàn Phong Thủy Âm Trạch</strong>
-              </div>
-              {message.response.baziSuggestion.element && (
-                <span
-                  className={`agent-bazi-element-badge element-${message.response.baziSuggestion.element.toLowerCase()}`}
-                >
-                  Mệnh {message.response.baziSuggestion.element}
+                <span className="agent-bazi-eyebrow">Phong thủy truyền thống</span>
+                <strong>La Bàn Bát Trạch</strong>
+                <span className="agent-bazi-subtitle">
+                  Tra cứu hướng âm trạch theo Cung Mệnh &amp; năm sinh
                 </span>
-              )}
+                <span className="agent-bazi-title-rule" />
+              </div>
+              <div
+                className={`agent-bazi-element-seal ${
+                  baziSuggestion.element
+                    ? `element-${baziSuggestion.element.toLowerCase()}`
+                    : ""
+                }`}
+                aria-label={
+                  baziSuggestion.element
+                    ? `Mệnh ${baziSuggestion.element}`
+                    : "Cung mệnh"
+                }
+              >
+                <span className="agent-bazi-element-glyph">
+                  {baziElementGlyph}
+                </span>
+                <span className="agent-bazi-element-name">
+                  {baziSuggestion.element
+                    ? `MỆNH ${baziSuggestion.element.toLocaleUpperCase("vi-VN")}`
+                    : "CUNG MỆNH"}
+                </span>
+              </div>
             </div>
 
             <BaziCompassWidget
-              cungMenh={message.response.baziSuggestion.cungMenh}
-              tuMenh={message.response.baziSuggestion.tuMenh}
-              element={message.response.baziSuggestion.element}
-              napAmName={message.response.baziSuggestion.napAmName}
-              goodDirections={message.response.baziSuggestion.goodDirections}
-              badDirections={message.response.baziSuggestion.badDirections}
-              preferredDirections={
-                message.response.baziSuggestion.preferredDirections
-              }
+              cungMenh={baziSuggestion.cungMenh}
+              tuMenh={baziSuggestion.tuMenh}
+              element={baziSuggestion.element}
+              napAmName={baziSuggestion.napAmName}
+              goodDirections={baziSuggestion.goodDirections}
+              badDirections={baziSuggestion.badDirections}
+              preferredDirections={baziSuggestion.preferredDirections}
             />
 
             <div className="agent-bazi-grid">
-              {message.response.baziSuggestion.yearPillar && (
+              {baziSuggestion.yearPillar && (
                 <div className="agent-bazi-badge-item">
                   <small>Can Chi năm sinh</small>
-                  <strong>{message.response.baziSuggestion.yearPillar}</strong>
+                  <strong>{baziSuggestion.yearPillar}</strong>
                 </div>
               )}
-              {message.response.baziSuggestion.napAmName && (
+              {baziSuggestion.napAmName && (
                 <div className="agent-bazi-badge-item">
                   <small>Nạp âm</small>
-                  <strong>{message.response.baziSuggestion.napAmName}</strong>
+                  <strong>{baziSuggestion.napAmName}</strong>
                 </div>
               )}
-              {message.response.baziSuggestion.cungMenh && (
+              {baziSuggestion.cungMenh && (
                 <div className="agent-bazi-badge-item">
                   <small>Cung mệnh</small>
-                  <strong>{message.response.baziSuggestion.cungMenh}</strong>
+                  <strong>{baziSuggestion.cungMenh}</strong>
                 </div>
               )}
-              {message.response.baziSuggestion.tuMenh && (
+              {baziSuggestion.tuMenh && (
                 <div className="agent-bazi-badge-item">
                   <small>Nhóm mệnh</small>
-                  <strong>{message.response.baziSuggestion.tuMenh}</strong>
+                  <strong>{baziSuggestion.tuMenh}</strong>
                 </div>
               )}
-              {message.response.baziSuggestion.birthHourBranch && (
+              {baziSuggestion.birthHourBranch && (
                 <div className="agent-bazi-badge-item">
                   <small>Giờ sinh quy đổi</small>
-                  <strong>
-                    {message.response.baziSuggestion.birthHourBranch}
-                  </strong>
+                  <strong>{baziSuggestion.birthHourBranch}</strong>
                 </div>
               )}
             </div>
 
             <div className="agent-bazi-analysis">
-              <p>
-                {message.response.baziSuggestion.detailedAnalysis ||
-                  message.response.baziSuggestion.explanation}
-              </p>
+              <p>{baziSuggestion.detailedAnalysis || baziSuggestion.explanation}</p>
             </div>
 
-            {(message.response.baziSuggestion.goodDirections?.length ||
-              message.response.baziSuggestion.badDirections?.length) && (
+            {(baziSuggestion.goodDirections?.length ||
+              baziSuggestion.badDirections?.length) && (
               <div className="agent-bazi-directions-section">
-                {!!message.response.baziSuggestion.goodDirections?.length && (
-                  <div className="agent-bazi-dir-group">
-                    <span className="agent-bazi-dir-label good">
-                      Hướng nên ưu tiên
-                    </span>
+                {!!baziSuggestion.goodDirections?.length && (
+                  <div className="agent-bazi-dir-group good">
+                    <div className="agent-bazi-dir-heading">
+                      <span className="agent-bazi-dir-marker" />
+                      <span className="agent-bazi-dir-label good">
+                        Hướng nên ưu tiên
+                      </span>
+                    </div>
                     <div className="agent-bazi-dir-tags">
-                      {message.response.baziSuggestion.goodDirections.map(
-                        (item) => (
-                          <div
-                            key={`${item.direction}-${item.star}`}
-                            className="agent-bazi-tag good"
-                          >
+                      {baziSuggestion.goodDirections.map((item) => (
+                        <div
+                          key={`${item.direction}-${item.star}`}
+                          className="agent-bazi-tag good"
+                        >
+                          <div className="agent-bazi-tag-main">
                             <span className="agent-bazi-tag-dir">
                               {item.direction}
                             </span>
                             <span className="agent-bazi-tag-star">
                               {item.star}
                             </span>
-                            <span className="agent-bazi-tag-desc">
-                              {item.meaning}
-                            </span>
                           </div>
-                        ),
-                      )}
+                          <span className="agent-bazi-tag-desc">
+                            {item.meaning}
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
-                {!!message.response.baziSuggestion.badDirections?.length && (
-                  <div className="agent-bazi-dir-group">
-                    <span className="agent-bazi-dir-label bad">
-                      Hướng nên hạn chế
-                    </span>
+
+                {!!baziSuggestion.badDirections?.length && (
+                  <div className="agent-bazi-dir-group bad">
+                    <div className="agent-bazi-dir-heading">
+                      <span className="agent-bazi-dir-marker" />
+                      <span className="agent-bazi-dir-label bad">
+                        Hướng nên hạn chế
+                      </span>
+                    </div>
                     <div className="agent-bazi-dir-tags">
-                      {message.response.baziSuggestion.badDirections.map(
-                        (item) => (
-                          <div
-                            key={`${item.direction}-${item.star}`}
-                            className="agent-bazi-tag bad"
-                          >
+                      {baziSuggestion.badDirections.map((item) => (
+                        <div
+                          key={`${item.direction}-${item.star}`}
+                          className="agent-bazi-tag bad"
+                        >
+                          <div className="agent-bazi-tag-main">
                             <span className="agent-bazi-tag-dir">
                               {item.direction}
                             </span>
                             <span className="agent-bazi-tag-star">
                               {item.star}
                             </span>
-                            <span className="agent-bazi-tag-desc">
-                              {item.meaning}
-                            </span>
                           </div>
-                        ),
-                      )}
+                          <span className="agent-bazi-tag-desc">
+                            {item.meaning}
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
               </div>
             )}
 
-            {message.response.baziSuggestion.elementRelations && (
+            {baziSuggestion.elementRelations && (
               <div className="agent-bazi-relations">
-                <span>
-                  <strong>Tương sinh:</strong>{" "}
-                  {message.response.baziSuggestion.elementRelations.supporting}
-                </span>
-                <span>
-                  <strong>Yếu tố nên cân nhắc:</strong>{" "}
-                  {message.response.baziSuggestion.elementRelations.weakening}
-                </span>
+                <div className="agent-bazi-relation-note">
+                  <strong>Tương sinh</strong>
+                  <span>{baziSuggestion.elementRelations.supporting}</span>
+                </div>
+                <div className="agent-bazi-relation-note">
+                  <strong>Yếu tố cần lưu ý</strong>
+                  <span>{baziSuggestion.elementRelations.weakening}</span>
+                </div>
               </div>
             )}
 
-            {/* Clean CTA — no icons */}
             <div className="agent-bazi-followup">
               <p className="agent-bazi-followup-title">
                 Bạn muốn trợ lý hỗ trợ thêm nội dung nào?
@@ -321,7 +352,7 @@ export default function AgentMessage({
                   }
                 >
                   <strong>Tìm lô theo hướng</strong>
-                  <span>Chỉ bắt đầu lọc lô khi bạn chủ động chọn bước này</span>
+                  <span>Chỉ lọc lô khi bạn chủ động chọn bước này</span>
                 </button>
                 <button
                   type="button"
@@ -334,7 +365,7 @@ export default function AgentMessage({
                   }
                 >
                   <strong>Giải thích từng hướng</strong>
-                  <span>Phân tích rõ sao, ý nghĩa và cách dùng khi cân nhắc lô</span>
+                  <span>Phân tích sao, ý nghĩa và cách dùng khi cân nhắc lô</span>
                 </button>
                 <button
                   type="button"
@@ -353,7 +384,7 @@ export default function AgentMessage({
             </div>
 
             <small className="agent-bazi-disclaimer">
-              {message.response.baziSuggestion.disclaimer}
+              {baziSuggestion.disclaimer}
             </small>
           </div>
         )}

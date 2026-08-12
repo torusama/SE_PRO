@@ -295,6 +295,10 @@ export default function AgentPage() {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const isPacing = messages.some(
+    (message) => message.role === "assistant" && message.animatePresentation,
+  );
+  const isBusy = loading || isPacing;
   const [elapsedMs, setElapsedMs] = useState(0);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [conversationLoading, setConversationLoading] = useState(false);
@@ -341,7 +345,7 @@ export default function AgentPage() {
       idleTimerRef.current = null;
     }
 
-    if (loading || input.trim() !== "") {
+    if (isBusy || input.trim() !== "") {
       setIsIdleAfterOneMin(false);
       return;
     }
@@ -364,7 +368,7 @@ export default function AgentPage() {
         clearTimeout(idleTimerRef.current);
       }
     };
-  }, [messages, loading, input]);
+  }, [messages, isBusy, input]);
 
   const lastAssistantMessage = [...messages]
     .reverse()
@@ -481,7 +485,7 @@ export default function AgentPage() {
 
   useEffect(() => {
     messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
+  }, [messages, isBusy]);
 
   useEffect(() => {
     if (!sidebarOpen) return;
@@ -495,13 +499,13 @@ export default function AgentPage() {
   }, [sidebarOpen]);
 
   useEffect(() => {
-    if (!loading) return;
+    if (!isBusy) return;
     const updateElapsed = () =>
       setElapsedMs(Date.now() - requestStartedAtRef.current);
     updateElapsed();
     const timer = window.setInterval(updateElapsed, 100);
     return () => window.clearInterval(timer);
-  }, [loading]);
+  }, [isBusy]);
 
   useEffect(
     () => () => {
@@ -627,9 +631,21 @@ export default function AgentPage() {
   }, [user?.id]);
 
   function stopResponse() {
-    if (!requestControllerRef.current) return;
-    requestControllerRef.current.abort();
-    requestControllerRef.current = null;
+    if (requestControllerRef.current) {
+      requestControllerRef.current.abort();
+      requestControllerRef.current = null;
+    }
+    presentationTimersRef.current.forEach((timer) =>
+      window.clearTimeout(timer),
+    );
+    presentationTimersRef.current = [];
+    setMessages((current) =>
+      current.map((item) =>
+        item.animatePresentation
+          ? { ...item, animatePresentation: false }
+          : item,
+      ),
+    );
     sendLockRef.current = false;
     setLoading(false);
     setNotice("Đã dừng phản hồi. Bạn có thể chỉnh câu hỏi hoặc gửi lại.");
@@ -723,6 +739,20 @@ export default function AgentPage() {
   ) {
     const value = text.trim();
     if (!value || loading || sendLockRef.current) return;
+
+    if (isPacing) {
+      presentationTimersRef.current.forEach((timer) =>
+        window.clearTimeout(timer),
+      );
+      presentationTimersRef.current = [];
+      setMessages((current) =>
+        current.map((item) =>
+          item.animatePresentation
+            ? { ...item, animatePresentation: false }
+            : item,
+        ),
+      );
+    }
     sendLockRef.current = true;
 
     // A comparison is contextual to the current pause in the conversation.
@@ -826,7 +856,7 @@ export default function AgentPage() {
   }
 
   function editAndResend(_message: ChatMessage, content: string) {
-    if (loading) return;
+    if (isBusy) return;
     void sendMessage(content, {
       startNewConversation: true,
       replaceMessages: true,
@@ -834,7 +864,7 @@ export default function AgentPage() {
   }
 
   function resendMessage(message: ChatMessage) {
-    if (loading) return;
+    if (isBusy) return;
     void sendMessage(message.content);
   }
 
@@ -1161,7 +1191,7 @@ export default function AgentPage() {
                     key={message.localId}
                     message={message}
                     comparedIds={compared.map(getRecommendationCompareKey)}
-                    busy={loading}
+                    busy={isBusy}
                     onToggleCompare={toggleCompare}
                     onViewMap={focusOnMap}
                     onStartRequest={startPlotRequest}
@@ -1212,7 +1242,7 @@ export default function AgentPage() {
                       followUpPrompt={comparisonFollowUpPrompt}
                       actions={comparisonActions}
                       loading={comparisonAssessmentLoading}
-                      disabled={loading}
+                      disabled={isBusy}
                       onAction={(message) => void sendMessage(message)}
                     />
                   </>
@@ -1228,7 +1258,7 @@ export default function AgentPage() {
               onMouseLeave={() => setIsInputHovered(false)}
             >
               <div className="agent-composer-inner">
-                {!loading &&
+                {!isBusy &&
                   !input.trim() &&
                   isIdleAfterOneMin &&
                   (isInputFocused || isInputHovered) && (
@@ -1277,7 +1307,7 @@ export default function AgentPage() {
                     placeholder="Nhắn tin cho trợ lý…"
                     maxLength={2000}
                   />
-                  {loading && (
+                  {isBusy && (
                     <span className="agent-composer-timer">
                       {(elapsedMs / 1000).toLocaleString("vi-VN", {
                         minimumFractionDigits: 1,
@@ -1287,13 +1317,13 @@ export default function AgentPage() {
                     </span>
                   )}
                   <button
-                    type={loading ? "button" : "submit"}
-                    onClick={loading ? stopResponse : undefined}
-                    disabled={!loading && !input.trim()}
-                    aria-label={loading ? "Dừng phản hồi" : "Gửi tin nhắn"}
-                    title={loading ? "Dừng phản hồi" : "Gửi tin nhắn"}
+                    type={isBusy ? "button" : "submit"}
+                    onClick={isBusy ? stopResponse : undefined}
+                    disabled={!isBusy && !input.trim()}
+                    aria-label={isBusy ? "Dừng phản hồi" : "Gửi tin nhắn"}
+                    title={isBusy ? "Dừng phản hồi" : "Gửi tin nhắn"}
                   >
-                    {loading ? (
+                    {isBusy ? (
                       <Square size={16} fill="currentColor" />
                     ) : (
                       <Send size={17} />

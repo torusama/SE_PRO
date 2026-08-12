@@ -96,5 +96,6 @@ Thứ tự hiện tại:
 30. `034_remove_plot_hold_requests.sql`
 31. `035_cancel_legacy_plot_hold_requests.sql`
 32. `036_purchase_request_cancellations.sql`
+33. `037_seed_spiritual_consultation_kb.sql`
 
 `015` phải chạy trước `016`; thứ tự tên file của runner bảo đảm dependency này.

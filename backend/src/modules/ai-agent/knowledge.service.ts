@@ -108,6 +108,10 @@ export class KnowledgeService {
           : '';
       }
 
+      const spiritualPinnedRows = this.isSpiritualKnowledgeQuery(queryText)
+        ? await this.spiritualGlobalKnowledge(Math.max(globalLimit, 8))
+        : [];
+
       const canUseSemanticRag =
         Boolean(queryText.trim()) &&
         Boolean(this.embeddings?.isConfigured()) &&
@@ -158,6 +162,14 @@ export class KnowledgeService {
         globalRows = await this.lexicalGlobalKnowledge(queryText, globalLimit);
         userRows =
           userId === null ? [] : await this.recentUserMemory(userId, userLimit);
+      }
+
+      if (spiritualPinnedRows.length) {
+        globalRows = this.mergeRows(
+          spiritualPinnedRows,
+          globalRows,
+          Math.max(globalLimit, 8),
+        );
       }
 
       const userSection = this.promptSection(
@@ -242,6 +254,45 @@ export class KnowledgeService {
        ORDER BY embedding <=> $2::vector
        LIMIT $4`,
       [userId, vector, embeddingModel, limit, maxCosineDistance],
+    );
+  }
+
+  private isSpiritualKnowledgeQuery(queryText: string) {
+    const folded = queryText
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .replace(/Đ/g, 'D')
+      .toLowerCase();
+    return /\b(?:phong thuy|bat trach|bat tu|bazi|tu tru|can chi|nap am|cung menh|menh quai|gua|am trach|huong mo|sinh khi|thien y|dien nien|phuc vi|tuyet menh|ngu quy|luc sat|hoa hai|ngu hanh)\b/.test(
+      folded,
+    );
+  }
+
+  private spiritualGlobalKnowledge(limit: number) {
+    return this.database.query<PromptKnowledgeRow>(
+      `SELECT knowledge_entry_id AS id, title, content,
+              knowledge_type AS "knowledgeType",
+              memory_key AS "memoryKey"
+       FROM ai_knowledge_entries
+       WHERE scope = 'global'
+         AND is_active = TRUE
+         AND validation_status = 'active'
+         AND category = 'spiritual_consultation'
+         AND (effective_from IS NULL OR effective_from <= NOW())
+         AND (effective_to IS NULL OR effective_to > NOW())
+       ORDER BY CASE memory_key
+                  WHEN 'spiritual:bazi_scope' THEN 1
+                  WHEN 'spiritual:bat_trach_method' THEN 2
+                  WHEN 'spiritual:wuxing_layering' THEN 3
+                  WHEN 'spiritual:yin_feng_shui_site' THEN 4
+                  WHEN 'spiritual:luopan_24_mountains' THEN 5
+                  WHEN 'spiritual:consultation_response' THEN 6
+                  ELSE 99
+                END,
+                updated_at DESC, knowledge_entry_id DESC
+       LIMIT $1`,
+      [limit],
     );
   }
 

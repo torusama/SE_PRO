@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Search,
   RotateCcw,
+  Bell,
   ChevronRight,
   ChevronLeft,
   ShieldCheck,
@@ -146,8 +147,8 @@ function displayStatusLabel(
   if (status === "confirmed" && paymentStatus === "awaiting_confirmation") {
     return "Đã thanh toán - đang chờ duyệt";
   }
-  if (status === "in_progress") {
-    return "Đang thực hiện";
+  if (status === "in_progress" && paymentStatus === "paid") {
+    return "Đã thanh toán - đang thực hiện";
   }
   return STATUS_LABEL[status];
 }
@@ -662,6 +663,17 @@ export default function ServicePage() {
               độ ngay trên một trang. Mỗi yêu cầu đều được ban quản lý xác nhận
               trước khi triển khai.
             </p>
+            <div className="header-cta">
+              <button
+                className="btn-primary-inline"
+                onClick={() => openBooking()}
+              >
+                Đặt dịch vụ mới <ArrowRight className="inline-icon" />
+              </button>
+              <button className="btn-text" onClick={openTrack}>
+                Theo dõi đơn đã đặt
+              </button>
+            </div>
           </div>
 
           <aside className="service-assurance" aria-label="Cam kết dịch vụ">
@@ -833,6 +845,7 @@ export default function ServicePage() {
             orderDetails={orderDetails}
             detailLoadingId={detailLoadingId}
             detailError={detailError}
+            onOpenNotifications={() => navigate(ROUTES.NOTIFICATION)}
             page={page}
             pageCount={pageCount}
             setPage={setPage}
@@ -1377,6 +1390,7 @@ function TrackTab(props: {
   orderDetails: Record<number, ServiceOrder>;
   detailLoadingId: number | null;
   detailError: string;
+  onOpenNotifications: () => void;
   page: number;
   pageCount: number;
   setPage: (p: number) => void;
@@ -1396,6 +1410,7 @@ function TrackTab(props: {
     orderDetails,
     detailLoadingId,
     detailError,
+    onOpenNotifications,
     page,
     pageCount,
     setPage,
@@ -1413,6 +1428,11 @@ function TrackTab(props: {
             Kiểm tra lịch thực hiện, người phụ trách, thanh toán và kết quả
             nghiệm thu của từng yêu cầu.
           </p>
+        </div>
+        <div className="tracking-heading-actions">
+          <button className="btn-text bordered" onClick={onOpenNotifications}>
+            <Bell className="inline-icon" /> Thông báo
+          </button>
         </div>
       </div>
 
@@ -1521,6 +1541,9 @@ function TrackTab(props: {
                           </span>
                           <h3 className="s-name">{order.serviceName}</h3>
                         </div>
+                        <span className={`status-badge ${group}`}>
+                          {displayStatusLabel(order.status, order.paymentStatus)}
+                        </span>
                       </div>
 
                       <div className="s-meta">

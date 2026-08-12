@@ -96,13 +96,14 @@ describe("AgentWorkflowPanel", () => {
     expect(screen.getByText("Đơn dịch vụ & thanh toán")).toBeInTheDocument();
     expect(screen.getByText("VPV00045")).toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole("button", { name: "Thanh toán bằng QR" }));
     fireEvent.click(screen.getByRole("button", { name: "Tôi đã thanh toán" }));
 
     await waitFor(() =>
       expect(apiMock.post).toHaveBeenCalledWith("/service-orders/45/pay"),
     );
     await waitFor(() =>
-      expect(screen.getByText(/Đã thanh toán - đang chờ duyệt/)).toBeInTheDocument(),
+      expect(screen.getByText("Đã báo thanh toán")).toBeInTheDocument(),
     );
     expect(onDirectiveChange).not.toHaveBeenCalled();
   });
@@ -138,7 +139,7 @@ describe("AgentWorkflowPanel", () => {
     );
 
     await waitFor(() =>
-      expect(screen.getByText(/Đã thanh toán - đang chờ duyệt/)).toBeInTheDocument(),
+      expect(screen.getByText("Đã báo thanh toán")).toBeInTheDocument(),
     );
     expect(onDirectiveChange).not.toHaveBeenCalled();
   });
@@ -247,7 +248,7 @@ describe("AgentWorkflowPanel", () => {
     );
     expect(onDirectiveChange).not.toHaveBeenCalled();
     expect(screen.getAllByText("Thắp hương").length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: "Tôi đã thanh toán" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Thanh toán bằng QR" })).toBeInTheDocument();
   });
 
   it("redirects a legacy calendar directive back to payment while approval is pending", async () => {
