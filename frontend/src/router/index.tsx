@@ -1,4 +1,5 @@
 // src/router/index.tsx
+import { useEffect } from "react";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { ROUTES } from "@/constants/routes";
 
@@ -116,7 +117,44 @@ const router = createBrowserRouter([
   },
 ]);
 
+// FIX: router dùng createBrowserRouter nhưng trước đây không có bất kỳ cơ chế
+// nào đưa trang về đầu khi chuyển route. Khi người dùng đang cuộn xuống giữa/
+// cuối trang (ví dụ trang chủ) rồi bấm vào một liên kết (Xem dịch vụ, Đặt lịch
+// hẹn, Nhắc lịch ngày giỗ,...), React Router chỉ thay nội dung trang — trình
+// duyệt vẫn giữ nguyên vị trí cuộn (scrollY) cũ, khiến trang mới hiển thị như
+// đang ở giữa/cuối trang thay vì bắt đầu từ đầu. Đăng ký lắng nghe mỗi lần
+// route thay đổi (điều hướng hoàn tất) và chủ động cuộn về đầu trang.
+function useScrollToTopOnNavigate() {
+  useEffect(() => {
+    // Tắt cơ chế tự khôi phục vị trí cuộn mặc định của trình duyệt để tránh
+    // xung đột với việc chủ động cuộn về đầu trang bên dưới.
+    const previousScrollRestoration = window.history.scrollRestoration;
+    if ("scrollRestoration" in window.history) {
+      window.history.scrollRestoration = "manual";
+    }
+
+    let previousPathname = window.location.pathname;
+    const unsubscribe = router.subscribe((state) => {
+      if (state.navigation.state !== "idle") return;
+      const currentPathname = state.location.pathname;
+      if (currentPathname !== previousPathname) {
+        window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      }
+      previousPathname = currentPathname;
+    });
+
+    return () => {
+      unsubscribe();
+      if ("scrollRestoration" in window.history) {
+        window.history.scrollRestoration = previousScrollRestoration;
+      }
+    };
+  }, []);
+}
+
 export default function AppRouter() {
+  useScrollToTopOnNavigate();
+
   return (
     <>
       <RealtimeConnection />
