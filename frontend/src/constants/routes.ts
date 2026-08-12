@@ -38,4 +38,5 @@ export const ROUTES = {
   ADMIN_REMINDERS:    '/admin/nhac-lich',
   ADMIN_AI_AGENT:     '/admin/ai-agent',
   ADMIN_DECEASED:     '/admin/ho-so-nguoi-da-khuat',
+  TRANSFER: '/chuyen-nhuong-thua-ke',
 } as const
