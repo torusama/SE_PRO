@@ -40,6 +40,16 @@ export class ConversationMemoryService {
     private readonly llm: MultiProviderLlmService,
   ) {}
 
+  /** Delete derived AI summaries for this account, without deleting the
+   * customer's conversations or any cemetery business data. */
+  async clearUserMemory(userId: number) {
+    const result = await this.database.query(
+      `DELETE FROM ai_conversation_memories WHERE user_id = $1`,
+      [userId],
+    );
+    return result.length;
+  }
+
   async getPromptContext(
     conversationId: number,
     userId: number | null,

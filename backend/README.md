@@ -79,11 +79,12 @@ Do not commit a real `.env` file. A safe `.env.example` is included.
 The AI agent supports multiple API keys and multiple providers. Routing is designed for low latency and graceful failover:
 
 - A single user turn gets a routing key, so planner/composer calls stay on the same provider and API key when possible.
-- By default the router keeps the **fast 20B route first** and rotates API keys inside that provider from turn to turn. The 120B and Llama routes are fallbacks, not first-choice models. Set `AI_LLM_ROTATE_PROVIDERS=true` only if you intentionally want whole-model rotation; it can increase latency.
-- HTTP 401/403/408/429, 5xx, network failures, and timeouts place the failing key/provider on cooldown and immediately fail over when another route is available.
+- By default main chat starts with the responsive **20B route**, then borrows the Nemotron 49B pool and keeps 120B as the final fallback. Set `AI_LLM_ROTATE_PROVIDERS=true` only if you intentionally want whole-model rotation.
+- HTTP 401/403/408/429, 5xx, network failures, timeouts, and empty assistant responses rotate to another configured key/provider instead of being accepted as success.
 - A route that is already cooling down is skipped instead of being retried and wasting the full timeout again.
-- Normal conversational turns (`action=none`) are now **strictly one LLM call**. The planner schema requires `directResponse`; if a provider still omits it, the backend returns a safe deterministic fallback instead of calling a second LLM. Tool-backed plot/service actions still use authoritative backend data and may require a second composition call.
-- The planner uses a compact planning prompt instead of the full long consultation prompt, and has an internal 5s/provider + 8.5s total wall-clock budget for simple turns. This removes the previous 30–40s failure mode caused by planner + composer being called sequentially for a simple message.
+- Normal conversational turns use the LLM planner's `directResponse`. Tool/RAG and transaction turns keep backend data authoritative, then send that grounded result to the LLM for the final wording. A deterministic answer is retained only after all configured routes fail.
+- `AI_LLM_WRITES_CONVERSATIONAL_TURNS=true` is the default. Set it to `false` only for an offline/emergency mode that uses local conversational responses.
+- The planner gives the measured healthy route enough time to emit final text, then uses a bounded cross-provider budget; grounded composition has its own bounded budget.
 - History, pending-action lookup, and memory-context loading have small latency guards. RAG/DB context can fall back for the current turn instead of holding the whole HTTP request open.
 
 Latency/failover can be tuned with:
@@ -91,6 +92,7 @@ Latency/failover can be tuned with:
 ```env
 AI_LLM_TOTAL_TIMEOUT_MS=10000
 AI_LLM_PROVIDER_TIMEOUT_MS=6000
+AI_LLM_WRITES_CONVERSATIONAL_TURNS=true
 AI_LLM_PROVIDER_COOLDOWN_MS=0
 AI_LLM_TRANSIENT_KEY_COOLDOWN_MS=800
 AI_LLM_ROTATE_PROVIDERS=false

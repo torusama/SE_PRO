@@ -42,6 +42,7 @@ export const AGENT_PLANNER_TOOL = {
             'get_service_suggestions',
             'prepare_plot_request',
             'prepare_service_order',
+            'cancel_service_order',
             'confirm_pending_action',
             'cancel_pending_action',
             'get_purchase_process',
@@ -123,12 +124,35 @@ export const AGENT_PLANNER_TOOL = {
           type: 'string',
           enum: ['male', 'female', 'other'],
         },
+        zodiacSign: {
+          type: 'string',
+          description:
+            'Vietnamese zodiac sign understood from the customer, such as Mão or Tuất. Soft narrative context only, never an invented inventory filter.',
+        },
+        consultationGoal: {
+          type: 'string',
+          enum: ['bazi_then_plots'],
+          description:
+            'Preserve this multi-turn goal when the customer wants plot advice based on age/zodiac: collect Bát Tự inputs, analyze directions, then search inventory.',
+        },
         serviceQuery: {
           type: 'string',
           description:
             'The cemetery service name or natural-language description requested by the customer.',
         },
+        serviceQueries: {
+          type: 'array',
+          maxItems: 8,
+          items: { type: 'string' },
+          description:
+            'Every distinct service name when the customer explicitly asks to order several services together. Preserve their spoken order. Omit for a single service.',
+        },
         serviceTypeId: { type: 'integer', minimum: 1 },
+        serviceOrderId: {
+          type: 'integer',
+          minimum: 1,
+          description: 'Exact existing service order id named by the customer.',
+        },
         selectedPlotCode: { type: 'string' },
         requestedDate: {
           type: 'string',
@@ -263,6 +287,7 @@ export type AgentPlanAction =
   | 'get_service_suggestions'
   | 'prepare_plot_request'
   | 'prepare_service_order'
+  | 'cancel_service_order'
   | 'confirm_pending_action'
   | 'cancel_pending_action'
   | 'get_purchase_process'
@@ -303,6 +328,7 @@ const ACTIONS = new Set<AgentPlanAction>([
   'get_service_suggestions',
   'prepare_plot_request',
   'prepare_service_order',
+  'cancel_service_order',
   'confirm_pending_action',
   'cancel_pending_action',
   'get_purchase_process',
@@ -456,11 +482,31 @@ export function parseAgentPlan(raw: string): AgentPlan {
       parsed.gender === 'other'
         ? parsed.gender
         : undefined,
+    zodiacSign: optionalString(parsed.zodiacSign),
+    consultationGoal:
+      parsed.consultationGoal === 'bazi_then_plots'
+        ? 'bazi_then_plots'
+        : undefined,
     serviceQuery: optionalString(parsed.serviceQuery),
+    serviceQueries: Array.isArray(parsed.serviceQueries)
+      ? [
+          ...new Set(
+            parsed.serviceQueries
+              .filter((item): item is string => typeof item === 'string')
+              .map((item) => item.trim())
+              .filter(Boolean),
+          ),
+        ].slice(0, 8)
+      : undefined,
     serviceTypeId:
       optionalPositiveNumber(parsed.serviceTypeId) !== undefined &&
       Number.isInteger(optionalPositiveNumber(parsed.serviceTypeId))
         ? optionalPositiveNumber(parsed.serviceTypeId)
+        : undefined,
+    serviceOrderId:
+      optionalPositiveNumber(parsed.serviceOrderId) !== undefined &&
+      Number.isInteger(optionalPositiveNumber(parsed.serviceOrderId))
+        ? optionalPositiveNumber(parsed.serviceOrderId)
         : undefined,
     selectedPlotCode: optionalString(parsed.selectedPlotCode),
     requestedDate: optionalString(parsed.requestedDate),

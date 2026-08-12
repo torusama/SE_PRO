@@ -23,7 +23,10 @@ describe('pending service date resolution', () => {
 
   it('does not mistake the service name mai táng for tomorrow', () => {
     expect(
-      extractPendingServiceRequestedDate('Mình muốn dùng dịch vụ mai táng.', now),
+      extractPendingServiceRequestedDate(
+        'Mình muốn dùng dịch vụ mai táng.',
+        now,
+      ),
     ).toBeUndefined();
   });
 
@@ -131,12 +134,12 @@ describe('AI Agent deterministic requirement extraction', () => {
       selectedPlotCode: 'A-01-001',
       appointmentDate: '2026-08-20',
       appointmentStartTime: '09:00',
-      appointmentTopic: 'Tham quan và tư vấn lô A-01-001',
+      appointmentTopic: 'Hẹn xem lô đất A-01-001',
       birthDate: undefined,
     });
   });
 
-  it('extracts the complete appointment range and panel-provided topic', () => {
+  it('extracts the complete appointment range and ignores other appointment reasons', () => {
     expect(
       extractDeterministicRequirements(
         'Mình muốn đặt lịch với ban quản lý vào ngày 2026-08-22, từ 14:30 đến 15:45. Nội dung: Trao đổi hợp đồng lô B-02-004.',
@@ -146,7 +149,7 @@ describe('AI Agent deterministic requirement extraction', () => {
       appointmentDate: '2026-08-22',
       appointmentStartTime: '14:30',
       appointmentEndTime: '15:45',
-      appointmentTopic: 'Trao đổi hợp đồng lô B-02-004',
+      appointmentTopic: 'Hẹn xem lô đất B-02-004',
       birthDate: undefined,
     });
   });
@@ -208,7 +211,6 @@ describe('AI Agent pending booking reply resolution', () => {
     });
   });
 
-
   it.each([
     'ok đặt i',
     'ok đặt đi',
@@ -216,24 +218,29 @@ describe('AI Agent pending booking reply resolution', () => {
     'mình xác nhận đặt dịch vụ này',
     'đồng ý đặt dịch vụ',
     'chốt',
-  ])('keeps colloquial confirmation inside the pending service flow for "%s"', (message) => {
-    const ready: AgentPendingAction = {
-      kind: 'service_order',
-      stage: 'awaiting_confirmation',
-      serviceTypeId: 3,
-      serviceName: 'Thay hoa tươi',
-      plotId: 10,
-      plotCode: 'A-01-002',
-      quotedPrice: 150_000,
-      serviceUnit: 'lần',
-    };
+  ])(
+    'keeps colloquial confirmation inside the pending service flow for "%s"',
+    (message) => {
+      const ready: AgentPendingAction = {
+        kind: 'service_order',
+        stage: 'awaiting_confirmation',
+        serviceTypeId: 3,
+        serviceName: 'Thay hoa tươi',
+        plotId: 10,
+        plotCode: 'A-01-002',
+        quotedPrice: 150_000,
+        serviceUnit: 'lần',
+      };
 
-    expect(resolvePendingBookingReply(basePlan(), ready, message)).toMatchObject({
-      intent: 'service_booking',
-      action: 'confirm_pending_action',
-      needsClarification: false,
-    });
-  });
+      expect(
+        resolvePendingBookingReply(basePlan(), ready, message),
+      ).toMatchObject({
+        intent: 'service_booking',
+        action: 'confirm_pending_action',
+        needsClarification: false,
+      });
+    },
+  );
 
   it('does not convert a negative reply into a purchase request', () => {
     expect(
@@ -244,8 +251,24 @@ describe('AI Agent pending booking reply resolution', () => {
       ),
     ).toEqual(basePlan());
   });
-});
 
+  it('keeps selecting one of several cancellation candidates in the cancellation flow', () => {
+    const pending: AgentPendingAction = {
+      kind: 'service_order',
+      operation: 'cancel',
+      stage: 'collecting',
+      candidateOrderIds: [52, 51],
+    };
+
+    expect(
+      resolvePendingBookingReply(basePlan(), pending, 'chọn cái thứ 2'),
+    ).toMatchObject({
+      intent: 'service_booking',
+      action: 'cancel_service_order',
+      needsClarification: false,
+    });
+  });
+});
 
 describe('AI Agent regression routing helpers', () => {
   const orchestrator = Object.create(
@@ -270,6 +293,20 @@ describe('AI Agent regression routing helpers', () => {
       intent: 'service_booking',
       action: 'prepare_service_order',
       requirements: { serviceQuery: 'Thắp hương' },
+    });
+  });
+
+  it('routes cancellation of an already-created service order deterministically', () => {
+    expect(
+      orchestrator.buildDeterministicAgentPlan(
+        'Hủy đơn dịch vụ #52 vừa đặt giúp mình.',
+        'service_suggestions',
+        {},
+        [],
+      ),
+    ).toMatchObject({
+      intent: 'service_booking',
+      action: 'cancel_service_order',
     });
   });
 
@@ -327,7 +364,9 @@ describe('AI Agent regression routing helpers', () => {
     const proposals = orchestrator.recoverExplicitUserPreferenceProposal(
       'Từ giờ nhớ giúp mình ngân sách tối đa 300 triệu, ưu tiên khu B, hướng Đông và lô gần cổng.',
     );
-    expect(proposals?.map((item: { memoryKey?: string }) => item.memoryKey)).toEqual(
+    expect(
+      proposals?.map((item: { memoryKey?: string }) => item.memoryKey),
+    ).toEqual(
       expect.arrayContaining([
         'maximum_budget',
         'preferred_zone',
@@ -338,9 +377,9 @@ describe('AI Agent regression routing helpers', () => {
   });
 
   it('treats a saved-budget question as memory lookup instead of plot discovery', () => {
-    expect(orchestrator.asksForSavedBudgetPreference('ngân sách t là bao nhiêu?')).toBe(
-      true,
-    );
+    expect(
+      orchestrator.asksForSavedBudgetPreference('ngân sách t là bao nhiêu?'),
+    ).toBe(true);
     expect(orchestrator.detectIntent('ngân sách t là bao nhiêu?')).toBe(
       'general_question',
     );

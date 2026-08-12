@@ -13,13 +13,13 @@ import { AgentToolRegistryService } from './agent-tool-registry.service';
 import { AgentBookingService, OwnedPlotContext } from './agent-booking.service';
 import { inlineRecommendationLimitMessage } from './assistant-content.util';
 import {
-  AGENT_PLANNER_TOOL,
   AGENT_PLANNER_TOOL_NAME,
   AgentPlan,
   AgentPlanAction,
   parseAgentPlan,
 } from './agent-planner';
 import {
+  ensureRecommendationParagraphs,
   isConsultativeRecommendationNarrative,
   isRecommendationResult,
 } from './agent-grounding';
@@ -39,7 +39,7 @@ import {
   CEMETERY_AGENT_PROMPT_VERSION,
   CEMETERY_AGENT_SYSTEM_PROMPT,
 } from './prompts/cemetery-agent.system-prompt';
-import { CEMETERY_AGENT_PLANNER_PROMPT } from './prompts/cemetery-agent.planner-prompt';
+import { CEMETERY_AGENT_SEMANTIC_ROUTER_PROMPT } from './prompts/cemetery-agent.semantic-router-prompt';
 import { PlotRecommendationService } from './plot-recommendation.service';
 import {
   AgentPendingAction,
@@ -48,7 +48,7 @@ import {
   BaziSuggestion,
   RecommendationResult,
 } from './types/agent-response.types';
-import { NvidiaMessage } from './types/nvidia.types';
+import { NvidiaChatResponse, NvidiaMessage } from './types/nvidia.types';
 import {
   AgentToolContext,
   AutonomousLearningResult,
@@ -129,11 +129,12 @@ export function extractRequestedRecommendationCount(message: string) {
   const recommendedPlotMatch = folded.match(
     /\b(?:so sanh|goi y|de xuat|cho xem|xem thu|dua ra|chon ra|tim)\b.{0,45}\b(\d{1,2}|mot|hai|ba|bon|nam|sau|bay|tam|chin|muoi)\s+lo\b/,
   );
-  const informalPluralRequest = /\b(?:vai|mot vai|may|mot so|nhieu)\s+(?:lo|phuong an|lua chon)\b/.test(
-    folded,
-  )
-    ? 3
-    : undefined;
+  const informalPluralRequest =
+    /\b(?:vai|mot vai|may|mot so|nhieu)\s+(?:lo|phuong an|lua chon)\b/.test(
+      folded,
+    )
+      ? 3
+      : undefined;
   const raw = optionMatch?.[1] ?? recommendedPlotMatch?.[1];
   if (!raw) return informalPluralRequest;
   const count = Number(raw) || RECOMMENDATION_COUNT_WORDS[raw];
@@ -197,11 +198,13 @@ export function extractDeterministicRequirements(
       foldedForProfile,
     );
   const reminderContext =
-    /\b(?:nhac lich|nhac nho|tuong niem|ngay gio|gui email nhac)\b/.test(
+    /\b(?:nhac lich|nhac nho|nhac gio|dam gio|tuong niem|ngay gio|gui email nhac)\b/.test(
       foldedForProfile,
     );
   const birthDate =
-    isAppointmentContext || reminderContext ? undefined : extractBirthDate(message);
+    isAppointmentContext || reminderContext
+      ? undefined
+      : extractBirthDate(message);
   const birthProfileContext =
     Boolean(birthDate) ||
     /\b(?:gio sinh|sinh ngay|nam sinh|nu sinh|bat tu|bazi)\b/.test(
@@ -216,14 +219,14 @@ export function extractDeterministicRequirements(
   const comparisonRequested = /\b(?:so sanh|doi chieu|dat canh nhau)\b/.test(
     foldedForProfile,
   );
+  // Read gender from the original text so "nam" (male) is never confused
+  // with accent-folded "năm" (year). Accept a natural standalone answer in
+  // any position, for example "sinh 12/03/1999, nữ, lúc 8 giờ".
+  const rawGenderText = message.toLocaleLowerCase('vi-VN');
   const gender =
-    /\b(?:gioi tinh nu|nu sinh|cho nu|female)\b/.test(foldedForProfile) ||
-    (birthProfileContext && /\bnu\s*$/.test(foldedForProfile)) ||
-    foldedForProfile === 'nu'
+    /(?:^|[\s,;])(?:nữ|nu|female)(?=$|[\s,;.])/.test(rawGenderText)
       ? 'female'
-      : /\b(?:gioi tinh nam|nam sinh|cho nam|male)\b/.test(foldedForProfile) ||
-          (birthProfileContext && /\bnam\s*$/.test(foldedForProfile)) ||
-          foldedForProfile === 'nam'
+      : /(?:^|[\s,;])(?:nam|male)(?=$|[\s,;.])/.test(rawGenderText)
         ? 'male'
         : undefined;
   const birthTimeMatch = isAppointmentContext
@@ -240,9 +243,6 @@ export function extractDeterministicRequirements(
     ? message.match(
         /\b(?:lúc|luc|vào|vao)?\s*(\d{1,2})(?::(\d{2})|h(\d{2})?)\s*(?:h|giờ|gio)?\b/i,
       )
-    : null;
-  const appointmentTopicMatch = isAppointmentContext
-    ? message.match(/(?:nội\s*dung|noi\s*dung)\s*:\s*([^\n.]{2,180})/i)
     : null;
   const operationalDate = extractBirthDate(message);
   const emailMatches = reminderContext
@@ -264,9 +264,7 @@ export function extractDeterministicRequirements(
       normalized,
     );
   const serviceBookingMatch =
-    message.match(
-      /(?:đặt|book|đăng\s*ký)\s+dịch\s*vụ\s+([^.,!?\n]{2,120})/i,
-    ) ??
+    message.match(/(?:đặt|book|đăng\s*ký)\s+dịch\s*vụ\s+([^.,!?\n]{2,120})/i) ??
     message.match(
       /(?:đặt|book|đăng\s*ký)\s+((?:mai\s*táng|chăm\s*sóc\s*mộ|dọn\s*dẹp\s*mộ|thay\s*hoa\s*tươi|thắp\s*hương|tưởng\s*niệm)[^.,!?\n]{0,80})/i,
     );
@@ -304,12 +302,11 @@ export function extractDeterministicRequirements(
       ? `${appointmentTimeRangeMatch[4].padStart(2, '0')}:${appointmentTimeRangeMatch[5] ?? appointmentTimeRangeMatch[6] ?? '00'}`
       : undefined,
     appointmentTopic:
-      appointmentTopicMatch?.[1]?.trim() ||
-      (isAppointmentContext && plotCodeMatch
-        ? `Tham quan và tư vấn lô ${plotCodeMatch[1].replace(/\s/g, '').toUpperCase()}`
+      isAppointmentContext && plotCodeMatch
+        ? `Hẹn xem lô đất ${plotCodeMatch[1].replace(/\s/g, '').toUpperCase()}`
         : isAppointmentContext
-          ? 'Trao đổi với ban quản lý'
-          : undefined),
+          ? 'Hẹn xem lô đất'
+          : undefined,
     reminderDate: reminderContext ? operationalDate : undefined,
     reminderTitle: reminderSubject
       ? `Tưởng niệm ${reminderSubject}`
@@ -413,7 +410,7 @@ export function asksForPlotCompetitiveness(message: string) {
 
 export function asksForCustomerCare(message: string) {
   const normalized = normalizeFallbackIntent(message);
-  return /(?:customer care|account overview|my (?:requests|orders|appointments|reminders|plots)|tong quan (?:cham soc|tai khoan)|yeu cau cua toi|don dich vu cua toi|lich hen cua toi|nhac lich cua toi|lo cua toi)/.test(
+  return /(?:customer care|account overview|my (?:requests|orders|appointments|reminders|plots)|tong quan (?:cham soc|tai khoan)|yeu cau cua (?:toi|minh|tui)|don dich vu cua (?:toi|minh|tui)|lich hen cua (?:toi|minh|tui)|nhac lich cua (?:toi|minh|tui)|lo cua (?:toi|minh|tui))/.test(
     normalized,
   );
 }
@@ -476,7 +473,10 @@ export function extractPendingServiceRequestedDate(
 
   if (/\b(?:hom nay|ngay hom nay)\b/.test(reply)) return today;
   if (/\bngay kia\b/.test(reply)) return addDaysToYmd(today, 2);
-  if (/\bngay mai\b/.test(reply) || /^(?:(?:minh|toi|em)\s+)?mai(?:\s+(?:nhe|nha|a))?$/.test(reply)) {
+  if (
+    /\bngay mai\b/.test(reply) ||
+    /^(?:(?:minh|toi|em)\s+)?mai(?:\s+(?:nhe|nha|a))?$/.test(reply)
+  ) {
     return addDaysToYmd(today, 1);
   }
 
@@ -523,11 +523,56 @@ export function resolvePendingBookingReply(
 
   const reply = normalizeShortReply(userMessage);
 
+  if (
+    pendingAction.kind === 'service_order' &&
+    pendingAction.operation === 'cancel' &&
+    pendingAction.stage === 'collecting' &&
+    (asksToCancelExistingServiceOrder(userMessage) ||
+      /\b(?:cai|don)?\s*thu\s*(?:\d+|nhat|hai|ba)\b/.test(reply))
+  ) {
+    return {
+      ...plan,
+      intent: 'service_booking',
+      action: 'cancel_service_order',
+      contextMode: 'continue',
+      needsClarification: false,
+      clarificationQuestion: '',
+    };
+  }
+
+  // Appointment dates are transactional information too. A short date reply
+  // must stay with the selected approved plot instead of being reinterpreted
+  // by the general conversation planner.
+  if (
+    pendingAction.kind === 'appointment' &&
+    pendingAction.stage === 'collecting' &&
+    !pendingAction.appointmentDate &&
+    !pendingAction.appointmentItems?.[
+      pendingAction.activeAppointmentItemIndex ?? 0
+    ]?.appointmentDate
+  ) {
+    const appointmentDate = extractPendingServiceRequestedDate(userMessage);
+    if (appointmentDate) {
+      return {
+        ...plan,
+        intent: 'appointment_booking',
+        action: 'prepare_appointment',
+        contextMode: 'continue',
+        needsClarification: false,
+        clarificationQuestion: '',
+        directResponse: '',
+        memoryProposals: [],
+        requirements: { ...plan.requirements, appointmentDate },
+      };
+    }
+  }
+
   // A collecting service order owns the next date-like reply. Resolve it
   // locally before any generic conversational/memory interpretation can steal
   // the turn (e.g. "Mình muốn thực hiện dịch vụ vào ngày mai").
   if (
     pendingAction.kind === 'service_order' &&
+    pendingAction.operation !== 'cancel' &&
     pendingAction.stage === 'collecting' &&
     !pendingAction.requestedDate
   ) {
@@ -565,9 +610,7 @@ export function resolvePendingBookingReply(
     /^(?:(?:minh|toi|em|anh|chi)\s+)?(?:xac nhan|dong y|chot)\s+(?:dat|gui)(?:\s+dich vu|\s+don|\s+yeu cau)?(?:\s+.*)?$/.test(
       reply,
     ) ||
-    /^(?:ok|oke|okay|oki)\s+(?:dat|gui|xac nhan|dong y)(?:\s+.*)?$/.test(
-      reply,
-    );
+    /^(?:ok|oke|okay|oki)\s+(?:dat|gui|xac nhan|dong y)(?:\s+.*)?$/.test(reply);
 
   if (
     pendingAction.stage === 'awaiting_confirmation' &&
@@ -591,6 +634,22 @@ export function resolvePendingBookingReply(
   }
 
   return plan;
+}
+
+function asksToCancelExistingServiceOrder(message: string) {
+  const reply = normalizeShortReply(message);
+  if (
+    /\b(?:khong huy|khong cancel|giu lai|thoi khong|huy nua|huy buoc|buoc xac nhan|chua muon dat|khong muon dat)\b/.test(
+      reply,
+    )
+  ) {
+    return false;
+  }
+  const hasCancel = /\b(?:huy|cancel|bo)\b/.test(reply);
+  const hasExistingOrderTarget =
+    /\b(?:don|dich vu|vua dat|moi dat|gan nhat|moi nhat)\b/.test(reply) ||
+    /#\s*\d+/.test(message);
+  return hasCancel && hasExistingOrderTarget;
 }
 
 @Injectable()
@@ -628,11 +687,24 @@ export class AiAgentOrchestratorService {
     const sessionId =
       dto.sessionId?.trim() || requestDerivedSessionId || `SES-${randomUUID()}`;
     const traceId = `TRACE-${randomUUID()}`;
-    const directRequirements = this.extractRequirements(dto.message);
+    let directRequirements = this.extractRequirements(dto.message);
     const ambiguousDomainTurn = this.buildAmbiguousDomainTurn(dto.message);
     let directIntent = ambiguousDomainTurn
       ? 'general_question'
       : this.detectIntent(dto.message);
+    const directZodiacPlotConsultation =
+      this.resolveZodiacPlotConsultation(dto.message);
+    if (directZodiacPlotConsultation) {
+      // A current explicit zodiac statement is stronger than an old profile.
+      // Ask for the actual subject's birth facts before applying Bát Tự instead
+      // of silently analyzing the authenticated account holder.
+      directIntent = 'bazi_suggestion';
+      directRequirements = {
+        ...directRequirements,
+        zodiacSign: directZodiacPlotConsultation,
+        consultationGoal: 'bazi_then_plots',
+      };
+    }
     const immediateSafetyTurn = this.buildImmediateSafetyTurn(dto.message);
     const sensitiveDisclosureRequest = this.isSensitiveSystemDisclosureRequest(
       dto.message,
@@ -640,15 +712,19 @@ export class AiAgentOrchestratorService {
     const socialTurn = this.buildDeterministicSocialTurn(dto.message);
     const bareAcknowledgement = this.isBareAcknowledgement(dto.message);
     const lowInformationTurn = this.isLowInformationTurn(dto.message);
+    const resetPersonalMemoryRequest = this.isResetPersonalMemoryRequest(
+      dto.message,
+    );
     const clearlyOutOfScope = this.isClearlyOutOfScope(dto.message);
     const contextReferenceTurn = this.isContextReferenceTurn(dto.message);
     const skipsContextBootstrap = Boolean(
       !contextReferenceTurn &&
-        (immediateSafetyTurn ||
-          sensitiveDisclosureRequest ||
-          (socialTurn && !bareAcknowledgement && !ambiguousDomainTurn) ||
-          lowInformationTurn ||
-          clearlyOutOfScope),
+      (immediateSafetyTurn ||
+        sensitiveDisclosureRequest ||
+        resetPersonalMemoryRequest ||
+        (socialTurn && !bareAcknowledgement && !ambiguousDomainTurn) ||
+        lowInformationTurn ||
+        clearlyOutOfScope),
     );
     const conversation = await this.ensureConversation(sessionId, userId);
     // If a completed HTTP request is retried with the same clientRequestId,
@@ -788,7 +864,8 @@ export class AiAgentOrchestratorService {
       history,
       directIntent,
     );
-    const profileRequirements = baziContextActive
+    const profileRequirements =
+      baziContextActive && !directZodiacPlotConsultation
       ? this.requirementsFromCustomerProfile(
           customerProfile,
           historyRequirements,
@@ -900,10 +977,53 @@ export class AiAgentOrchestratorService {
       });
     }
 
+    if (resetPersonalMemoryRequest) {
+      await saveUserMessage();
+      if (userId === null) {
+        return this.finish({
+          conversation,
+          sessionId,
+          userMessageId,
+          assistantMessage:
+            'Để xóa bộ nhớ cá nhân của riêng bạn, bạn cần đăng nhập tài khoản trước nhé.',
+          intent: 'general_question',
+          requirements,
+          recommendationResult: null,
+          traceId,
+          fallbackUsed: false,
+          llmModel: 'local-memory-reset',
+          skipSuggestedFollowUps: true,
+          learningResults,
+        });
+      }
+      const [preferencesCleared, summariesCleared] = await Promise.all([
+        this.knowledge.clearUserPersonalMemory(userId),
+        this.conversationMemory?.clearUserMemory(userId) ?? Promise.resolve(0),
+      ]);
+      return this.finish({
+        conversation,
+        sessionId,
+        userMessageId,
+        assistantMessage: `Mình đã xóa bộ nhớ cá nhân của bạn: ${preferencesCleared} sở thích/thông tin đã lưu và ${summariesCleared} tóm tắt hội thoại. Đơn hàng, lô đất, lịch hẹn, hợp đồng và lịch sử giao dịch của bạn vẫn giữ nguyên. Từ các cuộc trò chuyện mới, mình sẽ không dùng các ghi nhớ cũ nữa.`,
+        intent: 'general_question',
+        requirements: {},
+        recommendationResult: null,
+        traceId,
+        fallbackUsed: false,
+        llmModel: 'local-memory-reset',
+        skipSuggestedFollowUps: true,
+        learningResults,
+      });
+    }
+
     // A bare domain noun is a topic signal, not authorization to run a search.
     // Ask one useful question instead of silently reusing old filters and
     // producing a full recommendation the customer did not request.
-    if (ambiguousDomainTurn && !baziTopicRefinement) {
+    if (
+      !this.shouldUseLlmForSemanticTurns() &&
+      ambiguousDomainTurn &&
+      !baziTopicRefinement
+    ) {
       await saveUserMessage();
       const assistantMessage = history.length
         ? ambiguousDomainTurn.assistantMessage
@@ -930,6 +1050,7 @@ export class AiAgentOrchestratorService {
     // followed by a real domain question does not match this gate and still uses
     // the semantic planner with the full trusted conversation state.
     if (
+      !this.shouldUseLlmForSemanticTurns() &&
       socialTurn &&
       !baziTopicRefinement &&
       !(bareAcknowledgement && pendingAction)
@@ -952,7 +1073,11 @@ export class AiAgentOrchestratorService {
       });
     }
 
-    if (lowInformationTurn && !contextReferenceTurn) {
+    if (
+      !this.shouldUseLlmForSemanticTurns() &&
+      lowInformationTurn &&
+      !contextReferenceTurn
+    ) {
       await saveUserMessage();
       return this.finish({
         conversation,
@@ -972,7 +1097,7 @@ export class AiAgentOrchestratorService {
       });
     }
 
-    if (clearlyOutOfScope) {
+    if (!this.shouldUseLlmForSemanticTurns() && clearlyOutOfScope) {
       await saveUserMessage();
       return this.finish({
         conversation,
@@ -1030,7 +1155,11 @@ export class AiAgentOrchestratorService {
       });
     }
 
-    if (!pendingAction && this.isShortConfirmationFollowUp(dto.message, history)) {
+    if (
+      !this.shouldUseLlmForSemanticTurns() &&
+      !pendingAction &&
+      this.isShortConfirmationFollowUp(dto.message, history)
+    ) {
       await saveUserMessage();
       return this.finish({
         conversation,
@@ -1135,7 +1264,10 @@ export class AiAgentOrchestratorService {
     // Memory-inspection questions are answered from the authoritative DB, not
     // from an LLM guess. This is both faster and safer: the assistant can only
     // report preferences that are actually active for this authenticated user.
-    if (this.asksForSavedPreferences(dto.message)) {
+    if (
+      !this.shouldUseLlmForSemanticTurns() &&
+      this.asksForSavedPreferences(dto.message)
+    ) {
       await saveUserMessage();
       const assistantMessage = await this.buildNoSecondLlmFallback(
         dto.message,
@@ -1275,7 +1407,10 @@ export class AiAgentOrchestratorService {
     // Questions such as "theo sở thích của tui thì chỗ ít người qua lại có
     // hợp không?" are answered from saved memory directly. They must not be
     // mistaken for a request to list raw memory records or depend on API uptime.
-    if (this.isPreferenceCompatibilityQuestion(dto.message)) {
+    if (
+      !this.shouldUseLlmForSemanticTurns() &&
+      this.isPreferenceCompatibilityQuestion(dto.message)
+    ) {
       await saveUserMessage();
       const assistantMessage = await this.buildPreferenceCompatibilityAnswer(
         dto.message,
@@ -1295,15 +1430,21 @@ export class AiAgentOrchestratorService {
       });
     }
 
-    let deterministicAgentPlan = this.buildDeterministicAgentPlan(
+    const deterministicCandidate = this.buildDeterministicAgentPlan(
       dto.message,
       intent,
       context.requirements,
       history,
     );
+    // Clear domain actions always use the local plan so inventory, ownership,
+    // booking state and process facts are loaded from authoritative tools.
+    // The LLM still writes open-ended conversation and may rewrite advisory
+    // tool output, but it can no longer skip the tool and invent the facts.
+    let deterministicAgentPlan = deterministicCandidate;
 
     if (
       pendingAction?.kind === 'service_order' &&
+      pendingAction.operation !== 'cancel' &&
       pendingAction.stage === 'collecting' &&
       !pendingAction.requestedDate
     ) {
@@ -1325,7 +1466,7 @@ export class AiAgentOrchestratorService {
       }
     }
 
-    if (pendingAction?.stage === 'awaiting_confirmation') {
+    if (pendingAction) {
       const pendingIntent: AgentPlan['intent'] =
         pendingAction.kind === 'service_order'
           ? 'service_booking'
@@ -1346,8 +1487,23 @@ export class AiAgentOrchestratorService {
         pendingAction,
         dto.message,
       );
-      if (candidate.action === 'confirm_pending_action') {
+      if (
+        pendingAction.stage === 'awaiting_confirmation' &&
+        candidate.action === 'confirm_pending_action'
+      ) {
         deterministicAgentPlan = candidate;
+      } else if (
+        pendingAction.kind === 'service_order' &&
+        pendingAction.operation === 'cancel' &&
+        candidate.action === 'cancel_service_order'
+      ) {
+        deterministicAgentPlan = candidate;
+      } else if (asksToCancelExistingServiceOrder(dto.message)) {
+        deterministicAgentPlan = {
+          ...candidate,
+          intent: 'service_booking',
+          action: 'cancel_service_order',
+        };
       } else if (
         /\b(?:huy|khong dong y|dung lai|bo qua)\b/.test(
           this.foldForMemory(dto.message),
@@ -1425,7 +1581,14 @@ export class AiAgentOrchestratorService {
         plan.requirements,
         context.requirements,
       );
-      plan = this.reconcilePlannerWithTrustedContext(plan, dto.message, intent);
+      // The semantic LLM owns the intent for natural-language turns. Local
+      // extraction contributes trusted fields, but must not override the goal
+      // understood from the complete utterance/conversation.
+      plan = this.reconcilePlannerWithTrustedContext(
+        plan,
+        dto.message,
+        plan.intent,
+      );
       if (
         plan.action === 'browse_available_plots' &&
         !plan.requirements.numberOfPlots
@@ -1478,6 +1641,7 @@ export class AiAgentOrchestratorService {
           conversationId: conversation?.id ?? null,
           userId: userId ?? null,
           plan,
+          userMessage: dto.message,
           clientAction: dto.clientAction,
           pendingAction,
         });
@@ -1488,7 +1652,8 @@ export class AiAgentOrchestratorService {
           ...(pendingAction ? { pendingAction } : {}),
         };
         const retryUiDirective =
-          pendingAction?.kind === 'appointment'
+          pendingAction?.kind === 'appointment' &&
+          pendingAction.selectedPlotCode
             ? ({
                 type: 'OPEN_APPOINTMENT_CALENDAR',
                 mode:
@@ -1499,6 +1664,7 @@ export class AiAgentOrchestratorService {
                 startTime: pendingAction.startTime,
                 endTime: pendingAction.endTime,
                 topic: pendingAction.topic,
+                plotCode: pendingAction.selectedPlotCode,
               } as const)
             : undefined;
         return this.finish({
@@ -1531,11 +1697,17 @@ export class AiAgentOrchestratorService {
             ? { pendingAction: bookingTurn.pendingAction }
             : {}),
         };
+        const bookingFallbackMessage = bookingTurn.assistantMessage;
+        // Booking/service/reminder wording is already a natural template from
+        // the state machine. Do not spend an LLM round trip or risk changing a
+        // selected plot, required confirmation, date, price or creation status.
+        const bookingAssistantMessage = bookingFallbackMessage;
+        const bookingNarrativeFallback = false;
         return this.finish({
           conversation,
           sessionId,
           userMessageId,
-          assistantMessage: bookingTurn.assistantMessage,
+          assistantMessage: bookingAssistantMessage,
           intent: bookingTurn.intent,
           requirements,
           recommendationResult: null,
@@ -1544,8 +1716,8 @@ export class AiAgentOrchestratorService {
           uiDirective: bookingTurn.uiDirective,
           ownedPlots,
           traceId,
-          fallbackUsed: false,
-          llmModel: localPlan ? 'local-authoritative-data' : undefined,
+          fallbackUsed: bookingNarrativeFallback,
+          llmModel: 'local-authoritative-data',
           skipSuggestedFollowUps: true,
           learningResults,
         });
@@ -1557,9 +1729,27 @@ export class AiAgentOrchestratorService {
       // a second API request for greetings, memory requests, explanations, casual
       // in-scope chat, and out-of-scope redirects.
       if (plan.action === 'none' && !plan.needsClarification) {
+        const localFallback = await this.buildNoSecondLlmFallback(
+          dto.message,
+          userId,
+        );
         const directResponse =
           plan.directResponse?.trim() ||
-          (await this.buildNoSecondLlmFallback(dto.message, userId));
+          (await this.composeAgentResponse({
+            history,
+            userMessage: dto.message,
+            plan,
+            toolOutput: null,
+            fallbackMessage: localFallback,
+            persistentKnowledgeContext: [
+              persistentKnowledgeContext,
+              conversationMemoryContext,
+            ]
+              .filter(Boolean)
+              .join('\n\n'),
+            learningResults,
+            routingKey: `${sessionId}:conversation-recovery`,
+          }));
         return this.finish({
           conversation,
           sessionId,
@@ -1574,6 +1764,9 @@ export class AiAgentOrchestratorService {
           ),
           traceId,
           fallbackUsed: false,
+          skipSuggestedFollowUps:
+            plan.intent === 'bazi_suggestion' &&
+            plan.requirements.consultationGoal === 'bazi_then_plots',
           learningResults,
         });
       }
@@ -1602,6 +1795,43 @@ export class AiAgentOrchestratorService {
         role: userRole,
         sessionId: sessionId,
       });
+      let consultationPrelude = '';
+      if (
+        plan.action === 'suggest_bazi_direction' &&
+        requirements.consultationGoal === 'bazi_then_plots' &&
+        execution.baziSuggestion
+      ) {
+        const bazi = execution.baziSuggestion;
+        const recommendationContext = {
+          userId,
+          conversationId: conversation?.id ?? null,
+          sourceMessageId: userMessageId,
+        };
+        const {
+          requirements: plotRequirements,
+          result: baziRecommendation,
+        } = await this.recommendPlotsAcrossBaziDirections(
+          requirements,
+          bazi,
+          recommendationContext,
+        );
+        baziRecommendation.baziSuggestion ??= bazi;
+        execution.toolOutput = baziRecommendation;
+        execution.recommendationResult = baziRecommendation;
+        execution.suggestedServices = baziRecommendation.suggestedServices;
+        execution.baziSuggestion = bazi;
+        requirements = plotRequirements;
+        plan = {
+          ...plan,
+          intent: 'recommend_plots',
+          action: plotRequirements.budgetMax
+            ? 'rank_plot_options'
+            : 'browse_available_plots',
+          requirements: plotRequirements,
+        };
+        intent = 'recommend_plots';
+        consultationPrelude = `${this.describeBaziSuggestion(bazi, false)}\n\n**Đối chiếu sang quỹ lô đang trống**\n\n`;
+      }
       let recommendationResult = execution.recommendationResult;
       let alternativeMessage = [
         this.isBereavementContext(dto.message)
@@ -1649,17 +1879,16 @@ export class AiAgentOrchestratorService {
         suggestedServices: execution.suggestedServices,
         baziSuggestion: execution.baziSuggestion,
         toolOutput: execution.toolOutput,
-        prefix: alternativeMessage,
+        prefix: `${consultationPrelude}${alternativeMessage}`,
         ownedPlots,
         userMessage: dto.message,
       });
-      // Inventory lookup/ranking remains authoritative, but plot consultation is
-      // written by the LLM from that grounded result. The deterministic formatter
-      // is retained only as an emergency fallback so provider failure can never
-      // make a successful plot search disappear.
+      // Tools/RAG own facts and side effects; the LLM owns the final wording for
+      // every successful advisory tool result. Deterministic text remains only as
+      // an emergency fallback after every configured key/provider is exhausted.
       let assistantMessage = fallbackMessage;
-      let recommendationNarrativeFallback = false;
-      if (recommendationResult?.recommendations.length) {
+      let narrativeFallback = false;
+      if (plan.action !== 'none') {
         assistantMessage = await this.composeAgentResponse({
           history,
           userMessage: dto.message,
@@ -1674,9 +1903,9 @@ export class AiAgentOrchestratorService {
             .filter(Boolean)
             .join('\n\n'),
           learningResults,
-          routingKey: `${sessionId}:plot-consultation`,
+          routingKey: `${sessionId}:tool-response`,
         });
-        recommendationNarrativeFallback = assistantMessage === fallbackMessage;
+        narrativeFallback = assistantMessage === fallbackMessage;
       }
 
       return this.finish({
@@ -1692,16 +1921,20 @@ export class AiAgentOrchestratorService {
         baziSuggestion: execution.baziSuggestion,
         ownedPlots,
         traceId,
-        fallbackUsed: recommendationNarrativeFallback,
-        ...(recommendationNarrativeFallback
+        fallbackUsed: narrativeFallback,
+        ...(narrativeFallback
           ? {
-              fallbackReason: 'RECOMMENDATION_NARRATIVE_FALLBACK',
+              fallbackReason: recommendationResult?.recommendations.length
+                ? 'RECOMMENDATION_NARRATIVE_FALLBACK'
+                : 'TOOL_RESPONSE_NARRATIVE_FALLBACK',
               llmModel: 'local-authoritative-data',
             }
           : localPlan && !recommendationResult
             ? { llmModel: 'local-authoritative-data' }
             : {}),
-        skipSuggestedFollowUps: Boolean(recommendationResult?.recommendations.length),
+        skipSuggestedFollowUps: Boolean(
+          recommendationResult?.recommendations.length,
+        ),
         learningResults,
       });
     } catch (error) {
@@ -1761,6 +1994,10 @@ export class AiAgentOrchestratorService {
       requirements,
     });
 
+    if (asksToCancelExistingServiceOrder(message)) {
+      return deterministicPlan('service_booking', 'cancel_service_order');
+    }
+
     if (this.isContextReferenceTurn(message)) {
       const recentMeaningfulIntent = [...history]
         .reverse()
@@ -1785,25 +2022,21 @@ export class AiAgentOrchestratorService {
       if (recentMeaningfulIntent === 'purchase_process') {
         return deterministicPlan('purchase_process', 'get_purchase_process');
       }
-      if (recentMeaningfulIntent === 'bazi_suggestion' && requirements.birthDate) {
+      if (
+        recentMeaningfulIntent === 'bazi_suggestion' &&
+        requirements.birthDate
+      ) {
         return deterministicPlan('bazi_suggestion', 'suggest_bazi_direction');
       }
     }
 
-    // High-confidence operational commands with all required date/time fields
-    // can go straight to the authoritative confirmation workflow. Ambiguous
-    // language still goes to the semantic LLM planner below.
-    if (
-      intent === 'appointment_booking' &&
-      requirements.appointmentDate &&
-      requirements.appointmentStartTime
-    ) {
+    // Appointment phrases are operational commands with one fixed purpose:
+    // viewing an approved plot. They do not need an LLM planning round-trip;
+    // the booking service owns plot validation and the natural templates.
+    if (intent === 'appointment_booking') {
       return deterministicPlan('appointment_booking', 'prepare_appointment');
     }
-    if (
-      intent === 'memorial_reminder' &&
-      requirements.reminderDate
-    ) {
+    if (intent === 'memorial_reminder' && requirements.reminderDate) {
       return deterministicPlan(
         'memorial_reminder',
         'prepare_memorial_reminder',
@@ -1835,7 +2068,6 @@ export class AiAgentOrchestratorService {
       );
     }
     const asksForServiceCatalog =
-      intent === 'service_suggestions' &&
       /\b(?:dich vu|cham soc|don dep|thap huong)\b/.test(folded) &&
       !/\b(?:dat dich vu|gui yeu cau|xac nhan|thanh toan)\b/.test(folded);
     if (asksForServiceCatalog) {
@@ -1850,6 +2082,9 @@ export class AiAgentOrchestratorService {
       /\b(?:mua|giu cho|dat cho|gui yeu cau)\b/.test(folded);
     if (asksForProcess) {
       return deterministicPlan('purchase_process', 'get_purchase_process');
+    }
+    if (asksForCustomerCare(message)) {
+      return deterministicPlan('customer_care', 'get_customer_care_overview');
     }
     if (intent === 'bazi_suggestion' && requirements.birthDate) {
       return deterministicPlan('bazi_suggestion', 'suggest_bazi_direction');
@@ -1935,7 +2170,9 @@ export class AiAgentOrchestratorService {
         return `${item.role === 'assistant' ? 'Trợ lý' : 'Khách hàng'}: ${content}`;
       })
       .filter(Boolean);
-    recent.push(`Khách hàng hiện tại: ${this.redactSensitiveData(userMessage)}`);
+    recent.push(
+      `Khách hàng hiện tại: ${this.redactSensitiveData(userMessage)}`,
+    );
     return recent.join('\n').slice(-4000);
   }
 
@@ -1959,9 +2196,16 @@ export class AiAgentOrchestratorService {
     const messages: NvidiaMessage[] = [
       {
         role: 'system',
-        content: `${CEMETERY_AGENT_PLANNER_PROMPT}
+        content: `${CEMETERY_AGENT_SEMANTIC_ROUTER_PROMPT}
 
-Planner tool: ${AGENT_PLANNER_TOOL_NAME}
+<OUTPUT_CONTRACT>
+Return one JSON object with these required fields:
+{"intent":"general_question","action":"none","contextMode":"continue","needsClarification":false,"clarificationQuestion":"","directResponse":""}
+Allowed intents: recommend_plots, service_suggestions, plot_request, service_booking, purchase_process, bazi_suggestion, plot_competitiveness, customer_care, appointment_booking, memorial_reminder, general_question.
+Allowed actions: rank_plot_options, browse_available_plots, get_service_suggestions, prepare_plot_request, prepare_service_order, cancel_service_order, confirm_pending_action, cancel_pending_action, get_purchase_process, suggest_bazi_direction, analyze_plot_competitiveness, get_customer_care_overview, prepare_appointment, prepare_memorial_reminder, none.
+Add only relevant optional fields at the top level: budgetMin, budgetMax, numberOfPlots, recommendationCount, comparisonRequested, preferredZone, preferredDirection, plotType, minAreaSqm, maxAreaSqm, needAdjacent, preferNearEntrance, birthDate, birthTime, gender, zodiacSign, consultationGoal, requestType, serviceQuery, serviceTypeId, serviceOrderId, selectedPlotCode, requestedDate, appointmentDate, appointmentStartTime, appointmentEndTime, appointmentTopic, reminderTitle, reminderDescription, reminderDate, reminderRecurring, reminderCalendarType, reminderNotifyDaysBefore, reminderNotifyEmails, note, memoryProposals.
+For action=none, directResponse is the complete natural Vietnamese answer. For an action that needs authoritative data, directResponse must be empty. Never emit fields with guessed values.
+</OUTPUT_CONTRACT>
 
 ${persistentKnowledgeContext || 'No active persistent user preference or verified global knowledge is available.'}
 
@@ -1993,29 +2237,35 @@ Today: ${new Date().toISOString().slice(0, 10)}`,
         content: this.redactSensitiveData(userMessage),
       },
     ];
-    const response = await this.nvidia.chat(
-      messages,
-      [AGENT_PLANNER_TOOL],
-      {
-        type: 'function',
-        function: { name: AGENT_PLANNER_TOOL_NAME },
-      },
-      {
+    // NVIDIA-hosted models answer normal text reliably but several of them
+    // stall when forced into function-calling mode. Ask for compact JSON in a
+    // regular completion, validate it, then fail over across models as needed.
+    const response = await this.nvidia.chat(messages, [], 'auto', {
         temperature: 0,
         routingKey,
-        maxTokens: 700,
-        timeoutMs: 5_000,
-        totalTimeoutMs: 12_000,
-        preferredProviderId: 'nvidia',
-      },
-    );
+        maxTokens: 1_100,
+        timeoutMs: 10_000,
+        totalTimeoutMs: 22_000,
+        preferredProviderId: 'openai-primary',
+        enableThinking: false,
+        validateResponse: (candidate) =>
+          this.isUsablePlannerResponse(
+            candidate,
+            userMessage,
+            false,
+          ),
+      });
     const assistant = response.choices[0].message;
     const plannerCall = assistant.tool_calls?.find(
       (call) => call.function.name === AGENT_PLANNER_TOOL_NAME,
     );
     if (plannerCall) {
       try {
-        return parseAgentPlan(plannerCall.function.arguments);
+        const plan = parseAgentPlan(plannerCall.function.arguments);
+        if (!this.isSemanticallyConsistentPlan(plan, userMessage)) {
+          throw new Error('Planner tool result contradicts the user request');
+        }
+        return plan;
       } catch (error) {
         this.logger.warn(
           `[agent planner] Invalid tool arguments (${error instanceof Error ? error.name : 'unknown error'})`,
@@ -2025,13 +2275,157 @@ Today: ${new Date().toISOString().slice(0, 10)}`,
     }
 
     const inlineJson = assistant.content?.match(/\{[\s\S]*\}/)?.[0];
-    if (inlineJson) return parseAgentPlan(inlineJson);
+    if (inlineJson) {
+      const plan = parseAgentPlan(inlineJson);
+      if (this.isSemanticallyConsistentPlan(plan, userMessage)) return plan;
+    }
     this.logger.warn(
       `[agent planner] Provider response had no usable structured plan; toolCalls=${assistant.tool_calls?.map((call) => call.function.name).join(',') || 'none'}, contentLength=${assistant.content?.length ?? 0}`,
     );
     throw new ServiceUnavailableException(
       'NVIDIA did not return a structured agent plan',
     );
+  }
+
+  private isUsablePlannerResponse(
+    response: NvidiaChatResponse,
+    userMessage: string,
+    allowPlainResponse: boolean,
+  ) {
+    const assistant = response.choices?.[0]?.message;
+    if (!assistant) return false;
+    const plannerCall = assistant.tool_calls?.find(
+      (call) => call.function.name === AGENT_PLANNER_TOOL_NAME,
+    );
+    if (plannerCall) {
+      try {
+        return this.isSemanticallyConsistentPlan(
+          parseAgentPlan(plannerCall.function.arguments),
+          userMessage,
+        );
+      } catch {
+        return false;
+      }
+    }
+
+    const inlineJson = assistant.content?.match(/\{[\s\S]*\}/)?.[0];
+    if (inlineJson) {
+      try {
+        return this.isSemanticallyConsistentPlan(
+          parseAgentPlan(inlineJson),
+          userMessage,
+        );
+      } catch {
+        return false;
+      }
+    }
+
+    return Boolean(
+      allowPlainResponse &&
+      assistant.content?.trim() &&
+      this.detectIntent(userMessage) === 'general_question',
+    );
+  }
+
+  /** Reject only clear contradictions, then let the provider router try the
+   * next LLM. This guard never writes an answer and never supplies business
+   * data; semantic planning still belongs to the model. */
+  private isSemanticallyConsistentPlan(plan: AgentPlan, userMessage: string) {
+    if (plan.action === 'none' && !plan.directResponse?.trim()) return false;
+    if (plan.action !== 'none' && plan.directResponse?.trim()) return false;
+
+    const folded = this.foldForMemory(userMessage);
+    const serviceCatalogRequest =
+      /\b(?:dich vu|cham soc|don dep|thay hoa|thap huong)\b/.test(folded) &&
+      /\b(?:xem|coi|co gi|danh sach|gioi thieu|goi y|tu van)\b/.test(folded) &&
+      !/\b(?:dat|book|dang ky|mua)\b/.test(folded);
+    if (serviceCatalogRequest && plan.action !== 'get_service_suggestions') {
+      return false;
+    }
+
+    const zodiacMention =
+      /\btuoi\s+(?:meo|mao|chuot|ty|trau|suu|ho|dan|rong|thin|ran|ti|ty|ngua|ngo|de|mui|khi|than|ga|dau|cho|tuat|heo|hoi|lon)\b/.test(
+        folded,
+      );
+    const zodiacPlotConsultation =
+      this.resolveZodiacPlotConsultation(userMessage);
+    if (
+      zodiacPlotConsultation &&
+      (plan.intent !== 'bazi_suggestion' ||
+        plan.requirements.consultationGoal !== 'bazi_then_plots' ||
+        (plan.action !== 'none' && plan.action !== 'suggest_bazi_direction'))
+    ) {
+      return false;
+    }
+
+    const asksSimpleZodiacDefinition =
+      zodiacMention && /\b(?:la tuoi gi|la con gi|nghia la gi)\b/.test(folded);
+    if (asksSimpleZodiacDefinition && plan.action === 'none') {
+      const answer = this.foldForMemory(plan.directResponse ?? '');
+      const canonicalMentions =
+        answer.match(
+          /\b(?:ty|suu|dan|mao|thin|ti|ty|ngo|mui|than|dau|tuat|hoi)\b/g,
+        ) ?? [];
+      if (canonicalMentions.length > 3) return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Recognize the customer's everyday zodiac wording only to enforce the
+   * consultation sequence. The LLM still owns semantic planning and wording;
+   * this is also the safety signal used when every provider is unavailable so
+   * a failed API call can never degrade into an unrelated inventory dump.
+   */
+  private resolveZodiacPlotConsultation(message: string): string | null {
+    const folded = this.foldForMemory(message);
+    const zodiacMatch = folded.match(
+      /\btuoi\s+(meo|mao|chuot|ty|trau|suu|ho|dan|rong|thin|ran|ti|ngua|ngo|de|mui|khi|than|ga|dau|cho|tuat|heo|hoi|lon)\b/,
+    );
+    if (!zodiacMatch) return null;
+
+    const asksToChoosePlot =
+      /\b(?:chon|tim|goi y|de xuat|xem|coi)\b.{0,32}\b(?:cho|vi tri|lo|dat)\b/.test(
+        folded,
+      ) ||
+      /\b(?:chon cho nao|nam cho nao|o cho nao|lo nao|vi tri nao)\b/.test(
+        folded,
+      );
+    if (!asksToChoosePlot) return null;
+
+    const raw = message.toLocaleLowerCase('vi-VN');
+    if (/\btuổi\s+tỵ\b/.test(raw)) return 'Tỵ';
+    if (/\btuổi\s+tý\b/.test(raw)) return 'Tý';
+
+    const zodiacByWord: Record<string, string> = {
+      chuot: 'Tý',
+      ty: 'Tý',
+      trau: 'Sửu',
+      suu: 'Sửu',
+      ho: 'Dần',
+      dan: 'Dần',
+      meo: 'Mão',
+      mao: 'Mão',
+      rong: 'Thìn',
+      thin: 'Thìn',
+      ran: 'Tỵ',
+      ti: 'Tỵ',
+      ngua: 'Ngọ',
+      ngo: 'Ngọ',
+      de: 'Mùi',
+      mui: 'Mùi',
+      khi: 'Thân',
+      than: 'Thân',
+      ga: 'Dậu',
+      dau: 'Dậu',
+      cho: 'Tuất',
+      tuat: 'Tuất',
+      heo: 'Hợi',
+      hoi: 'Hợi',
+      lon: 'Hợi',
+    };
+    return zodiacByWord[zodiacMatch[1]] ?? null;
   }
 
   private reconcilePlannerWithTrustedContext(
@@ -2187,6 +2581,7 @@ Today: ${new Date().toISOString().slice(0, 10)}`,
         return { limit: 5 };
       case 'prepare_plot_request':
       case 'prepare_service_order':
+      case 'cancel_service_order':
       case 'prepare_appointment':
       case 'prepare_memorial_reminder':
       case 'confirm_pending_action':
@@ -2363,7 +2758,7 @@ Write the final helpful, highly consultative response now.
   4. Always maintain a warm, respectful, empathetic, and professional tone suitable for cemetery and memorial planning.
   5. When useful, end with one natural consultative question that continues the exact phong-thủy/cultural point the user is discussing rather than steering them to price or plot shopping.
 - For plot recommendations, write a genuinely consultative decision brief, not a backend-style field dump. For one option, aim for 180–320 Vietnamese words; for multiple options, aim for 320–620 Vietnamese words.
-- For EVERY recommended option, give it its own clearly separated paragraph/section and cover the grounded facts that actually exist: total listed price, approximate price per plot when it is a group, total area, zone, direction if present, adjacency/family-planning implications, verified entrance-access summary, the strongest reasons it fits the customer's known priorities, and the most important trade-off or uncertainty.
+- For EVERY recommended option, use an exact Markdown heading in the form "### Phương án N — MÃ_LÔ", followed by its own paragraph. Put one completely blank line before every heading and between option sections. Cover the grounded facts that actually exist: total listed price, approximate price per plot when it is a group, total area, zone, direction if present, adjacency/family-planning implications, verified entrance-access summary, the strongest reasons it fits the customer's known priorities, and the most important trade-off or uncertainty.
 - Then compare the options across the customer's priorities (budget, access, area, direction, adjacency/family use, and internal listed-price position when inventoryPriceContext supports it), explain who each option is best suited for, and make a reasoned final ranking. Do not merely repeat reasons/tradeOffs verbatim; synthesize them into natural expert advice.
 - If a requested group could not be found and the backend returned individual plots instead, say that clearly before analyzing the alternatives.
 - Do NOT invent legal status, road width, landscape quality, noise level, future value, scarcity, spiritual benefit, burial capacity, maintenance burden, or any other attribute not present in the authoritative result. Direction alone is not a Feng Shui conclusion; only discuss cultural-direction fit when a Bazi result is actually provided.
@@ -2387,8 +2782,24 @@ Write the final helpful, highly consultative response now.
       const response = await this.nvidia.chat(messages, [], 'auto', {
         routingKey: input.routingKey,
         maxTokens: recommendationResult ? 1_800 : 1_100,
-        timeoutMs: recommendationResult ? 10_000 : 8_000,
-        totalTimeoutMs: recommendationResult ? 14_000 : 10_000,
+        timeoutMs: recommendationResult ? 9_000 : 10_000,
+        totalTimeoutMs: recommendationResult ? 10_000 : 16_000,
+        preferredProviderId: 'openai-primary',
+        // Inventory facts are already available at this point. Do not make the
+        // customer wait through every large model merely to rewrite them; if
+        // the fast writer misses its deadline, use the grounded local brief.
+        strictPreferredProvider: Boolean(recommendationResult),
+        enableThinking: false,
+        validateResponse: (candidate) =>
+          this.isUsableComposedResponse(
+            candidate,
+            recommendationResult,
+            input.plan.action,
+          ) &&
+          (!input.plan.requirements.consultationGoal ||
+            /(?:Bát\s*Tự|Bát\s*Trạch|Can\s*Chi|Nạp\s*Âm)/iu.test(
+              candidate.choices?.[0]?.message?.content ?? '',
+            )),
       });
       const content = response.choices[0].message.content?.trim() ?? '';
       this.logger.debug(
@@ -2401,7 +2812,9 @@ Write the final helpful, highly consultative response now.
         (!recommendationResult ||
           isConsultativeRecommendationNarrative(content, recommendationResult))
       ) {
-        return content;
+        return recommendationResult
+          ? ensureRecommendationParagraphs(content, recommendationResult)
+          : content;
       }
       if (content && input.plan.action === 'none') {
         return content;
@@ -2412,6 +2825,28 @@ Write the final helpful, highly consultative response now.
       );
     }
     return input.fallbackMessage;
+  }
+
+  private isUsableComposedResponse(
+    response: NvidiaChatResponse,
+    recommendationResult: RecommendationResult | null,
+    action: AgentPlanAction,
+  ) {
+    const content = response.choices?.[0]?.message?.content?.trim() ?? '';
+    if (
+      !content ||
+      /```(?:json)?/i.test(content) ||
+      /(?:đang|sẽ)\s+tìm kiếm|vui lòng\s+chờ/i.test(content)
+    ) {
+      return false;
+    }
+    if (recommendationResult) {
+      return isConsultativeRecommendationNarrative(
+        content,
+        recommendationResult,
+      );
+    }
+    return action === 'none' || content.length > 0;
   }
 
   private describePlanResult(input: {
@@ -2425,9 +2860,12 @@ Write the final helpful, highly consultative response now.
     userMessage?: string;
   }) {
     if (input.recommendationResult) {
-      return (
-        input.prefix + this.describeRecommendations(input.recommendationResult)
-      );
+      const zodiacContext =
+        input.plan.requirements.zodiacSign &&
+        !input.plan.requirements.birthDate
+        ? `Mình đã hiểu bạn đang chọn lô cho **tuổi ${input.plan.requirements.zodiacSign}**. Con giáp được dùng làm ngữ cảnh tư vấn ban đầu; vì chưa có năm sinh cụ thể nên mình chưa tự gán một hướng là “hợp tuổi”, nhưng vẫn giới thiệu ngay các lô đang trống để bạn có phương án thực tế trước.\n\n`
+        : '';
+      return `${input.prefix}${zodiacContext}${this.describeRecommendations(input.recommendationResult)}`;
     }
     if (input.suggestedServices.length) {
       return this.describeServices(
@@ -2437,55 +2875,7 @@ Write the final helpful, highly consultative response now.
       );
     }
     if (input.baziSuggestion) {
-      const bazi = input.baziSuggestion;
-      const goodDirs =
-        bazi.goodDirections?.length
-          ? bazi.goodDirections
-              .map(
-                (item, index) =>
-                  `${index + 1}. **${item.direction}** — ${item.star}: ${item.meaning}.`,
-              )
-              .join('\n')
-          : bazi.preferredDirections
-              .map((direction, index) => `${index + 1}. **${direction}**`)
-              .join('\n');
-      const badDirs =
-        bazi.badDirections?.length
-          ? bazi.badDirections
-              .map(
-                (item, index) =>
-                  `${index + 1}. **${item.direction}** — ${item.star}: ${item.meaning}.`,
-              )
-              .join('\n')
-          : 'Không có dữ liệu hướng cần hạn chế từ bộ quy tắc hiện tại.';
-      const hourContext = bazi.birthHourBranch
-        ? `Giờ sinh được quy về **chi ${bazi.birthHourBranch}** và dùng như tín hiệu tham khảo bổ sung.`
-        : 'Chưa có giờ sinh, nên phần giờ chỉ được bỏ qua chứ không suy đoán.';
-
-      return `Mình phân tích kỹ hơn theo dữ liệu bạn đã cung cấp. Phần dưới đây là **tham khảo phong thủy/Bát Trạch**, không phải kết luận khoa học hay bảo đảm tốt-xấu.
-
-**1. Nền tảng mệnh và cung**
-- Tuổi Can Chi: **${bazi.yearPillar || 'chưa xác định'}**.
-- Nạp Âm: **${bazi.napAmName || 'chưa xác định'}**${bazi.napAmMeaning ? ` — ${bazi.napAmMeaning}` : ''}, thuộc hành **${bazi.element || bazi.napAmElement || 'chưa xác định'}**.
-- Cung mệnh: ${bazi.cungMenh ? `**${bazi.cungMenh}** — ${bazi.tuMenh}` : '**chưa xác định**'}.
-- Giờ sinh: ${hourContext}
-
-**2. Các hướng nên ưu tiên**
-${goodDirs}
-
-**3. Các hướng nên hạn chế**
-${badDirs}
-
-**4. Quan hệ ngũ hành để tham khảo**
-- Yếu tố hỗ trợ: ${bazi.elementRelations?.supporting || 'chưa có dữ liệu'}.
-- Yếu tố làm suy yếu/xung khắc cần cân nhắc: ${bazi.elementRelations?.weakening || 'chưa có dữ liệu'}.
-
-**5. Ý nghĩa khi áp dụng vào chọn lô**
-${bazi.detailedAnalysis || bazi.explanation} Hướng chỉ nên là **một tiêu chí mềm**. Khi chọn lô thực tế, mình vẫn phải đối chiếu thêm tình trạng còn trống, giá niêm yết, diện tích, khu vực và nhu cầu gia đình; mình sẽ không tự chọn hay tạo yêu cầu chỉ vì hợp hướng.
-
-**Lưu ý:** Phần hiện tại dùng năm sinh/cung mệnh và giờ sinh như dữ liệu bổ sung, chưa phải phép lập đầy đủ Tứ Trụ với can-chi của cả năm, tháng, ngày và giờ. ${bazi.disclaimer}
-
-Nếu bạn muốn, mình có thể **lọc lô theo các hướng ưu tiên này**; mình chỉ bắt đầu tìm khi bạn đồng ý.`;
+      return this.describeBaziSuggestion(input.baziSuggestion);
     }
     if (input.plan.action === 'analyze_plot_competitiveness') {
       return this.describePlotCompetitiveness(input.toolOutput);
@@ -2509,6 +2899,59 @@ Nếu bạn muốn, mình có thể **lọc lô theo các hướng ưu tiên nà
       return `${title}: ${content}`;
     }
     return 'Mình có thể giúp bạn tìm lô, so sánh phương án, xem dịch vụ hoặc giải thích quy trình. Bạn muốn bắt đầu từ nội dung nào?';
+  }
+
+  private describeBaziSuggestion(
+    bazi: BaziSuggestion,
+    includePlotPrompt = true,
+  ) {
+    const goodDirs = bazi.goodDirections?.length
+      ? bazi.goodDirections
+          .map(
+            (item, index) =>
+              `${index + 1}. **${item.direction}** — ${item.star}: ${item.meaning}.`,
+          )
+          .join('\n')
+      : bazi.preferredDirections
+          .map((direction, index) => `${index + 1}. **${direction}**`)
+          .join('\n');
+    const badDirs = bazi.badDirections?.length
+      ? bazi.badDirections
+          .map(
+            (item, index) =>
+              `${index + 1}. **${item.direction}** — ${item.star}: ${item.meaning}.`,
+          )
+          .join('\n')
+      : 'Không có dữ liệu hướng cần hạn chế từ bộ quy tắc hiện tại.';
+    const hourContext = bazi.birthHourBranch
+      ? `Giờ sinh được quy về **chi ${bazi.birthHourBranch}** và dùng như tín hiệu tham khảo bổ sung.`
+      : 'Chưa có giờ sinh, nên phần giờ chỉ được bỏ qua chứ không suy đoán.';
+    const nextStep = includePlotPrompt
+      ? '\n\nNếu bạn muốn, mình có thể **lọc lô theo các hướng ưu tiên này**; mình chỉ bắt đầu tìm khi bạn đồng ý.'
+      : '';
+
+    return `Mình phân tích theo dữ liệu bạn đã cung cấp. Phần dưới đây là **tham khảo phong thủy/Bát Trạch**, không phải kết luận khoa học hay bảo đảm tốt-xấu.
+
+**1. Nền tảng mệnh và cung**
+- Tuổi Can Chi: **${bazi.yearPillar || 'chưa xác định'}**.
+- Nạp Âm: **${bazi.napAmName || 'chưa xác định'}**${bazi.napAmMeaning ? ` — ${bazi.napAmMeaning}` : ''}, thuộc hành **${bazi.element || bazi.napAmElement || 'chưa xác định'}**.
+- Cung mệnh: ${bazi.cungMenh ? `**${bazi.cungMenh}** — ${bazi.tuMenh}` : '**chưa xác định**'}.
+- Giờ sinh: ${hourContext}
+
+**2. Các hướng nên ưu tiên**
+${goodDirs}
+
+**3. Các hướng nên hạn chế**
+${badDirs}
+
+**4. Quan hệ ngũ hành để tham khảo**
+- Yếu tố hỗ trợ: ${bazi.elementRelations?.supporting || 'chưa có dữ liệu'}.
+- Yếu tố làm suy yếu/xung khắc cần cân nhắc: ${bazi.elementRelations?.weakening || 'chưa có dữ liệu'}.
+
+**5. Ý nghĩa khi áp dụng vào chọn lô**
+${bazi.detailedAnalysis || bazi.explanation} Hướng chỉ là **một tiêu chí mềm**; lựa chọn thực tế vẫn phải đối chiếu tình trạng, giá, diện tích, khu vực và nhu cầu gia đình.
+
+**Lưu ý:** Phần hiện tại dùng năm sinh/cung mệnh và giờ sinh như dữ liệu bổ sung, chưa phải phép lập đầy đủ Tứ Trụ với can-chi của cả năm, tháng, ngày và giờ. ${bazi.disclaimer}${nextStep}`;
   }
 
   private describePlotCompetitiveness(toolOutput: unknown) {
@@ -2690,7 +3133,50 @@ Bạn muốn mình đi sâu vào yêu cầu lô, đơn dịch vụ hay lịch ch
   }) {
     let recommendationResult: RecommendationResult | null = null;
     let suggestedServices: SuggestedService[] = [];
+    let baziSuggestion: BaziSuggestion | null = null;
     let resolvedIntent = input.intent;
+    const directZodiacPlotConsultation =
+      this.resolveZodiacPlotConsultation(input.message);
+    const baziThenPlotsActive = Boolean(
+      directZodiacPlotConsultation ||
+        input.requirements.consultationGoal === 'bazi_then_plots',
+    );
+    if (baziThenPlotsActive) {
+      input.requirements = {
+        ...input.requirements,
+        ...(directZodiacPlotConsultation
+          ? { zodiacSign: directZodiacPlotConsultation }
+          : {}),
+        consultationGoal: 'bazi_then_plots',
+      };
+      const intake = this.buildBaziIntakeTurn({
+        message: input.message,
+        intent: 'bazi_suggestion',
+        requirements: input.requirements,
+        directRequirements: this.extractRequirements(input.message),
+        customerProfile: null,
+      });
+      if (intake) {
+        return this.finish({
+          conversation: input.conversation,
+          sessionId: input.sessionId,
+          userMessageId: input.userMessageId,
+          userMessage: input.message,
+          assistantMessage: intake.assistantMessage,
+          intent: 'bazi_suggestion',
+          requirements: intake.requirements,
+          recommendationResult: null,
+          quickReplies: intake.quickReplies,
+          ownedPlots: input.ownedPlots,
+          traceId: input.traceId,
+          fallbackUsed: true,
+          fallbackReason: input.fallbackReason,
+          llmModel: 'local-authoritative-data',
+          skipSuggestedFollowUps: true,
+          learningResults: input.learningResults,
+        });
+      }
+    }
     // Never expose API/timeout/provider failures to customers. Even when every
     // external model fails, return a useful domain-aware answer from local data
     // and saved preferences instead of a technical outage banner.
@@ -2703,16 +3189,11 @@ Bạn muốn mình đi sâu vào yêu cầu lô, đơn dịch vụ hay lịch ch
     );
     const socialFallback = this.buildDeterministicSocialTurn(input.message);
     if (socialFallback) assistantMessage = socialFallback.assistantMessage;
-
     if (
       input.intent === 'appointment_booking' ||
       input.intent === 'memorial_reminder' ||
       input.intent === 'service_booking' ||
-      input.intent === 'plot_request' ||
-      input.pendingAction?.kind === 'appointment' ||
-      input.pendingAction?.kind === 'memorial_reminder' ||
-      input.pendingAction?.kind === 'service_order' ||
-      input.pendingAction?.kind === 'plot_request'
+      input.intent === 'plot_request'
     ) {
       const fallbackIntent: AgentPlan['intent'] =
         input.pendingAction?.kind === 'appointment'
@@ -2750,8 +3231,16 @@ Bạn muốn mình đi sâu vào yêu cầu lô, đơn dịch vụ hay lịch ch
         input.pendingAction,
         input.message,
       );
+      if (asksToCancelExistingServiceOrder(input.message)) {
+        fallbackPlan = {
+          ...fallbackPlan,
+          intent: 'service_booking',
+          action: 'cancel_service_order',
+        };
+      }
       if (
         input.pendingAction &&
+        !asksToCancelExistingServiceOrder(input.message) &&
         /\b(?:huy|khong dong y|dung lai|bo qua)\b/.test(
           this.foldForMemory(input.message),
         )
@@ -2762,6 +3251,7 @@ Bạn muốn mình đi sâu vào yêu cầu lô, đơn dịch vụ hay lịch ch
         conversationId: input.conversation?.id ?? null,
         userId: input.conversation?.userId ?? null,
         plan: fallbackPlan,
+        userMessage: input.message,
         pendingAction: input.pendingAction,
       });
       if (bookingTurn) {
@@ -2840,6 +3330,41 @@ Bạn muốn mình đi sâu vào yêu cầu lô, đơn dịch vụ hay lịch ch
       assistantMessage = this.describeCustomerCareOverview(
         execution.toolOutput,
       );
+    } else if (baziThenPlotsActive) {
+      const baziPlan: AgentPlan = {
+        intent: 'bazi_suggestion',
+        action: 'suggest_bazi_direction',
+        contextMode: 'continue',
+        needsClarification: false,
+        clarificationQuestion: '',
+        requirements: input.requirements,
+      };
+      const execution = await this.executeAgentPlan({
+        plan: baziPlan,
+        conversationId: input.conversation?.id ?? null,
+        userMessageId: input.userMessageId,
+        userId: input.conversation?.userId ?? null,
+        sessionId: input.sessionId,
+      });
+      const bazi =
+        execution.baziSuggestion ?? (execution.toolOutput as BaziSuggestion);
+      baziSuggestion = bazi;
+      const recommendationContext = {
+        userId: input.conversation?.userId ?? null,
+        conversationId: input.conversation?.id ?? null,
+        sourceMessageId: input.userMessageId,
+      };
+      const baziPlotMatch = await this.recommendPlotsAcrossBaziDirections(
+        input.requirements,
+        bazi,
+        recommendationContext,
+      );
+      input.requirements = baziPlotMatch.requirements;
+      recommendationResult = baziPlotMatch.result;
+      recommendationResult.baziSuggestion ??= bazi;
+      suggestedServices = recommendationResult.suggestedServices;
+      resolvedIntent = 'recommend_plots';
+      assistantMessage = `${this.describeBaziSuggestion(bazi, false)}\n\n**Đối chiếu sang quỹ lô đang trống**\n\n${this.describeRecommendations(recommendationResult)}`;
     } else if (input.intent === 'recommend_plots') {
       const searchRequirements: AgentRequirements = {
         ...input.requirements,
@@ -2948,15 +3473,87 @@ Bạn muốn mình đi sâu vào yêu cầu lô, đơn dịch vụ hay lịch ch
       userMessage: input.message,
       assistantMessage,
       intent: resolvedIntent,
-      requirements: input.requirements,
+      requirements: input.pendingAction
+        ? { ...input.requirements, pendingAction: input.pendingAction }
+        : input.requirements,
       recommendationResult,
       suggestedServices,
+      baziSuggestion: baziSuggestion ?? undefined,
       ownedPlots: input.ownedPlots,
       traceId: input.traceId,
       fallbackUsed: true,
       fallbackReason: input.fallbackReason,
       learningResults: input.learningResults,
     });
+  }
+
+  private async recommendPlotsAcrossBaziDirections(
+    baseRequirements: AgentRequirements,
+    bazi: BaziSuggestion,
+    context: {
+      userId: number | null;
+      conversationId: number | null;
+      sourceMessageId: number | null;
+    },
+  ): Promise<{
+    requirements: AgentRequirements;
+    result: RecommendationResult;
+  }> {
+    const directions = [
+      ...new Set(
+        [...bazi.preferredDirections, ...bazi.alternativeDirections].filter(
+          Boolean,
+        ),
+      ),
+    ].slice(0, 4);
+    const candidates = directions.length ? directions : [undefined];
+    let lastRequirements: AgentRequirements = {
+      ...baseRequirements,
+      numberOfPlots: baseRequirements.numberOfPlots ?? 1,
+    };
+    let lastResult: RecommendationResult | null = null;
+
+    for (const direction of candidates) {
+      const requirements: AgentRequirements = {
+        ...baseRequirements,
+        ...(direction ? { preferredDirection: direction } : {}),
+        numberOfPlots: baseRequirements.numberOfPlots ?? 1,
+      };
+      const result = requirements.budgetMax
+        ? await this.recommendations.recommend(
+            {
+              ...requirements,
+              budgetMax: requirements.budgetMax,
+              numberOfPlots: requirements.numberOfPlots ?? 1,
+            },
+            context,
+          )
+        : await this.recommendations.browseAvailablePlots(requirements, context);
+      lastRequirements = requirements;
+      lastResult = result;
+      if (result.recommendations.length > 0) {
+        return { requirements, result };
+      }
+    }
+
+    return {
+      requirements: lastRequirements,
+      result:
+        lastResult ??
+        (baseRequirements.budgetMax
+          ? await this.recommendations.recommend(
+              {
+                ...lastRequirements,
+                budgetMax: baseRequirements.budgetMax,
+                numberOfPlots: lastRequirements.numberOfPlots ?? 1,
+              },
+              context,
+            )
+          : await this.recommendations.browseAvailablePlots(
+              lastRequirements,
+              context,
+            )),
+    };
   }
 
   private async generateSuggestedFollowUps(
@@ -2973,12 +3570,13 @@ Yêu cầu bắt buộc:
 1. Trả về đúng định dạng JSON Array chứa 3 object: [{"category": "...", "text": "..."}, ...]
 2. TUỆT ĐỐI KHÔNG sử dụng emoji hay bất kỳ biểu tượng nào.
 3. Nội dung bằng tiếng Việt, xưng hô lịch sự (ví dụ: "Cho mình hỏi...", "Tư vấn chi tiết..."), tập trung vào nhu cầu tiếp theo về đất nghĩa trang, dịch vụ chăm sóc, phong thủy hay thủ tục.
+4. Không gợi ý tham quan chung chung hoặc đến hoa viên khi chưa có lô. Chỉ được gợi ý "hẹn xem lô đất" khi khách đã có yêu cầu lô được duyệt; backend sẽ bắt khách tự chọn đúng lô trước khi mở lịch.
 
 Ví dụ JSON output:
 [
   {"category": "Chi phí mua lô", "text": "Giá trị hợp đồng và thanh toán khi mua lô diễn ra như thế nào?"},
   {"category": "Hướng phong thủy", "text": "Khu vực này có hợp với gia chủ tuổi Mậu Thìn không?"},
-  {"category": "Xem thực tế", "text": "Tôi muốn đăng ký xem thực tế hoa viên vào cuối tuần."}
+  {"category": "Hồ sơ cần chuẩn bị", "text": "Mình cần chuẩn bị giấy tờ gì cho bước tiếp theo?"}
 ]`;
 
     try {
@@ -3019,7 +3617,13 @@ Ví dụ JSON output:
                 .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '')
                 .trim(),
             }))
-            .filter((item) => item.text.length > 0);
+            .filter(
+              (item) =>
+                item.text.length > 0 &&
+                !/(?:tham|thăm)\s*quan|xem\s+thực\s+tế|(?:đến|tới)\s+hoa\s+viên/i.test(
+                  `${item.category} ${item.text}`,
+                ),
+            );
         }
       }
     } catch (err) {
@@ -3048,6 +3652,10 @@ Ví dụ JSON output:
         ? [this.decisionComparisonAi]
         : []),
       ...(this.comparisonAi.isConfigured() ? [this.comparisonAi] : []),
+      // If both isolated comparison pools are unavailable or return unusable
+      // JSON, borrow the normal cross-model router (20B -> 120B -> Mistral)
+      // instead of leaving the comparison panel empty.
+      ...(this.nvidia.isConfigured() ? [this.nvidia] : []),
     ];
     if (providers.length === 0) {
       return {
@@ -3096,9 +3704,22 @@ ${JSON.stringify(options)}
       try {
         const response = await provider.chat(messages, [], 'auto', {
           temperature: 0.2,
-          maxTokens: 1_100,
-          timeoutMs: 6_500,
-          totalTimeoutMs: 14_000,
+          maxTokens: 1_400,
+          timeoutMs: 18_000,
+          totalTimeoutMs: provider === this.nvidia ? 42_000 : 30_000,
+          validateResponse:
+            provider === this.nvidia
+              ? (candidate: NvidiaChatResponse) =>
+                  Boolean(
+                    this.parseComparisonAssessment(
+                      candidate.choices[0]?.message?.content,
+                      dto.options.map((option) => option.plotCodes),
+                    ),
+                  )
+              : undefined,
+          ...(provider === this.nvidia
+            ? { preferredProviderId: 'openai-primary' as const }
+            : {}),
           ...(provider.model.includes('nemotron-3')
             ? { enableThinking: false }
             : {}),
@@ -3136,9 +3757,22 @@ ${JSON.stringify(options)}
             'auto',
             {
               temperature: 0.1,
-              maxTokens: 1_100,
-              timeoutMs: 4_500,
-              totalTimeoutMs: 8_000,
+              maxTokens: 1_400,
+              timeoutMs: 16_000,
+              totalTimeoutMs: provider === this.nvidia ? 36_000 : 26_000,
+              validateResponse:
+                provider === this.nvidia
+                  ? (candidate: NvidiaChatResponse) =>
+                      Boolean(
+                        this.parseComparisonAssessment(
+                          candidate.choices[0]?.message?.content,
+                          dto.options.map((option) => option.plotCodes),
+                        ),
+                      )
+                  : undefined,
+              ...(provider === this.nvidia
+                ? { preferredProviderId: 'openai-primary' as const }
+                : {}),
               ...(provider.model.includes('nemotron-3')
                 ? { enableThinking: false }
                 : {}),
@@ -3485,8 +4119,11 @@ ${JSON.stringify(options)}
     learningResults?: AutonomousLearningResult[];
   }) {
     const knowledgeVersion = await this.safeKnowledgeVersion();
+    const nonEmptyMessage =
+      input.assistantMessage?.trim() ||
+      'Mình đã nhận câu hỏi của bạn. Bạn nói rõ thêm một ý chính bạn muốn mình giải đáp để mình trả lời đúng trọng tâm nhé.';
     const assistantMessage = this.appendLearningOutcome(
-      input.assistantMessage.trim(),
+      nonEmptyMessage,
       input.learningResults ?? [],
     );
     const localLlmFallback =
@@ -3637,6 +4274,13 @@ ${JSON.stringify(options)}
       uiDirective,
       metadata,
     };
+  }
+
+  private shouldUseLlmForSemanticTurns() {
+    return (
+      this.nvidia.isConfigured() &&
+      this.config.get<boolean>('ai.llmWritesConversationalTurns') !== false
+    );
   }
 
   private async withTimeout<T>(
@@ -3801,9 +4445,11 @@ ${JSON.stringify(options)}
     );
 
     if (!requirements.birthDate) {
+      const zodiacLead = requirements.zodiacSign
+        ? `Mình hiểu bạn muốn chọn lô theo tuổi ${requirements.zodiacSign}. Cùng một con giáp có thể rơi vào các năm Can Chi, Nạp Âm và cung khác nhau nên mình chưa thể gán hướng hợp tuổi chỉ từ chữ “tuổi ${requirements.zodiacSign}”. `
+        : '';
       return {
-        assistantMessage:
-          'Được, mình sẽ xem Bát Tự theo hướng tham khảo văn hóa. Hồ sơ tài khoản hiện chưa có ngày sinh để mình sử dụng, nên bạn cho mình ngày sinh theo dạng ngày/tháng/năm trước nhé.',
+        assistantMessage: `${zodiacLead}Hiện mình chưa có ngày sinh cụ thể. Để mình tư vấn Bát Tự/Bát Trạch trước rồi mới đối chiếu lô thực tế, bạn gửi giúp ngày/tháng/năm sinh, giới tính và giờ sinh nếu biết. Nếu tiện, cho mình thêm ngân sách cùng khu vực hoặc vị trí mong muốn; chưa có hai tiêu chí này thì mình vẫn có thể luận hướng trước.`,
         requirements,
         quickReplies: [],
       };
@@ -3934,6 +4580,11 @@ ${JSON.stringify(options)}
       /\b(remember|please remember|ghi nho|nho giup|hay nho|luu lai|luu giup)\b/.test(
         folded,
       );
+    const explicitlyMakesItDurable =
+      explicitlyAsksToRemember ||
+      /\b(?:tu gio|ve sau|sau nay|lan sau|nhung lan sau|mac dinh|always|from now on|next time|future)\b/.test(
+        folded,
+      );
     const firstPersonPreference =
       /^(?:toi|minh|tui|tao|t|to|em|anh|chi)\b.{0,120}\b(?:thich|uu tien|muon|can|doi y|thay doi|cap nhat|sua lai|prefer|like|want|need|change|update)\b/.test(
         folded,
@@ -3947,8 +4598,11 @@ ${JSON.stringify(options)}
         folded,
       ) ||
       (/\bdich vu\b/.test(folded) &&
-        /\b(?:hom nay|ngay mai|ngay kia|ngay nua|sau \d+ ngay|\d{1,2}[/-]\d{1,2})\b/.test(folded));
+        /\b(?:hom nay|ngay mai|ngay kia|ngay nua|sau \d+ ngay|\d{1,2}[/-]\d{1,2})\b/.test(
+          folded,
+        ));
     if (
+      !explicitlyMakesItDurable ||
       (!explicitlyAsksToRemember && !firstPersonPreference) ||
       isPreferenceQuestion ||
       (!explicitlyAsksToRemember && transactionalRequest)
@@ -4564,7 +5218,8 @@ ${JSON.stringify(options)}
       return `Ừ, mình nhớ ngữ cảnh trước đó. Phần bạn đang nhắc tới là: “${recentMeaningful.content.trim().slice(0, 260)}”. Mình sẽ tiếp tục từ phần này, không bắt bạn kể lại từ đầu.`;
     }
 
-    const memorySummary = conversationMemoryContext.match(/Summary:\s*([^\n]+)/)?.[1];
+    const memorySummary =
+      conversationMemoryContext.match(/Summary:\s*([^\n]+)/)?.[1];
     if (memorySummary) {
       return `Ừ, mình nhớ phần trước. Tóm tắt gần nhất của cuộc trao đổi là: ${memorySummary.slice(0, 420)}. Mình sẽ tiếp tục dựa trên ngữ cảnh đó.`;
     }
@@ -4579,7 +5234,35 @@ ${JSON.stringify(options)}
       /^(?:gi|ha|he|a|ua|help|test|thu|sao|roi sao|tiep di|noi di|khong biet)$/.test(
         folded,
       )
+    ) || this.isUnintelligibleTurn(folded);
+  }
+
+  private isUnintelligibleTurn(folded: string) {
+    if (!folded) return true;
+    const compact = folded.replace(/\s+/g, '');
+    if (/(.)\1{3,}/.test(compact)) return true;
+    if (/^(?:asdf|qwer|qwerty|zxcv|lolol|hahaha|kkkk|hehehe)+$/.test(compact)) {
+      return true;
+    }
+    const words = folded.split(' ').filter(Boolean);
+    return (
+      words.length <= 3 &&
+      compact.length >= 5 &&
+      !/[aeiouy]/.test(compact) &&
+      /^[a-z0-9]+$/.test(compact)
     );
+  }
+
+  private isResetPersonalMemoryRequest(message: string) {
+    const folded = this.foldForMemory(message);
+    const resetVerb = /\b(?:xoa|reset|lam moi|clear|quen|bo het|bo nho lai)\b/.test(
+      folded,
+    );
+    const personalMemory =
+      /\b(?:bo nho|memory|so thich|uu tien|thong tin ca nhan|tri nho|nho ve toi|nho minh|nho tui|intelligence ca nhan)\b/.test(
+        folded,
+      );
+    return resetVerb && personalMemory;
   }
 
   private isBareAcknowledgement(message: string) {
@@ -5172,8 +5855,10 @@ Hệ thống không còn lựa chọn giữ chỗ riêng. Việc gửi yêu cầ
       ),
     ];
     if (acknowledgements.length <= 1) {
-      return acknowledgements[0] ??
-        'Được, mình đã ghi nhận ưu tiên bạn vừa nêu để tư vấn sát nhu cầu hơn.';
+      return (
+        acknowledgements[0] ??
+        'Được, mình đã ghi nhận ưu tiên bạn vừa nêu để tư vấn sát nhu cầu hơn.'
+      );
     }
     const normalized = acknowledgements.map((item) =>
       item
@@ -5213,6 +5898,40 @@ Hệ thống không còn lựa chọn giữ chỗ riêng. Việc gửi yêu cầ
       )
     ) {
       return 'Mình là trợ lý Vĩnh Phúc Viên. Mình có thể hỗ trợ tìm lô phù hợp, so sánh phương án, xem quy trình mua lô, dịch vụ chăm sóc, thông tin tài khoản và tư vấn phong thủy mang tính tham khảo.';
+    }
+    const zodiacWord = folded.match(
+      /\btuoi\s+(chuot|ty|trau|suu|ho|dan|meo|mao|rong|thin|ran|ti|ngua|ngo|de|mui|khi|than|ga|dau|cho|tuat|heo|hoi|lon)\b/,
+    )?.[1];
+    if (zodiacWord) {
+      const zodiac: Record<string, { sign: string; animal: string }> = {
+        chuot: { sign: 'Tý', animal: 'Chuột' },
+        ty: { sign: 'Tý', animal: 'Chuột' },
+        trau: { sign: 'Sửu', animal: 'Trâu' },
+        suu: { sign: 'Sửu', animal: 'Trâu' },
+        ho: { sign: 'Dần', animal: 'Hổ' },
+        dan: { sign: 'Dần', animal: 'Hổ' },
+        meo: { sign: 'Mão', animal: 'Mèo' },
+        mao: { sign: 'Mão', animal: 'Mèo' },
+        rong: { sign: 'Thìn', animal: 'Rồng' },
+        thin: { sign: 'Thìn', animal: 'Rồng' },
+        ran: { sign: 'Tỵ', animal: 'Rắn' },
+        ti: { sign: 'Tỵ', animal: 'Rắn' },
+        ngua: { sign: 'Ngọ', animal: 'Ngựa' },
+        ngo: { sign: 'Ngọ', animal: 'Ngựa' },
+        de: { sign: 'Mùi', animal: 'Dê' },
+        mui: { sign: 'Mùi', animal: 'Dê' },
+        khi: { sign: 'Thân', animal: 'Khỉ' },
+        than: { sign: 'Thân', animal: 'Khỉ' },
+        ga: { sign: 'Dậu', animal: 'Gà' },
+        dau: { sign: 'Dậu', animal: 'Gà' },
+        cho: { sign: 'Tuất', animal: 'Chó' },
+        tuat: { sign: 'Tuất', animal: 'Chó' },
+        heo: { sign: 'Hợi', animal: 'Heo' },
+        hoi: { sign: 'Hợi', animal: 'Heo' },
+        lon: { sign: 'Hợi', animal: 'Heo' },
+      };
+      const item = zodiac[zodiacWord];
+      return `Tuổi ${item.sign} là tuổi ${item.animal} trong 12 con giáp của Việt Nam. Nếu bạn muốn dùng tuổi này để tham khảo khi chọn lô, mình cần thêm năm hoặc ngày sinh cụ thể, giới tính và giờ sinh nếu biết vì cùng một con giáp có thể thuộc các Can Chi, Nạp Âm và cung khác nhau.`;
     }
     if (/\b(?:phong thuy|bat tu|bazi|huong mo|am trach)\b/.test(folded)) {
       return 'Mình có thể trao đổi về phong thủy và Bát Tự như một yếu tố tham khảo khi chọn hướng hoặc vị trí lô, đồng thời vẫn ưu tiên dữ liệu thực tế như giá, diện tích, tình trạng và nhu cầu của gia đình. Bạn muốn hỏi về hướng, vị trí hay chọn lô theo một tiêu chí cụ thể?';
@@ -5463,7 +6182,7 @@ Hệ thống không còn lựa chọn giữ chỗ riêng. Việc gửi yêu cầ
         ? `Điểm cần cân nhắc: ${tradeOffs.join('; ')}.`
         : 'Trước khi đặt yêu cầu, bạn nên xem vị trí trên bản đồ và kiểm tra lại hướng cùng diện tích.',
       comparisons.length > 1
-        ? `**So sánh nhanh các phương án:**\n${comparisons.join('\n')}`
+        ? `**So sánh nhanh các phương án:**\n\n${comparisons.join('\n\n')}`
         : '',
       limitedAvailabilityNote,
       priceContext,
@@ -5490,9 +6209,7 @@ Hệ thống không còn lựa chọn giữ chỗ riêng. Việc gửi yêu cầ
     };
     const categoryLabel = categoryLabels[service.category] ?? service.category;
     const lines: string[] = [];
-    lines.push(
-      `- **Chi phí:** ${priceStr} VND/${service.unit}`,
-    );
+    lines.push(`- **Chi phí:** ${priceStr} VND/${service.unit}`);
     if (service.description) {
       lines.push(`- **Nội dung thực hiện:** ${service.description}`);
     }
@@ -5618,7 +6335,7 @@ Hệ thống không còn lựa chọn giữ chỗ riêng. Việc gửi yêu cầ
         const service = matchedServices[0];
         sections.push(
           `Mình đã tra cứu thông tin chi tiết về dịch vụ **${service.name}** mà bạn quan tâm:\n\n` +
-          this.buildServiceAnalysis(service),
+            this.buildServiceAnalysis(service),
         );
       } else {
         // Multiple matched services — detailed analysis + comparison
@@ -5627,8 +6344,7 @@ Hệ thống không còn lựa chọn giữ chỗ riêng. Việc gửi yêu cầ
         );
         for (const service of matchedServices) {
           sections.push(
-            `### ${service.name}\n\n` +
-            this.buildServiceAnalysis(service),
+            `### ${service.name}\n\n` + this.buildServiceAnalysis(service),
           );
         }
 
@@ -5641,9 +6357,9 @@ Hệ thống không còn lựa chọn giữ chỗ riêng. Việc gửi yêu cầ
           const sameUnit = sorted[0].unit === sorted[1].unit;
           sections.push(
             `**So sánh nhanh:** **${sorted[0].name}** có chi phí thấp hơn ${diff}/${sameUnit ? sorted[0].unit : 'lần sử dụng'} so với **${sorted[1].name}**. ` +
-            (sorted[0].category === sorted[1].category
-              ? `Cả hai cùng thuộc nhóm ${(({ maintenance: 'chăm sóc & bảo trì', memorial: 'tưởng niệm & tâm linh', burial: 'an táng' } as Record<string, string>)[sorted[0].category] ?? sorted[0].category)}, nên bạn có thể kết hợp sử dụng song song để phủ đủ nhu cầu.`
-              : `Hai dịch vụ thuộc nhóm khác nhau nên phục vụ mục đích khác nhau — bạn có thể cân nhắc đặt cả hai tùy dịp.`),
+              (sorted[0].category === sorted[1].category
+                ? `Cả hai cùng thuộc nhóm ${({ maintenance: 'chăm sóc & bảo trì', memorial: 'tưởng niệm & tâm linh', burial: 'an táng' } as Record<string, string>)[sorted[0].category] ?? sorted[0].category}, nên bạn có thể kết hợp sử dụng song song để phủ đủ nhu cầu.`
+                : `Hai dịch vụ thuộc nhóm khác nhau nên phục vụ mục đích khác nhau — bạn có thể cân nhắc đặt cả hai tùy dịp.`),
           );
         } else {
           const cheapest = sorted[0];
@@ -5661,8 +6377,9 @@ Hệ thống không còn lựa chọn giữ chỗ riêng. Việc gửi yêu cầ
             ? `lô **${ownedPlots[0].plotCode}**`
             : `các lô **${ownedPlots.map((plot) => plot.plotCode).join(', ')}**`;
         sections.push(
-          ownershipAdvice + '\n\n' +
-          `**Gợi ý tiếp theo:** Bạn muốn mình đặt **${matchedServices[0].name}** cho ${plotList}, ${matchedServices.length > 1 ? `so sánh kỹ hơn giữa **${matchedServices.map((service) => service.name).join('** và **')}**,` : 'xem thêm dịch vụ khác,'} hay cần mình tư vấn lịch chăm sóc phù hợp theo thời gian?`,
+          ownershipAdvice +
+            '\n\n' +
+            `**Gợi ý tiếp theo:** Bạn muốn mình đặt **${matchedServices[0].name}** cho ${plotList}, ${matchedServices.length > 1 ? `so sánh kỹ hơn giữa **${matchedServices.map((service) => service.name).join('** và **')}**,` : 'xem thêm dịch vụ khác,'} hay cần mình tư vấn lịch chăm sóc phù hợp theo thời gian?`,
         );
       } else {
         sections.push(ownershipAdvice);
@@ -5672,12 +6389,12 @@ Hệ thống không còn lựa chọn giữ chỗ riêng. Việc gửi yêu cầ
       if (otherServices.length > 0) {
         sections.push(
           `Ngoài ra, nghĩa trang còn có ${otherServices.length} dịch vụ khác bạn có thể tham khảo thêm:\n\n` +
-          otherServices
-            .map(
-              (service) =>
-                `- **${service.name}:** ${service.basePrice.toLocaleString('vi-VN')} VND/${service.unit}${service.description ? ` — ${service.description}` : ''}.`,
-            )
-            .join('\n'),
+            otherServices
+              .map(
+                (service) =>
+                  `- **${service.name}:** ${service.basePrice.toLocaleString('vi-VN')} VND/${service.unit}${service.description ? ` — ${service.description}` : ''}.`,
+              )
+              .join('\n'),
         );
       }
 
@@ -5698,8 +6415,7 @@ Hệ thống không còn lựa chọn giữ chỗ riêng. Việc gửi yêu cầ
 
     for (const service of options) {
       sections.push(
-        `### ${service.name}\n\n` +
-        this.buildServiceAnalysis(service),
+        `### ${service.name}\n\n` + this.buildServiceAnalysis(service),
       );
     }
 
@@ -6044,11 +6760,26 @@ Hệ thống không còn lựa chọn giữ chỗ riêng. Việc gửi yêu cầ
   ): AgentRequirements {
     let requirements: AgentRequirements = {};
     for (const item of history) {
-      if (item.role !== 'user' || !item.content) continue;
-      requirements = this.mergeDefinedRequirements(
-        requirements,
-        this.extractRequirements(item.content),
-      );
+      if (item.role === 'user' && item.content) {
+        requirements = this.mergeDefinedRequirements(
+          requirements,
+          this.extractRequirements(item.content),
+        );
+        continue;
+      }
+      // The semantic planner creates this goal; preserve its backend-validated
+      // fields across the Bát Tự intake turns instead of trying to rediscover
+      // them from a later short reply such as a birth date or "nam, 8 giờ".
+      if (
+        item.role === 'assistant' &&
+        item.intent === 'bazi_suggestion' &&
+        item.extractedData?.consultationGoal === 'bazi_then_plots'
+      ) {
+        requirements = this.mergeDefinedRequirements(
+          requirements,
+          item.extractedData as AgentRequirements,
+        );
+      }
     }
     return requirements;
   }
@@ -6126,7 +6857,7 @@ Hệ thống không còn lựa chọn giữ chỗ riêng. Việc gửi yêu cầ
       return 'service_booking';
     }
     if (
-      /\b(?:nhac lich|nhac nho|gui email nhac)\b/.test(folded) ||
+      /\b(?:nhac lich|nhac nho|nhac gio|dam gio|gui email nhac)\b/.test(folded) ||
       /\b(?:tuong niem|ngay gio)\b.{0,45}\b(?:ngay|nhac|email|hang nam|moi nam)\b/.test(
         folded,
       )
@@ -6136,9 +6867,16 @@ Hệ thống không còn lựa chọn giữ chỗ riêng. Việc gửi yêu cầ
     if (this.asksForSavedBudgetPreference(message)) {
       return 'general_question';
     }
-    const hasPlotCode = /\b[a-z]\s*-\s*\d{1,3}\s*-\s*\d{1,3}\b/i.test(
-      message,
-    );
+    if (
+      /\b(?:quy trinh|thu tuc|cac buoc|lam sao|nhu the nao)\b/.test(folded) &&
+      /\b(?:mua|giu cho|dat cho|giu lo|gui yeu cau)\b/.test(folded)
+    ) {
+      return 'purchase_process';
+    }
+    if (/\b(?:dich vu|cham soc|thap huong|don dep)\b/.test(folded)) {
+      return 'service_suggestions';
+    }
+    const hasPlotCode = /\b[a-z]\s*-\s*\d{1,3}\s*-\s*\d{1,3}\b/i.test(message);
     if (
       hasPlotCode &&
       /\b(?:dat yeu cau|gui yeu cau|tao yeu cau|yeu cau cho phuong an|yeu cau cho lo|giu cho|mua lo|dat mua)\b/.test(

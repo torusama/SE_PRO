@@ -161,6 +161,28 @@ describe('NvidiaNemotronService', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it('rotates to the next key when HTTP succeeds with empty content', async () => {
+    const emptyResponse = new Response(
+      JSON.stringify({
+        choices: [{ message: { role: 'assistant', content: null } }],
+      }),
+      { status: 200 },
+    );
+    const fetchMock = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(emptyResponse)
+      .mockResolvedValueOnce(okResponse());
+    const service = createService({
+      'ai.mistralAgent.apiKey': undefined,
+      'ai.mistralAgent.apiKeys': 'key-empty,key-good',
+    });
+
+    await expect(service.chat(messages)).resolves.toMatchObject({
+      choices: [{ message: { content: 'OK' } }],
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('fails over after timeout, network failure, or server error', async () => {
     const timeoutError = Object.assign(new Error('timeout'), {
       name: 'AbortError',

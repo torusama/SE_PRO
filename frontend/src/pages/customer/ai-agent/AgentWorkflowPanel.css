@@ -10,6 +10,15 @@
   padding: 24px 20px;
 }
 
+@media (min-width: 981px) {
+  .agent-workflow-panel.is-appointment {
+    width: 100%;
+    min-width: 460px;
+    padding-right: clamp(24px, 3vw, 44px);
+    padding-left: clamp(24px, 3vw, 44px);
+  }
+}
+
 .agent-workflow-close {
   position: absolute;
   top: 16px;
@@ -59,6 +68,19 @@
 
 @media (max-width: 980px) {
   .agent-workflow-panel { position: absolute; inset: 0 0 0 auto; z-index: 20; width: min(420px, 92vw); box-shadow: -18px 0 48px rgba(0,0,0,.36); }
+
+  .agent-workflow-panel.is-appointment {
+    width: min(720px, 100vw);
+    min-width: 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .agent-workflow-panel.is-appointment {
+    width: 100vw;
+    padding: 20px 14px;
+    border-left: 0;
+  }
 }
 
 .agent-workflow-success {
@@ -138,7 +160,7 @@
 .agent-workflow-calendar-note { margin: 8px 2px 0; color: #67838a; font-size: 10px; line-height: 1.55; }
 .agent-workflow-primary:disabled { opacity: .55; cursor: not-allowed; }
 
-/* Service checkout flow: Đã đặt -> Thanh toán -> Chọn lịch */
+/* Service checkout flow: Đã đặt -> Thanh toán -> Xem lịch */
 .agent-workflow-progress {
   display: grid;
   grid-template-columns: minmax(64px, 1fr) 24px minmax(72px, 1fr) 24px minmax(70px, 1fr);
@@ -317,14 +339,117 @@
   cursor: pointer;
 }
 
+/* The AI panel embeds the canonical service payment component in a narrow rail. */
+.agent-workflow-panel .demo-payment {
+  position: relative;
+  overflow: hidden;
+  margin-top: 0;
+  padding: 18px 16px 16px;
+  border-color: rgba(37, 215, 203, .42);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 50% 0, rgba(24, 167, 157, .12), transparent 42%),
+    linear-gradient(180deg, rgba(9, 31, 42, .98), rgba(7, 25, 35, .96));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .025),
+    0 14px 34px rgba(0, 0, 0, .16);
+}
+
+.agent-workflow-panel .demo-payment::before {
+  position: absolute;
+  inset: 0 20% auto;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(80, 231, 216, .7), transparent);
+  content: "";
+}
+
+.agent-workflow-panel .demo-payment h3 {
+  margin-bottom: 16px;
+  color: #dff8f5;
+  font-size: 12px;
+  letter-spacing: .12em;
+  text-align: center;
+}
+
+.agent-workflow-panel .demo-payment-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+  width: 100%;
+}
+
+.agent-workflow-panel .demo-payment-qr {
+  justify-self: center;
+  width: 100%;
+}
+
+.agent-workflow-panel .demo-payment-qr .fake-qr {
+  width: min(156px, 70%);
+  height: auto;
+  border-width: 5px;
+  border-radius: 9px;
+  filter: drop-shadow(0 10px 20px rgba(0, 0, 0, .24));
+}
+
+.agent-workflow-panel .demo-payment-qr-badge {
+  margin-top: 3px;
+  color: rgba(188, 216, 212, .5);
+  font-size: 9px;
+}
+
+.agent-workflow-panel .demo-payment-info {
+  width: 100%;
+  min-width: 0;
+  gap: 0;
+}
+
+.agent-workflow-panel .demo-payment-row {
+  min-width: 0;
+  padding: 10px 0;
+  border-bottom-color: rgba(75, 190, 177, .16);
+  font-size: 11px;
+}
+
+.agent-workflow-panel .demo-payment-row span {
+  color: #78969d;
+}
+
+.agent-workflow-panel .demo-payment-row strong {
+  overflow-wrap: anywhere;
+  color: #d9e9e8;
+  font-size: 11.5px;
+}
+
+.agent-workflow-panel .demo-payment .service-primary {
+  min-height: 44px;
+  margin-top: 14px;
+  border-color: rgba(37, 215, 203, .62);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(18, 139, 133, .25), rgba(11, 91, 91, .18));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .035);
+  font-size: 13px;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.agent-workflow-panel .demo-payment .service-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: #38dbcf;
+  background: linear-gradient(180deg, rgba(24, 164, 157, .32), rgba(11, 100, 98, .24));
+  box-shadow: 0 8px 20px rgba(0, 115, 105, .12);
+}
+
 /* Agent-guided workflow focus: subtle motion, never a full-page zoom. */
 .agent-workflow-panel {
   box-shadow: -18px 0 52px rgba(0, 0, 0, 0.24);
-  animation: agent-workflow-panel-enter 260ms cubic-bezier(.2, .8, .2, 1) both;
+  animation: agent-workflow-panel-enter 220ms cubic-bezier(.22, .72, .26, 1) both;
 }
 
 .agent-workflow-content {
-  animation: agent-workflow-content-enter 220ms ease-out both;
+  animation: agent-workflow-content-enter 180ms ease-out both;
 }
 
 .agent-workflow-close,
@@ -348,8 +473,7 @@
 .agent-workflow-primary:focus-visible,
 .agent-workflow-link:focus-visible,
 .agent-workflow-close:focus-visible,
-.agent-workflow-calendar button:focus-visible,
-.agent-workflow-appointment-fields input:focus-visible {
+.agent-workflow-calendar button:focus-visible {
   outline: 2px solid rgba(66, 223, 210, .72);
   outline-offset: 2px;
 }
@@ -358,109 +482,34 @@
   animation: agent-workflow-step-focus 900ms ease-out 1;
 }
 
-.agent-workflow-appointment-progress {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 7px;
+.agent-workflow-selected-plot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 15px;
+  border: 1px solid rgba(37, 215, 203, .28);
+  border-radius: 11px;
+  background: rgba(18, 125, 123, .1);
 }
 
-.agent-workflow-appointment-progress > span {
+.agent-workflow-selected-plot span {
+  color: #789da2;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.agent-workflow-selected-plot strong {
+  color: #dff8f5;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.agent-workflow-appointment-page-link {
   display: flex;
-  min-height: 38px;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 7px 8px;
-  border: 1px solid rgba(81, 136, 140, .2);
-  border-radius: 9px;
-  background: rgba(9, 22, 36, .72);
-  color: #617f87;
-  font-size: 9px;
-  font-weight: 750;
-  text-align: center;
-}
-
-.agent-workflow-appointment-progress b {
-  display: grid;
-  width: 19px;
-  height: 19px;
-  flex: 0 0 19px;
-  place-items: center;
-  border-radius: 50%;
-  background: rgba(95, 144, 149, .12);
-  font-size: 9px;
-}
-
-.agent-workflow-appointment-progress > span.is-complete,
-.agent-workflow-appointment-progress > span.is-current {
-  border-color: rgba(37, 215, 203, .28);
-  color: #9bd8d3;
-}
-
-.agent-workflow-appointment-progress > span.is-current {
-  background: rgba(18, 125, 123, .12);
-  box-shadow: 0 0 0 3px rgba(37, 215, 203, .035);
-  animation: agent-workflow-step-focus 900ms ease-out 1;
-}
-
-.agent-workflow-appointment-fields {
-  display: grid;
-  gap: 11px;
-  padding: 13px;
-  border: 1px solid rgba(81, 136, 140, .22);
-  border-radius: 12px;
-  background: #091624;
-}
-
-.agent-workflow-time-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.agent-workflow-time-grid label,
-.agent-workflow-topic-field {
-  display: grid;
   gap: 7px;
-}
-
-.agent-workflow-time-grid label > span,
-.agent-workflow-topic-field > span {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  color: #78969d;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: .03em;
-}
-
-.agent-workflow-time-grid input,
-.agent-workflow-topic-field input {
-  width: 100%;
-  min-height: 38px;
-  box-sizing: border-box;
-  border: 1px solid rgba(81, 136, 140, .25);
-  border-radius: 8px;
-  background: #07131f;
-  color: #dce9eb;
-  padding: 0 10px;
-  font: inherit;
-  font-size: 11px;
-}
-
-.agent-workflow-topic-field input {
-  min-height: 40px;
-}
-
-.agent-workflow-review-note {
-  margin: 0;
-  padding: 11px 12px;
-  border-left: 2px solid #d9b35e;
-  background: rgba(217, 179, 94, .07);
-  color: #b8a77f;
-  font-size: 10px;
-  line-height: 1.6;
 }
 
 .agent-workflow-appointment-summary {
@@ -469,13 +518,13 @@
 }
 
 @keyframes agent-workflow-panel-enter {
-  from { opacity: 0; transform: translateX(18px) scale(.992); }
-  to { opacity: 1; transform: translateX(0) scale(1); }
+  from { opacity: .55; transform: translateX(12px); }
+  to { opacity: 1; transform: translateX(0); }
 }
 
 @keyframes agent-workflow-content-enter {
-  from { opacity: 0; transform: translateY(7px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @keyframes agent-workflow-step-focus {
@@ -483,16 +532,10 @@
   100% { box-shadow: 0 0 0 7px rgba(37, 215, 203, 0); }
 }
 
-@media (max-width: 420px) {
-  .agent-workflow-time-grid { grid-template-columns: 1fr; }
-  .agent-workflow-appointment-progress > span { padding-inline: 5px; }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .agent-workflow-panel,
   .agent-workflow-content,
-  .agent-workflow-progress > div.is-current > span,
-  .agent-workflow-appointment-progress > span.is-current {
+  .agent-workflow-progress > div.is-current > span {
     animation: none !important;
   }
 
@@ -503,4 +546,14 @@
   .agent-workflow-days button {
     transition: none !important;
   }
+}
+.agent-workflow-service-item {
+  display: grid;
+  gap: 14px;
+}
+
+.agent-workflow-service-item + .agent-workflow-service-item {
+  margin-top: 22px;
+  padding-top: 22px;
+  border-top: 1px solid rgba(86, 211, 199, 0.2);
 }

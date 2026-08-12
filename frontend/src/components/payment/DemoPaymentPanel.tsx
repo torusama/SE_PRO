@@ -168,13 +168,13 @@ export default function DemoPaymentPanel({
         {error && <div className="demo-payment-status demo-payment-status--waiting">{error}</div>}
         {paymentStatus === 'unpaid' && (
           <div className="demo-payment-status demo-payment-status--waiting">
-            ⏳ Đang chờ khách hàng thanh toán (mã <strong>{code}</strong>).
+            Đang chờ khách hàng thanh toán (mã <strong>{code}</strong>).
           </div>
         )}
         {paymentStatus === 'awaiting_confirmation' && (
           <>
             <div className="demo-payment-status demo-payment-status--paid">
-              💰 Khách hàng báo đã thanh toán lúc{' '}
+              Khách hàng báo đã thanh toán lúc{' '}
               {paidAt ? new Date(paidAt).toLocaleString('vi-VN') : '—'} · Mã: <strong>{code}</strong> ·
               Số tiền: <strong>{money.format(amount)}</strong>
             </div>
@@ -183,13 +183,13 @@ export default function DemoPaymentPanel({
               xác nhận, đơn sẽ tự chuyển sang trạng thái <strong>Đã thanh toán - đang thực hiện</strong>.
             </p>
             <button className="service-primary" onClick={() => void handleConfirm()} disabled={submitting}>
-              {submitting ? 'Đang xác nhận…' : '✅ Xác nhận đã nhận thanh toán'}
+              {submitting ? 'Đang xác nhận…' : 'Xác nhận đã nhận thanh toán'}
             </button>
           </>
         )}
         {paymentStatus === 'paid' && (
           <div className="demo-payment-status demo-payment-status--confirmed">
-            ✅ Đã xác nhận thanh toán lúc{' '}
+            Đã xác nhận thanh toán lúc{' '}
             {paymentConfirmedAt ? new Date(paymentConfirmedAt).toLocaleString('vi-VN') : '—'}.
           </div>
         )}
@@ -203,7 +203,7 @@ export default function DemoPaymentPanel({
       <section className="demo-payment demo-payment--customer">
         <h3>Thanh toán</h3>
         <div className="demo-payment-status demo-payment-status--confirmed">
-          ✅ Đã thanh toán - đang thực hiện. Đơn của bạn đang được thực hiện.
+          Đã thanh toán - đang thực hiện. Đơn của bạn đang được thực hiện.
         </div>
       </section>
     )
@@ -214,7 +214,7 @@ export default function DemoPaymentPanel({
       <section className="demo-payment demo-payment--customer">
         <h3>Thanh toán</h3>
         <div className="demo-payment-status demo-payment-status--paid">
-          🕒 Đã thanh toán - đang chờ duyệt. Ban quản lý sẽ xác nhận trong thời gian sớm nhất.
+          Đã thanh toán - đang chờ duyệt. Ban quản lý sẽ xác nhận trong thời gian sớm nhất.
         </div>
       </section>
     )

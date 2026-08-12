@@ -10,6 +10,11 @@ export type AgentPendingAction =
   | {
       kind: 'service_order';
       stage: 'collecting' | 'awaiting_confirmation';
+      /** Undefined/create is a new order; cancel targets an existing order. */
+      operation?: 'create' | 'cancel';
+      orderId?: number;
+      orderStatus?: string;
+      candidateOrderIds?: number[];
       serviceTypeId?: number;
       serviceName?: string;
       plotId?: number;
@@ -18,6 +23,13 @@ export type AgentPendingAction =
       quotedPrice?: number;
       serviceUnit?: string;
       note?: string;
+      /**
+       * A structured queue used when the customer asks for several services in
+       * one request. Only the active item is collected/reviewed at a time, and
+       * no order is created until every item has an explicitly confirmed date.
+       */
+      serviceItems?: AgentPendingServiceItem[];
+      activeServiceItemIndex?: number;
     }
   | {
       kind: 'appointment';
@@ -28,6 +40,9 @@ export type AgentPendingAction =
       topic?: string;
       note?: string;
       selectedPlotCode?: string;
+      /** Queue of explicitly selected approved plots for a multi-plot visit. */
+      appointmentItems?: AgentPendingAppointmentItem[];
+      activeAppointmentItemIndex?: number;
     }
   | {
       kind: 'memorial_reminder';
@@ -43,19 +58,42 @@ export type AgentPendingAction =
       notifyEmails: string[];
     };
 
+export interface AgentPendingServiceItem {
+  serviceTypeId?: number;
+  serviceName?: string;
+  plotId?: number;
+  plotCode?: string;
+  requestedDate?: string;
+  quotedPrice?: number;
+  serviceUnit?: string;
+  note?: string;
+  confirmed?: boolean;
+}
+
+export interface AgentPendingAppointmentItem {
+  plotCode: string;
+  appointmentDate?: string;
+  startTime?: string;
+  endTime?: string;
+  confirmed?: boolean;
+}
+
 export type AgentUiDirective =
   | {
       /** Legacy directive name retained for stored conversations; frontend opens the service checkout side panel. */
       type: 'SHOW_INLINE_SERVICE_PAYMENT';
       serviceTypeId?: number;
       orderId?: number;
+      /** All order ids when one chat request created several service orders. */
+      orderIds?: number[];
       amount?: number;
       paymentStatus?: 'unpaid' | 'awaiting_confirmation' | 'paid';
     }
   | {
-      /** Open scheduling only after the payment step and highlight the known date. */
+      /** Open the read-only service calendar only after admin confirms payment. */
       type: 'OPEN_SERVICE_SCHEDULE_CALENDAR';
       orderId: number;
+      orderIds?: number[];
       requestedDate?: string;
       scheduledDate?: string;
     }
@@ -73,6 +111,8 @@ export type AgentUiDirective =
       startTime?: string;
       endTime?: string;
       topic?: string;
+      /** Approved reservation plot explicitly selected by the customer. */
+      plotCode?: string;
     }
   | {
       type: 'OPEN_REMINDER_CALENDAR';
@@ -100,8 +140,15 @@ export interface AgentRequirements {
   birthDate?: string;
   birthTime?: string;
   gender?: 'male' | 'female' | 'other';
+  /** Zodiac understood from natural language; narrative context, never a hard inventory filter. */
+  zodiacSign?: string;
+  /** Multi-turn consultation goal: finish Bát Tự guidance before inventory search. */
+  consultationGoal?: 'bazi_then_plots';
   serviceQuery?: string;
+  /** Service names requested together in one customer turn. */
+  serviceQueries?: string[];
   serviceTypeId?: number;
+  serviceOrderId?: number;
   selectedPlotCode?: string;
   requestedDate?: string;
   appointmentDate?: string;

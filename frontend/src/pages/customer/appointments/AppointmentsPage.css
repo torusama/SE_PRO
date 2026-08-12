@@ -47,7 +47,6 @@
 }
 
 .appointments-eyebrow,
-.appointment-section-heading p,
 .appointment-list-heading p {
   margin: 0 0 10px;
   color: #0affd4;
@@ -201,7 +200,6 @@
   margin-top: 22px;
 }
 
-.appointment-booking-panel,
 .appointment-list-panel {
   border: 1px solid rgba(96, 130, 189, 0.16);
   border-radius: 12px;
@@ -212,17 +210,12 @@
   );
 }
 
-.appointment-booking-panel {
-  padding: clamp(22px, 3vw, 30px);
-}
-
 .appointment-list-panel {
   position: sticky;
   top: 90px;
   overflow: hidden;
 }
 
-.appointment-section-heading,
 .appointment-list-heading {
   display: flex;
   justify-content: space-between;
@@ -230,7 +223,6 @@
   align-items: flex-end;
 }
 
-.appointment-section-heading h2,
 .appointment-list-heading h2 {
   margin: 0;
   color: #edf2ee;
@@ -240,7 +232,6 @@
   letter-spacing: -0.025em;
 }
 
-.appointment-section-heading > span,
 .appointment-list-heading > span {
   color: #728a84;
   font-size: 11px;
@@ -249,202 +240,6 @@
 
 .appointment-list-heading {
   padding: 25px 25px 19px;
-}
-
-.booking-form {
-  display: grid;
-  gap: 24px;
-  margin-top: 26px;
-}
-
-.booking-form fieldset {
-  display: grid;
-  gap: 14px;
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-
-.booking-form fieldset + fieldset {
-  padding-top: 24px;
-  border-top: 1px solid rgba(96, 130, 189, 0.13);
-}
-
-.booking-form legend {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  margin-bottom: 3px;
-  color: #d8e4e0;
-  font-size: 13px;
-  font-weight: 720;
-}
-
-.booking-form legend span {
-  color: #0affd4;
-  font-family:
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.06em;
-}
-
-.appointment-time-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.booking-field {
-  display: grid;
-  gap: 8px;
-  min-width: 0;
-}
-
-.booking-field > span {
-  color: #8ca19c;
-  font-size: 12px;
-  font-weight: 650;
-}
-
-.booking-field input,
-.booking-field select,
-.booking-field textarea {
-  width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
-  border: 1px solid rgba(96, 130, 189, 0.22);
-  border-radius: 9px;
-  outline: 0;
-  color: #e8f2ef;
-  background: #060d10;
-  font: inherit;
-  font-size: 13px;
-  transition:
-    border-color 180ms ease,
-    box-shadow 180ms ease,
-    background 180ms ease;
-  color-scheme: dark;
-}
-
-.booking-field input,
-.booking-field select {
-  min-height: 46px;
-  padding: 0 13px;
-}
-
-.booking-field input[type="date"],
-.booking-field input[type="time"] {
-  font-family:
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
-  font-variant-numeric: tabular-nums;
-}
-
-.booking-field textarea {
-  min-height: 102px;
-  padding: 12px 13px;
-  line-height: 1.6;
-  resize: vertical;
-}
-
-.booking-field input:hover,
-.booking-field select:hover,
-.booking-field textarea:hover {
-  border-color: rgba(96, 130, 189, 0.34);
-}
-
-.booking-field input:focus,
-.booking-field select:focus,
-.booking-field textarea:focus {
-  border-color: rgba(66, 190, 161, 0.7);
-  box-shadow: 0 0 0 3px rgba(66, 190, 161, 0.1);
-  background: #081216;
-}
-
-.booking-field small {
-  color: #657c76;
-  font-size: 10px;
-}
-
-.booking-review {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1.35fr;
-  overflow: hidden;
-  border: 1px solid rgba(10, 255, 212, 0.2);
-  border-radius: 10px;
-  background: rgba(10, 255, 212, 0.045);
-}
-
-.booking-review div {
-  min-width: 0;
-  padding: 14px;
-}
-
-.booking-review div + div {
-  border-left: 1px solid rgba(10, 255, 212, 0.15);
-}
-
-.booking-review span {
-  display: block;
-  margin-bottom: 6px;
-  color: #8b8270;
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-}
-
-.booking-review strong {
-  display: block;
-  overflow: hidden;
-  color: #ded5bf;
-  font-family:
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  font-weight: 680;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.booking-submit {
-  width: 100%;
-  min-height: 48px;
-  border: 1px solid #43bca0;
-  border-radius: 9px;
-  color: #06201a;
-  background: #43bca0;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 800;
-  cursor: pointer;
-  transition:
-    transform 180ms ease,
-    background 180ms ease,
-    border-color 180ms ease;
-}
-
-.booking-submit:hover:not(:disabled) {
-  transform: translateY(-1px);
-  border-color: #67cfb6;
-  background: #67cfb6;
-}
-
-.booking-submit:disabled {
-  cursor: not-allowed;
-  opacity: 0.62;
 }
 
 .appointment-filters {
@@ -776,16 +571,6 @@
     border-left: 0;
   }
 
-  .appointment-time-row,
-  .booking-review {
-    grid-template-columns: 1fr;
-  }
-
-  .booking-review div + div {
-    border-top: 1px solid rgba(10, 255, 212, 0.15);
-    border-left: 0;
-  }
-
   .appointment-card {
     grid-template-columns: 1fr;
     gap: 14px;
@@ -807,7 +592,6 @@
 }
 
 @media (max-width: 480px) {
-  .appointment-section-heading,
   .appointment-list-heading,
   .appointment-card-topline,
   .appointment-card-footer {
@@ -815,7 +599,6 @@
     flex-direction: column;
   }
 
-  .appointment-section-heading > span,
   .appointment-list-heading > span {
     white-space: normal;
   }

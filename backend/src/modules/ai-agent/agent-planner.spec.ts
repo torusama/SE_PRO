@@ -205,6 +205,25 @@ describe('agent planner', () => {
     });
   });
 
+  it('parses an exact existing service-order cancellation', () => {
+    expect(
+      parseAgentPlan(
+        JSON.stringify({
+          intent: 'service_booking',
+          action: 'cancel_service_order',
+          contextMode: 'continue',
+          needsClarification: false,
+          clarificationQuestion: '',
+          serviceOrderId: 42,
+        }),
+      ),
+    ).toMatchObject({
+      intent: 'service_booking',
+      action: 'cancel_service_order',
+      requirements: { serviceOrderId: 42 },
+    });
+  });
+
   it('parses a plot-viewing appointment as an operational action', () => {
     expect(
       parseAgentPlan(

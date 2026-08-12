@@ -349,6 +349,24 @@ export class KnowledgeService {
     return this.recentUserMemory(userId, safeLimit);
   }
 
+  /** Clears only customer-owned AI preference records. Business records,
+   * orders, contracts and shared/verified knowledge are never touched. */
+  async clearUserPersonalMemory(userId: number) {
+    const result = await this.database.query<{ count: string }>(
+      `UPDATE ai_knowledge_entries
+       SET is_active = FALSE,
+           effective_to = COALESCE(effective_to, NOW()),
+           updated_at = NOW()
+       WHERE scope = 'user'
+         AND owner_user_id = $1
+         AND knowledge_type = 'user_preference'
+         AND is_active = TRUE
+       RETURNING knowledge_entry_id`,
+      [userId],
+    );
+    return result.length;
+  }
+
   private isMemoryOverviewQuery(queryText: string) {
     const folded = queryText
       .normalize('NFD')

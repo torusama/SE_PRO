@@ -85,6 +85,7 @@
   padding: 10px 12px;
   border-radius: 8px;
   line-height: 1.5;
+  text-align: center;
 }
 .demo-payment-status--waiting {
   background: rgba(212, 133, 10, 0.1);
@@ -103,4 +104,27 @@
   font-size: 12px;
   color: rgba(212, 232, 224, 0.55);
   margin: 0 0 10px;
+}
+
+.demo-payment .service-primary {
+  width: 100%;
+  min-height: 42px;
+  margin-top: 12px;
+  padding: 0 16px;
+  border: 1px solid #148b88;
+  border-radius: 9px;
+  background: rgba(17, 119, 116, 0.18);
+  color: #42dfd2;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.demo-payment .service-primary:hover:not(:disabled) {
+  border-color: #25d7cb;
+  background: rgba(17, 119, 116, 0.28);
+}
+
+.demo-payment .service-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }

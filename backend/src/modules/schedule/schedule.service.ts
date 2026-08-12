@@ -3,9 +3,11 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { PoolClient } from 'pg';
 import { DatabaseService } from '../../database/database.service';
+import { RealtimeService } from '../realtime/realtime.service';
 import { BookAppointmentDto } from './dto/book-appointment.dto';
 import { CreateAvailabilitySlotDto } from './dto/create-availability-slot.dto';
 import { UpdateAppointmentStatusDto } from './dto/update-appointment-status.dto';
@@ -40,7 +42,10 @@ const APPOINTMENT_SELECT = `
 
 @Injectable()
 export class ScheduleService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(
+    private readonly database: DatabaseService,
+    @Optional() private readonly realtime?: RealtimeService,
+  ) {}
 
   // ---------------------------------------------------------------------
   // Availability slots
@@ -165,7 +170,7 @@ export class ScheduleService {
       throw new BadRequestException('Cannot book an appointment with yourself');
     }
 
-    return this.database.transaction(async (client) => {
+    const appointment = await this.database.transaction(async (client) => {
       let hostUserId = dto.hostUserId;
       if (!hostUserId) {
         const admin = await client.query(
@@ -231,8 +236,27 @@ export class ScheduleService {
         ],
       );
 
+      await client.query(
+        `INSERT INTO notifications
+           (user_id, type, title, message, related_entity_type, related_entity_id)
+         SELECT user_id, 'appointment_created', 'Lịch hẹn mới',
+                CONCAT('Khách hàng vừa gửi lịch hẹn ngày ', $2::text,
+                       ' từ ', $3::text, ' đến ', $4::text, '.'),
+                'schedule_appointment', $1
+         FROM users
+         WHERE LOWER(role) = 'admin' AND is_active = TRUE AND is_deleted = FALSE`,
+        [
+          inserted.rows[0].id,
+          dto.appointmentDate,
+          dto.startTime,
+          dto.endTime,
+        ],
+      );
+
       return this.getAppointment(client, inserted.rows[0].id);
     });
+    this.realtime?.publish(['appointments', 'notifications'], ['authenticated']);
+    return appointment;
   }
 
   async listMyAppointments(userId: number) {

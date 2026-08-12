@@ -27,6 +27,8 @@ const TYPE_LABELS: Record<string, string> = {
   contract_created: "Hợp đồng mới",
   contract_updated: "Cập nhật hợp đồng",
   service_submitted: "Dịch vụ mới",
+  service_payment_reported: "Khách báo đã thanh toán",
+  service_payment_confirmed: "Thanh toán đã xác nhận",
   service_pending_confirm: "Chờ xác nhận dịch vụ",
   service_confirmed: "Dịch vụ đã xác nhận",
   service_in_progress: "Dịch vụ đang thực hiện",

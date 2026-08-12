@@ -94,6 +94,92 @@ describe('CemeteryServicesService admin operations', () => {
     expect(sql).toContain("'payment_reported'");
   });
 
+  it('allows the owner to cancel one unpaid service order before work starts', async () => {
+    const client = {
+      query: jest.fn((sql: string) => {
+        if (sql.includes('FOR UPDATE OF so')) {
+          return {
+            rows: [
+              {
+                order_id: 31,
+                user_id: 7,
+                status: 'submitted',
+                payment_status: 'unpaid',
+                payment_code: null,
+                amount: '150000',
+                service_name: 'Thắp hương',
+              },
+            ],
+          };
+        }
+        return { rows: [], rowCount: 1 };
+      }),
+    };
+    const database = {
+      transaction: jest.fn(
+        (callback: (transactionClient: typeof client) => unknown) =>
+          callback(client),
+      ),
+      queryOne: jest.fn().mockResolvedValue({
+        id: 31,
+        status: 'cancelled',
+        serviceName: 'Thắp hương',
+      }),
+      query: jest.fn().mockResolvedValue([]),
+    };
+    const service = new CemeteryServicesService(database as never, {} as never);
+
+    await expect(service.cancelByCustomer(31, 7)).resolves.toMatchObject({
+      id: 31,
+      status: 'cancelled',
+    });
+    const sql = client.query.mock.calls
+      .map(([statement]) => String(statement))
+      .join('\n');
+    expect(sql).toContain("SET status = 'cancelled'");
+    expect(sql).toContain("'customer_cancelled'");
+    expect(sql).toContain("'service_customer_cancelled'");
+  });
+
+  it('blocks customer self-cancellation after payment was reported', async () => {
+    const client = {
+      query: jest.fn((sql: string) => {
+        if (sql.includes('FOR UPDATE OF so')) {
+          return {
+            rows: [
+              {
+                order_id: 32,
+                user_id: 7,
+                status: 'confirmed',
+                payment_status: 'awaiting_confirmation',
+                payment_code: 'VPV00032',
+                amount: '150000',
+                service_name: 'Thắp hương',
+              },
+            ],
+          };
+        }
+        return { rows: [], rowCount: 1 };
+      }),
+    };
+    const database = {
+      transaction: jest.fn(
+        (callback: (transactionClient: typeof client) => unknown) =>
+          callback(client),
+      ),
+    };
+    const service = new CemeteryServicesService(database as never, {} as never);
+
+    await expect(service.cancelByCustomer(32, 7)).rejects.toThrow(
+      'Đơn đã ghi nhận thanh toán',
+    );
+    expect(
+      client.query.mock.calls.some(([sql]) =>
+        String(sql).includes("SET status = 'cancelled'"),
+      ),
+    ).toBe(false);
+  });
+
   it('allows choosing the service date only after payment is reported', async () => {
     const client = {
       query: jest.fn((sql: string) => {

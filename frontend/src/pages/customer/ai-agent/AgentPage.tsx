@@ -84,7 +84,14 @@ export function getContextualPrompts(
       category: String(item?.category ?? "").trim(),
       text: String(item?.text ?? "").trim(),
     }))
-    .filter((item) => item.category && item.text)
+    .filter(
+      (item) =>
+        item.category &&
+        item.text &&
+        !/(?:tham|thăm)\s*quan|xem\s+thực\s+tế|(?:đến|tới)\s+hoa\s+viên/i.test(
+          `${item.category} ${item.text}`,
+        ),
+    )
     .slice(0, 3);
 
   const response = lastMessage.response;
@@ -153,8 +160,8 @@ export function getContextualPrompts(
         text: "Tư vấn giúp mình các bước tiếp theo cần chuẩn bị.",
       });
       prompts.push({
-        category: "Tham quan thực tế",
-        text: "Đặt lịch hẹn đến tham quan thực tế hoa viên.",
+        category: "Tình trạng yêu cầu",
+        text: "Làm sao kiểm tra yêu cầu lô của mình đã được duyệt hay chưa?",
       });
       prompts.push({
         category: "Liên hệ tư vấn",
@@ -304,7 +311,8 @@ export default function AgentPage() {
   const [comparisonAssessmentLoading, setComparisonAssessmentLoading] =
     useState(false);
   const [mapOpen, setMapOpen] = useState(false);
-  const [workflowDirective, setWorkflowDirective] = useState<WorkflowDirective>();
+  const [workflowDirective, setWorkflowDirective] =
+    useState<WorkflowDirective>();
   const [mapRecommendations, setMapRecommendations] = useState<
     AgentRecommendation[]
   >([]);
@@ -312,6 +320,9 @@ export default function AgentPage() {
   const messageEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const accountIdRef = useRef(user?.id);
+  const knownApprovedRequestNotificationsRef = useRef<Set<number> | null>(
+    null,
+  );
   const requestControllerRef = useRef<AbortController | null>(null);
   const sendLockRef = useRef(false);
   const comparisonAssessmentControllerRef = useRef<AbortController | null>(
@@ -381,6 +392,54 @@ export default function AgentPage() {
   }, [canPersistConversations]);
 
   useRealtimeRefresh(["ai"], loadConversations);
+
+  const syncApprovedPlotNotifications = useCallback(async () => {
+    if (role !== "customer") return;
+    try {
+      const response = await api.get("/notifications");
+      const notifications = (response.data?.data ?? []) as Array<{
+        id?: number;
+        type?: string;
+      }>;
+      const approved = notifications.filter(
+        (item) =>
+          item.type === "request_approved" &&
+          typeof item.id === "number",
+      );
+      const known = knownApprovedRequestNotificationsRef.current;
+      if (known === null) {
+        knownApprovedRequestNotificationsRef.current = new Set(
+          approved.map((item) => item.id!),
+        );
+        return;
+      }
+      const newlyApproved = approved.filter((item) => !known.has(item.id!));
+      knownApprovedRequestNotificationsRef.current = new Set(
+        approved.map((item) => item.id!),
+      );
+      if (!newlyApproved.length) return;
+      setMessages((current) => [
+        ...current,
+        {
+          localId: createLocalId(),
+          role: "assistant",
+          content:
+            "Ban quản lý vừa duyệt yêu cầu mua lô của bạn. Khi cần, bạn có thể nhắn “đặt lịch” để mình kiểm tra các lô đã duyệt và hỗ trợ đặt lịch xem lô.",
+          createdAt: new Date(),
+        },
+      ]);
+    } catch {
+      // Notification bell remains the fallback when this passive chat update
+      // cannot be loaded; never interrupt the active conversation.
+    }
+  }, [role]);
+
+  useEffect(() => {
+    knownApprovedRequestNotificationsRef.current = null;
+    void syncApprovedPlotNotifications();
+  }, [syncApprovedPlotNotifications, user?.id]);
+
+  useRealtimeRefresh(["notifications"], syncApprovedPlotNotifications);
 
   const restoreConversation = useCallback((detail: ConversationDetail) => {
     const restoredRecommendations =
@@ -1023,7 +1082,9 @@ export default function AgentPage() {
           onClick={() => setSidebarOpen(false)}
         />
 
-        <div className={`agent-workspace ${mapOpen ? "has-context-map" : ""} ${workflowDirective ? "has-workflow-panel" : ""}`}>
+        <div
+          className={`agent-workspace ${mapOpen ? "has-context-map" : ""} ${workflowDirective ? "has-workflow-panel" : ""} ${workflowDirective?.type === "OPEN_APPOINTMENT_CALENDAR" ? "has-appointment-panel" : ""}`}
+        >
           <main className="agent-chat">
             <header className="agent-topbar">
               <button
@@ -1256,6 +1317,23 @@ export default function AgentPage() {
               onDirectiveChange={(directive) => {
                 setWorkflowDirective(directive);
                 setMapOpen(false);
+              }}
+              onAssistantNotice={(content) => {
+                setMessages((current) => {
+                  const last = current[current.length - 1];
+                  if (last?.role === "assistant" && last.content === content) {
+                    return current;
+                  }
+                  return [
+                    ...current,
+                    {
+                      localId: createLocalId(),
+                      role: "assistant",
+                      content,
+                      createdAt: new Date(),
+                    },
+                  ];
+                });
               }}
               onClose={() => setWorkflowDirective(undefined)}
             />

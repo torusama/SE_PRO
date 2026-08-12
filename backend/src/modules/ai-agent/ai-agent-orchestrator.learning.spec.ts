@@ -115,6 +115,9 @@ function setup(
     get: jest.fn((key: string) => {
       if (key === 'ai.maxHistoryMessages') return 20;
       if (key === 'ai.fallbackRuleBased') return true;
+      // Most legacy local-gate tests exercise the explicit emergency mode.
+      // Production defaults this flag to true and has a dedicated flow test.
+      if (key === 'ai.llmWritesConversationalTurns') return false;
       return undefined;
     }),
   };
@@ -194,6 +197,28 @@ function setup(
           ],
         };
       }
+      if (name === 'analyze_plot_competitiveness') {
+        return {
+          found: true,
+          plotCode: 'A-01-001',
+          plot: {
+            plotCode: 'A-01-001',
+            status: 'sold',
+            listedPrice: 50_000_000,
+            zoneName: 'Khu A - Cao cấp',
+            plotType: 'single',
+            areaSqm: 4,
+            direction: 'Nam',
+          },
+        };
+      }
+      if (name === 'get_purchase_process') {
+        return {
+          title: 'Quy trình mua lô',
+          content:
+            'Chọn lô, gửi yêu cầu, chờ quản trị viên duyệt rồi hoàn tất hồ sơ và thanh toán.',
+        };
+      }
       return recommendation;
     }),
   };
@@ -209,6 +234,11 @@ function setup(
       ].join('\n'),
     ),
     getActiveUserPreferences: jest.fn(() => []),
+    getPurchaseProcess: jest.fn(() => ({
+      title: 'Quy trình mua lô',
+      content:
+        'Chọn lô, gửi yêu cầu, chờ quản trị viên duyệt rồi hoàn tất hồ sơ và thanh toán.',
+    })),
     getCurrentVersion: jest.fn(() => 'kb-test'),
   };
   const booking = {
@@ -226,12 +256,17 @@ function setup(
     isConfigured: jest.fn(() => false),
     chat: jest.fn(),
   };
+  const recommendations = {
+    recommend: jest.fn(() => recommendation),
+    browseAvailablePlots: jest.fn(() => recommendation),
+    getServiceSuggestions: jest.fn(() => []),
+  };
   const service = new AiAgentOrchestratorService(
     database as unknown as DatabaseService,
     config as unknown as ConfigService,
     nvidia as unknown as MultiProviderLlmService,
     tools as unknown as AgentToolRegistryService,
-    {} as PlotRecommendationService,
+    recommendations as unknown as PlotRecommendationService,
     knowledge as unknown as KnowledgeService,
     booking as unknown as AgentBookingService,
     comparisonAi as never,
@@ -239,6 +274,7 @@ function setup(
   );
   return {
     service,
+    config,
     database,
     tools,
     nvidia,
@@ -246,10 +282,610 @@ function setup(
     booking,
     comparisonAi,
     decisionComparisonAi,
+    recommendations,
   };
 }
 
 describe('AiAgentOrchestratorService application-level learning', () => {
+  it('lets the LLM answer an ordinary age/zodiac question in the production semantic flow', async () => {
+    const { service, nvidia, config } = setup();
+    config.get.mockImplementation((key: string) => {
+      if (key === 'ai.maxHistoryMessages') return 20;
+      if (key === 'ai.fallbackRuleBased') return true;
+      if (key === 'ai.llmWritesConversationalTurns') return true;
+      return undefined;
+    });
+    nvidia.chat.mockReset().mockResolvedValue({
+      choices: [
+        {
+          message: {
+            role: 'assistant',
+            content: JSON.stringify({
+              intent: 'general_question',
+              action: 'none',
+              contextMode: 'continue',
+              needsClarification: false,
+              clarificationQuestion: '',
+              directResponse:
+                'Tuổi Chó là tuổi Tuất trong hệ 12 con giáp. Nếu bạn hỏi vị trí trong thứ tự, Tuất đứng thứ 11.',
+            }),
+          },
+        },
+      ],
+    });
+
+    const result = await service.chat(
+      { sessionId: 'SES-ZODIAC', message: 'người tuổi chó nằm đâu ok' },
+      { id: 7, role: 'customer' },
+    );
+
+    expect(result.assistantMessage).toContain('Tuổi Chó');
+    expect(result.assistantMessage).toContain('thứ 11');
+    expect(nvidia.chat).toHaveBeenCalled();
+    expect(result.metadata.llmModel).not.toBe('local-conversation-response');
+  });
+
+  it('accepts a semantic JSON plan for an ordinary cultural question without forcing a tool call', async () => {
+    const { service, nvidia } = setup();
+    nvidia.chat.mockReset().mockResolvedValue({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              intent: 'general_question',
+              action: 'none',
+              contextMode: 'continue',
+              needsClarification: false,
+              clarificationQuestion: '',
+              directResponse:
+                'Tuổi Tuất là cách gọi theo con giáp; để tư vấn hướng an táng cần thêm năm sinh cụ thể.',
+            }),
+          },
+        },
+      ],
+    });
+    const createPlan = (
+      service as unknown as {
+        createAgentPlan: (
+          history: unknown[],
+          message: string,
+          knowledge: string,
+          routingKey: string,
+          bookingContext: { trustedRequirements: Record<string, never> },
+        ) => Promise<AgentPlan>;
+      }
+    ).createAgentPlan.bind(service);
+
+    await expect(
+      createPlan([], 'người tuổi chó nằm đâu ok', '', 'test-route', {
+        trustedRequirements: {},
+      }),
+    ).resolves.toMatchObject({
+      action: 'none',
+      intent: 'general_question',
+      directResponse: expect.stringContaining('Tuổi Tuất'),
+    });
+  });
+
+  it('starts Bát Tự intake before searching plots for an informal zodiac-place question', async () => {
+    const { service, nvidia, config, tools } = setup();
+    config.get.mockImplementation((key: string) => {
+      if (key === 'ai.maxHistoryMessages') return 20;
+      if (key === 'ai.fallbackRuleBased') return true;
+      if (key === 'ai.llmWritesConversationalTurns') return true;
+      return undefined;
+    });
+    nvidia.chat.mockReset().mockResolvedValueOnce({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              intent: 'bazi_suggestion',
+              action: 'none',
+              contextMode: 'continue',
+              needsClarification: false,
+              clarificationQuestion: '',
+              directResponse:
+                'Mình hiểu bạn muốn chọn lô theo tuổi Mão. Bạn cho mình ngày tháng năm sinh, giới tính và giờ sinh nếu biết để mình phân tích Bát Tự trước nhé.',
+              zodiacSign: 'Mão',
+              consultationGoal: 'bazi_then_plots',
+            }),
+          },
+        },
+      ],
+    });
+
+    const result = await service.chat(
+      {
+        sessionId: 'SES-ZODIAC-PLOT',
+        message: 'tuổi mèo chọn chỗ nào',
+      },
+      { id: 7, role: 'customer' },
+    );
+
+    expect(result.intent).toBe('bazi_suggestion');
+    expect(result.requirements).toEqual(
+      expect.objectContaining({
+        zodiacSign: 'Mão',
+        consultationGoal: 'bazi_then_plots',
+      }),
+    );
+    expect(result.assistantMessage).toContain('ngày/tháng/năm sinh');
+    expect(result.recommendations).toHaveLength(0);
+    expect(tools.execute).not.toHaveBeenCalledWith(
+      'browse_available_plots',
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(nvidia.chat).not.toHaveBeenCalled();
+  });
+
+  it('does not dump generic plots when every LLM provider fails during zodiac consultation', async () => {
+    const { service, nvidia, config, tools, recommendations } = setup();
+    config.get.mockImplementation((key: string) => {
+      if (key === 'ai.maxHistoryMessages') return 20;
+      if (key === 'ai.fallbackRuleBased') return true;
+      if (key === 'ai.llmWritesConversationalTurns') return true;
+      return undefined;
+    });
+    nvidia.chat.mockReset().mockRejectedValue(new Error('all providers timeout'));
+
+    const result = await service.chat(
+      {
+        sessionId: 'SES-ZODIAC-PROVIDER-FAILURE',
+        message: 't tuổi mèo thì nên ở lô nào',
+      },
+      { id: 7, role: 'customer' },
+    );
+
+    expect(result.intent).toBe('bazi_suggestion');
+    expect(result.requirements).toEqual(
+      expect.objectContaining({
+        zodiacSign: 'Mão',
+        consultationGoal: 'bazi_then_plots',
+      }),
+    );
+    expect(result.assistantMessage).toContain('ngày/tháng/năm sinh');
+    expect(result.assistantMessage).toContain('giới tính');
+    expect(result.assistantMessage).toContain('ngân sách');
+    expect(result.recommendations).toHaveLength(0);
+    expect(recommendations.recommend).not.toHaveBeenCalled();
+    expect(recommendations.browseAvailablePlots).not.toHaveBeenCalled();
+    expect(tools.execute).not.toHaveBeenCalledWith(
+      'browse_available_plots',
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it('does not let an old account profile override an explicit zodiac plot question', async () => {
+    const { service, nvidia, config, recommendations } = setup(
+      false,
+      false,
+      [],
+      { dateOfBirth: '2006-03-12', gender: 'male' },
+    );
+    config.get.mockImplementation((key: string) => {
+      if (key === 'ai.maxHistoryMessages') return 20;
+      if (key === 'ai.fallbackRuleBased') return true;
+      if (key === 'ai.llmWritesConversationalTurns') return true;
+      return undefined;
+    });
+    nvidia.chat.mockReset();
+
+    const result = await service.chat(
+      {
+        sessionId: 'SES-ZODIAC-PROFILE-CONFLICT',
+        message: 't tuổi mèo thì nên chọn lô nào?',
+      },
+      { id: 7, role: 'customer' },
+    );
+
+    expect(result.intent).toBe('bazi_suggestion');
+    expect(result.requirements.birthDate).toBeUndefined();
+    expect(result.requirements.zodiacSign).toBe('Mão');
+    expect(result.assistantMessage).toContain('ngày/tháng/năm sinh');
+    expect(result.assistantMessage).not.toContain('Bính Tuất');
+    expect(result.recommendations).toHaveLength(0);
+    expect(recommendations.recommend).not.toHaveBeenCalled();
+    expect(nvidia.chat).not.toHaveBeenCalled();
+  });
+
+  it('uses authoritative inventory before wording a clear plot consultation', async () => {
+    const { service, nvidia, config, tools } = setup();
+    config.get.mockImplementation((key: string) => {
+      if (key === 'ai.maxHistoryMessages') return 20;
+      if (key === 'ai.fallbackRuleBased') return true;
+      if (key === 'ai.llmWritesConversationalTurns') return true;
+      return undefined;
+    });
+    nvidia.chat.mockReset().mockRejectedValue(new Error('all providers timeout'));
+
+    const result = await service.chat(
+      {
+        sessionId: 'SES-AUTHORITATIVE-INVENTORY',
+        message: 'Tư vấn lô đất ngân sách 80 triệu ở Khu A.',
+      },
+      { id: 7, role: 'customer' },
+    );
+
+    expect(tools.execute).toHaveBeenCalledWith(
+      'rank_plot_options',
+      expect.objectContaining({
+        budgetMax: 80_000_000,
+        preferredZone: 'Khu A',
+        numberOfPlots: 1,
+      }),
+      expect.anything(),
+    );
+    expect(result.intent).toBe('recommend_plots');
+    expect(result.recommendations).toHaveLength(1);
+    expect(result.assistantMessage).toContain('A-01-001');
+    expect(result.assistantMessage).not.toContain('không có lô');
+  });
+
+  it('keeps service booking on the local template even when providers fail', async () => {
+    const { service, nvidia, config, booking } = setup();
+    config.get.mockImplementation((key: string) => {
+      if (key === 'ai.maxHistoryMessages') return 20;
+      if (key === 'ai.fallbackRuleBased') return true;
+      if (key === 'ai.llmWritesConversationalTurns') return true;
+      return undefined;
+    });
+    nvidia.chat.mockReset().mockRejectedValue(new Error('all providers timeout'));
+    booking.handleTurn.mockResolvedValue({
+      handled: true,
+      intent: 'service_booking',
+      assistantMessage:
+        'Bạn muốn đặt dịch vụ chăm sóc nào? Mình sẽ hiển thị danh mục đang hoạt động để bạn chọn.',
+    });
+
+    const result = await service.chat(
+      {
+        sessionId: 'SES-SERVICE-TEMPLATE',
+        message: 'tôi muốn đặt dịch vụ chăm sóc mộ',
+      },
+      { id: 7, role: 'customer' },
+    );
+
+    expect(booking.handleTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plan: expect.objectContaining({ action: 'prepare_service_order' }),
+      }),
+    );
+    expect(result.assistantMessage).toContain('Bạn muốn đặt dịch vụ');
+    expect(result.assistantMessage).not.toContain('mô hình AI');
+    expect(nvidia.chat).not.toHaveBeenCalled();
+  });
+
+  it('routes an owned-plot care question to services instead of empty plots', async () => {
+    const { service, nvidia, config, tools } = setup(false, false, [
+      {
+        plotId: 21,
+        plotCode: 'A-01-001',
+        zoneName: 'Khu A - Cao cấp',
+        direction: 'Nam',
+        areaSqm: 4,
+        plotType: 'single',
+      },
+    ]);
+    config.get.mockImplementation((key: string) => {
+      if (key === 'ai.maxHistoryMessages') return 20;
+      if (key === 'ai.fallbackRuleBased') return true;
+      if (key === 'ai.llmWritesConversationalTurns') return true;
+      return undefined;
+    });
+    nvidia.chat.mockReset().mockRejectedValue(new Error('all providers timeout'));
+
+    const result = await service.chat(
+      {
+        sessionId: 'SES-OWNED-PLOT-SERVICES',
+        message:
+          'Lô của mình có thể dùng các dịch vụ chăm sóc nào và chi phí ra sao?',
+      },
+      { id: 7, role: 'customer' },
+    );
+
+    expect(tools.execute).toHaveBeenCalledWith(
+      'get_service_suggestions',
+      { limit: 5 },
+      expect.anything(),
+    );
+    expect(result.intent).toBe('service_suggestions');
+    expect(result.assistantMessage).toContain('Chăm sóc mộ định kỳ');
+    expect(result.assistantMessage).toContain('A-01-001');
+    expect(result.recommendations).toHaveLength(0);
+  });
+
+  it('starts a memorial reminder from natural wording without an LLM', async () => {
+    const { service, nvidia, config, booking } = setup();
+    config.get.mockImplementation((key: string) => {
+      if (key === 'ai.maxHistoryMessages') return 20;
+      if (key === 'ai.fallbackRuleBased') return true;
+      if (key === 'ai.llmWritesConversationalTurns') return true;
+      return undefined;
+    });
+    nvidia.chat.mockReset();
+    booking.handleTurn.mockResolvedValue({
+      handled: true,
+      intent: 'memorial_reminder',
+      assistantMessage:
+        'Mình đã chuẩn bị nhắc giỗ ông nội vào ngày 20/08/2027 lúc 09:00. Bạn xác nhận trước khi tạo nhé.',
+    });
+
+    const result = await service.chat(
+      {
+        sessionId: 'SES-MEMORIAL-TEMPLATE',
+        message:
+          'Nhắc giỗ ông nội cho mình vào ngày 20/08/2027 lúc 9 giờ sáng.',
+      },
+      { id: 7, role: 'customer' },
+    );
+
+    expect(booking.handleTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plan: expect.objectContaining({
+          action: 'prepare_memorial_reminder',
+          requirements: expect.objectContaining({
+            reminderDate: '2027-08-20',
+          }),
+        }),
+      }),
+    );
+    expect(result.assistantMessage).toContain('20/08/2027');
+    expect(nvidia.chat).not.toHaveBeenCalled();
+  });
+
+  it('cancels any collecting booking state without calling an LLM', async () => {
+    const { service, nvidia, config, booking } = setup();
+    const pendingAction = {
+      kind: 'memorial_reminder' as const,
+      stage: 'collecting' as const,
+      reminderTitle: 'Giỗ ông nội',
+    };
+    booking.loadPendingAction.mockResolvedValue(pendingAction);
+    booking.handleTurn.mockResolvedValue({
+      handled: true,
+      intent: 'memorial_reminder',
+      assistantMessage:
+        'Mình đã hủy yêu cầu đang chuẩn bị. Chưa có lịch nhắc nào được tạo.',
+    });
+    config.get.mockImplementation((key: string) => {
+      if (key === 'ai.maxHistoryMessages') return 20;
+      if (key === 'ai.fallbackRuleBased') return true;
+      if (key === 'ai.llmWritesConversationalTurns') return true;
+      return undefined;
+    });
+    nvidia.chat.mockReset();
+
+    const result = await service.chat(
+      { sessionId: 'SES-CANCEL-COLLECTING', message: 'hủy giúp mình' },
+      { id: 7, role: 'customer' },
+    );
+
+    expect(booking.handleTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pendingAction,
+        plan: expect.objectContaining({ action: 'cancel_pending_action' }),
+      }),
+    );
+    expect(result.assistantMessage).toContain('đã hủy');
+    expect(nvidia.chat).not.toHaveBeenCalled();
+  });
+
+  it('uses authoritative process and exact-plot data in semantic mode', async () => {
+    const { service, nvidia, config, tools } = setup();
+    config.get.mockImplementation((key: string) => {
+      if (key === 'ai.maxHistoryMessages') return 20;
+      if (key === 'ai.fallbackRuleBased') return true;
+      if (key === 'ai.llmWritesConversationalTurns') return true;
+      return undefined;
+    });
+    nvidia.chat.mockReset().mockRejectedValue(new Error('all providers timeout'));
+
+    const process = await service.chat(
+      {
+        sessionId: 'SES-PURCHASE-PROCESS',
+        message:
+          'Quy trình mua một lô đất nghĩa trang gồm những bước nào, cần chuẩn bị gì?',
+      },
+      { id: 7, role: 'customer' },
+    );
+    const plot = await service.chat(
+      {
+        sessionId: 'SES-EXACT-PLOT-PRICE',
+        message: 'Giá lô A-01-001 bao nhiêu?',
+      },
+      { id: 7, role: 'customer' },
+    );
+
+    expect(tools.execute).toHaveBeenCalledWith(
+      'get_purchase_process',
+      {},
+      expect.anything(),
+    );
+    expect(process.intent).toBe('purchase_process');
+    expect(process.assistantMessage).toContain('Chọn lô');
+    expect(tools.execute).toHaveBeenCalledWith(
+      'analyze_plot_competitiveness',
+      { plotCode: 'A-01-001' },
+      expect.anything(),
+    );
+    expect(plot.intent).toBe('plot_details');
+    expect(plot.assistantMessage).toContain('50.000.000 VND');
+    expect(plot.recommendations).toHaveLength(0);
+  });
+
+  it('returns a useful zodiac answer instead of an outage banner', async () => {
+    const { service, nvidia, config } = setup();
+    config.get.mockImplementation((key: string) => {
+      if (key === 'ai.maxHistoryMessages') return 20;
+      if (key === 'ai.fallbackRuleBased') return true;
+      if (key === 'ai.llmWritesConversationalTurns') return true;
+      return undefined;
+    });
+    nvidia.chat.mockReset().mockRejectedValue(new Error('all providers timeout'));
+
+    const result = await service.chat(
+      { sessionId: 'SES-ZODIAC-FALLBACK', message: 'tuổi Mão là con gì?' },
+      { id: 7, role: 'customer' },
+    );
+
+    expect(result.assistantMessage).toContain('tuổi Mèo');
+    expect(result.assistantMessage).not.toContain('mô hình AI');
+  });
+
+  it('analyzes Bát Tự first and then searches plots with the derived direction when details are sufficient', async () => {
+    const { service, nvidia, config, tools, recommendations } = setup();
+    config.get.mockImplementation((key: string) => {
+      if (key === 'ai.maxHistoryMessages') return 20;
+      if (key === 'ai.fallbackRuleBased') return true;
+      if (key === 'ai.llmWritesConversationalTurns') return true;
+      return undefined;
+    });
+    const bazi = {
+      preferredDirections: ['Đông Nam', 'Đông'],
+      alternativeDirections: [],
+      explanation: 'Ưu tiên hướng Đông theo dữ liệu cung mệnh.',
+      disclaimer: 'Chỉ dùng để tham khảo văn hóa.',
+      heavenlyStem: 'Kỷ',
+      earthlyBranch: 'Mão',
+      yearPillar: 'Kỷ Mão',
+      element: 'Thổ',
+      napAmElement: 'Thổ',
+      napAmName: 'Thành Đầu Thổ',
+      napAmMeaning: 'Đất trên thành.',
+      cungMenh: 'Cấn',
+      tuMenh: 'Tây tứ mệnh',
+      birthHourBranch: 'Thìn',
+      goodDirections: [
+        { direction: 'Đông', star: 'Sinh Khí', meaning: 'Hướng ưu tiên' },
+      ],
+      badDirections: [
+        { direction: 'Tây', star: 'Tuyệt Mệnh', meaning: 'Nên hạn chế' },
+      ],
+      elementRelations: { supporting: 'Hỏa sinh Thổ', weakening: 'Mộc khắc Thổ' },
+      detailedAnalysis: 'Hướng Đông là tín hiệu tham khảo chính.',
+    };
+    tools.execute.mockImplementation((name: string) =>
+      name === 'suggest_bazi_direction' ? bazi : recommendation,
+    );
+    recommendations.recommend.mockImplementation(
+      (requirements: RecommendationResult['requirements']) => ({
+        ...recommendation,
+        requirements,
+        recommendations:
+          requirements.preferredDirection === 'Đông Nam'
+            ? []
+            : recommendation.recommendations,
+        baziSuggestion: bazi,
+      }),
+    );
+    nvidia.chat.mockReset().mockResolvedValueOnce({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              intent: 'bazi_suggestion',
+              action: 'suggest_bazi_direction',
+              contextMode: 'continue',
+              needsClarification: false,
+              clarificationQuestion: '',
+              directResponse: '',
+              birthDate: '1999-03-12',
+              birthTime: '08:00',
+              gender: 'female',
+              zodiacSign: 'Mão',
+              consultationGoal: 'bazi_then_plots',
+              budgetMax: 100_000_000,
+              numberOfPlots: 1,
+            }),
+          },
+        },
+      ],
+    });
+
+    const result = await service.chat(
+      {
+        sessionId: 'SES-BAZI-THEN-PLOT',
+        message:
+          'T tuổi Mão, nữ sinh 12/03/1999 lúc 8 giờ, ngân sách 100 triệu thì nên chọn lô nào?',
+      },
+      { id: 7, role: 'customer' },
+    );
+
+    expect(tools.execute).toHaveBeenCalledWith(
+      'suggest_bazi_direction',
+      expect.objectContaining({
+        birthDate: '1999-03-12',
+        birthTime: '08:00',
+        gender: 'female',
+      }),
+      expect.anything(),
+    );
+    expect(recommendations.recommend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        budgetMax: 100_000_000,
+        preferredDirection: 'Đông',
+      }),
+      expect.anything(),
+    );
+    expect(recommendations.recommend).toHaveBeenCalledTimes(2);
+    expect(result.intent).toBe('recommend_plots');
+    expect(result.baziSuggestion).toEqual(bazi);
+    expect(result.recommendations).toHaveLength(1);
+    expect(result.assistantMessage).toContain('Nạp Âm');
+    expect(result.assistantMessage).toContain('A-01-001');
+  });
+
+  it('rejects semantic plans that answer a live service-catalog request as a memory acknowledgement', () => {
+    const { service } = setup();
+    const validator = service as unknown as {
+      isSemanticallyConsistentPlan: (
+        plan: AgentPlan,
+        message: string,
+      ) => boolean;
+      recoverExplicitUserPreferenceProposal: (
+        message: string,
+      ) => unknown[] | undefined;
+    };
+
+    expect(
+      validator.recoverExplicitUserPreferenceProposal(
+        'tui muốn coi mấy dịch vụ chăm sóc có gì',
+      ),
+    ).toBeUndefined();
+
+    expect(
+      validator.isSemanticallyConsistentPlan(
+        {
+          intent: 'general_question',
+          action: 'none',
+          contextMode: 'continue',
+          needsClarification: false,
+          clarificationQuestion: '',
+          directResponse: 'Mình sẽ ghi nhớ dịch vụ bạn quan tâm.',
+          requirements: {},
+        },
+        'tui muốn coi mấy dịch vụ chăm sóc có gì',
+      ),
+    ).toBe(false);
+    expect(
+      validator.isSemanticallyConsistentPlan(
+        {
+          intent: 'service_suggestions',
+          action: 'get_service_suggestions',
+          contextMode: 'continue',
+          needsClarification: false,
+          clarificationQuestion: '',
+          directResponse: '',
+          requirements: {},
+        },
+        'tui muốn coi mấy dịch vụ chăm sóc có gì',
+      ),
+    ).toBe(true);
+  });
+
   it('uses the dedicated 20B route and normalizes three generated follow-up questions', async () => {
     const { service, nvidia } = setup();
     nvidia.chat.mockReset().mockResolvedValue({
@@ -259,7 +895,7 @@ describe('AiAgentOrchestratorService application-level learning', () => {
             content: JSON.stringify([
               { category: 'Chi phí', text: 'Tổng chi phí gồm những gì?' },
               { category: 'Vị trí', text: 'Cho mình xem vị trí trên bản đồ?' },
-              { category: 'Tham quan', text: 'Đăng ký tham quan thế nào?' },
+              { category: 'Hồ sơ', text: 'Cần chuẩn bị giấy tờ gì?' },
             ]),
           },
         },
@@ -584,6 +1220,18 @@ describe('AiAgentOrchestratorService application-level learning', () => {
         gender: 'male',
       }),
     );
+    expect(
+      extractDeterministicRequirements(
+        'Mình sinh ngày 12/03/1999, nữ, lúc 8 giờ sáng, ngân sách tối đa 100 triệu.',
+      ),
+    ).toEqual(
+      expect.objectContaining({
+        birthDate: '1999-03-12',
+        birthTime: '08:00',
+        gender: 'female',
+        budgetMax: 100_000_000,
+      }),
+    );
   });
 
   it('uses the authenticated profile for Bát Tự intake without saving a transient request as memory', async () => {
@@ -884,6 +1532,59 @@ describe('AiAgentOrchestratorService application-level learning', () => {
     expect(result.assistantMessage).toContain('đã được gửi');
   });
 
+  it('answers an unrelated question with the LLM while an appointment is unfinished', async () => {
+    const { service, booking, nvidia, config } = setup();
+    const pendingAction = {
+      kind: 'appointment' as const,
+      stage: 'collecting' as const,
+      selectedPlotCode: 'A-01-001',
+    };
+    booking.loadPendingAction.mockResolvedValue(pendingAction);
+    booking.handleTurn.mockResolvedValue(null);
+    config.get.mockImplementation((key: string) => {
+      if (key === 'ai.maxHistoryMessages') return 20;
+      if (key === 'ai.fallbackRuleBased') return true;
+      if (key === 'ai.llmWritesConversationalTurns') return true;
+      return undefined;
+    });
+    nvidia.chat.mockReset().mockResolvedValueOnce({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              intent: 'general_question',
+              action: 'none',
+              contextMode: 'continue',
+              needsClarification: false,
+              clarificationQuestion: '',
+              directResponse:
+                'Người tuổi Tuất thường được xem là chân thành và có tinh thần trách nhiệm. Bạn muốn hỏi về tính cách hay hướng hợp tuổi?',
+            }),
+          },
+        },
+      ],
+    });
+
+    const result = await service.chat(
+      { sessionId: 'SES-1', message: 'người tuổi chó nằm đâu ok' },
+      { id: 7, role: 'customer' },
+    );
+
+    expect(result.assistantMessage).toContain('tuổi Tuất');
+    expect(result.intent).toBe('general_question');
+    expect(result.uiDirective).toBeUndefined();
+    expect(result.requirements.pendingAction).toEqual(pendingAction);
+    expect(booking.handleTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pendingAction,
+        plan: expect.objectContaining({
+          intent: 'general_question',
+          action: 'none',
+        }),
+      }),
+    );
+  });
+
   it('handles an exact plot booking request without an LLM and asks anonymous users to sign in', async () => {
     const { service, booking, nvidia, tools } = setup();
     nvidia.isConfigured.mockReturnValue(false);
@@ -1007,9 +1708,10 @@ describe('AiAgentOrchestratorService application-level learning', () => {
     expect(plannerSystemPrompt).toContain('<PERSISTENT_USER_PREFERENCES>');
     expect(nvidia.chat.mock.calls[0][3]).toEqual(
       expect.objectContaining({
-        preferredProviderId: 'nvidia',
-        timeoutMs: 5_000,
-        totalTimeoutMs: 12_000,
+        preferredProviderId: 'openai-primary',
+        enableThinking: false,
+        timeoutMs: 10_000,
+        totalTimeoutMs: 22_000,
       }),
     );
   });
@@ -1054,7 +1756,9 @@ describe('AiAgentOrchestratorService application-level learning', () => {
           },
         ],
       })
-      .mockResolvedValueOnce({ choices: [{ message: { content: consultation } }] });
+      .mockResolvedValueOnce({
+        choices: [{ message: { content: consultation } }],
+      });
 
     const result = await service.chat(
       {
@@ -1069,7 +1773,14 @@ describe('AiAgentOrchestratorService application-level learning', () => {
     expect(result.metadata.fallbackUsed).toBe(false);
     expect(nvidia.chat).toHaveBeenCalledTimes(2);
     expect(nvidia.chat.mock.calls[1][3]).toEqual(
-      expect.objectContaining({ maxTokens: 1_800, timeoutMs: 10_000 }),
+      expect.objectContaining({
+        maxTokens: 1_800,
+        timeoutMs: 9_000,
+        totalTimeoutMs: 10_000,
+        preferredProviderId: 'openai-primary',
+        strictPreferredProvider: true,
+        enableThinking: false,
+      }),
     );
   });
 
@@ -1279,7 +1990,7 @@ describe('AiAgentOrchestratorService application-level learning', () => {
       ]),
       [],
       'auto',
-      expect.objectContaining({ maxTokens: 1_100 }),
+      expect.objectContaining({ maxTokens: 1_400 }),
     );
     expect(result.actions).toHaveLength(2);
     expect(result.actions[0].message).toContain('A-01-001');
@@ -1470,11 +2181,38 @@ describe('AiAgentOrchestratorService application-level learning', () => {
     });
   });
 
-  it('never falls back to the shared chat pool when the dedicated comparison model returns no final answer', async () => {
+  it('borrows the shared chat pool when the dedicated comparison model returns no final answer', async () => {
     const { service, nvidia, comparisonAi } = setup();
     comparisonAi.chat.mockResolvedValue({
       model: 'nvidia/nemotron-3-nano-30b-a3b',
       choices: [{ message: { content: '' } }],
+    });
+    nvidia.chat.mockReset().mockResolvedValue({
+      model: 'openai/gpt-oss-120b',
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              assessment:
+                'Lô A-01-001 phù hợp hơn khi ưu tiên tổng chi phí và hướng Đông, đồng thời dữ liệu tiếp cận ghi nhận gần Cổng chính. Lô B-02-002 có diện tích rộng hơn nhưng tổng giá cao hơn, nên chỉ đáng cân nhắc nếu diện tích quan trọng hơn phần ngân sách còn lại.',
+              followUpPrompt:
+                'Bạn muốn mình phân tích kỹ hai lô này hay tìm thêm lựa chọn khác? Nếu có tiêu chí khác, hãy nói với mình.',
+              actions: [
+                {
+                  label: 'Phân tích kỹ hai lô',
+                  message:
+                    'Hãy phân tích kỹ hơn lô A-01-001 và lô B-02-002 cho mình.',
+                },
+                {
+                  label: 'Gợi ý lô khác',
+                  message:
+                    'Hãy gợi ý các lô khác phù hợp với tiêu chí hiện tại của mình.',
+                },
+              ],
+            }),
+          },
+        },
+      ],
     });
 
     const result = await service.generateComparisonAssessment({
@@ -1488,6 +2226,7 @@ describe('AiAgentOrchestratorService application-level learning', () => {
           directions: ['Đông'],
           totalAreaSqm: 4,
           isAdjacent: false,
+          accessSummary: 'Gần Cổng chính',
         },
         {
           plotIds: [2],
@@ -1502,13 +2241,9 @@ describe('AiAgentOrchestratorService application-level learning', () => {
       ],
     });
 
-    expect(result).toEqual({
-      assessment: null,
-      followUpPrompt: null,
-      actions: [],
-      model: null,
-    });
+    expect(result.assessment).toContain('A-01-001');
+    expect(result.model).toBe('openai/gpt-oss-120b');
     expect(comparisonAi.chat).toHaveBeenCalledTimes(1);
-    expect(nvidia.chat).not.toHaveBeenCalled();
+    expect(nvidia.chat).toHaveBeenCalledTimes(1);
   });
 });

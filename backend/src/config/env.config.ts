@@ -24,6 +24,8 @@ export const envConfig = () => ({
   },
   ai: {
     enableLlm: (process.env.AI_ENABLE_LLM ?? 'true') === 'true',
+    llmWritesConversationalTurns:
+      (process.env.AI_LLM_WRITES_CONVERSATIONAL_TURNS ?? 'true') === 'true',
     fallbackRuleBased:
       (process.env.AI_FALLBACK_RULE_BASED ?? 'true') === 'true',
     maxToolRounds: Number(process.env.AI_MAX_TOOL_ROUNDS) || 4,
@@ -48,8 +50,7 @@ export const envConfig = () => ({
       // reuse the existing NVIDIA NIM keys so semantic RAG does not silently
       // stay disabled in deployments that already configured the LLM pool.
       apiKey: process.env.AI_EMBEDDING_API_KEY ?? process.env.NVIDIA_API_KEY,
-      apiKeys:
-        process.env.AI_EMBEDDING_API_KEYS ?? process.env.NVIDIA_API_KEYS,
+      apiKeys: process.env.AI_EMBEDDING_API_KEYS ?? process.env.NVIDIA_API_KEYS,
       baseUrl:
         process.env.AI_EMBEDDING_API_BASE_URL ??
         process.env.NVIDIA_API_BASE_URL ??
@@ -67,13 +68,11 @@ export const envConfig = () => ({
         Number(process.env.AI_EMBEDDING_INVALID_KEY_COOLDOWN_MS) || 600000,
       userLimit: Number(process.env.AI_RAG_USER_LIMIT) || 8,
       globalLimit: Number(process.env.AI_RAG_GLOBAL_LIMIT) || 6,
-      maxCosineDistance:
-        Number(process.env.AI_RAG_MAX_COSINE_DISTANCE) || 0.72,
+      maxCosineDistance: Number(process.env.AI_RAG_MAX_COSINE_DISTANCE) || 0.72,
       backfillOnStartup:
         (process.env.AI_RAG_BACKFILL_ON_STARTUP ?? 'true') === 'true',
       backfillBatchSize: Number(process.env.AI_RAG_BACKFILL_BATCH_SIZE) || 5,
-      backfillMaxEntries:
-        Number(process.env.AI_RAG_BACKFILL_MAX_ENTRIES) || 25,
+      backfillMaxEntries: Number(process.env.AI_RAG_BACKFILL_MAX_ENTRIES) || 25,
     },
     openai: {
       apiKey: process.env.OPENAI_API_KEY,
@@ -140,7 +139,8 @@ export const envConfig = () => ({
         process.env.DECISION_AI_API_BASE_URL ??
         'https://integrate.api.nvidia.com/v1',
       model:
-        process.env.DECISION_AI_MODEL ?? 'mistralai/mistral-medium-3.5-128b',
+        process.env.DECISION_AI_MODEL ??
+        'nvidia/llama-3.3-nemotron-super-49b-v1.5',
       timeoutMs: Number(process.env.DECISION_AI_TIMEOUT_MS) || 8000,
       totalTimeoutMs: Number(process.env.DECISION_AI_TOTAL_TIMEOUT_MS) || 16000,
       maxAttempts: Number(process.env.DECISION_AI_MAX_ATTEMPTS) || 10,
@@ -154,7 +154,9 @@ export const envConfig = () => ({
       baseUrl:
         process.env.MISTRAL_AGENT_API_BASE_URL ??
         'https://integrate.api.nvidia.com/v1',
-      model: process.env.MISTRAL_AGENT_MODEL ?? 'mistralai/mistral-nemotron',
+      model:
+        process.env.MISTRAL_AGENT_MODEL ??
+        'nvidia/llama-3.3-nemotron-super-49b-v1.5',
       timeoutMs: Number(process.env.MISTRAL_AGENT_TIMEOUT_MS) || 2500,
       totalTimeoutMs:
         Number(process.env.MISTRAL_AGENT_TOTAL_TIMEOUT_MS) || 10000,

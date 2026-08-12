@@ -423,6 +423,10 @@
   grid-template-columns: minmax(520px, 1fr) minmax(330px, 390px);
 }
 
+.agent-workspace.has-appointment-panel {
+  grid-template-columns: minmax(520px, 52fr) minmax(460px, 48fr);
+}
+
 .agent-workspace.has-context-map .agent-message-column,
 .agent-workspace.has-context-map .agent-composer-inner,
 .agent-workspace.has-workflow-panel .agent-message-column,

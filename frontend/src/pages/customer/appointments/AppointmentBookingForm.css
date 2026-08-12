@@ -1,0 +1,242 @@
+.appointment-booking-panel {
+  padding: clamp(22px, 3vw, 30px);
+  border: 1px solid rgba(96, 130, 189, 0.16);
+  border-radius: 12px;
+  background: linear-gradient(
+    160deg,
+    rgba(13, 27, 56, 0.92) 0%,
+    rgba(5, 7, 26, 0.96) 100%
+  );
+}
+
+.appointment-section-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.appointment-section-heading p {
+  margin: 0 0 10px;
+  color: #0affd4;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.appointment-section-heading h2 {
+  margin: 0;
+  color: #edf2ee;
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: clamp(25px, 3vw, 32px);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+.appointment-section-heading > span {
+  color: #728a84;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.appointment-booking-form {
+  display: grid;
+  gap: 24px;
+  margin-top: 26px;
+}
+
+.appointment-booking-form fieldset {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.appointment-booking-form fieldset + fieldset {
+  padding-top: 24px;
+  border-top: 1px solid rgba(96, 130, 189, 0.13);
+}
+
+.appointment-booking-form legend {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 3px;
+  color: #d8e4e0;
+  font-size: 13px;
+  font-weight: 720;
+}
+
+.appointment-booking-form legend span {
+  color: #0affd4;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
+}
+
+.appointment-booking-form .appointment-time-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.appointment-booking-form .booking-field {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.appointment-booking-form .booking-field > span {
+  color: #8ca19c;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.appointment-booking-form .booking-field input,
+.appointment-booking-form .booking-field select,
+.appointment-booking-form .booking-field textarea {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  border: 1px solid rgba(96, 130, 189, 0.22);
+  border-radius: 9px;
+  outline: 0;
+  color: #e8f2ef;
+  background: #060d10;
+  font: inherit;
+  font-size: 13px;
+  color-scheme: dark;
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    background 180ms ease;
+}
+
+.appointment-booking-form .booking-field input,
+.appointment-booking-form .booking-field select {
+  min-height: 46px;
+  padding: 0 13px;
+}
+
+.appointment-booking-form .booking-field textarea {
+  min-height: 102px;
+  padding: 12px 13px;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.appointment-booking-form .booking-field input:focus,
+.appointment-booking-form .booking-field select:focus,
+.appointment-booking-form .booking-field textarea:focus {
+  border-color: rgba(66, 190, 161, 0.7);
+  box-shadow: 0 0 0 3px rgba(66, 190, 161, 0.1);
+  background: #081216;
+}
+
+.appointment-booking-form .booking-field small {
+  color: #657c76;
+  font-size: 10px;
+}
+
+.appointment-booking-form .booking-review {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.35fr;
+  overflow: hidden;
+  border: 1px solid rgba(10, 255, 212, 0.2);
+  border-radius: 10px;
+  background: rgba(10, 255, 212, 0.045);
+}
+
+.appointment-booking-form .booking-review div {
+  min-width: 0;
+  padding: 14px;
+}
+
+.appointment-booking-form .booking-review div + div {
+  border-left: 1px solid rgba(10, 255, 212, 0.15);
+}
+
+.appointment-booking-form .booking-review span {
+  display: block;
+  margin-bottom: 6px;
+  color: #8b8270;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.appointment-booking-form .booking-review strong {
+  display: block;
+  overflow: hidden;
+  color: #ded5bf;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 680;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.appointment-booking-helper {
+  color: #8da8ad;
+  font-size: 11px;
+  line-height: 1.65;
+}
+
+.appointment-booking-form .booking-submit {
+  display: inline-flex;
+  width: 100%;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid #43bca0;
+  border-radius: 9px;
+  color: #06201a;
+  background: #43bca0;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.appointment-booking-form .booking-submit:hover:not(:disabled) {
+  border-color: #67cfb6;
+  background: #67cfb6;
+  transform: translateY(-1px);
+}
+
+.appointment-booking-form .booking-submit:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.appointment-booking-form :is(input, select, textarea, button):focus-visible {
+  outline: 2px solid rgba(66, 223, 210, 0.72);
+  outline-offset: 2px;
+}
+
+@media (max-width: 720px) {
+  .appointment-booking-form .appointment-time-row,
+  .appointment-booking-form .booking-review {
+    grid-template-columns: 1fr;
+  }
+
+  .appointment-booking-form .booking-review div + div {
+    border-top: 1px solid rgba(10, 255, 212, 0.15);
+    border-left: 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .appointment-section-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .appointment-section-heading > span {
+    white-space: normal;
+  }
+}

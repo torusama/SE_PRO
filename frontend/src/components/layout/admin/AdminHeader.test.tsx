@@ -35,7 +35,7 @@ describe("Admin Header", () => {
     expect(screen.getByText("Vĩnh Phúc Viên")).toBeInTheDocument();
   });
 
-  it("renders the admin account control without the notification icon", () => {
+  it("renders the admin notification and account controls", async () => {
     useAuthStore.setState({
       role: "admin",
       user: {
@@ -52,10 +52,7 @@ describe("Admin Header", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getAllByRole("button")).toHaveLength(1);
-    expect(
-      screen.queryByRole("button", { name: "Thông báo" }),
-    ).not.toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Thông báo" })).toBeInTheDocument();
     expect(
       screen.getByRole("button", {
         name: "Mở menu tài khoản của Nguyễn An",

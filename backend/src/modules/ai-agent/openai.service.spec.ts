@@ -87,6 +87,38 @@ describe('OpenAiService', () => {
     expect(result.choices[0].message.content).toBe('Success with key2');
   });
 
+  it('switches keys when a successful HTTP response has no usable assistant output', async () => {
+    jest.spyOn(configService, 'get').mockImplementation((key: string) => {
+      if (key === 'ai.openai.apiKeys') return 'sk-empty,sk-good';
+      if (key === 'ai.enableLlm') return true;
+      if (key === 'ai.openai.baseUrl') return 'https://api.openai.com/v1';
+      return undefined;
+    });
+    const mockFetch = global.fetch as jest.Mock;
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { role: 'assistant', content: '   ' } }],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          choices: [
+            { message: { role: 'assistant', content: 'Có câu trả lời' } },
+          ],
+        }),
+      });
+
+    await expect(
+      service.chat([{ role: 'user', content: 'hi' }]),
+    ).resolves.toMatchObject({
+      choices: [{ message: { content: 'Có câu trả lời' } }],
+    });
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
   it('keeps the same API key inside one user turn and rotates on the next turn', async () => {
     jest.spyOn(configService, 'get').mockImplementation((key: string) => {
       if (key === 'ai.openai.apiKey') return undefined;
@@ -239,7 +271,8 @@ describe('EmailDraftAiService', () => {
       if (key === 'ai.enableLlm') return true;
       if (key === 'ai.emailDraft.apiKey') return undefined;
       if (key === 'ai.emailDraft.apiKeys') return 'email-key-1,email-key-2';
-      if (key === 'ai.emailDraft.baseUrl') return 'https://integrate.api.nvidia.com/v1';
+      if (key === 'ai.emailDraft.baseUrl')
+        return 'https://integrate.api.nvidia.com/v1';
       if (key === 'ai.emailDraft.model') return 'openai/gpt-oss-20b';
       if (key === 'ai.emailDraft.timeoutMs') return 10000;
       if (key === 'ai.emailDraft.totalTimeoutMs') return 22000;
@@ -264,7 +297,9 @@ describe('EmailDraftAiService', () => {
       });
     global.fetch = mockFetch;
 
-    const result = await service.chat([{ role: 'user', content: 'Draft email' }]);
+    const result = await service.chat([
+      { role: 'user', content: 'Draft email' },
+    ]);
 
     expect(mockFetch).toHaveBeenCalledTimes(2);
     expect(mockFetch.mock.calls[0][1].headers.Authorization).toBe(

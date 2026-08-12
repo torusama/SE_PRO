@@ -218,6 +218,72 @@ export class CemeteryServicesService {
     return order;
   }
 
+  /** Customer cancellation is intentionally narrower than the admin state
+   * machine: only unpaid orders that have not started can be cancelled here.
+   * Reported/confirmed payments need staff handling for reconciliation. */
+  async cancelByCustomer(id: number, userId: number) {
+    await this.database.transaction(async (client) => {
+      const currentResult = await client.query<ServiceOrderPaymentRow>(
+        `SELECT so.order_id, so.user_id, so.status, so.payment_status,
+                so.payment_code, so.amount::text AS amount,
+                st.name AS service_name
+         FROM service_orders so
+         JOIN service_types st ON st.service_type_id = so.service_type_id
+         WHERE so.order_id = $1 AND so.is_deleted = FALSE
+         FOR UPDATE OF so`,
+        [id],
+      );
+      const current = currentResult.rows[0];
+      if (!current) throw new NotFoundException('Không tìm thấy đơn dịch vụ');
+      if (current.user_id !== userId) {
+        throw new ForbiddenException('Bạn không có quyền hủy đơn dịch vụ này');
+      }
+      if (current.status === 'cancelled') {
+        throw new BadRequestException('Đơn dịch vụ này đã được hủy trước đó');
+      }
+      if (current.status === 'completed') {
+        throw new BadRequestException('Dịch vụ đã hoàn thành nên không thể hủy');
+      }
+      if (current.status === 'in_progress') {
+        throw new BadRequestException(
+          'Dịch vụ đang được thực hiện; bạn vui lòng liên hệ ban quản lý để được hỗ trợ',
+        );
+      }
+      if (current.payment_status !== 'unpaid') {
+        throw new BadRequestException(
+          'Đơn đã ghi nhận thanh toán; bạn vui lòng liên hệ ban quản lý để đối soát trước khi hủy',
+        );
+      }
+
+      await client.query(
+        `UPDATE service_orders
+         SET status = 'cancelled', updated_at = NOW()
+         WHERE order_id = $1`,
+        [id],
+      );
+      await client.query(
+        `INSERT INTO service_order_history
+           (order_id, changed_by, action, previous_status, new_status, note)
+         VALUES ($1, $2, 'customer_cancelled', $3, 'cancelled',
+                 'Khách hàng hủy đơn qua trợ lý hoặc trang dịch vụ')`,
+        [id, userId, current.status],
+      );
+      await client.query(
+        `INSERT INTO notifications
+           (user_id, type, title, message, related_entity_type, related_entity_id)
+         SELECT user_id, 'service_customer_cancelled', 'Khách đã hủy đơn dịch vụ',
+                CONCAT('Khách hàng đã hủy đơn #', $1::text, ' "', $2::text, '".'),
+                'service_order', $1
+         FROM users
+         WHERE LOWER(role) = 'admin' AND is_active = TRUE AND is_deleted = FALSE`,
+        [id, current.service_name],
+      );
+    });
+
+    this.publishRealtime(['services', 'notifications', 'dashboard']);
+    return this.one(id, userId);
+  }
+
   private async plotCodeOf(plotId: number) {
     const row = await this.database.queryOne<{ plot_code: string }>(
       `SELECT plot_code FROM plots WHERE plot_id = $1`,

@@ -20,6 +20,7 @@ import DemoPaymentPanel from "@/components/payment/DemoPaymentPanel";
 import GuidePopup, { type GuideStep } from "@/components/guide/GuidePopup";
 import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
 import NavyStarfield from "@/components/decor/NavyStarfield";
+import ServiceScheduleCalendar from "./ServiceScheduleCalendar";
 import "./ServicePage.css";
 
 type Tab = "catalogue" | "book" | "track";
@@ -1621,7 +1622,8 @@ function TrackTab(props: {
                             </div>
                           </div>
 
-                          {detail.status === "confirmed" && (
+                          {detail.status !== "completed" &&
+                            detail.status !== "cancelled" && (
                             <DemoPaymentPanel
                               orderId={detail.id}
                               amount={detail.amount}
@@ -1631,6 +1633,15 @@ function TrackTab(props: {
                               paymentConfirmedAt={detail.paymentConfirmedAt}
                               variant="customer"
                               onChanged={() => onLoadOrderDetail(detail.id)}
+                            />
+                          )}
+
+                          {detail.paymentStatus === "paid" && (
+                            <ServiceScheduleCalendar
+                              requestedDate={detail.requestedDate}
+                              scheduledDate={detail.scheduledDate}
+                              serviceName={detail.serviceName}
+                              plotCode={detail.plotCode}
                             />
                           )}
 

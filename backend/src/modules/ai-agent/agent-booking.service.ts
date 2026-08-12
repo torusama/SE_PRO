@@ -13,6 +13,8 @@ import { AgentPlan } from './agent-planner';
 import { AgentClientActionDto } from './dto/chat.dto';
 import {
   AgentPendingAction,
+  AgentPendingAppointmentItem,
+  AgentPendingServiceItem,
   AgentUiDirective,
   RecommendationOption,
 } from './types/agent-response.types';
@@ -26,6 +28,8 @@ export interface OwnedPlotContext {
   plotType: string;
 }
 
+type ApprovedAppointmentPlot = OwnedPlotContext;
+
 interface ServiceType {
   id: number;
   name: string;
@@ -33,6 +37,17 @@ interface ServiceType {
   basePrice: number;
   unit: string;
   category: string;
+}
+
+interface CustomerServiceOrder {
+  id: number;
+  status: string;
+  paymentStatus?: 'unpaid' | 'awaiting_confirmation' | 'paid';
+  serviceName: string;
+  plotCode?: string | null;
+  requestedDate?: string | null;
+  createdAt?: string | null;
+  amount?: number;
 }
 
 interface ProfileSummary {
@@ -107,15 +122,21 @@ export class AgentBookingService {
     conversationId: number | null;
     userId: number | null;
     plan: AgentPlan;
+    userMessage?: string;
     clientAction?: AgentClientActionDto;
     pendingAction?: AgentPendingAction;
   }): Promise<AgentBookingTurn | null> {
+    // A pending action is context for the planner, not proof that every later
+    // user message belongs to that transaction. Only an explicit client action
+    // or a booking action chosen for the current turn may enter this service.
+    // This lets customers ask an unrelated question without the unfinished
+    // appointment/service flow swallowing the turn.
     const bookingAction =
       input.clientAction ||
-      input.pendingAction ||
       [
         'prepare_plot_request',
         'prepare_service_order',
+        'cancel_service_order',
         'prepare_appointment',
         'prepare_memorial_reminder',
         'confirm_pending_action',
@@ -133,12 +154,11 @@ export class AgentBookingService {
             : input.pendingAction?.kind === 'memorial_reminder' ||
                 input.plan.intent === 'memorial_reminder'
               ? 'memorial_reminder'
-              :
-          input.clientAction?.type === 'START_SERVICE_ORDER' ||
-          input.pendingAction?.kind === 'service_order' ||
-          input.plan.intent === 'service_booking'
-            ? 'service_booking'
-            : 'plot_request',
+              : input.clientAction?.type === 'START_SERVICE_ORDER' ||
+                  input.pendingAction?.kind === 'service_order' ||
+                  input.plan.intent === 'service_booking'
+                ? 'service_booking'
+                : 'plot_request',
         assistantMessage:
           'Để mình thay bạn tạo yêu cầu và dùng đúng thông tin hồ sơ, bạn vui lòng đăng nhập tài khoản khách hàng rồi tiếp tục tại cuộc trò chuyện này nhé.',
       };
@@ -154,8 +174,8 @@ export class AgentBookingService {
             : input.pendingAction?.kind === 'memorial_reminder'
               ? 'memorial_reminder'
               : input.pendingAction?.kind === 'service_order'
-            ? 'service_booking'
-            : 'plot_request',
+                ? 'service_booking'
+                : 'plot_request',
         assistantMessage: input.pendingAction
           ? 'Mình đã hủy yêu cầu đang chuẩn bị. Chưa có đơn, lịch hẹn hoặc lịch nhắc nào được tạo.'
           : 'Hiện không có yêu cầu nào đang chờ xác nhận để hủy.',
@@ -166,29 +186,33 @@ export class AgentBookingService {
       return this.confirm(authenticatedInput.userId, input.pendingAction);
     }
 
-    if (
-      input.pendingAction?.kind === 'appointment' ||
-      input.plan.action === 'prepare_appointment'
-    ) {
+    if (input.plan.action === 'prepare_appointment') {
       return this.prepareAppointment(authenticatedInput);
     }
 
-    if (
-      input.pendingAction?.kind === 'memorial_reminder' ||
-      input.plan.action === 'prepare_memorial_reminder'
-    ) {
+    if (input.plan.action === 'prepare_memorial_reminder') {
       return this.prepareMemorialReminder(authenticatedInput);
+    }
+
+    if (input.plan.action === 'cancel_service_order') {
+      return this.prepareServiceCancellation(authenticatedInput);
     }
 
     if (
       input.clientAction?.type === 'START_SERVICE_ORDER' ||
-      input.pendingAction?.kind === 'service_order' ||
       input.plan.action === 'prepare_service_order'
     ) {
       return this.prepareServiceOrder(authenticatedInput);
     }
 
-    return this.preparePlotRequest(authenticatedInput);
+    if (
+      input.clientAction?.type === 'START_PLOT_REQUEST' ||
+      input.plan.action === 'prepare_plot_request'
+    ) {
+      return this.preparePlotRequest(authenticatedInput);
+    }
+
+    return null;
   }
 
   private async preparePlotRequest(input: {
@@ -252,12 +276,18 @@ export class AgentBookingService {
   private async prepareServiceOrder(input: {
     userId: number;
     plan: AgentPlan;
+    userMessage?: string;
     clientAction?: AgentClientActionDto;
     pendingAction?: AgentPendingAction;
   }): Promise<AgentBookingTurn> {
     const existing =
-      input.pendingAction?.kind === 'service_order'
+      input.pendingAction?.kind === 'service_order' &&
+      input.pendingAction.operation !== 'cancel'
         ? input.pendingAction
+        : undefined;
+    const requestedDateFromTurn =
+      !input.userMessage || this.hasExplicitServiceDate(input.userMessage)
+        ? input.plan.requirements.requestedDate
         : undefined;
     const service = await this.resolveServiceType(
       input.clientAction?.serviceTypeId ??
@@ -287,6 +317,41 @@ export class AgentBookingService {
       };
     }
 
+    let queuedItems = existing?.serviceItems?.map((item) => ({ ...item }));
+    if (!queuedItems?.length && input.plan.requirements.serviceQueries?.length) {
+      const resolved = await Promise.all(
+        input.plan.requirements.serviceQueries.map((query) =>
+          this.resolveServiceType(undefined, query),
+        ),
+      );
+      const seen = new Set<number>();
+      queuedItems = resolved
+        .filter((item): item is ServiceType => Boolean(item))
+        .filter((item) => {
+          if (seen.has(item.id)) return false;
+          seen.add(item.id);
+          return true;
+        })
+        .map((item, index) => ({
+          serviceTypeId: item.id,
+          serviceName: item.name,
+          quotedPrice: item.basePrice,
+          serviceUnit: item.unit,
+          requestedDate: index === 0 ? requestedDateFromTurn : undefined,
+          note: input.plan.requirements.note,
+        }));
+    }
+
+    if (queuedItems && queuedItems.length > 1) {
+      return this.prepareQueuedServiceOrder({
+        ...input,
+        existing,
+        ownedPlots,
+        items: queuedItems,
+        requestedDateFromTurn,
+      });
+    }
+
     const requestedCode =
       input.plan.requirements.selectedPlotCode ?? existing?.plotCode;
     const selectedPlot =
@@ -303,7 +368,7 @@ export class AgentBookingService {
       plotId: selectedPlot?.plotId,
       plotCode: selectedPlot?.plotCode,
       requestedDate:
-        input.plan.requirements.requestedDate ?? existing?.requestedDate,
+        requestedDateFromTurn ?? existing?.requestedDate,
       quotedPrice: service?.basePrice ?? existing?.quotedPrice,
       serviceUnit: service?.unit ?? existing?.serviceUnit,
       note: input.plan.requirements.note ?? existing?.note,
@@ -389,7 +454,7 @@ export class AgentBookingService {
         `- Chi phí dự kiến: **${service.basePrice.toLocaleString('vi-VN')} VND/${service.unit}**`,
         `- Khách hàng: **${profile.fullName || profile.email}** (lấy từ tài khoản hiện tại)`,
         '',
-        'Bạn xác nhận để mình gửi đơn dịch vụ này không? Sau khi đơn được xác nhận, panel dịch vụ bên phải sẽ mở bước thanh toán; khi thanh toán được ghi nhận, panel sẽ tự chuyển sang lịch với ngày bạn vừa chọn để bạn kiểm tra hoặc điều chỉnh lần cuối.',
+        'Bạn xác nhận để mình gửi đơn dịch vụ này không? Sau khi đơn được tạo, panel bên phải sẽ mở bước thanh toán. Khi bạn báo đã thanh toán, đơn sẽ chờ ban quản lý duyệt; chỉ sau khi được duyệt panel mới hiển thị lịch với đúng ngày bạn vừa chọn.',
       ].join('\n'),
       quickReplies: [
         {
@@ -407,15 +472,372 @@ export class AgentBookingService {
     };
   }
 
+  private async prepareQueuedServiceOrder(input: {
+    userId: number;
+    plan: AgentPlan;
+    userMessage?: string;
+    existing?: Extract<AgentPendingAction, { kind: 'service_order' }>;
+    ownedPlots: OwnedPlotContext[];
+    items: AgentPendingServiceItem[];
+    requestedDateFromTurn?: string;
+  }): Promise<AgentBookingTurn> {
+    const index = Math.min(
+      Math.max(input.existing?.activeServiceItemIndex ?? 0, 0),
+      input.items.length - 1,
+    );
+    const current = { ...input.items[index] };
+    const service = await this.resolveServiceType(
+      current.serviceTypeId,
+      current.serviceName,
+    );
+    if (!service) {
+      return {
+        handled: true,
+        intent: 'service_booking',
+        assistantMessage:
+          'Một dịch vụ trong danh sách hiện không còn hoạt động. Bạn chọn lại các dịch vụ đang nhận đơn giúp mình nhé.',
+        suggestedServices: await this.activeServices(),
+      };
+    }
+
+    const requestedCode =
+      input.plan.requirements.selectedPlotCode ?? current.plotCode;
+    const selectedPlot =
+      input.ownedPlots.find(
+        (plot) =>
+          plot.plotId === current.plotId ||
+          this.normalize(plot.plotCode) === this.normalize(requestedCode ?? ''),
+      ) ?? (input.ownedPlots.length === 1 ? input.ownedPlots[0] : undefined);
+    current.serviceTypeId = service.id;
+    current.serviceName = service.name;
+    current.quotedPrice = service.basePrice;
+    current.serviceUnit = service.unit;
+    current.plotId = selectedPlot?.plotId;
+    current.plotCode = selectedPlot?.plotCode;
+    current.requestedDate =
+      input.requestedDateFromTurn ?? current.requestedDate;
+    current.note = input.plan.requirements.note ?? current.note;
+    input.items[index] = current;
+
+    const pending: Extract<AgentPendingAction, { kind: 'service_order' }> = {
+      kind: 'service_order',
+      operation: 'create',
+      stage: 'collecting',
+      serviceItems: input.items,
+      activeServiceItemIndex: index,
+      serviceTypeId: current.serviceTypeId,
+      serviceName: current.serviceName,
+      plotId: current.plotId,
+      plotCode: current.plotCode,
+      requestedDate: current.requestedDate,
+      quotedPrice: current.quotedPrice,
+      serviceUnit: current.serviceUnit,
+      note: current.note,
+    };
+    const position = `dịch vụ ${index + 1}/${input.items.length}`;
+
+    if (!selectedPlot) {
+      return {
+        handled: true,
+        intent: 'service_booking',
+        pendingAction: pending,
+        assistantMessage: `Với ${position} **${service.name}**, bạn muốn áp dụng cho lô nào: **${input.ownedPlots.map((plot) => plot.plotCode).join(', ')}**? Mình sẽ hỏi riêng từng dịch vụ, không tự chọn thay bạn.`,
+        quickReplies: input.ownedPlots.slice(0, 6).map((plot) => ({
+          id: `service-${index}-plot-${plot.plotId}`,
+          label: plot.plotCode,
+          message: `Dịch vụ ${service.name} áp dụng cho lô ${plot.plotCode}.`,
+          emphasis: 'strong' as const,
+        })),
+      };
+    }
+
+    if (
+      current.requestedDate &&
+      !this.isValidFutureDate(current.requestedDate)
+    ) {
+      current.requestedDate = undefined;
+      pending.requestedDate = undefined;
+      return {
+        handled: true,
+        intent: 'service_booking',
+        pendingAction: pending,
+        assistantMessage: `Ngày đã chọn cho **${service.name}** không hợp lệ hoặc đã qua. Bạn chọn lại một ngày từ hôm nay trở đi nhé.`,
+      };
+    }
+
+    if (!current.requestedDate) {
+      return {
+        handled: true,
+        intent: 'service_booking',
+        pendingAction: pending,
+        assistantMessage: [
+          `Mình đang ghi nhận ${position}: **${service.name}** cho lô **${selectedPlot.plotCode}**.`,
+          '',
+          `**Bạn muốn riêng dịch vụ ${service.name} được thực hiện vào ngày nào?** Mình sẽ chưa chuyển sang thanh toán cho đến khi bạn xác nhận ngày của tất cả ${input.items.length} dịch vụ.`,
+        ].join('\n'),
+      };
+    }
+
+    pending.stage = 'awaiting_confirmation';
+    return {
+      handled: true,
+      intent: 'service_booking',
+      pendingAction: pending,
+      assistantMessage: [
+        `Mình đã ghi nhận ngày cho ${position}:`,
+        `- Dịch vụ: **${service.name}**`,
+        `- Lô áp dụng: **${selectedPlot.plotCode}**`,
+        `- Ngày mong muốn: **${current.requestedDate}**`,
+        `- Chi phí dự kiến: **${service.basePrice.toLocaleString('vi-VN')} VND/${service.unit}**`,
+        '',
+        `Bạn xác nhận đúng ngày này cho **${service.name}** chứ? Sau khi xác nhận, mình mới chuyển sang hỏi dịch vụ tiếp theo; chưa mở thanh toán lúc này.`,
+      ].join('\n'),
+      quickReplies: [
+        {
+          id: `service-confirm-item-${index}`,
+          label: `Xác nhận ngày dịch vụ ${index + 1}`,
+          message: `Mình xác nhận ngày ${current.requestedDate} cho dịch vụ ${service.name}.`,
+          emphasis: 'strong',
+        },
+      ],
+    };
+  }
+
+  private async prepareServiceCancellation(input: {
+    userId: number;
+    plan: AgentPlan;
+    userMessage?: string;
+    pendingAction?: AgentPendingAction;
+  }): Promise<AgentBookingTurn> {
+    const orders = (await this.cemeteryServices.myOrders(
+      input.userId,
+    )) as CustomerServiceOrder[];
+    const activeOrders = orders
+      .filter((order) => !['completed', 'cancelled'].includes(order.status))
+      .sort(
+        (left, right) =>
+          new Date(right.createdAt ?? 0).getTime() -
+          new Date(left.createdAt ?? 0).getTime(),
+      );
+
+    const message = input.userMessage ?? '';
+    const folded = this.normalize(message);
+    const explicitOrderId =
+      input.plan.requirements.serviceOrderId ??
+      this.serviceOrderIdFromMessage(message);
+
+    if (!activeOrders.length) {
+      const exact = explicitOrderId
+        ? orders.find((order) => order.id === explicitOrderId)
+        : undefined;
+      return {
+        handled: true,
+        intent: 'service_booking',
+        assistantMessage:
+          exact?.status === 'cancelled'
+            ? `Đơn dịch vụ **#${exact.id}** đã được hủy trước đó rồi.`
+            : exact?.status === 'completed'
+              ? `Đơn **#${exact.id} – ${exact.serviceName}** đã hoàn thành nên không thể hủy.`
+              : 'Tài khoản của bạn hiện không có đơn dịch vụ nào đang hoạt động để hủy.',
+      };
+    }
+
+    const existing =
+      input.pendingAction?.kind === 'service_order' &&
+      input.pendingAction.operation === 'cancel'
+        ? input.pendingAction
+        : undefined;
+    let candidates = existing?.candidateOrderIds?.length
+      ? activeOrders.filter((order) =>
+          existing.candidateOrderIds?.includes(order.id),
+        )
+      : activeOrders;
+    let selected: CustomerServiceOrder | undefined;
+
+    if (explicitOrderId) {
+      selected = orders.find((order) => order.id === explicitOrderId);
+      if (!selected) {
+        return {
+          handled: true,
+          intent: 'service_booking',
+          assistantMessage: `Mình không tìm thấy đơn dịch vụ **#${explicitOrderId}** trong tài khoản của bạn. Bạn kiểm tra lại mã đơn giúp mình nhé.`,
+        };
+      }
+    }
+
+    if (!selected && candidates.length > 1) {
+      const ordinal = this.serviceOrderOrdinal(folded);
+      if (ordinal && ordinal <= candidates.length) {
+        selected = candidates[ordinal - 1];
+      }
+    }
+
+    if (!selected) {
+      const namedMatches = candidates.filter((order) => {
+        const serviceName = this.normalize(order.serviceName);
+        const plotCode = this.normalize(order.plotCode ?? '');
+        return (
+          (serviceName && folded.includes(serviceName)) ||
+          (plotCode && folded.includes(plotCode))
+        );
+      });
+      if (namedMatches.length === 1) selected = namedMatches[0];
+      else if (namedMatches.length > 1) candidates = namedMatches;
+    }
+
+    const asksForLatest =
+      /\b(?:vua dat|moi dat|gan nhat|moi nhat|don vua roi|don luc nay)\b/.test(
+        folded,
+      );
+    if (!selected && asksForLatest) selected = activeOrders[0];
+    if (!selected && candidates.length === 1) selected = candidates[0];
+
+    if (!selected) {
+      const pendingAction: AgentPendingAction = {
+        kind: 'service_order',
+        operation: 'cancel',
+        stage: 'collecting',
+        candidateOrderIds: candidates.map((order) => order.id),
+      };
+      return {
+        handled: true,
+        intent: 'service_booking',
+        pendingAction,
+        assistantMessage: [
+          'Bạn đang có nhiều đơn dịch vụ. Mình chưa hủy đơn nào; bạn chọn đúng một đơn bên dưới nhé:',
+          ...candidates.map(
+            (order, index) =>
+              `${index + 1}. **#${order.id} – ${order.serviceName}**${order.plotCode ? ` · lô **${order.plotCode}**` : ''}${order.requestedDate ? ` · ngày **${order.requestedDate}**` : ''} · ${this.serviceOrderStatusLabel(order)}`,
+          ),
+        ].join('\n'),
+        quickReplies: candidates.slice(0, 6).map((order) => ({
+          id: `cancel-service-order-${order.id}`,
+          label: `Chọn đơn #${order.id}`,
+          message: `Mình muốn hủy đơn dịch vụ #${order.id}.`,
+          emphasis: 'strong' as const,
+        })),
+      };
+    }
+
+    if (selected.status === 'cancelled') {
+      return {
+        handled: true,
+        intent: 'service_booking',
+        assistantMessage: `Đơn dịch vụ **#${selected.id}** đã được hủy trước đó rồi.`,
+      };
+    }
+    if (selected.status === 'completed') {
+      return {
+        handled: true,
+        intent: 'service_booking',
+        assistantMessage: `Đơn **#${selected.id} – ${selected.serviceName}** đã hoàn thành nên không thể hủy.`,
+      };
+    }
+    if (
+      selected.status === 'in_progress' ||
+      selected.paymentStatus === 'awaiting_confirmation' ||
+      selected.paymentStatus === 'paid'
+    ) {
+      return {
+        handled: true,
+        intent: 'service_booking',
+        assistantMessage: `Đơn **#${selected.id} – ${selected.serviceName}** ${selected.status === 'in_progress' ? 'đang được thực hiện' : 'đã ghi nhận thanh toán'}, nên mình không thể tự hủy vì còn liên quan xử lý/đối soát. Bạn vui lòng liên hệ ban quản lý để được hỗ trợ đúng quy trình.`,
+      };
+    }
+
+    const pendingAction: AgentPendingAction = {
+      kind: 'service_order',
+      operation: 'cancel',
+      stage: 'awaiting_confirmation',
+      orderId: selected.id,
+      orderStatus: selected.status,
+      serviceName: selected.serviceName,
+      plotCode: selected.plotCode ?? undefined,
+      requestedDate: selected.requestedDate ?? undefined,
+    };
+    return {
+      handled: true,
+      intent: 'service_booking',
+      pendingAction,
+      assistantMessage: [
+        'Mình đã xác định đơn bạn muốn hủy:',
+        `- Đơn: **#${selected.id} – ${selected.serviceName}**`,
+        selected.plotCode ? `- Lô áp dụng: **${selected.plotCode}**` : '',
+        selected.requestedDate
+          ? `- Ngày mong muốn: **${selected.requestedDate}**`
+          : '',
+        '',
+        'Bạn xác nhận hủy đúng đơn này chứ? Sau khi xác nhận, đơn sẽ chuyển sang trạng thái đã hủy.',
+      ]
+        .filter(Boolean)
+        .join('\n'),
+      quickReplies: [
+        {
+          id: `confirm-cancel-service-order-${selected.id}`,
+          label: `Xác nhận hủy đơn #${selected.id}`,
+          message: `Mình xác nhận hủy đơn dịch vụ #${selected.id}.`,
+          emphasis: 'strong',
+        },
+        {
+          id: `keep-service-order-${selected.id}`,
+          label: 'Giữ lại đơn này',
+          message: 'Mình không hủy nữa, hãy giữ lại đơn dịch vụ này.',
+        },
+      ],
+    };
+  }
+
   private async prepareAppointment(input: {
     userId: number;
     plan: AgentPlan;
+    userMessage?: string;
     pendingAction?: AgentPendingAction;
   }): Promise<AgentBookingTurn> {
+    const approvedPlots = await this.getApprovedAppointmentPlots(input.userId);
     const existing =
       input.pendingAction?.kind === 'appointment'
         ? input.pendingAction
         : undefined;
+    if (!approvedPlots.length) {
+      return {
+        handled: true,
+        intent: 'appointment_booking',
+        assistantMessage:
+          'Hiện tài khoản của bạn chưa có yêu cầu lô nào đã được ban quản lý duyệt, nên mình chưa thể mở bước đặt lịch. Khi một yêu cầu lô được duyệt, bạn quay lại đây và mình sẽ giúp chọn đúng lô rồi đặt lịch với ban quản lý.',
+        quickReplies: [
+          {
+            id: 'appointment-view-plot-requests',
+            label: 'Xem yêu cầu lô của tôi',
+            message: 'Cho mình xem tình trạng các yêu cầu lô của mình.',
+            emphasis: 'strong',
+          },
+        ],
+      };
+    }
+
+    // Never treat an old recommendation or remembered plot as consent. The
+    // customer must explicitly name each approved plot they want to visit.
+    const explicitlySelectedPlots =
+      existing && !existing.selectedPlotCode && !existing.appointmentItems
+        ? this.findPlotMentions(input.userMessage, approvedPlots)
+        : [];
+    if (explicitlySelectedPlots.length > 1 || existing?.appointmentItems) {
+      return this.prepareQueuedAppointments({
+        ...input,
+        approvedPlots,
+        items:
+          existing?.appointmentItems ??
+          explicitlySelectedPlots.map((plot) => ({ plotCode: plot.plotCode })),
+      });
+    }
+    const explicitlySelectedPlot = explicitlySelectedPlots[0];
+    const selectedPlot = approvedPlots.find(
+      (plot) =>
+        this.normalize(plot.plotCode) ===
+        this.normalize(
+          existing?.selectedPlotCode ?? explicitlySelectedPlot?.plotCode ?? '',
+        ),
+    );
     const startTime =
       input.plan.requirements.appointmentStartTime ?? existing?.startTime;
     const pending: AgentPendingAction = {
@@ -428,16 +850,20 @@ export class AgentBookingService {
         input.plan.requirements.appointmentEndTime ??
         existing?.endTime ??
         (startTime ? this.addMinutes(startTime, 60) : undefined),
-      topic:
-        input.plan.requirements.appointmentTopic ??
-        existing?.topic ??
-        'Tham quan và tư vấn lô đất',
-      note: input.plan.requirements.note ?? existing?.note,
-      selectedPlotCode:
-        input.plan.requirements.selectedPlotCode ?? existing?.selectedPlotCode,
+      topic: selectedPlot
+        ? this.appointmentPurpose(selectedPlot.plotCode)
+        : undefined,
+      selectedPlotCode: selectedPlot?.plotCode,
     };
 
-    if (!pending.appointmentDate || !this.isValidFutureDate(pending.appointmentDate)) {
+    if (!selectedPlot) {
+      return this.askForAppointmentPlot(pending, approvedPlots);
+    }
+
+    if (
+      !pending.appointmentDate ||
+      !this.isValidFutureDate(pending.appointmentDate)
+    ) {
       pending.appointmentDate = undefined;
       return {
         handled: true,
@@ -449,12 +875,16 @@ export class AgentBookingService {
           startTime: pending.startTime,
           endTime: pending.endTime,
           topic: pending.topic,
+          plotCode: pending.selectedPlotCode,
         },
         assistantMessage:
           'Bạn muốn gặp ban quản lý vào ngày nào? Mình sẽ mở lịch để bạn chọn ngày phù hợp.',
       };
     }
-    if (!pending.startTime || !/^([01]\d|2[0-3]):[0-5]\d$/.test(pending.startTime)) {
+    if (
+      !pending.startTime ||
+      !/^([01]\d|2[0-3]):[0-5]\d$/.test(pending.startTime)
+    ) {
       pending.startTime = undefined;
       pending.endTime = undefined;
       return {
@@ -468,6 +898,7 @@ export class AgentBookingService {
           startTime: pending.startTime,
           endTime: pending.endTime,
           topic: pending.topic,
+          plotCode: pending.selectedPlotCode,
         },
         assistantMessage: `Bạn muốn gặp ban quản lý lúc mấy giờ ngày **${pending.appointmentDate}**?`,
       };
@@ -480,13 +911,7 @@ export class AgentBookingService {
       pending.endTime = this.addMinutes(pending.startTime, 60);
     }
     pending.stage = 'awaiting_confirmation';
-    const subject =
-      pending.selectedPlotCode &&
-      !this.normalize(pending.topic ?? '').includes(
-        this.normalize(pending.selectedPlotCode),
-      )
-        ? `${pending.topic} · Lô ${pending.selectedPlotCode}`
-        : pending.topic;
+    const subject = this.appointmentPurpose(pending.selectedPlotCode);
     return {
       handled: true,
       intent: 'appointment_booking',
@@ -498,12 +923,13 @@ export class AgentBookingService {
         startTime: pending.startTime,
         endTime: pending.endTime,
         topic: subject,
+        plotCode: pending.selectedPlotCode,
       },
       assistantMessage: [
-        'Mình đã chuẩn bị lịch hẹn với ban quản lý:',
+        `Mình đã chuẩn bị lịch hẹn xem lô **${pending.selectedPlotCode}**:`,
         `- Ngày: **${pending.appointmentDate}**`,
         `- Thời gian: **${pending.startTime}–${pending.endTime}**`,
-        `- Nội dung: **${subject}**`,
+        `- Mục đích: **${subject}**`,
         '',
         'Bạn xác nhận để mình gửi yêu cầu đặt lịch này không?',
       ].join('\n'),
@@ -528,13 +954,16 @@ export class AgentBookingService {
       ...(profile.email ? [profile.email] : []),
     ]
       .map((email) => email.trim().toLowerCase())
-      .filter((email, index, values) =>
-        /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) &&
-        values.indexOf(email) === index,
+      .filter(
+        (email, index, values) =>
+          /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) &&
+          values.indexOf(email) === index,
       )
       .slice(0, 10);
     const recurring =
-      input.plan.requirements.reminderRecurring ?? existing?.isRecurring ?? true;
+      input.plan.requirements.reminderRecurring ??
+      existing?.isRecurring ??
+      true;
     const title =
       input.plan.requirements.reminderTitle ??
       existing?.title ??
@@ -547,7 +976,7 @@ export class AgentBookingService {
       ? parsedDate
         ? `${parsedDate.day}/${parsedDate.month} hằng năm (${calendarType === 'lunar' ? 'âm lịch' : 'dương lịch'})`
         : 'chưa xác định'
-      : reminderDate ?? existing?.specificDate ?? 'chưa xác định';
+      : (reminderDate ?? existing?.specificDate ?? 'chưa xác định');
     const fallbackDescription = this.defaultMemorialMessage(
       profile.fullName,
       title,
@@ -569,7 +998,9 @@ export class AgentBookingService {
       stage: 'collecting',
       title,
       description,
-      specificDate: recurring ? undefined : reminderDate ?? existing?.specificDate,
+      specificDate: recurring
+        ? undefined
+        : (reminderDate ?? existing?.specificDate),
       remindMonth: parsedDate?.month ?? existing?.remindMonth,
       remindDay: parsedDate?.day ?? existing?.remindDay,
       isRecurring: recurring,
@@ -583,7 +1014,8 @@ export class AgentBookingService {
 
     if (
       (!pending.isRecurring &&
-        (!pending.specificDate || !this.isValidFutureDate(pending.specificDate))) ||
+        (!pending.specificDate ||
+          !this.isValidFutureDate(pending.specificDate))) ||
       (pending.isRecurring && (!pending.remindMonth || !pending.remindDay))
     ) {
       return {
@@ -653,6 +1085,28 @@ export class AgentBookingService {
     }
 
     if (pending.kind === 'appointment') {
+      if (pending.appointmentItems?.length) {
+        return this.confirmQueuedAppointments(userId, pending);
+      }
+      const approvedPlots = await this.getApprovedAppointmentPlots(userId);
+      const approvedPlot = approvedPlots.find(
+        (plot) =>
+          this.normalize(plot.plotCode) ===
+          this.normalize(pending.selectedPlotCode ?? ''),
+      );
+      if (!approvedPlot) {
+        pending.stage = 'collecting';
+        pending.selectedPlotCode = undefined;
+        if (!approvedPlots.length) {
+          return {
+            handled: true,
+            intent: 'appointment_booking',
+            assistantMessage:
+              'Yêu cầu lô dùng cho lịch hẹn này hiện không còn ở trạng thái đã duyệt, nên mình chưa gửi lịch. Bạn vui lòng kiểm tra lại tình trạng yêu cầu lô trước.',
+          };
+        }
+        return this.askForAppointmentPlot(pending, approvedPlots);
+      }
       if (
         !pending.appointmentDate ||
         !pending.startTime ||
@@ -661,25 +1115,18 @@ export class AgentBookingService {
       ) {
         throw new BadRequestException('Thông tin lịch hẹn chưa đầy đủ');
       }
-      const baseTopic = pending.topic ?? 'Tham quan và tư vấn lô đất';
-      const topic =
-        pending.selectedPlotCode &&
-        !this.normalize(baseTopic).includes(
-          this.normalize(pending.selectedPlotCode),
-        )
-          ? `${baseTopic} · Lô ${pending.selectedPlotCode}`
-          : baseTopic;
+      const topic = this.appointmentPurpose(approvedPlot.plotCode);
       const result = await this.schedule.bookAppointment(userId, {
         appointmentDate: pending.appointmentDate,
         startTime: pending.startTime,
         endTime: pending.endTime,
-        note: [topic, pending.note].filter(Boolean).join(' — '),
+        note: topic,
       });
       const id = this.resultId(result);
       return {
         handled: true,
         intent: 'appointment_booking',
-        assistantMessage: `Đã gửi yêu cầu đặt lịch${id ? ` **#${id}**` : ''} với ban quản lý vào **${pending.startTime}–${pending.endTime}, ngày ${pending.appointmentDate}**. Lịch đang chờ ban quản lý xác nhận.`,
+        assistantMessage: `Mình đã gửi yêu cầu đặt lịch${id ? ` **#${id}**` : ''} để xem lô **${approvedPlot.plotCode}** vào **${pending.startTime}–${pending.endTime}, ngày ${pending.appointmentDate}**. Lịch đang chờ ban quản lý xác nhận.`,
         uiDirective: {
           type: 'OPEN_APPOINTMENT_CALENDAR',
           mode: 'summary',
@@ -688,6 +1135,7 @@ export class AgentBookingService {
           startTime: pending.startTime,
           endTime: pending.endTime,
           topic,
+          plotCode: approvedPlot.plotCode,
         },
       };
     }
@@ -801,10 +1249,49 @@ export class AgentBookingService {
           {
             id: 'after-plot-request-process',
             label: 'Hỏi bước tiếp theo',
-            message: 'Giải thích giúp mình bước tiếp theo sau khi đã gửi yêu cầu.',
+            message:
+              'Giải thích giúp mình bước tiếp theo sau khi đã gửi yêu cầu.',
           },
         ],
       };
+    }
+
+    if (pending.operation === 'cancel') {
+      if (!pending.orderId) {
+        return {
+          handled: true,
+          intent: 'service_booking',
+          pendingAction: { ...pending, stage: 'collecting' },
+          assistantMessage:
+            'Mình chưa xác định được đơn dịch vụ cần hủy. Bạn chọn lại đúng một đơn giúp mình nhé.',
+        };
+      }
+      const cancelled = (await this.cemeteryServices.cancelByCustomer(
+        pending.orderId,
+        userId,
+      )) as unknown as CustomerServiceOrder;
+      return {
+        handled: true,
+        intent: 'service_booking',
+        assistantMessage: `Mình đã hủy đơn dịch vụ **#${cancelled.id} – ${cancelled.serviceName}**${cancelled.plotCode ? ` cho lô **${cancelled.plotCode}**` : ''}. Các đơn dịch vụ khác của bạn vẫn được giữ nguyên.`,
+        quickReplies: [
+          {
+            id: 'after-service-cancel-view-services',
+            label: 'Đặt dịch vụ khác',
+            message: 'Cho mình xem các dịch vụ chăm sóc để đặt dịch vụ khác.',
+            emphasis: 'strong',
+          },
+          {
+            id: 'after-service-cancel-view-orders',
+            label: 'Xem các đơn còn lại',
+            message: 'Cho mình xem tình trạng các đơn dịch vụ còn lại.',
+          },
+        ],
+      };
+    }
+
+    if (pending.serviceItems && pending.serviceItems.length > 1) {
+      return this.confirmQueuedServiceOrders(userId, pending);
     }
 
     if (!pending.serviceTypeId || !pending.plotId) {
@@ -883,12 +1370,396 @@ export class AgentBookingService {
     return {
       handled: true,
       intent: 'service_booking',
-      assistantMessage: `${(result as { reused?: boolean }).reused ? 'Đơn này đã được ghi nhận trước đó' : 'Đã gửi đơn dịch vụ'}${id ? ` **#${id}**` : ''} **${pending.serviceName ?? ''}** cho lô **${pending.plotCode}**${dateText}. Mình đã mở panel **Đã đặt → Thanh toán → Chọn lịch** ở bên phải. Sau khi bạn báo đã chuyển khoản, hệ thống sẽ ghi nhận trạng thái chờ xác minh; panel sẽ tự chuyển sang lịch và tô sẵn ngày mong muốn để bạn kiểm tra hoặc đổi ngày.`,
+      assistantMessage: `${(result as { reused?: boolean }).reused ? 'Đơn này đã được ghi nhận trước đó' : 'Đã gửi đơn dịch vụ'}${id ? ` **#${id}**` : ''} **${pending.serviceName ?? ''}** cho lô **${pending.plotCode}**${dateText}. Mình đã mở panel thanh toán ở bên phải. Sau khi bạn báo đã chuyển khoản, đơn sẽ chờ ban quản lý duyệt. Khi thanh toán được xác nhận, bạn sẽ nhận thông báo và panel sẽ tự hiển thị đúng ngày dịch vụ đã chọn; bạn không cần xác nhận ngày thêm lần nữa.`,
+      quickReplies: [
+        {
+          id: 'after-service-order-add-more',
+          label: 'Đặt thêm dịch vụ',
+          message: 'Cho mình xem các dịch vụ chăm sóc để đặt thêm dịch vụ khác.',
+          emphasis: 'strong',
+        },
+        ...(id
+          ? [
+              {
+                id: `after-service-order-cancel-${id}`,
+                label: `Hủy đơn #${id}`,
+                message: `Mình muốn hủy đơn dịch vụ #${id} vừa đặt.`,
+                emphasis: 'normal' as const,
+              },
+            ]
+          : []),
+      ],
       uiDirective: {
         type: 'SHOW_INLINE_SERVICE_PAYMENT',
         serviceTypeId: pending.serviceTypeId,
         orderId: id,
         amount: currentService.basePrice,
+        paymentStatus: 'unpaid',
+      },
+    };
+  }
+
+  private async confirmQueuedAppointments(
+    userId: number,
+    pending: Extract<AgentPendingAction, { kind: 'appointment' }>,
+  ): Promise<AgentBookingTurn> {
+    const items = (pending.appointmentItems ?? []).map((item) => ({ ...item }));
+    const index = Math.min(
+      Math.max(pending.activeAppointmentItemIndex ?? 0, 0),
+      items.length - 1,
+    );
+    const current = items[index];
+    if (
+      !current?.appointmentDate ||
+      !current.startTime ||
+      !current.endTime ||
+      !this.isValidFutureDate(current.appointmentDate)
+    ) {
+      return {
+        handled: true,
+        intent: 'appointment_booking',
+        pendingAction: { ...pending, stage: 'collecting', appointmentItems: items },
+        assistantMessage: `Lịch cho lô **${current?.plotCode ?? ''}** còn thiếu ngày hoặc giờ hợp lệ nên mình chưa xác nhận. Bạn bổ sung thông tin cho đúng lô này nhé.`,
+      };
+    }
+    current.confirmed = true;
+    items[index] = current;
+    const nextIndex = items.findIndex((item) => !item.confirmed);
+    if (nextIndex >= 0) {
+      const next = items[nextIndex];
+      return {
+        handled: true,
+        intent: 'appointment_booking',
+        pendingAction: {
+          kind: 'appointment',
+          stage: 'collecting',
+          appointmentItems: items,
+          activeAppointmentItemIndex: nextIndex,
+          selectedPlotCode: next.plotCode,
+          appointmentDate: next.appointmentDate,
+          startTime: next.startTime,
+          endTime: next.endTime,
+          topic: this.appointmentPurpose(next.plotCode),
+        },
+        assistantMessage: `Đã xác nhận lịch xem lô **${current.plotCode}**. Tiếp theo là lô **${next.plotCode}** (${nextIndex + 1}/${items.length}); bạn muốn hẹn vào ngày nào?`,
+      };
+    }
+
+    const approved = await this.getApprovedAppointmentPlots(userId);
+    const approvedCodes = new Set(approved.map((plot) => this.normalize(plot.plotCode)));
+    const invalid = items.find((item) => !approvedCodes.has(this.normalize(item.plotCode)));
+    if (invalid) {
+      return {
+        handled: true,
+        intent: 'appointment_booking',
+        assistantMessage: `Lô **${invalid.plotCode}** không còn ở trạng thái đã duyệt nên mình chưa gửi các lịch. Bạn kiểm tra lại yêu cầu mua lô trước nhé.`,
+      };
+    }
+
+    const appointments: Array<{ id?: number; item: AgentPendingAppointmentItem }> = [];
+    for (const item of items) {
+      const result = await this.schedule.bookAppointment(userId, {
+        appointmentDate: item.appointmentDate!,
+        startTime: item.startTime!,
+        endTime: item.endTime!,
+        note: this.appointmentPurpose(item.plotCode),
+      });
+      appointments.push({ id: this.resultId(result), item });
+    }
+    const first = appointments[0];
+    return {
+      handled: true,
+      intent: 'appointment_booking',
+      assistantMessage: [
+        `Đã gửi ${appointments.length} yêu cầu lịch hẹn sang ban quản lý:`,
+        ...appointments.map(
+          ({ id, item }) =>
+            `- ${id ? `**#${id}** ` : ''}xem lô **${item.plotCode}** · **${item.startTime}–${item.endTime}, ngày ${item.appointmentDate}**`,
+        ),
+        '',
+        'Các lịch này giống hệt lịch đặt thủ công và đang chờ ban quản lý xác nhận.',
+      ].join('\n'),
+      uiDirective: {
+        type: 'OPEN_APPOINTMENT_CALENDAR',
+        mode: 'summary',
+        appointmentId: first.id,
+        appointmentDate: first.item.appointmentDate,
+        startTime: first.item.startTime,
+        endTime: first.item.endTime,
+        topic: this.appointmentPurpose(first.item.plotCode),
+        plotCode: first.item.plotCode,
+      },
+    };
+  }
+
+  private async prepareQueuedAppointments(input: {
+    userId: number;
+    plan: AgentPlan;
+    userMessage?: string;
+    pendingAction?: AgentPendingAction;
+    approvedPlots: ApprovedAppointmentPlot[];
+    items: AgentPendingAppointmentItem[];
+  }): Promise<AgentBookingTurn> {
+    const existing = input.pendingAction?.kind === 'appointment'
+      ? input.pendingAction
+      : undefined;
+    const items = input.items.map((item) => ({ ...item }));
+    const index = Math.min(
+      Math.max(existing?.activeAppointmentItemIndex ?? 0, 0),
+      items.length - 1,
+    );
+    const item = items[index];
+    const plot = input.approvedPlots.find(
+      (candidate) =>
+        this.normalize(candidate.plotCode) === this.normalize(item.plotCode),
+    );
+    if (!plot) {
+      return {
+        handled: true,
+        intent: 'appointment_booking',
+        assistantMessage: `Lô **${item.plotCode}** không còn ở trạng thái yêu cầu mua đã được duyệt nên mình chưa tạo lịch nào. Bạn chọn lại lô hợp lệ giúp mình nhé.`,
+      };
+    }
+    const dateFromTurn =
+      input.userMessage && this.hasExplicitServiceDate(input.userMessage)
+        ? input.plan.requirements.appointmentDate
+        : undefined;
+    item.appointmentDate = dateFromTurn ?? item.appointmentDate;
+    const timeFromTurn = input.plan.requirements.appointmentStartTime;
+    if (
+      timeFromTurn &&
+      /\b(?:\d{1,2}:\d{2}|\d{1,2}\s*(?:gio|h))\b/i.test(
+        input.userMessage ?? '',
+      )
+    ) {
+      item.startTime = timeFromTurn;
+      item.endTime =
+        input.plan.requirements.appointmentEndTime ??
+        this.addMinutes(timeFromTurn, 60);
+    }
+    items[index] = item;
+    const pending: Extract<AgentPendingAction, { kind: 'appointment' }> = {
+      kind: 'appointment',
+      stage: 'collecting',
+      appointmentItems: items,
+      activeAppointmentItemIndex: index,
+      selectedPlotCode: item.plotCode,
+      appointmentDate: item.appointmentDate,
+      startTime: item.startTime,
+      endTime: item.endTime,
+      topic: this.appointmentPurpose(item.plotCode),
+    };
+    const label = `lô ${index + 1}/${items.length} **${item.plotCode}**`;
+
+    if (!item.appointmentDate || !this.isValidFutureDate(item.appointmentDate)) {
+      item.appointmentDate = undefined;
+      pending.appointmentDate = undefined;
+      return {
+        handled: true,
+        intent: 'appointment_booking',
+        pendingAction: pending,
+        assistantMessage: `Bạn muốn hẹn xem ${label} vào ngày nào? Mình sẽ hỏi và xác nhận lịch riêng cho từng lô, chưa tạo lịch nào lúc này.`,
+      };
+    }
+    if (!item.startTime || !/^([01]\d|2[0-3]):[0-5]\d$/.test(item.startTime)) {
+      item.startTime = undefined;
+      item.endTime = undefined;
+      pending.startTime = undefined;
+      pending.endTime = undefined;
+      return {
+        handled: true,
+        intent: 'appointment_booking',
+        pendingAction: pending,
+        assistantMessage: `Bạn muốn gặp ban quản lý lúc mấy giờ ngày **${item.appointmentDate}** để xem ${label}?`,
+      };
+    }
+    if (!item.endTime || item.endTime <= item.startTime) {
+      item.endTime = this.addMinutes(item.startTime, 60);
+      pending.endTime = item.endTime;
+    }
+    pending.stage = 'awaiting_confirmation';
+    return {
+      handled: true,
+      intent: 'appointment_booking',
+      pendingAction: pending,
+      assistantMessage: [
+        `Mình đã chuẩn bị lịch hẹn cho ${label}:`,
+        `- Ngày: **${item.appointmentDate}**`,
+        `- Thời gian: **${item.startTime}–${item.endTime}**`,
+        '',
+        `Bạn xác nhận lịch riêng của lô **${item.plotCode}** chứ? Sau đó mình mới hỏi lô tiếp theo; chưa gửi lịch sang ban quản lý.`,
+      ].join('\n'),
+    };
+  }
+
+  private async confirmQueuedServiceOrders(
+    userId: number,
+    pending: Extract<AgentPendingAction, { kind: 'service_order' }>,
+  ): Promise<AgentBookingTurn> {
+    const items = (pending.serviceItems ?? []).map((item) => ({ ...item }));
+    const index = Math.min(
+      Math.max(pending.activeServiceItemIndex ?? 0, 0),
+      items.length - 1,
+    );
+    const current = items[index];
+    if (
+      !current?.serviceTypeId ||
+      !current.plotId ||
+      !current.requestedDate ||
+      !this.isValidFutureDate(current.requestedDate)
+    ) {
+      return {
+        handled: true,
+        intent: 'service_booking',
+        pendingAction: {
+          ...pending,
+          stage: 'collecting',
+          requestedDate: current?.requestedDate,
+          serviceItems: items,
+        },
+        assistantMessage: `Dịch vụ **${current?.serviceName ?? `thứ ${index + 1}`}** vẫn thiếu lô hoặc ngày hợp lệ nên mình chưa xác nhận và chưa mở thanh toán. Bạn bổ sung đúng thông tin cho dịch vụ này nhé.`,
+      };
+    }
+    current.confirmed = true;
+    items[index] = current;
+
+    const nextIndex = items.findIndex((item) => !item.confirmed);
+    if (nextIndex >= 0) {
+      const next = items[nextIndex];
+      const ownedPlots = await this.getOwnedPlots(userId);
+      if (ownedPlots.length === 1 && !next.plotId) {
+        next.plotId = ownedPlots[0].plotId;
+        next.plotCode = ownedPlots[0].plotCode;
+      }
+      items[nextIndex] = next;
+      const nextPending: Extract<
+        AgentPendingAction,
+        { kind: 'service_order' }
+      > = {
+        kind: 'service_order',
+        operation: 'create',
+        stage: 'collecting',
+        serviceItems: items,
+        activeServiceItemIndex: nextIndex,
+        serviceTypeId: next.serviceTypeId,
+        serviceName: next.serviceName,
+        plotId: next.plotId,
+        plotCode: next.plotCode,
+        requestedDate: next.requestedDate,
+        quotedPrice: next.quotedPrice,
+        serviceUnit: next.serviceUnit,
+        note: next.note,
+      };
+      if (!next.plotId && ownedPlots.length > 1) {
+        return {
+          handled: true,
+          intent: 'service_booking',
+          pendingAction: nextPending,
+          assistantMessage: `Đã xác nhận ngày của **${current.serviceName}**. Tiếp theo là dịch vụ **${next.serviceName}** (${nextIndex + 1}/${items.length}); bạn muốn áp dụng cho lô nào: **${ownedPlots.map((plot) => plot.plotCode).join(', ')}**?`,
+          quickReplies: ownedPlots.slice(0, 6).map((plot) => ({
+            id: `service-${nextIndex}-plot-${plot.plotId}`,
+            label: plot.plotCode,
+            message: `Dịch vụ ${next.serviceName} áp dụng cho lô ${plot.plotCode}.`,
+            emphasis: 'strong' as const,
+          })),
+        };
+      }
+      return {
+        handled: true,
+        intent: 'service_booking',
+        pendingAction: nextPending,
+        assistantMessage: [
+          `Đã xác nhận ngày **${current.requestedDate}** cho **${current.serviceName}**.`,
+          '',
+          `Tiếp theo là dịch vụ **${next.serviceName}** (${nextIndex + 1}/${items.length})${next.plotCode ? ` cho lô **${next.plotCode}**` : ''}. **Bạn muốn dịch vụ này được thực hiện vào ngày nào?** Mình vẫn chưa mở thanh toán cho đến khi bạn xác nhận đủ từng dịch vụ.`,
+        ].join('\n'),
+      };
+    }
+
+    const refreshed: Array<{
+      item: AgentPendingServiceItem;
+      service: ServiceType;
+    }> = [];
+    for (const item of items) {
+      if (!item.serviceTypeId || !item.plotId || !item.requestedDate) {
+        throw new BadRequestException('Service queue information is incomplete');
+      }
+      const service = await this.resolveServiceType(item.serviceTypeId);
+      if (!service) {
+        throw new BadRequestException(
+          `Dịch vụ ${item.serviceName ?? ''} hiện không còn hoạt động.`,
+        );
+      }
+      if (
+        item.quotedPrice === undefined ||
+        Math.abs(service.basePrice - item.quotedPrice) >= 0.01
+      ) {
+        item.quotedPrice = service.basePrice;
+        item.serviceUnit = service.unit;
+        item.serviceName = service.name;
+        item.confirmed = false;
+        const changedIndex = items.indexOf(item);
+        return {
+          handled: true,
+          intent: 'service_booking',
+          pendingAction: {
+            ...pending,
+            stage: 'awaiting_confirmation',
+            serviceItems: items,
+            activeServiceItemIndex: changedIndex,
+            ...item,
+          },
+          assistantMessage: `Giá dịch vụ **${service.name}** vừa thay đổi thành **${service.basePrice.toLocaleString('vi-VN')} VND/${service.unit}**. Bạn xác nhận lại dịch vụ này với ngày **${item.requestedDate}** trước khi mình tạo cả nhóm đơn nhé.`,
+        };
+      }
+      refreshed.push({ item, service });
+    }
+
+    const created: Array<{
+      id?: number;
+      item: AgentPendingServiceItem;
+      service: ServiceType;
+    }> = [];
+    for (const entry of refreshed) {
+      const result = await this.cemeteryServices.createOrder(userId, {
+        serviceTypeId: entry.item.serviceTypeId!,
+        plotId: entry.item.plotId!,
+        requestedDate: entry.item.requestedDate!,
+        note:
+          entry.item.note ??
+          'Đơn dịch vụ được Trợ lý AI thiết lập theo xác nhận của khách hàng',
+      });
+      created.push({
+        id: this.resultId(result),
+        item: entry.item,
+        service: entry.service,
+      });
+    }
+    const orderIds = created
+      .map((entry) => entry.id)
+      .filter((id): id is number => typeof id === 'number');
+    const first = created[0];
+    return {
+      handled: true,
+      intent: 'service_booking',
+      assistantMessage: [
+        `Đã tạo **${created.length} đơn dịch vụ** sau khi bạn xác nhận đủ ngày:`,
+        ...created.map(
+          (entry) =>
+            `- ${entry.id ? `**#${entry.id}** ` : ''}**${entry.service.name}** · lô **${entry.item.plotCode}** · ngày **${entry.item.requestedDate}**`,
+        ),
+        '',
+        'Mình đã mở panel thanh toán cho toàn bộ các đơn. Mỗi đơn sẽ cập nhật realtime riêng; khi ban quản lý duyệt thanh toán, mình sẽ báo và lịch của đúng dịch vụ đó sẽ xuất hiện.',
+      ].join('\n'),
+      uiDirective: {
+        type: 'SHOW_INLINE_SERVICE_PAYMENT',
+        serviceTypeId: first.item.serviceTypeId,
+        orderId: first.id,
+        orderIds,
+        amount: created.reduce(
+          (total, entry) => total + entry.service.basePrice,
+          0,
+        ),
         paymentStatus: 'unpaid',
       },
     };
@@ -1104,6 +1975,74 @@ export class AgentBookingService {
     );
   }
 
+  private getApprovedAppointmentPlots(
+    userId: number,
+  ): Promise<ApprovedAppointmentPlot[]> {
+    return this.database.query<ApprovedAppointmentPlot>(
+      `SELECT DISTINCT p.plot_id AS "plotId", p.plot_code AS "plotCode",
+              z.zone_name AS "zoneName", p.direction,
+              p.area_sqm::float AS "areaSqm", p.plot_type AS "plotType"
+       FROM reservation_requests rr
+       JOIN request_plots rp ON rp.request_id = rr.request_id
+       JOIN plots p ON p.plot_id = rp.plot_id AND p.is_deleted = FALSE
+       JOIN cemetery_zones z ON z.zone_id = p.zone_id
+       WHERE rr.user_id = $1
+         AND rr.status = 'approved'
+         AND rr.is_deleted = FALSE
+       ORDER BY p.plot_code`,
+      [userId],
+    );
+  }
+
+  private askForAppointmentPlot(
+    pending: AgentPendingAction & { kind: 'appointment' },
+    plots: ApprovedAppointmentPlot[],
+  ): AgentBookingTurn {
+    pending.stage = 'collecting';
+    pending.selectedPlotCode = undefined;
+    return {
+      handled: true,
+      intent: 'appointment_booking',
+      pendingAction: pending,
+      assistantMessage: `Tài khoản của bạn có ${plots.length === 1 ? 'lô đã được duyệt' : 'các lô đã được duyệt'}: **${plots.map((plot) => plot.plotCode).join(', ')}**. Bạn muốn hẹn xem lô nào? Nếu muốn xem nhiều lô, hãy nêu các mã lô; mình sẽ hỏi và xác nhận ngày riêng từng lô. Mình không tự chọn thay bạn.`,
+      quickReplies: plots.slice(0, 6).map((plot) => ({
+        id: `appointment-plot-${plot.plotId}`,
+        label: `Chọn lô ${plot.plotCode}`,
+        message: `Mình muốn đặt lịch hẹn xem lô ${plot.plotCode}.`,
+        emphasis: 'strong' as const,
+      })),
+    };
+  }
+
+  private findPlotMention(
+    userMessage: string | undefined,
+    plots: ApprovedAppointmentPlot[],
+  ) {
+    const message = this.normalize(userMessage ?? '');
+    if (!message) return undefined;
+    const paddedMessage = ` ${message} `;
+    const matches = plots.filter((plot) =>
+      paddedMessage.includes(` ${this.normalize(plot.plotCode)} `),
+    );
+    return matches.length === 1 ? matches[0] : undefined;
+  }
+
+  private findPlotMentions(
+    userMessage: string | undefined,
+    plots: ApprovedAppointmentPlot[],
+  ) {
+    const message = this.normalize(userMessage ?? '');
+    if (!message) return [];
+    const paddedMessage = ` ${message} `;
+    return plots.filter((plot) =>
+      paddedMessage.includes(` ${this.normalize(plot.plotCode)} `),
+    );
+  }
+
+  private appointmentPurpose(plotCode?: string) {
+    return plotCode ? `Hẹn xem lô đất ${plotCode}` : 'Hẹn xem lô đất';
+  }
+
   private async profile(userId: number): Promise<ProfileSummary> {
     const row = await this.database.queryOne<ProfileSummary>(
       `SELECT full_name AS "fullName", phone_number AS phone, email
@@ -1130,6 +2069,23 @@ export class AgentBookingService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     return date >= today;
+  }
+
+  private hasExplicitServiceDate(value: string) {
+    const message = this.normalize(value);
+    return (
+      /\b(?:hom nay|ngay mai|mai|ngay mot|mot|ngay kia|kia)\b/.test(message) ||
+      /\b(?:sau|trong)\s+\d{1,3}\s+(?:ngay|hom)\b/.test(message) ||
+      /\b\d{1,3}\s+(?:ngay|hom)\s+(?:nua|toi)\b/.test(message) ||
+      /\b(?:thu\s*[2-7]|chu nhat)(?:\s+tuan\s+(?:nay|sau))?\b/.test(
+        message,
+      ) ||
+      /\bngay\s+\d{1,2}(?:\s+thang\s+\d{1,2})?(?:\s+nam\s+\d{4})?\b/.test(
+        message,
+      ) ||
+      /\b\d{1,2}[\/.\-]\d{1,2}(?:[\/.\-]\d{2,4})?\b/.test(value) ||
+      /\b\d{4}-\d{2}-\d{2}\b/.test(value)
+    );
   }
 
   private parseIsoDate(value: string) {
@@ -1177,6 +2133,35 @@ export class AgentBookingService {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, ' ')
       .trim();
+  }
+
+  private serviceOrderIdFromMessage(message: string) {
+    const hashMatch = message.match(/#\s*(\d{1,10})\b/);
+    if (hashMatch) return Number(hashMatch[1]);
+    const folded = this.normalize(message);
+    const orderMatch = folded.match(
+      /\bdon(?: dich vu)?(?: so| ma)?\s+(\d{1,10})\b/,
+    );
+    return orderMatch ? Number(orderMatch[1]) : undefined;
+  }
+
+  private serviceOrderOrdinal(foldedMessage: string) {
+    const match = foldedMessage.match(/\b(?:cai|don)?\s*thu\s*(\d+)\b/);
+    if (match) return Number(match[1]);
+    if (/\b(?:dau tien|thu nhat|cai dau)\b/.test(foldedMessage)) return 1;
+    if (/\b(?:thu hai|cai hai|cai 2)\b/.test(foldedMessage)) return 2;
+    if (/\b(?:thu ba|cai ba|cai 3)\b/.test(foldedMessage)) return 3;
+    return undefined;
+  }
+
+  private serviceOrderStatusLabel(order: CustomerServiceOrder) {
+    if (order.status === 'in_progress') return 'đang thực hiện';
+    if (order.paymentStatus === 'paid') return 'đã thanh toán';
+    if (order.paymentStatus === 'awaiting_confirmation') {
+      return 'đang chờ duyệt thanh toán';
+    }
+    if (order.status === 'confirmed') return 'đã được xác nhận';
+    return 'chưa thanh toán';
   }
 
   private resultId(result: unknown) {

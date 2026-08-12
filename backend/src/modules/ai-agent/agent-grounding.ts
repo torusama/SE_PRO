@@ -57,7 +57,10 @@ export function isConsultativeRecommendationNarrative(
   if (!result.recommendations.length) return true;
 
   const wordCount = content.trim().split(/\s+/u).filter(Boolean).length;
-  const minimumWords = result.recommendations.length > 1 ? 170 : 110;
+  // A concise, grounded answer is preferable to rejecting a useful response
+  // and waiting through another large-model timeout. Coverage, trade-off,
+  // recommendation and grounding checks below still protect quality.
+  const minimumWords = result.recommendations.length > 1 ? 80 : 55;
   if (wordCount < minimumWords) return false;
 
   const coversEveryOption = result.recommendations.every((option) =>
@@ -76,4 +79,47 @@ export function isConsultativeRecommendationNarrative(
   const endsWithQuestion = /\?\s*$/u.test(content);
 
   return hasTradeOff && hasProfessionalRecommendation && endsWithQuestion;
+}
+
+/**
+ * Models occasionally follow the content contract but emit every option in one
+ * visual paragraph. Split the first discussion of each recommendation into its
+ * own Markdown paragraph without changing any grounded wording or facts.
+ */
+export function ensureRecommendationParagraphs(
+  content: string,
+  result: RecommendationResult,
+) {
+  let formatted = content.replace(/\r\n?/g, '\n').trim();
+
+  for (const option of result.recommendations) {
+    const indexes = option.plotCodes
+      .map((code) => formatted.indexOf(code))
+      .filter((index) => index >= 0);
+    if (!indexes.length) continue;
+
+    const codeIndex = Math.min(...indexes);
+    const lineStart = formatted.lastIndexOf('\n', codeIndex - 1) + 1;
+    let sectionStart = lineStart;
+
+    if (formatted.slice(lineStart, codeIndex).trim()) {
+      const sentenceStarts = [
+        formatted.lastIndexOf('. ', codeIndex - 1),
+        formatted.lastIndexOf('! ', codeIndex - 1),
+        formatted.lastIndexOf('? ', codeIndex - 1),
+      ];
+      const latestSentenceBoundary = Math.max(...sentenceStarts);
+      sectionStart =
+        latestSentenceBoundary >= 0 ? latestSentenceBoundary + 2 : 0;
+    }
+
+    if (
+      sectionStart > 0 &&
+      formatted.slice(sectionStart - 2, sectionStart) !== '\n\n'
+    ) {
+      formatted = `${formatted.slice(0, sectionStart).trimEnd()}\n\n${formatted.slice(sectionStart).trimStart()}`;
+    }
+  }
+
+  return formatted.replace(/\n{3,}/g, '\n\n');
 }
