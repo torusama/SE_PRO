@@ -627,8 +627,8 @@ export function recommendationDiscoveryQuestion(
         : 'Would you prefer a dedicated family plot or a group of adjacent plots?';
     }
     return missingBudget
-      ? 'Với nhu cầu dòng tộc/gia đình, bạn dự trù tổng ngân sách khoảng bao nhiêu và muốn một lô family chuyên dụng hay một nhóm bao nhiêu lô liền kề?'
-      : 'Bạn muốn một lô family chuyên dụng hay một nhóm bao nhiêu lô liền kề cho gia đình/dòng tộc?';
+      ? 'Với nhu cầu dòng tộc/gia đình, bạn dự trù tổng ngân sách khoảng bao nhiêu và muốn một lô gia đình chuyên dụng hay một nhóm bao nhiêu lô liền kề?'
+      : 'Bạn muốn một lô gia đình chuyên dụng hay một nhóm bao nhiêu lô liền kề cho gia đình/dòng tộc?';
   }
   if (missingBudget && missingCount) {
     return isEn

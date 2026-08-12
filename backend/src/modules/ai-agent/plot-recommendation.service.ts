@@ -618,7 +618,7 @@ export class PlotRecommendationService {
         ? `${plots.length} lô tạo thành một nhóm liền kề hợp lệ`
         : 'Lô đang được hệ thống ghi nhận là còn trống tại thời điểm tìm kiếm',
       ...(plots.every((plot) => plot.plotType === 'family')
-        ? ['Đúng loại lô family dành cho gia đình hoặc dòng tộc']
+        ? ['Đúng loại lô gia đình dành cho gia đình hoặc dòng tộc']
         : []),
       ...(zoneMatches && dto.preferredZone
         ? [`Đúng khu vực ${dto.preferredZone}`]

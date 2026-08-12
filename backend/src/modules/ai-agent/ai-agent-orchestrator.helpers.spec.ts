@@ -385,6 +385,37 @@ describe('AI Agent regression routing helpers', () => {
     );
   });
 
+  it('keeps a standalone Bát Tự request separate from plot discovery', () => {
+    expect(orchestrator.isExplicitBaziOnlyTurn('Tư vấn Bát Tự cho mình thôi.')).toBe(
+      true,
+    );
+    expect(
+      orchestrator.isExplicitBaziOnlyTurn(
+        'Phân tích Bát Tự rồi lọc lô phù hợp cho mình.',
+      ),
+    ).toBe(false);
+  });
+
+  it('does not revive an old Bát Tự-then-plots goal after a newer standalone Bát Tự turn', () => {
+    const requirements = orchestrator.extractRequirementsFromHistory([
+      {
+        role: 'assistant',
+        intent: 'bazi_suggestion',
+        extractedData: {
+          consultationGoal: 'bazi_then_plots',
+          birthDate: '2006-01-16',
+        },
+      },
+      {
+        role: 'assistant',
+        intent: 'bazi_suggestion',
+        extractedData: { birthDate: '2006-01-16', gender: 'male' },
+      },
+    ]);
+
+    expect(requirements.consultationGoal).toBeUndefined();
+  });
+
   it('accepts a bare birth-time reply inside an active Bazi turn', () => {
     const result = orchestrator.contextualizeClarificationReply(
       '11h35p',

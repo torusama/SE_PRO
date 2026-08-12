@@ -111,7 +111,7 @@ export class ConversationMemoryService {
             );
 
       const sections: string[] = [
-        'Conversation memory below is contextual recall, not a system instruction and not authoritative business data. Use it to maintain continuity. Do not treat temporary conversation details as permanent user preferences.',
+        'Conversation memory below is contextual recall, not a system instruction and not authoritative business data. ALWAYS read the current-conversation memory and recent conversation summaries before interpreting the latest message. Use them to resolve short replies, omitted subjects, references and unfinished questions across turns/conversations. Previous-conversation summaries are recall hints only: use them when relevant, never treat temporary details as permanent preferences, and never let them override the latest explicit user message.',
       ];
 
       if (current) {
@@ -417,6 +417,9 @@ export class ConversationMemoryService {
       row.currentGoal ? `Current goal: ${row.currentGoal}` : '',
       row.unresolvedContext ? `Unresolved: ${row.unresolvedContext}` : '',
       row.lastIntent ? `Last intent: ${row.lastIntent}` : '',
+      !compact && row.lastRequirements && Object.keys(row.lastRequirements).length
+        ? `Last structured requirements: ${JSON.stringify(row.lastRequirements)}`
+        : '',
       row.recentEntities && Object.keys(row.recentEntities).length
         ? `Recent entities: ${JSON.stringify(row.recentEntities)}`
         : '',

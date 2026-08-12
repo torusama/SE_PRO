@@ -775,14 +775,14 @@ export class BaziRuleService {
     const explanation = `Gia chủ tuổi ${yearPillar} (${year}${hourText}), Mệnh Nạp Âm ${napAm.name} (${napAm.meaning}, thuộc hành ${napAm.element}). Cung mệnh ${batTrach.cung} (${batTrach.group}, giới tính ${genderText}).`;
 
     const detailedAnalysis = [
-      `Khung chính để xếp hướng là Bát Trạch/Mệnh Quái: gia chủ thuộc ${batTrach.group}, Cung ${batTrach.cung}. Bốn hướng cát hiện tại là ${batTrach.good.map((item) => `${item.direction} (${item.star})`).join(', ')} và bốn hướng hung là ${batTrach.bad.map((item) => `${item.direction} (${item.star})`).join(', ')}.`,
-      `Ý nghĩa bốn sao cát nên được giải thích theo mục đích thay vì coi một hướng luôn tốt nhất cho mọi việc: Sinh Khí thiên về sinh lực/phát triển, Thiên Y thiên về sức khỏe và sự nâng đỡ, Diên Niên thiên về hòa hợp/bền lâu, Phục Vị thiên về ổn định và tĩnh tại. Với âm trạch, đây chỉ là ngôn ngữ tham khảo văn hóa chứ không phải bảo đảm kết quả.`,
-      `Nạp Âm ${napAm.name} thuộc hành ${napAm.element}. ${elementRel.supporting}; ${elementRel.weakening}. Ngũ Hành ở đây là lớp diễn giải phụ: không dùng Nạp Âm để phủ định bảng hướng Bát Trạch. Nếu hai lớp cho tín hiệu khác nhau, hệ thống phải nói rõ xung đột thay vì vừa khuyên vừa cấm cùng một hướng.`,
-      `Khi áp dụng vào lô mộ, hướng cá nhân không thay thế việc xem dữ liệu thực tế của lô. Chỉ được nói về hướng, khu, giá, diện tích, khả năng tiếp cận hoặc cảnh quan khi backend có dữ liệu xác thực; không được tự suy đoán thế đất, nước, núi, long mạch hay mức độ cát-hung của địa hình.`,
+      `Khung chính để xếp hướng là Bát Trạch/Mệnh Quái: gia chủ thuộc ${batTrach.group}, Cung ${batTrach.cung}. Bốn hướng cát hiện tại là ${batTrach.good.map((item) => `${item.direction} (${item.star})`).join(', ')}; bốn hướng nên hạn chế là ${batTrach.bad.map((item) => `${item.direction} (${item.star})`).join(', ')}.`,
+      `Bốn sao cát nên được hiểu theo mục đích thay vì xem một hướng là tốt tuyệt đối cho mọi việc: Sinh Khí thiên về sinh lực và phát triển; Thiên Y thiên về sức khỏe và sự nâng đỡ; Diên Niên thiên về hòa hợp, bền lâu; Phục Vị thiên về ổn định và tĩnh tại. Với âm trạch, đây là lớp tham khảo văn hóa chứ không phải bảo đảm kết quả.`,
+      `Nạp Âm ${napAm.name} thuộc hành ${napAm.element}. ${elementRel.supporting}; ${elementRel.weakening}. Ngũ Hành ở đây là lớp diễn giải bổ sung, không dùng Nạp Âm để phủ định bảng hướng Bát Trạch. Khi hai lớp cho tín hiệu khác nhau, phần tư vấn cần tách rõ từng lớp thay vì vừa khuyên vừa cấm cùng một hướng.`,
+      `Khi áp dụng vào lô mộ, hướng cá nhân chỉ là một tiêu chí mềm. Các nhận xét về hướng, khu, giá, diện tích, khả năng tiếp cận hoặc cảnh quan chỉ nên dựa trên dữ liệu Vĩnh Phúc Viên đã xác minh; không tự suy đoán thế đất, nước, núi, long mạch hay mức độ cát-hung của địa hình.`,
       birthHourBranch
-        ? `Giờ sinh hiện chỉ được quy về chi ${birthHourBranch}. Công cụ chưa lập đủ Can Chi của trụ tháng, trụ ngày và Can của trụ giờ, chưa xác định Nhật Chủ hay cân bằng toàn bộ Tứ Trụ, vì vậy không được gọi kết quả này là lá số Bát Tự đầy đủ.`
-        : 'Không có giờ sinh. Công cụ hiện cũng chưa lập đủ trụ tháng, trụ ngày và trụ giờ, nên kết quả chỉ là Can Chi năm sinh + Nạp Âm + Bát Trạch/Mệnh Quái tham khảo, không phải lá số Bát Tự đầy đủ.',
-    ].join(' ');
+        ? `Giờ sinh hiện được quy về chi ${birthHourBranch} để bổ sung ngữ cảnh. Phép tính hiện tại chưa lập đủ Can Chi của trụ tháng, trụ ngày và Can của trụ giờ, chưa xác định Nhật Chủ hay cân bằng toàn bộ Tứ Trụ, vì vậy đây chưa phải lá số Bát Tự đầy đủ.`
+        : 'Chưa có giờ sinh. Phép tính hiện tại cũng chưa lập đủ trụ tháng, trụ ngày và trụ giờ, nên kết quả là Can Chi năm sinh + Nạp Âm + Bát Trạch/Mệnh Quái tham khảo, chưa phải lá số Bát Tự đầy đủ.',
+    ].join('\n\n');
 
     return {
       preferredDirections,

@@ -713,36 +713,78 @@
   max-width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  margin: 14px 0;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 10px;
-  overflow: hidden;
-  font-size: 14px;
-  background: rgba(10, 18, 31, 0.6);
+  margin: 18px 0;
+  border: 0;
+  background: transparent;
 }
 
-.agent-markdown th {
-  padding: 10px 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.07);
-  color: #f8fafc;
+.agent-markdown thead th {
+  padding: 0 14px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--agent-border-strong);
+  background: transparent;
+  color: var(--agent-teal);
   font-weight: 700;
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
   text-align: left;
 }
 
+.agent-markdown thead th:first-child { padding-left: 0; }
+
 .agent-markdown td {
-  padding: 10px 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 13px 14px;
+  border: 0;
+  border-bottom: 1px solid var(--agent-border);
   color: #cbd5e1;
-  line-height: 1.55;
+  line-height: 1.6;
+  vertical-align: top;
+  text-align: left;
+}
+
+.agent-markdown td:first-child {
+  position: relative;
+  padding-left: 14px;
+}
+
+/* A slim gold tick instead of a full grid — reads as a ledger entry rather
+   than a spreadsheet cell. */
+.agent-markdown td:first-child::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 3px;
+  height: 60%;
+  transform: translateY(-50%);
+  border-radius: 2px;
+  background: var(--agent-gold);
+  opacity: 0.55;
+}
+
+.agent-markdown td:first-child {
+  color: #f1f7f8;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.agent-markdown td strong {
+  display: block;
+  margin-bottom: 2px;
+  color: #f1f7f8;
 }
 
 .agent-markdown tr:last-child td {
   border-bottom: none;
 }
 
-.agent-markdown tr:nth-child(even) {
-  background: rgba(255, 255, 255, 0.02);
+.agent-markdown tbody tr {
+  transition: background 140ms ease;
+}
+
+.agent-markdown tbody tr:hover td {
+  background: rgba(0, 229, 196, 0.035);
 }
 
 .agent-paced-message {
@@ -1358,144 +1400,8 @@
   background: rgba(251, 191, 36, 0.15);
 }
 
-.agent-bazi-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 12px;
-}
-
-.agent-bazi-badge-item {
-  display: flex;
-  flex-direction: column;
-  padding: 12px 14px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.agent-bazi-badge-item small {
-  color: #8fa2b0;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.agent-bazi-badge-item strong {
-  margin-top: 4px;
-  color: #ffffff;
-  font-size: 14px;
-  font-weight: 650;
-}
-
-.agent-bazi-analysis {
-  padding: 14px 16px;
-  border-left: 4px solid var(--agent-gold);
-  border-radius: 0 10px 10px 0;
-  background: rgba(201, 168, 76, 0.08);
-}
-
-.agent-bazi-analysis p,
-.agent-bazi-summary {
-  margin: 0;
-  color: #e2ebf0;
-  font-size: 14px;
-  line-height: 1.65;
-}
-
-.agent-bazi-directions-section {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.agent-bazi-dir-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.agent-bazi-dir-label {
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-.agent-bazi-dir-label.good {
-  color: #34d399;
-}
-
-.agent-bazi-dir-label.bad {
-  color: #f87171;
-}
-
-.agent-bazi-dir-tags {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-  gap: 10px;
-}
-
-.agent-bazi-tag {
-  display: flex;
-  flex-direction: column;
-  padding: 10px 14px;
-  border-radius: 10px;
-}
-
-.agent-bazi-tag.good {
-  border: 1px solid rgba(52, 211, 153, 0.25);
-  background: rgba(52, 211, 153, 0.07);
-}
-
-.agent-bazi-tag.bad {
-  border: 1px solid rgba(248, 113, 113, 0.25);
-  background: rgba(248, 113, 113, 0.07);
-}
-
-.agent-bazi-tag-dir {
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.agent-bazi-tag.good .agent-bazi-tag-dir {
-  color: #6ee7b7;
-}
-
-.agent-bazi-tag.bad .agent-bazi-tag-dir {
-  color: #fca5a5;
-}
-
-.agent-bazi-tag-star {
-  margin-top: 2px;
-  color: #f5e8c4;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.agent-bazi-tag-desc {
-  margin-top: 3px;
-  color: #94a3b8;
-  font-size: 12px;
-  line-height: 1.45;
-}
-
 .agent-bazi-simple-dirs {
   font-size: 14px;
-}
-
-.agent-bazi-relations {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 12px 14px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.03);
-  font-size: 13px;
-  line-height: 1.55;
-}
-
-.agent-bazi-relations strong {
-  color: #f1f5f9;
 }
 
 .agent-bazi-disclaimer {
@@ -2849,6 +2755,11 @@
   margin: 0;
 }
 
+.agent-markdown p {
+  text-align: justify;
+  text-justify: inter-word;
+}
+
 .agent-markdown ul,
 .agent-markdown ol {
   display: grid;
@@ -3643,199 +3554,6 @@ button.agent-bazi-followup-item:disabled {
 .bazi-compass-legend .legend-item.bad .legend-swatch { background: var(--bazi-bad); }
 
 /* Personal calculation summary */
-.agent-bazi-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(125px, 1fr));
-  gap: 8px;
-  overflow: visible;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-}
-
-.agent-bazi-badge-item {
-  min-width: 0;
-  padding: 11px 12px;
-  border: 1px solid var(--bazi-line);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.018);
-  text-align: left;
-}
-
-.agent-bazi-badge-item:last-child { border-right: 1px solid var(--bazi-line); }
-
-.agent-bazi-badge-item small {
-  display: block;
-  color: #738794;
-  font-size: 8px;
-  font-weight: 650;
-  letter-spacing: 0.07em;
-  line-height: 1.35;
-  text-transform: uppercase;
-}
-
-.agent-bazi-badge-item strong {
-  display: block;
-  margin-top: 4px;
-  color: #e4edf1;
-  font-family: "Be Vietnam Pro", sans-serif;
-  font-size: 12.5px;
-  font-weight: 650;
-  line-height: 1.35;
-}
-
-.agent-bazi-analysis {
-  position: relative;
-  padding: 14px 15px 14px 17px;
-  border: 1px solid rgba(201, 168, 76, 0.13);
-  border-left: 2px solid var(--bazi-gold);
-  border-radius: 9px;
-  background: rgba(201, 168, 76, 0.035);
-}
-
-.agent-bazi-analysis p,
-.agent-bazi-summary {
-  margin: 0;
-  color: #c5d2d9;
-  font-size: 11.5px;
-  line-height: 1.72;
-}
-
-/* Good / bad directions are readable app panels, not ceremonial ledgers. */
-.agent-bazi-directions-section {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.agent-bazi-dir-group {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 4px;
-  padding: 12px;
-  border: 1px solid var(--bazi-line);
-  border-radius: 11px;
-  background: rgba(255, 255, 255, 0.016);
-}
-
-.agent-bazi-dir-group.good { border-color: rgba(99, 205, 184, 0.18); }
-.agent-bazi-dir-group.bad { border-color: rgba(217, 135, 135, 0.16); }
-
-.agent-bazi-dir-heading {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-height: 22px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--bazi-line);
-}
-
-.agent-bazi-dir-marker {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-}
-
-.agent-bazi-dir-group.good .agent-bazi-dir-marker { background: var(--bazi-good); }
-.agent-bazi-dir-group.bad .agent-bazi-dir-marker { background: var(--bazi-bad); }
-
-.agent-bazi-dir-label {
-  font-size: 9.5px;
-  font-weight: 750;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.agent-bazi-dir-label.good { color: var(--bazi-good); }
-.agent-bazi-dir-label.bad { color: var(--bazi-bad); }
-
-.agent-bazi-dir-tags {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-
-.agent-bazi-tag {
-  display: grid;
-  grid-template-columns: minmax(82px, 0.72fr) minmax(0, 1.28fr);
-  align-items: start;
-  gap: 10px;
-  min-height: 52px;
-  padding: 9px 1px;
-  border: 0;
-  border-bottom: 1px solid rgba(126, 167, 174, 0.09);
-  border-radius: 0;
-  background: transparent;
-}
-
-.agent-bazi-tag:last-child { border-bottom: 0; }
-
-.agent-bazi-tag-main {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 1px;
-}
-
-.agent-bazi-tag-dir,
-.agent-bazi-tag.good .agent-bazi-tag-dir,
-.agent-bazi-tag.bad .agent-bazi-tag-dir {
-  color: #e6eef2;
-  font-family: "Be Vietnam Pro", sans-serif;
-  font-size: 11.5px;
-  font-weight: 700;
-}
-
-.agent-bazi-tag-star {
-  margin: 0;
-  font-size: 9px;
-  font-weight: 650;
-}
-
-.agent-bazi-tag.good .agent-bazi-tag-star { color: var(--bazi-good); }
-.agent-bazi-tag.bad .agent-bazi-tag-star { color: var(--bazi-bad); }
-
-.agent-bazi-tag-desc {
-  margin: 0;
-  color: #80939e;
-  font-size: 9.5px;
-  line-height: 1.5;
-  text-align: left;
-}
-
-.agent-bazi-relations {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  padding: 0;
-  border-radius: 0;
-  background: transparent;
-}
-
-.agent-bazi-relation-note {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 11px 12px;
-  border: 1px solid var(--bazi-line);
-  border-radius: 9px;
-  background: rgba(255, 255, 255, 0.016);
-}
-
-.agent-bazi-relation-note strong {
-  color: var(--bazi-gold-light);
-  font-size: 9px;
-  letter-spacing: 0.045em;
-  text-transform: uppercase;
-}
-
-.agent-bazi-relation-note span {
-  color: #889ba6;
-  font-size: 9.5px;
-  line-height: 1.55;
-}
-
 .agent-bazi-followup {
   display: flex;
   flex-direction: column;
@@ -4027,16 +3745,34 @@ button.agent-bazi-followup-item:hover {
 }
 
 .agent-bazi-head {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 26px;
+  gap: 20px;
   width: 100%;
   margin: 0 0 24px;
-  padding: 0;
+  padding: 4px 0;
   border: 0;
+  overflow: hidden;
   text-align: center;
-  animation: baziTextRise 520ms 90ms cubic-bezier(.2,.8,.2,1) both;
+  animation: baziHeadSweepIn 680ms 90ms cubic-bezier(.22,.85,.2,1) both;
+}
+
+@keyframes baziHeadSweepIn {
+  0% {
+    opacity: 0;
+    clip-path: inset(0 100% 0 0);
+    transform: translateX(-18px);
+  }
+  55% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+    transform: translateX(0);
+  }
 }
 
 .agent-bazi-title {
@@ -4099,13 +3835,49 @@ button.agent-bazi-followup-item:hover {
   background: linear-gradient(160deg, var(--bazi-gold-light), var(--bazi-gold-deep));
   box-shadow: 0 4px 10px rgba(0, 0, 0, .4);
   color: var(--bazi-red-light);
-  transform: rotate(-4deg);
-  animation: baziSealIn 600ms 210ms cubic-bezier(.2,.9,.2,1.15) both;
+  animation: baziSealSlam 640ms 260ms cubic-bezier(.17,.89,.32,1.28) both;
 }
 
-@keyframes baziSealIn {
-  from { opacity: 0; transform: rotate(-14deg) scale(.72); }
-  to { opacity: 1; transform: rotate(-4deg) scale(1); }
+/* Mirrors the seal's footprint on the opposite side of the title, invisibly,
+   so the title text stays centered with the compass below while the real
+   seal still sits right next to the title instead of drifting to a corner. */
+.agent-bazi-element-seal--spacer {
+  visibility: hidden;
+  background: none;
+  box-shadow: none;
+  animation: none;
+  transform: none;
+}
+
+/* Punchier "slams into place" entrance: flies in oversized and rotated,
+   overshoots past its resting size/angle, then snaps back and settles —
+   much more impact than a plain fade/scale-in. */
+@keyframes baziSealSlam {
+  0% {
+    opacity: 0;
+    transform: scale(2.6) rotate(22deg);
+    filter: blur(3px) brightness(1.6);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, .4);
+  }
+  45% {
+    opacity: 1;
+    transform: scale(.82) rotate(-10deg);
+    filter: blur(0) brightness(1.25);
+    box-shadow: 0 10px 26px rgba(212, 175, 55, .5);
+  }
+  65% {
+    transform: scale(1.12) rotate(0deg);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, .45);
+  }
+  82% {
+    transform: scale(.96) rotate(-7deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(-4deg);
+    filter: brightness(1);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, .4);
+  }
 }
 
 .agent-bazi-element-glyph {
@@ -4152,12 +3924,13 @@ button.agent-bazi-followup-item:hover {
   width: min(100%, 560px);
   aspect-ratio: 1 / 1;
   filter: drop-shadow(0 20px 36px rgba(0, 0, 0, .5));
-  animation: baziCompassBaseIn 760ms 160ms cubic-bezier(.2,.8,.2,1) both;
+  animation: baziCompassBaseIn 1600ms 160ms cubic-bezier(.22,.8,.24,1) both;
 }
 
 @keyframes baziCompassBaseIn {
-  from { opacity: 0; transform: scale(.86) rotate(-5deg); }
-  to { opacity: 1; transform: scale(1) rotate(0); }
+  from { opacity: 0; transform: scale(.78) rotate(-360deg); }
+  70% { opacity: 1; }
+  to { opacity: 1; transform: scale(1) rotate(0deg); }
 }
 
 .bazi-compass-svg {
@@ -4394,7 +4167,7 @@ button.agent-bazi-followup-item:hover {
   margin-top: 16px;
   color: rgba(247, 236, 201, .84);
   font-size: 11.5px;
-  animation: baziTextRise 440ms 1220ms ease both;
+  animation: baziTextRise 440ms 1850ms ease both;
 }
 
 .bazi-compass-legend .legend-item {
@@ -4412,74 +4185,6 @@ button.agent-bazi-followup-item:hover {
 .bazi-compass-legend .legend-item.good .legend-swatch { background: var(--bazi-jade); }
 .bazi-compass-legend .legend-item.bad .legend-swatch { background: var(--bazi-red-light); }
 
-/* ---------- Four-value ledger from supplied HTML ---------- */
-.agent-bazi-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0;
-  width: 100%;
-  margin: 0 0 24px;
-  overflow: hidden;
-  border: 1px solid rgba(212, 175, 55, .4);
-  border-radius: 8px;
-  background: rgba(0, 0, 0, .15);
-  animation: baziTextRise 500ms 1260ms ease both;
-}
-
-.agent-bazi-badge-item {
-  min-width: 0;
-  padding: 14px 10px;
-  border: 0;
-  border-right: 1px solid rgba(212, 175, 55, .25);
-  border-radius: 0;
-  background: transparent;
-  text-align: center;
-}
-
-.agent-bazi-badge-item:last-child { border-right: 0; }
-
-.agent-bazi-badge-item small {
-  display: block;
-  margin: 0 0 6px;
-  color: rgba(247, 236, 201, .6);
-  font-size: 9px;
-  font-weight: 500;
-  letter-spacing: .07em;
-  line-height: 1.35;
-  text-transform: uppercase;
-}
-
-.agent-bazi-badge-item strong {
-  display: block;
-  margin: 0;
-  color: var(--bazi-gold-light);
-  font-family: "Playfair Display", Georgia, serif;
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 1.35;
-  overflow-wrap: anywhere;
-}
-
-/* ---------- Narrative ---------- */
-.agent-bazi-analysis {
-  position: relative;
-  margin: 0 0 32px;
-  padding: 17px 20px;
-  border: 1px solid rgba(212, 175, 55, .3);
-  border-left: 4px solid var(--bazi-gold);
-  border-radius: 6px;
-  background: rgba(0, 0, 0, .18);
-  animation: baziTextRise 500ms 1360ms ease both;
-}
-
-.agent-bazi-analysis p,
-.agent-bazi-summary {
-  margin: 0;
-  color: rgba(247, 236, 201, .85);
-  font-size: 13px;
-  line-height: 1.8;
-}
-
 /* ---------- Good / bad directions as open ledger columns, no inner cards ---------- */
 .agent-bazi-directions-section {
   display: grid;
@@ -4487,7 +4192,7 @@ button.agent-bazi-followup-item:hover {
   gap: 32px;
   width: 100%;
   margin: 0 0 26px;
-  animation: baziTextRise 520ms 1460ms ease both;
+  animation: baziTextRise 520ms 2190ms ease both;
 }
 
 .agent-bazi-dir-group {
@@ -4495,14 +4200,21 @@ button.agent-bazi-followup-item:hover {
   min-width: 0;
   flex-direction: column;
   gap: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
+  padding: 16px 18px 6px;
+  border: 1px solid rgba(212, 175, 55, .16);
+  border-radius: 14px;
+  background: rgba(0, 0, 0, .16);
 }
 
-.agent-bazi-dir-group.good,
-.agent-bazi-dir-group.bad { border: 0; }
+.agent-bazi-dir-group.good {
+  border-color: rgba(58, 138, 105, .45);
+  background: linear-gradient(180deg, rgba(47, 107, 69, .12), rgba(0, 0, 0, .16) 55%);
+}
+
+.agent-bazi-dir-group.bad {
+  border-color: rgba(143, 32, 22, .45);
+  background: linear-gradient(180deg, rgba(143, 32, 22, .12), rgba(0, 0, 0, .16) 55%);
+}
 
 .agent-bazi-dir-heading {
   display: flex;
@@ -4510,8 +4222,11 @@ button.agent-bazi-followup-item:hover {
   gap: 8px;
   min-height: 0;
   padding: 0 0 10px;
-  border-bottom: 1px solid rgba(212, 175, 55, .3);
+  border-bottom: 1px solid rgba(212, 175, 55, .18);
 }
+
+.agent-bazi-dir-group.good .agent-bazi-dir-heading { border-bottom-color: rgba(58, 138, 105, .3); }
+.agent-bazi-dir-group.bad .agent-bazi-dir-heading { border-bottom-color: rgba(143, 32, 22, .3); }
 
 .agent-bazi-dir-marker {
   width: 8px;
@@ -4541,25 +4256,20 @@ button.agent-bazi-followup-item:hover {
 
 .agent-bazi-tag {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 16px;
+  flex-direction: column;
+  gap: 5px;
   min-height: 0;
-  padding: 11px 2px;
+  padding: 11px 0;
   border: 0;
-  border-bottom: 1px dashed rgba(212, 175, 55, .25);
+  border-bottom: 1px dashed rgba(212, 175, 55, .18);
   border-radius: 0;
   background: transparent;
 }
 
 .agent-bazi-tag:last-child { border-bottom: 0; }
-.agent-bazi-tag.good,
-.agent-bazi-tag.bad { border-left: 0; }
 
 .agent-bazi-tag-main {
   display: flex;
-  min-width: 88px;
-  flex: 0 0 auto;
   flex-direction: column;
   gap: 1px;
 }
@@ -4567,7 +4277,7 @@ button.agent-bazi-followup-item:hover {
 .agent-bazi-tag-dir {
   color: var(--bazi-cream);
   font-family: "Playfair Display", Georgia, serif;
-  font-size: 14px;
+  font-size: 14.5px;
   font-weight: 700;
   line-height: 1.35;
 }
@@ -4575,6 +4285,7 @@ button.agent-bazi-followup-item:hover {
 .agent-bazi-tag-star {
   font-size: 10.5px;
   font-weight: 700;
+  letter-spacing: .03em;
   line-height: 1.35;
 }
 
@@ -4582,11 +4293,10 @@ button.agent-bazi-followup-item:hover {
 .agent-bazi-tag.bad .agent-bazi-tag-star { color: #e39383; }
 
 .agent-bazi-tag-desc {
-  flex: 1;
-  color: rgba(247, 236, 201, .7);
+  color: rgba(247, 236, 201, .68);
   font-size: 11.5px;
   line-height: 1.55;
-  text-align: right;
+  text-align: left;
 }
 
 /* ---------- Element notes ---------- */
@@ -4595,7 +4305,7 @@ button.agent-bazi-followup-item:hover {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
   margin: 0 0 28px;
-  animation: baziTextRise 500ms 1570ms ease both;
+  animation: baziTextRise 500ms 2310ms ease both;
 }
 
 .agent-bazi-relation-note {
@@ -4625,7 +4335,7 @@ button.agent-bazi-followup-item:hover {
   margin-top: 0;
   padding: 18px 0 0;
   border-top: 1px solid rgba(212, 175, 55, .25);
-  animation: baziTextRise 500ms 1660ms ease both;
+  animation: baziTextRise 500ms 2430ms ease both;
 }
 
 .agent-bazi-followup-title {
@@ -4685,7 +4395,7 @@ button.agent-bazi-followup-item:hover {
   font-size: 10px;
   line-height: 1.7;
   text-align: center;
-  animation: baziTextRise 480ms 1740ms ease both;
+  animation: baziTextRise 480ms 2550ms ease both;
 }
 
 @keyframes baziTextRise {
@@ -4763,6 +4473,12 @@ button.agent-bazi-followup-item:hover {
     gap: 14px;
   }
 
+  /* Stacked layout centers the title on its own; the side spacer is no
+     longer needed (and would otherwise leave a blank gap above the title). */
+  .agent-bazi-element-seal--spacer {
+    display: none;
+  }
+
   .agent-bazi-element-seal {
     width: 56px;
     height: 56px;
@@ -4772,9 +4488,9 @@ button.agent-bazi-followup-item:hover {
     width: min(100%, 460px);
   }
 
-  .bazi-svg-star { font-size: 12.2px; }
-  .bazi-svg-direction { font-size: 8px; }
-  .bazi-svg-trigram { font-size: 15px; }
+  .bazi-svg-star { font-size: 10.8px; }
+  .bazi-svg-direction { font-size: 6.8px; }
+  .bazi-svg-trigram { font-size: 14px; }
 
   .agent-bazi-tag {
     align-items: flex-start;
@@ -4815,4 +4531,282 @@ button.agent-bazi-followup-item:hover {
     filter: none !important;
     stroke-dashoffset: 0 !important;
   }
+}
+
+/* ========================================================================== */
+/* BÁT TRẠCH readability & staged-consultation polish                         */
+/* ========================================================================== */
+.agent-message.has-bazi .agent-message-body {
+  width: 100%;
+  max-width: min(1120px, calc(100% - 42px));
+}
+
+.agent-message.has-bazi .agent-message-bubble--continuation {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(212, 175, 55, .2);
+  animation: baziPlotNarrativeIn 520ms cubic-bezier(.2,.8,.2,1) both;
+}
+
+@keyframes baziPlotNarrativeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Give the wheel enough physical size for 24 Sơn labels + 8 sector labels.
+   Bumped up slightly so the wider label band in BaziCompassWidget (radial
+   trigram/star/direction/stamp stack) has more physical room, not just more
+   room in the abstract 600x600 viewBox. */
+.bazi-compass-frame {
+  width: min(100%, 860px);
+}
+
+.bazi-svg-son {
+  font-size: 10.2px;
+  font-weight: 700;
+  paint-order: stroke fill;
+  stroke: rgba(240, 215, 140, .16);
+  stroke-width: .45px;
+}
+
+.bazi-svg-degree {
+  font-size: 8.1px;
+  font-weight: 600;
+}
+
+.bazi-svg-trigram {
+  font-size: 15px;
+}
+
+.bazi-svg-star {
+  font-size: 12.5px;
+  stroke-width: 1px;
+}
+
+.bazi-svg-direction {
+  font-size: 7.6px;
+  letter-spacing: .02em;
+  stroke-width: .75px;
+}
+
+.bazi-svg-stamp text {
+  font-size: 8.5px;
+}
+
+/* Keep the inner heavenly-pool labels legible above the compass crosshair. */
+.bazi-svg-center-kicker,
+.bazi-svg-center-group,
+.bazi-svg-center-element {
+  paint-order: stroke fill;
+  stroke: #faf5e4;
+  stroke-linejoin: round;
+}
+
+.bazi-svg-center-kicker {
+  font-size: 10.4px;
+  stroke-width: 3.3px;
+}
+
+.bazi-svg-center-group {
+  font-size: 8.6px;
+  stroke-width: 3px;
+}
+
+.bazi-svg-center-element {
+  font-size: 7.1px;
+  stroke-width: 2.7px;
+}
+
+.bazi-svg-crosshair {
+  opacity: .58;
+}
+
+/* Column count tracks how many facts actually rendered (--bazi-fact-count,
+   set inline from JSX), so a missing optional field like birth-hour never
+   leaves a dangling empty track that shoves the row to the left. Falls back
+   to 5 if the variable isn't set for some reason. Held back until the
+   compass has fully finished revealing itself. */
+.agent-bazi-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--bazi-fact-count, 5), minmax(0, 1fr));
+  margin-bottom: 28px;
+  overflow: visible;
+  border: 0;
+  border-top: 1px solid rgba(212, 175, 55, .3);
+  border-bottom: 1px solid rgba(212, 175, 55, .3);
+  border-radius: 0;
+  background: transparent;
+  animation: baziTextRise 460ms 1960ms ease both;
+}
+
+.agent-bazi-badge-item {
+  display: flex;
+  min-height: 78px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 13px 12px;
+  border-right: 1px solid rgba(212, 175, 55, .22);
+  text-align: center;
+}
+
+.agent-bazi-badge-item:last-child {
+  border-right: 0;
+}
+
+.agent-bazi-badge-item small {
+  display: block;
+  width: 100%;
+  min-height: 24px;
+  margin-bottom: 7px;
+  font-size: 9px;
+  line-height: 1.3;
+  text-align: center;
+}
+
+.agent-bazi-badge-item strong {
+  display: block;
+  width: 100%;
+  font-size: 14.5px;
+  line-height: 1.35;
+  overflow-wrap: normal;
+  word-break: keep-all;
+  text-align: center;
+}
+
+/* Open editorial treatment instead of another boxed card inside chat. */
+.agent-bazi-analysis {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 34px;
+  padding: 17px 22px 17px 20px;
+  border: 0;
+  border-left: 3px solid var(--bazi-gold);
+  border-radius: 0;
+  background: linear-gradient(90deg, rgba(126, 20, 22, .16), rgba(0, 0, 0, .04) 62%, transparent);
+  animation: baziTextRise 460ms 2070ms ease both;
+}
+
+.agent-bazi-analysis p,
+.agent-bazi-summary {
+  margin: 0;
+  color: rgba(247, 236, 201, .88);
+  font-size: 13.2px;
+  line-height: 1.86;
+  text-align: justify;
+  text-justify: inter-word;
+}
+
+.agent-bazi-directions-section {
+  gap: 42px;
+}
+
+.agent-bazi-tag {
+  gap: 20px;
+  padding: 12px 2px;
+}
+
+.agent-bazi-tag-main {
+  min-width: 104px;
+}
+
+.agent-bazi-tag-desc {
+  font-size: 11.8px;
+  line-height: 1.62;
+}
+
+.agent-bazi-relations {
+  gap: 28px;
+}
+
+.agent-bazi-relation-note {
+  padding: 13px 2px;
+  border: 0;
+  border-top: 1px solid rgba(212, 175, 55, .22);
+  border-bottom: 1px solid rgba(212, 175, 55, .16);
+  border-radius: 0;
+  background: transparent;
+}
+
+.agent-bazi-relation-note strong {
+  display: block;
+  margin: 0 0 5px;
+}
+
+@media (max-width: 920px) {
+  .bazi-compass-frame {
+    width: min(100%, 620px);
+  }
+
+  .agent-bazi-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .agent-bazi-badge-item:nth-child(3n) {
+    border-right: 0;
+  }
+
+  .agent-bazi-badge-item:nth-child(n + 4) {
+    border-top: 1px solid rgba(212, 175, 55, .2);
+  }
+}
+
+@media (max-width: 620px) {
+  .agent-message.has-bazi .agent-message-body {
+    max-width: calc(100% - 38px);
+  }
+
+  .bazi-compass-frame {
+    width: min(100%, 520px);
+  }
+
+  .agent-bazi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .agent-bazi-badge-item,
+  .agent-bazi-badge-item:nth-child(3n) {
+    border-right: 1px solid rgba(212, 175, 55, .2);
+  }
+
+  .agent-bazi-badge-item:nth-child(2n) {
+    border-right: 0;
+  }
+
+  .agent-bazi-badge-item:nth-child(n + 3) {
+    border-top: 1px solid rgba(212, 175, 55, .2);
+  }
+
+  .bazi-svg-star { font-size: 11.4px; }
+  .bazi-svg-direction { font-size: 7px; }
+  .bazi-svg-son { font-size: 9.1px; }
+}
+
+@media (max-width: 420px) {
+  .agent-bazi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-bazi-badge-item,
+  .agent-bazi-badge-item:nth-child(2n),
+  .agent-bazi-badge-item:nth-child(3n) {
+    min-height: 64px;
+    border-right: 0;
+    border-top: 1px solid rgba(212, 175, 55, .18);
+  }
+
+  .agent-bazi-badge-item:first-child {
+    border-top: 0;
+  }
+
+  .agent-bazi-badge-item small {
+    min-height: 0;
+  }
+}
+
+/* Prefer CJK serif glyphs for the 吉 / 凶 seals instead of relying on the
+   Latin display font's browser fallback. */
+.bazi-svg-stamp text {
+  font-family: "Noto Serif SC", "Songti SC", "STSong", "SimSun", serif;
+  font-weight: 800;
 }

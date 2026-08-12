@@ -31,6 +31,15 @@ const DIRECTIONS = [
   { key: "Tây Bắc", short: "TÂY BẮC", trigram: "☰", angle: 315 },
 ] as const;
 
+// Widened annular band for the 8 wedges (was 84–195). Giving the labels a
+// bigger ring to spread out along means the trigram/star/direction/stamp
+// stack no longer has to squeeze into a narrow column near radius 144 —
+// each element gets its own radius, spaced along the wedge's own radial
+// line (see the label loop below), with room to spare before the "Sơn"
+// tick ring at 233.
+const SECTOR_INNER = 76;
+const SECTOR_OUTER = 206;
+
 const SON_NAMES = [
   "Tý",
   "Quý",
@@ -166,7 +175,7 @@ export const BaziCompassWidget: React.FC<BaziCompassWidgetProps> = ({
                 return (
                   <path
                     key={`sector-${direction.key}`}
-                    d={annularSectorPath(direction.angle, 84, 195)}
+                    d={annularSectorPath(direction.angle, SECTOR_INNER, SECTOR_OUTER)}
                     className={`bazi-svg-sector ${info.type}`}
                     style={{ "--bazi-index": index } as IndexedStyle}
                   />
@@ -174,7 +183,7 @@ export const BaziCompassWidget: React.FC<BaziCompassWidgetProps> = ({
               })}
             </g>
 
-            {[84, 195, 233, 253, 258].map((radius, index) => (
+            {[SECTOR_INNER, SECTOR_OUTER, 236, 253, 258].map((radius, index) => (
               <circle
                 key={`ring-${radius}`}
                 cx="300"
@@ -187,8 +196,8 @@ export const BaziCompassWidget: React.FC<BaziCompassWidgetProps> = ({
 
             {DIRECTIONS.map((direction, index) => {
               const boundaryAngle = direction.angle - 22.5;
-              const start = polar(boundaryAngle, 84);
-              const end = polar(boundaryAngle, 233);
+              const start = polar(boundaryAngle, SECTOR_INNER);
+              const end = polar(boundaryAngle, 236);
               return (
                 <line
                   key={`spoke-${direction.key}`}
@@ -204,11 +213,11 @@ export const BaziCompassWidget: React.FC<BaziCompassWidgetProps> = ({
 
             {SON_NAMES.map((name, index) => {
               const angle = index * 15;
-              const point = polar(angle, 214);
+              const point = polar(angle, 221);
               const sectorIndex = Math.round(angle / 45) % 8;
               const info = getDirection(DIRECTIONS[sectorIndex].key);
-              const tickStart = polar(angle - 7.5, 197);
-              const tickEnd = polar(angle - 7.5, 233);
+              const tickStart = polar(angle - 7.5, SECTOR_OUTER);
+              const tickEnd = polar(angle - 7.5, 236);
               return (
                 <React.Fragment key={`son-${name}-${index}`}>
                   <line
@@ -220,7 +229,7 @@ export const BaziCompassWidget: React.FC<BaziCompassWidgetProps> = ({
                   />
                   <text
                     x={point.x}
-                    y={point.y + 3}
+                    y={point.y}
                     className={`bazi-svg-son ${info.type}`}
                   >
                     {name}
@@ -260,8 +269,13 @@ export const BaziCompassWidget: React.FC<BaziCompassWidgetProps> = ({
 
             {DIRECTIONS.map((direction, index) => {
               const info = getDirection(direction.key);
-              const labelPoint = polar(direction.angle, 143);
-              const stampPoint = polar(direction.angle, 181);
+              // Cleanly separate labels in each wedge to prevent overlapping:
+              // - Trigram symbol at inner radius (94)
+              // - Direction (short name) & Star (Bát Trạch star) stacked vertically at center radius (140)
+              // - Cát/Hung Stamp icon at outer radius (186)
+              const trigramPoint = polar(direction.angle, 94);
+              const centerPoint = polar(direction.angle, 140);
+              const stampPoint = polar(direction.angle, 186);
               return (
                 <g
                   key={`label-${direction.key}`}
@@ -269,32 +283,32 @@ export const BaziCompassWidget: React.FC<BaziCompassWidgetProps> = ({
                   style={{ "--bazi-index": index } as IndexedStyle}
                 >
                   <text
-                    x={labelPoint.x}
-                    y={labelPoint.y - 23}
+                    x={trigramPoint.x}
+                    y={trigramPoint.y}
                     className="bazi-svg-trigram"
                   >
                     {direction.trigram}
                   </text>
                   <text
-                    x={labelPoint.x}
-                    y={labelPoint.y + 1}
-                    className="bazi-svg-star"
-                  >
-                    {info.item?.star || "—"}
-                  </text>
-                  <text
-                    x={labelPoint.x}
-                    y={labelPoint.y + 23}
+                    x={centerPoint.x}
+                    y={centerPoint.y - 11}
                     className="bazi-svg-direction"
                   >
                     {direction.short}
+                  </text>
+                  <text
+                    x={centerPoint.x}
+                    y={centerPoint.y + 5}
+                    className="bazi-svg-star"
+                  >
+                    {info.item?.star || "—"}
                   </text>
                   {info.type !== "neutral" && (
                     <g
                       className={`bazi-svg-stamp ${info.type}`}
                       transform={`translate(${stampPoint.x} ${stampPoint.y}) rotate(-4)`}
                     >
-                      <rect x="-10" y="-10" width="20" height="20" rx="3" />
+                      <rect x="-9" y="-9" width="18" height="18" rx="2.5" />
                       <text x="0" y="1">
                         {info.type === "good" ? "吉" : "凶"}
                       </text>
@@ -320,22 +334,25 @@ export const BaziCompassWidget: React.FC<BaziCompassWidgetProps> = ({
                 y2="346"
                 className="bazi-svg-crosshair"
               />
-              <circle cx="294" cy="320" r="3.5" className="bazi-svg-needle-dot" />
-              <circle cx="302" cy="324" r="2.5" className="bazi-svg-needle-dot" />
-              <circle cx="309" cy="318" r="2" className="bazi-svg-needle-dot" />
+              {/* Tucked into the gap between the kicker text and the center
+                  dot so the needle cluster never collides with the tuMenh /
+                  element labels below it. */}
+              <circle cx="296" cy="287" r="2.2" className="bazi-svg-needle-dot" />
+              <circle cx="304" cy="287" r="2.2" className="bazi-svg-needle-dot" />
+              <circle cx="300" cy="291" r="1.6" className="bazi-svg-needle-dot" />
               <circle cx="300" cy="300" r="6" className="bazi-svg-center-dot" />
               <circle cx="300" cy="300" r="2.5" className="bazi-svg-center-gold" />
 
-              <text x="300" y="278" className="bazi-svg-center-kicker">
+              <text x="300" y="274" className="bazi-svg-center-kicker">
                 {cungMenh
                   ? `CUNG ${cungMenh.toLocaleUpperCase("vi-VN")}`
                   : "BÁT TRẠCH"}
               </text>
-              <text x="300" y="322" className="bazi-svg-center-group">
+              <text x="300" y="326" className="bazi-svg-center-group">
                 {tuMenh || "ÂM TRẠCH"}
               </text>
               {(element || napAmName) && (
-                <text x="300" y="340" className="bazi-svg-center-element">
+                <text x="300" y="347" className="bazi-svg-center-element">
                   {[element ? `Mệnh ${element}` : "", napAmName || ""]
                     .filter(Boolean)
                     .join(" · ")}

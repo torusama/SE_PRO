@@ -889,6 +889,17 @@ export class AiAgentOrchestratorService {
       trustedRequirements,
       directRequirements,
     );
+    // A direct request to view/analyze Bát Tự by itself is a Bát Tự turn,
+    // not permission to resume an older "Bát Tự rồi tìm lô" flow. Clear the
+    // session-local bridge unless the latest message explicitly asks to choose
+    // or find plots from the result. The customer must opt in before inventory
+    // is searched.
+    if (
+      this.isExplicitBaziOnlyTurn(dto.message) &&
+      !directZodiacPlotConsultation
+    ) {
+      delete trustedRequirements.consultationGoal;
+    }
     trustedRequirements = this.applyNaturalRecommendationDefaults(
       dto.message,
       directIntent,
@@ -1583,6 +1594,28 @@ export class AiAgentOrchestratorService {
         dto.message,
         plan.intent,
       );
+      // Final hard backstop for a standalone Bát Tự request. Even if an LLM
+      // planner tries to revive an older plot-shopping goal, the latest user
+      // turn wins: analyze Bát Tự only and wait for an explicit opt-in before
+      // searching inventory.
+      if (
+        this.isExplicitBaziOnlyTurn(dto.message) &&
+        !directZodiacPlotConsultation
+      ) {
+        delete plan.requirements.consultationGoal;
+        plan.intent = 'bazi_suggestion';
+        if (plan.requirements.birthDate) {
+          plan.action = 'suggest_bazi_direction';
+          plan.directResponse = undefined;
+          plan.needsClarification = false;
+          plan.clarificationQuestion = '';
+        } else {
+          plan.action = 'none';
+          plan.directResponse =
+            plan.directResponse?.trim() ||
+            'Được, mình sẽ chỉ phân tích Bát Tự/Bát Trạch ở bước này. Bạn cho mình ngày sinh; nếu có giờ sinh và giới tính thì phần tham khảo sẽ đầy đủ hơn.';
+        }
+      }
       if (
         plan.action === 'browse_available_plots' &&
         !plan.requirements.numberOfPlots
@@ -2719,6 +2752,7 @@ ${input.backendHint ? `<TRUSTED_BACKEND_AVAILABILITY_NOTE>\n${input.backendHint}
 
 Write the final helpful, highly consultative response now.
 - CRITICAL LANGUAGE RULE: Detect the language of the user's latest input message. If the user input is in English, write your ENTIRE response in fluent, natural English. If in Vietnamese, write in natural Vietnamese.
+- USER-FACING TERMINOLOGY: Never expose implementation words such as "backend", "tool output", "JSON", "database field", or raw enum labels. In Vietnamese, translate plot types as single = "lô đơn", double = "lô đôi", family = "lô gia đình". Say "dữ liệu hệ thống đã xác minh" when you need to refer to authoritative data.
 - Act as an exceptionally intelligent, empathetic, and culturally grounded AI Concierge (with the conversational depth of ChatGPT/Gemini/Claude).
 - RESPONSE CONTRACT FOR EVERY SUBSTANTIVE TURN:
   1. Answer the user's actual question immediately; never hide the answer behind another question.
@@ -3020,7 +3054,7 @@ Bạn muốn mình so sánh tiếp lô ${plotCode} với một mã lô cụ th�
         ? `giá niêm yết **${price.toLocaleString('vi-VN')} VND**`
         : '',
       plot.zoneName ? `thuộc **${this.asSafeString(plot.zoneName, '')}**` : '',
-      plot.plotType ? `loại **${this.asSafeString(plot.plotType, '')}**` : '',
+      plot.plotType ? `loại **${this.plotTypeLabel(this.asSafeString(plot.plotType, ''))}**` : '',
       Number.isFinite(area) && area > 0
         ? `diện tích **${area.toLocaleString('vi-VN')} m²**`
         : '',
@@ -5227,6 +5261,14 @@ ${JSON.stringify(options)}
   }
 
   private isLowInformationTurn(message: string) {
+    // A compact clock value such as "10h20" is meaningful when the previous
+    // assistant turn is waiting for a birth time / appointment time. Do not
+    // drop conversation bootstrap before we have a chance to inspect that
+    // context. Previously "10h20" was treated as unintelligible because the
+    // compact token contains only the consonant "h", so history was skipped
+    // and the Bát Tự flow forgot what it had just asked the customer for.
+    if (extractStandaloneClockTime(message)) return false;
+
     const folded = this.foldForMemory(message);
     if (!folded) return true;
     return (
@@ -6148,10 +6190,10 @@ Hệ thống không còn lựa chọn giữ chỗ riêng. Việc gửi yêu cầ
           ? ''
           : `${Math.abs(areaDelta).toLocaleString('vi-VN')} m² ${areaDelta < 0 ? 'nhỏ hơn' : 'rộng hơn'}`;
       const suitability = plotTypes.includes('family')
-        ? 'lô family dành cho gia đình/dòng tộc'
+        ? 'lô gia đình dành cho gia đình/dòng tộc'
         : option.isAdjacent
           ? 'nhóm lô liền kề'
-          : `loại ${plotTypes.join(', ') || 'chưa phân loại'}`;
+          : `loại ${plotTypes.map((value) => this.plotTypeLabel(value)).join(', ') || 'chưa phân loại'}`;
       const tradeOff =
         option.tradeOffs[0] ??
         'cần kiểm tra trực tiếp vị trí, hướng và kích thước trên bản đồ';
@@ -6642,6 +6684,27 @@ Hệ thống không còn lựa chọn giữ chỗ riêng. Việc gửi yêu cầ
       );
   }
 
+
+  private isExplicitBaziOnlyTurn(message: string) {
+    const folded = this.foldForMemory(message);
+    const asksForBazi =
+      /\b(?:bat tu|bazi|menh quai|bat trach)\b/.test(folded) &&
+      /\b(?:tu van|xem|phan tich|giai thich|coi|noi ve|bat tu|bazi)\b/.test(
+        folded,
+      );
+    if (!asksForBazi) return false;
+
+    const explicitlyAsksForPlotSearch =
+      /\b(?:tim|chon|goi y|de xuat|loc|xem|coi)\b.{0,36}\b(?:lo|dat|khu|vi tri)\b/.test(
+        folded,
+      ) ||
+      /\b(?:lo|dat|khu|vi tri)\b.{0,36}\b(?:tim|chon|goi y|de xuat|loc|xem|coi)\b/.test(
+        folded,
+      );
+
+    return !explicitlyAsksForPlotSearch;
+  }
+
   private requirementsFromCustomerProfile(
     profile: CustomerProfileContext | null,
     historyRequirements: AgentRequirements,
@@ -6762,6 +6825,7 @@ Hệ thống không còn lựa chọn giữ chỗ riêng. Việc gửi yêu cầ
     history: PersistedMessage[],
   ): AgentRequirements {
     let requirements: AgentRequirements = {};
+    let latestBaziState: AgentRequirements | null = null;
     for (const item of history) {
       if (item.role === 'user' && item.content) {
         requirements = this.mergeDefinedRequirements(
@@ -6770,19 +6834,17 @@ Hệ thống không còn lựa chọn giữ chỗ riêng. Việc gửi yêu cầ
         );
         continue;
       }
-      // The semantic planner creates this goal; preserve its backend-validated
-      // fields across the Bát Tự intake turns instead of trying to rediscover
-      // them from a later short reply such as a birth date or "nam, 8 giờ".
-      if (
-        item.role === 'assistant' &&
-        item.intent === 'bazi_suggestion' &&
-        item.extractedData?.consultationGoal === 'bazi_then_plots'
-      ) {
-        requirements = this.mergeDefinedRequirements(
-          requirements,
-          item.extractedData as AgentRequirements,
-        );
+      // Only the MOST RECENT Bát Tự assistant state can carry the multi-turn
+      // "analyze first, then search plots" goal. This prevents an old plot
+      // consultation from leaking into a later standalone Bát Tự request.
+      if (item.role === 'assistant' && item.intent === 'bazi_suggestion') {
+        latestBaziState = (item.extractedData ?? {}) as AgentRequirements;
       }
+    }
+    if (latestBaziState?.consultationGoal === 'bazi_then_plots') {
+      requirements = this.mergeDefinedRequirements(requirements, latestBaziState);
+    } else {
+      delete requirements.consultationGoal;
     }
     return requirements;
   }
