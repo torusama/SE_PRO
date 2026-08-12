@@ -6537,7 +6537,7 @@ Hệ thống không còn lựa chọn giữ chỗ riêng. Việc gửi yêu cầ
           lastAssistantIsPlotConsultation ||
           previouslyRecommendedPlotIds.length > 0));
 
-    let requirements = { ...directRequirements };
+    const requirements = { ...directRequirements };
     let intent = directIntent;
 
     if (baziContextActive) {
@@ -6687,7 +6687,7 @@ Hệ thống không còn lựa chọn giữ chỗ riêng. Việc gửi yêu cầ
   private requirementsFromPreferences(
     preferences: Array<{ memoryKey: string | null; content: string }>,
   ): AgentRequirements {
-    let requirements: AgentRequirements = {};
+    const requirements: AgentRequirements = {};
 
     for (const preference of preferences) {
       const key = preference.memoryKey ?? '';

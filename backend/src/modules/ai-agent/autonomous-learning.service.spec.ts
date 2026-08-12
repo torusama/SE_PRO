@@ -14,7 +14,11 @@ interface FakeOptions {
 
 function setup(options: FakeOptions = {}) {
   const client = {
-    query: jest.fn((sql: string): { rows: Record<string, unknown>[] } => {
+    query: jest.fn(
+      (
+        sql: string,
+        _params?: unknown[],
+      ): { rows: Record<string, unknown>[] } => {
       if (sql.includes('SELECT content') && sql.includes('FROM ai_messages')) {
         return {
           rows:

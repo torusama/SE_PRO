@@ -31,7 +31,7 @@ describe('CemeteryServicesService admin operations', () => {
           callback(client),
       ),
     };
-    const service = new CemeteryServicesService(database as never);
+    const service = new CemeteryServicesService(database as never, {} as never);
 
     await expect(
       service.createOrder(7, {
@@ -227,7 +227,7 @@ describe('CemeteryServicesService admin operations', () => {
       queryOne: jest.fn().mockResolvedValue({ total: '1' }),
       query: jest.fn().mockResolvedValue([{ id: 3 }]),
     };
-    const service = new CemeteryServicesService(database as never);
+    const service = new CemeteryServicesService(database as never, {} as never);
     await expect(
       service.adminOrders({
         page: 1,
@@ -269,7 +269,7 @@ describe('CemeteryServicesService admin operations', () => {
       queryOne: jest.fn().mockResolvedValue({ id: 3 }),
       query: jest.fn().mockResolvedValue([]),
     };
-    const service = new CemeteryServicesService(database as never);
+    const service = new CemeteryServicesService(database as never, {} as never);
     await service.complete(3, { completionNote: 'Đã xong' }, 1, [
       { filename: 'proof.jpg' },
     ] as Express.Multer.File[]);

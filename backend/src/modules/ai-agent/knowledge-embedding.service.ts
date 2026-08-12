@@ -380,11 +380,11 @@ export class KnowledgeEmbeddingService implements OnModuleInit {
       // Also accept comma/semicolon/newline separated keys and simple wrappers.
     }
     const unwrapped = trimmed
-      .replace(/^\s*[\[{]\s*/, '')
+      .replace(/^\s*[[{]\s*/, '')
       .replace(/\s*[\]}]\s*$/, '');
     return unwrapped
       .split(/[\s,;]+/)
-      .map((item) => item.replace(/^[\'"]|[\'"]$/g, '').trim())
+      .map((item) => item.replace(/^['"]|['"]$/g, '').trim())
       .filter(Boolean);
   }
 

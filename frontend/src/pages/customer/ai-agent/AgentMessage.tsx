@@ -122,7 +122,9 @@ export default function AgentMessage({
   }
 
   return (
-    <article className={`agent-message ${isAssistant ? "assistant" : "user"}`}>
+    <article
+      className={`agent-message ${isAssistant ? "assistant" : "user"}${baziSuggestion ? " has-bazi" : ""}`}
+    >
       <div className="agent-message-avatar">
         {isAssistant ? <Bot size={18} /> : <UserRound size={18} />}
       </div>
@@ -172,10 +174,8 @@ export default function AgentMessage({
         )}
 
         {/* Bazi Phong Thủy Section */}
-        {baziSuggestion && (
-          <div className="agent-bazi-card">
-            <span className="agent-bazi-corner agent-bazi-corner-tr" />
-            <span className="agent-bazi-corner agent-bazi-corner-bl" />
+        {baziSuggestion && presentationComplete && (
+          <div className="agent-bazi-experience">
 
             <div className="agent-bazi-head">
               <div className="agent-bazi-title">

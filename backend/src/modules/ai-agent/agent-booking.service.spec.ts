@@ -785,7 +785,10 @@ describe('AgentBookingService', () => {
       kind: 'service_order',
       stage: 'collecting',
     });
-    expect(result?.pendingAction?.requestedDate).toBeUndefined();
+    expect(result?.pendingAction?.kind).toBe('service_order');
+    if (result?.pendingAction?.kind === 'service_order') {
+      expect(result.pendingAction.requestedDate).toBeUndefined();
+    }
     expect(result?.assistantMessage).toContain(
       'thiếu ngày bạn muốn thực hiện dịch vụ',
     );

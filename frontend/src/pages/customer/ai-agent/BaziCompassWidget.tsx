@@ -1,4 +1,5 @@
 import React, { useId } from "react";
+import type { CSSProperties } from "react";
 
 export interface DirectionItem {
   direction: string;
@@ -17,6 +18,7 @@ interface BaziCompassWidgetProps {
 }
 
 type DirectionType = "good" | "bad" | "neutral";
+type IndexedStyle = CSSProperties & { "--bazi-index"?: number };
 
 const DIRECTIONS = [
   { key: "Bắc", short: "BẮC", trigram: "☵", angle: 0 },
@@ -127,12 +129,24 @@ export const BaziCompassWidget: React.FC<BaziCompassWidgetProps> = ({
         >
           <defs>
             <radialGradient id={gradientId} cx="42%" cy="32%" r="72%">
-              <stop offset="0%" stopColor="#20344a" />
-              <stop offset="56%" stopColor="#101f31" />
-              <stop offset="100%" stopColor="#07101d" />
+              <stop offset="0%" stopColor="#f6e6ab" />
+              <stop offset="55%" stopColor="#e8cd7c" />
+              <stop offset="100%" stopColor="#c8a749" />
             </radialGradient>
-            <filter id={`${gradientId}-shadow`} x="-20%" y="-20%" width="140%" height="140%">
-              <feDropShadow dx="0" dy="12" stdDeviation="14" floodColor="#000000" floodOpacity="0.42" />
+            <filter
+              id={`${gradientId}-shadow`}
+              x="-25%"
+              y="-25%"
+              width="150%"
+              height="150%"
+            >
+              <feDropShadow
+                dx="0"
+                dy="18"
+                stdDeviation="18"
+                floodColor="#000000"
+                floodOpacity="0.52"
+              />
             </filter>
           </defs>
 
@@ -146,31 +160,35 @@ export const BaziCompassWidget: React.FC<BaziCompassWidgetProps> = ({
               className="bazi-svg-disc"
             />
 
-            {DIRECTIONS.map((direction) => {
-              const info = getDirection(direction.key);
-              return (
-                <path
-                  key={`sector-${direction.key}`}
-                  d={annularSectorPath(direction.angle, 86, 194)}
-                  className={`bazi-svg-sector ${info.type}`}
-                />
-              );
-            })}
+            <g className="bazi-svg-fan">
+              {DIRECTIONS.map((direction, index) => {
+                const info = getDirection(direction.key);
+                return (
+                  <path
+                    key={`sector-${direction.key}`}
+                    d={annularSectorPath(direction.angle, 84, 195)}
+                    className={`bazi-svg-sector ${info.type}`}
+                    style={{ "--bazi-index": index } as IndexedStyle}
+                  />
+                );
+              })}
+            </g>
 
-            {[86, 194, 232, 252, 258].map((radius, index) => (
+            {[84, 195, 233, 253, 258].map((radius, index) => (
               <circle
                 key={`ring-${radius}`}
                 cx="300"
                 cy="300"
                 r={radius}
                 className={`bazi-svg-ring ${index === 4 ? "strong" : ""}`}
+                style={{ "--bazi-index": index } as IndexedStyle}
               />
             ))}
 
-            {DIRECTIONS.map((direction) => {
+            {DIRECTIONS.map((direction, index) => {
               const boundaryAngle = direction.angle - 22.5;
-              const start = polar(boundaryAngle, 86);
-              const end = polar(boundaryAngle, 232);
+              const start = polar(boundaryAngle, 84);
+              const end = polar(boundaryAngle, 233);
               return (
                 <line
                   key={`spoke-${direction.key}`}
@@ -179,17 +197,18 @@ export const BaziCompassWidget: React.FC<BaziCompassWidgetProps> = ({
                   x2={end.x}
                   y2={end.y}
                   className="bazi-svg-spoke"
+                  style={{ "--bazi-index": index } as IndexedStyle}
                 />
               );
             })}
 
             {SON_NAMES.map((name, index) => {
               const angle = index * 15;
-              const point = polar(angle, 213);
+              const point = polar(angle, 214);
               const sectorIndex = Math.round(angle / 45) % 8;
               const info = getDirection(DIRECTIONS[sectorIndex].key);
-              const tickStart = polar(angle - 7.5, 195);
-              const tickEnd = polar(angle - 7.5, 232);
+              const tickStart = polar(angle - 7.5, 197);
+              const tickEnd = polar(angle - 7.5, 233);
               return (
                 <React.Fragment key={`son-${name}-${index}`}>
                   <line
@@ -213,9 +232,9 @@ export const BaziCompassWidget: React.FC<BaziCompassWidgetProps> = ({
             {Array.from({ length: 36 }, (_, index) => index * 10).map(
               (angle) => {
                 const major = angle % 30 === 0;
-                const tickStart = polar(angle, 235);
-                const tickEnd = polar(angle, major ? 252 : 243);
-                const labelPoint = polar(angle, 244);
+                const tickStart = polar(angle, 236);
+                const tickEnd = polar(angle, major ? 253 : 244);
+                const labelPoint = polar(angle, 245);
                 return (
                   <React.Fragment key={`degree-${angle}`}>
                     <line
@@ -239,29 +258,33 @@ export const BaziCompassWidget: React.FC<BaziCompassWidgetProps> = ({
               },
             )}
 
-            {DIRECTIONS.map((direction) => {
+            {DIRECTIONS.map((direction, index) => {
               const info = getDirection(direction.key);
               const labelPoint = polar(direction.angle, 143);
               const stampPoint = polar(direction.angle, 181);
               return (
-                <React.Fragment key={`label-${direction.key}`}>
+                <g
+                  key={`label-${direction.key}`}
+                  className="bazi-svg-label-group"
+                  style={{ "--bazi-index": index } as IndexedStyle}
+                >
                   <text
                     x={labelPoint.x}
-                    y={labelPoint.y - 12}
+                    y={labelPoint.y - 23}
                     className="bazi-svg-trigram"
                   >
                     {direction.trigram}
                   </text>
                   <text
                     x={labelPoint.x}
-                    y={labelPoint.y + 5}
+                    y={labelPoint.y + 1}
                     className="bazi-svg-star"
                   >
                     {info.item?.star || "—"}
                   </text>
                   <text
                     x={labelPoint.x}
-                    y={labelPoint.y + 21}
+                    y={labelPoint.y + 23}
                     className="bazi-svg-direction"
                   >
                     {direction.short}
@@ -271,35 +294,54 @@ export const BaziCompassWidget: React.FC<BaziCompassWidgetProps> = ({
                       className={`bazi-svg-stamp ${info.type}`}
                       transform={`translate(${stampPoint.x} ${stampPoint.y}) rotate(-4)`}
                     >
-                      <rect x="-11" y="-11" width="22" height="22" rx="3" />
-                      <text x="0" y="4">
+                      <rect x="-10" y="-10" width="20" height="20" rx="3" />
+                      <text x="0" y="1">
                         {info.type === "good" ? "吉" : "凶"}
                       </text>
                     </g>
                   )}
-                </React.Fragment>
+                </g>
               );
             })}
 
-            <circle cx="300" cy="300" r="70" className="bazi-svg-pool" />
-            <line x1="254" y1="300" x2="346" y2="300" className="bazi-svg-crosshair" />
-            <line x1="300" y1="254" x2="300" y2="346" className="bazi-svg-crosshair" />
-            <circle cx="300" cy="300" r="7" className="bazi-svg-center-dot" />
-            <circle cx="300" cy="300" r="3" className="bazi-svg-center-gold" />
+            <g className="bazi-svg-center-layer">
+              <circle cx="300" cy="300" r="70" className="bazi-svg-pool" />
+              <line
+                x1="254"
+                y1="300"
+                x2="346"
+                y2="300"
+                className="bazi-svg-crosshair"
+              />
+              <line
+                x1="300"
+                y1="254"
+                x2="300"
+                y2="346"
+                className="bazi-svg-crosshair"
+              />
+              <circle cx="294" cy="320" r="3.5" className="bazi-svg-needle-dot" />
+              <circle cx="302" cy="324" r="2.5" className="bazi-svg-needle-dot" />
+              <circle cx="309" cy="318" r="2" className="bazi-svg-needle-dot" />
+              <circle cx="300" cy="300" r="6" className="bazi-svg-center-dot" />
+              <circle cx="300" cy="300" r="2.5" className="bazi-svg-center-gold" />
 
-            <text x="300" y="282" className="bazi-svg-center-kicker">
-              {cungMenh ? `CUNG ${cungMenh.toLocaleUpperCase("vi-VN")}` : "BÁT TRẠCH"}
-            </text>
-            <text x="300" y="323" className="bazi-svg-center-group">
-              {tuMenh || "ÂM TRẠCH"}
-            </text>
-            {(element || napAmName) && (
-              <text x="300" y="341" className="bazi-svg-center-element">
-                {[element ? `Mệnh ${element}` : "", napAmName || ""]
-                  .filter(Boolean)
-                  .join(" · ")}
+              <text x="300" y="278" className="bazi-svg-center-kicker">
+                {cungMenh
+                  ? `CUNG ${cungMenh.toLocaleUpperCase("vi-VN")}`
+                  : "BÁT TRẠCH"}
               </text>
-            )}
+              <text x="300" y="322" className="bazi-svg-center-group">
+                {tuMenh || "ÂM TRẠCH"}
+              </text>
+              {(element || napAmName) && (
+                <text x="300" y="340" className="bazi-svg-center-element">
+                  {[element ? `Mệnh ${element}` : "", napAmName || ""]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </text>
+              )}
+            </g>
           </g>
         </svg>
       </div>
@@ -307,11 +349,11 @@ export const BaziCompassWidget: React.FC<BaziCompassWidgetProps> = ({
       <div className="bazi-compass-legend">
         <div className="legend-item good">
           <span className="legend-swatch" />
-          <span>Hướng Cát · nên ưu tiên</span>
+          <span>Hướng Cát (nên ưu tiên)</span>
         </div>
         <div className="legend-item bad">
           <span className="legend-swatch" />
-          <span>Hướng Hung · nên hạn chế</span>
+          <span>Hướng Hung (nên tránh)</span>
         </div>
       </div>
     </section>

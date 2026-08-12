@@ -3951,3 +3951,868 @@ button.agent-bazi-followup-item:hover {
   .agent-bazi-tag { grid-template-columns: 76px minmax(0, 1fr); }
 }
 
+
+/* ========================================================================== */
+/* BÁT TRẠCH CEREMONIAL RESULT — based directly on la-ban-bat-trach.html      */
+/* Rendered outside the assistant text bubble; no enclosing result card.      */
+/* ========================================================================== */
+.agent-message.has-bazi .agent-message-body {
+  max-width: min(940px, calc(100% - 42px));
+  width: 100%;
+}
+
+.agent-message.assistant .agent-message-bubble {
+  animation: agentAssistantTextReveal 380ms cubic-bezier(.2,.8,.2,1) both;
+}
+
+@keyframes agentAssistantTextReveal {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+    filter: blur(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+.agent-bazi-experience {
+  --bazi-red-deep: #5c0e10;
+  --bazi-red: #7e1416;
+  --bazi-red-light: #a4231a;
+  --bazi-red-glow: #c23b2d;
+  --bazi-gold: #d4af37;
+  --bazi-gold-light: #f0d78c;
+  --bazi-gold-deep: #a67c1e;
+  --bazi-cream: #f7ecc9;
+  --bazi-ink: #1c1008;
+  --bazi-jade: #2f6b45;
+  --bazi-jade-light: #6fa885;
+  --bazi-black-ring: #191008;
+
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: 100%;
+  margin: 22px 0 8px;
+  padding: 30px 0 8px;
+  color: var(--bazi-cream);
+  font-family: "Be Vietnam Pro", sans-serif;
+  animation: baziExperienceReveal 560ms cubic-bezier(.2,.8,.2,1) both;
+}
+
+/* Ambient color from the supplied HTML body, deliberately unbounded so the
+   result does not look like another card nested inside chat. */
+.agent-bazi-experience::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: -28px;
+  right: -28px;
+  bottom: -18px;
+  left: -28px;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% 7%, rgba(138, 26, 26, .38) 0%, rgba(92, 14, 16, .22) 43%, rgba(60, 8, 8, 0) 82%);
+  opacity: .86;
+}
+
+@keyframes baziExperienceReveal {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.agent-bazi-head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 26px;
+  width: 100%;
+  margin: 0 0 24px;
+  padding: 0;
+  border: 0;
+  text-align: center;
+  animation: baziTextRise 520ms 90ms cubic-bezier(.2,.8,.2,1) both;
+}
+
+.agent-bazi-title {
+  display: flex;
+  min-width: 0;
+  flex: 0 1 auto;
+  align-items: center;
+  flex-direction: column;
+  gap: 0;
+  text-align: center;
+}
+
+.agent-bazi-eyebrow {
+  margin: 0 0 10px;
+  color: var(--bazi-gold-light);
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .28em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+.agent-bazi-title strong {
+  margin: 0;
+  color: var(--bazi-gold-light);
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: clamp(29px, 4.8vw, 43px);
+  font-weight: 700;
+  letter-spacing: .005em;
+  line-height: 1.08;
+  text-shadow: 0 0 24px rgba(212, 175, 55, .28);
+}
+
+.agent-bazi-subtitle {
+  margin-top: 8px;
+  color: rgba(247, 236, 201, .74);
+  font-size: 12px;
+  font-weight: 300;
+  line-height: 1.55;
+}
+
+.agent-bazi-title-rule {
+  width: 120px;
+  height: 1px;
+  margin-top: 13px;
+  background: linear-gradient(90deg, transparent, var(--bazi-gold), transparent);
+}
+
+.agent-bazi-element-seal {
+  flex: 0 0 auto;
+  width: 60px;
+  height: 60px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 6px;
+  background: linear-gradient(160deg, var(--bazi-gold-light), var(--bazi-gold-deep));
+  box-shadow: 0 4px 10px rgba(0, 0, 0, .4);
+  color: var(--bazi-red-light);
+  transform: rotate(-4deg);
+  animation: baziSealIn 600ms 210ms cubic-bezier(.2,.9,.2,1.15) both;
+}
+
+@keyframes baziSealIn {
+  from { opacity: 0; transform: rotate(-14deg) scale(.72); }
+  to { opacity: 1; transform: rotate(-4deg) scale(1); }
+}
+
+.agent-bazi-element-glyph {
+  font-family: "Playfair Display", "Noto Serif SC", Georgia, serif;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.agent-bazi-element-name {
+  max-width: 56px;
+  margin-top: 3px;
+  overflow: visible;
+  color: var(--bazi-red-light);
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: .035em;
+  line-height: 1.05;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+/* ---------- Compass copied to the original red / gold / jade visual system ---------- */
+.bazi-compass-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  width: 100%;
+  margin: 0 0 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  animation: baziCompassBlockIn 260ms 140ms ease both;
+}
+
+@keyframes baziCompassBlockIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.bazi-compass-frame {
+  width: min(100%, 560px);
+  aspect-ratio: 1 / 1;
+  filter: drop-shadow(0 20px 36px rgba(0, 0, 0, .5));
+  animation: baziCompassBaseIn 760ms 160ms cubic-bezier(.2,.8,.2,1) both;
+}
+
+@keyframes baziCompassBaseIn {
+  from { opacity: 0; transform: scale(.86) rotate(-5deg); }
+  to { opacity: 1; transform: scale(1) rotate(0); }
+}
+
+.bazi-compass-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.bazi-svg-outer-shadow {
+  fill: rgba(25, 16, 8, .92);
+}
+
+.bazi-svg-disc {
+  stroke: var(--bazi-black-ring);
+  stroke-width: 5;
+}
+
+/* Fan-opening effect: all eight blades originate at the heavenly pool and
+   unfold clockwise until the full 360-degree wheel is visible. */
+.bazi-svg-sector {
+  transform-box: view-box;
+  transform-origin: 300px 300px;
+  stroke: rgba(25, 16, 8, .55);
+  stroke-width: 1;
+  opacity: 0;
+  animation: baziFanBladeOpen 700ms cubic-bezier(.16,.84,.2,1) both;
+  animation-delay: calc(280ms + var(--bazi-index) * 68ms);
+}
+
+.bazi-svg-sector.good { fill: #2f6b45; }
+.bazi-svg-sector.bad { fill: #8f2016; }
+.bazi-svg-sector.neutral { fill: #7d6328; }
+
+@keyframes baziFanBladeOpen {
+  0% {
+    opacity: 0;
+    transform: rotate(-18deg) scale(.03);
+  }
+  58% {
+    opacity: 1;
+    transform: rotate(3deg) scale(1.025);
+  }
+  100% {
+    opacity: 1;
+    transform: rotate(0) scale(1);
+  }
+}
+
+.bazi-svg-ring {
+  fill: none;
+  stroke: var(--bazi-black-ring);
+  stroke-width: .75;
+  opacity: .55;
+  stroke-dasharray: 1700;
+  stroke-dashoffset: 1700;
+  animation: baziRingDraw 980ms cubic-bezier(.2,.8,.2,1) forwards;
+  animation-delay: calc(410ms + var(--bazi-index) * 55ms);
+}
+
+.bazi-svg-ring.strong {
+  stroke-width: 2;
+  opacity: .95;
+}
+
+@keyframes baziRingDraw {
+  to { stroke-dashoffset: 0; }
+}
+
+.bazi-svg-spoke,
+.bazi-svg-son-tick,
+.bazi-svg-degree-tick {
+  stroke: rgba(25, 16, 8, .42);
+  stroke-width: .75;
+}
+
+.bazi-svg-spoke {
+  opacity: 0;
+  animation: baziLineIn 360ms ease forwards;
+  animation-delay: calc(560ms + var(--bazi-index) * 58ms);
+}
+
+.bazi-svg-degree-tick.major { stroke-width: 1; }
+
+@keyframes baziLineIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.bazi-svg-son,
+.bazi-svg-degree,
+.bazi-svg-trigram,
+.bazi-svg-star,
+.bazi-svg-direction,
+.bazi-svg-center-kicker,
+.bazi-svg-center-group,
+.bazi-svg-center-element,
+.bazi-svg-stamp text {
+  text-anchor: middle;
+  dominant-baseline: middle;
+  user-select: none;
+}
+
+.bazi-svg-label-group {
+  opacity: 0;
+  animation: baziSectorTextIn 460ms cubic-bezier(.2,.8,.2,1) forwards;
+  animation-delay: calc(780ms + var(--bazi-index) * 58ms);
+}
+
+@keyframes baziSectorTextIn {
+  from { opacity: 0; transform: scale(.88); transform-origin: center; }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.bazi-svg-son {
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.bazi-svg-son.good { fill: var(--bazi-jade); }
+.bazi-svg-son.bad { fill: var(--bazi-red-light); }
+.bazi-svg-son.neutral { fill: #6e5420; }
+
+.bazi-svg-degree {
+  fill: var(--bazi-ink);
+  font-size: 7.5px;
+  opacity: .8;
+}
+
+/* Extra vertical separation prevents Họa Hại / Đông Nam and other two-line
+   labels from colliding, even at narrower responsive sizes. */
+.bazi-svg-trigram {
+  fill: rgba(247, 236, 201, .9);
+  font-family: "Segoe UI Symbol", "Noto Sans Symbols 2", sans-serif;
+  font-size: 16px;
+  font-weight: 400;
+}
+
+.bazi-svg-star {
+  fill: var(--bazi-gold-light);
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 13.5px;
+  font-weight: 700;
+  paint-order: stroke fill;
+  stroke: rgba(25, 16, 8, .18);
+  stroke-width: .8px;
+}
+
+.bazi-svg-direction {
+  fill: var(--bazi-cream);
+  font-family: "Be Vietnam Pro", sans-serif;
+  font-size: 8.6px;
+  font-weight: 600;
+  letter-spacing: .035em;
+  opacity: .92;
+  paint-order: stroke fill;
+  stroke: rgba(25, 16, 8, .18);
+  stroke-width: .65px;
+}
+
+.bazi-svg-stamp rect {
+  fill: var(--bazi-black-ring);
+  stroke: var(--bazi-gold-light);
+  stroke-width: 1;
+}
+
+.bazi-svg-stamp text {
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 9.5px;
+  font-weight: 700;
+}
+
+.bazi-svg-stamp.good text { fill: var(--bazi-jade-light); }
+.bazi-svg-stamp.bad text { fill: #d98070; }
+
+.bazi-svg-center-layer {
+  opacity: 0;
+  transform-box: view-box;
+  transform-origin: 300px 300px;
+  animation: baziCenterReveal 520ms 1060ms cubic-bezier(.2,.8,.2,1) forwards;
+}
+
+@keyframes baziCenterReveal {
+  from { opacity: 0; transform: scale(.65) rotate(-12deg); }
+  to { opacity: 1; transform: scale(1) rotate(0); }
+}
+
+.bazi-svg-pool {
+  fill: #faf5e4;
+  stroke: var(--bazi-black-ring);
+  stroke-width: 2;
+}
+
+.bazi-svg-crosshair {
+  stroke: var(--bazi-red-light);
+  stroke-width: 2;
+}
+
+.bazi-svg-needle-dot { fill: var(--bazi-red-light); }
+.bazi-svg-center-dot { fill: var(--bazi-black-ring); }
+.bazi-svg-center-gold { fill: var(--bazi-gold); }
+
+.bazi-svg-center-kicker {
+  fill: var(--bazi-ink);
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .04em;
+}
+
+.bazi-svg-center-group {
+  fill: var(--bazi-red-light);
+  font-family: "Be Vietnam Pro", sans-serif;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: .035em;
+  text-transform: uppercase;
+}
+
+.bazi-svg-center-element {
+  fill: #5f4315;
+  font-family: "Be Vietnam Pro", sans-serif;
+  font-size: 7.3px;
+  font-weight: 600;
+}
+
+.bazi-compass-legend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px 22px;
+  margin-top: 16px;
+  color: rgba(247, 236, 201, .84);
+  font-size: 11.5px;
+  animation: baziTextRise 440ms 1220ms ease both;
+}
+
+.bazi-compass-legend .legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.bazi-compass-legend .legend-swatch {
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+}
+
+.bazi-compass-legend .legend-item.good .legend-swatch { background: var(--bazi-jade); }
+.bazi-compass-legend .legend-item.bad .legend-swatch { background: var(--bazi-red-light); }
+
+/* ---------- Four-value ledger from supplied HTML ---------- */
+.agent-bazi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  width: 100%;
+  margin: 0 0 24px;
+  overflow: hidden;
+  border: 1px solid rgba(212, 175, 55, .4);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, .15);
+  animation: baziTextRise 500ms 1260ms ease both;
+}
+
+.agent-bazi-badge-item {
+  min-width: 0;
+  padding: 14px 10px;
+  border: 0;
+  border-right: 1px solid rgba(212, 175, 55, .25);
+  border-radius: 0;
+  background: transparent;
+  text-align: center;
+}
+
+.agent-bazi-badge-item:last-child { border-right: 0; }
+
+.agent-bazi-badge-item small {
+  display: block;
+  margin: 0 0 6px;
+  color: rgba(247, 236, 201, .6);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: .07em;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+.agent-bazi-badge-item strong {
+  display: block;
+  margin: 0;
+  color: var(--bazi-gold-light);
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Narrative ---------- */
+.agent-bazi-analysis {
+  position: relative;
+  margin: 0 0 32px;
+  padding: 17px 20px;
+  border: 1px solid rgba(212, 175, 55, .3);
+  border-left: 4px solid var(--bazi-gold);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, .18);
+  animation: baziTextRise 500ms 1360ms ease both;
+}
+
+.agent-bazi-analysis p,
+.agent-bazi-summary {
+  margin: 0;
+  color: rgba(247, 236, 201, .85);
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+/* ---------- Good / bad directions as open ledger columns, no inner cards ---------- */
+.agent-bazi-directions-section {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 32px;
+  width: 100%;
+  margin: 0 0 26px;
+  animation: baziTextRise 520ms 1460ms ease both;
+}
+
+.agent-bazi-dir-group {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.agent-bazi-dir-group.good,
+.agent-bazi-dir-group.bad { border: 0; }
+
+.agent-bazi-dir-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 0;
+  padding: 0 0 10px;
+  border-bottom: 1px solid rgba(212, 175, 55, .3);
+}
+
+.agent-bazi-dir-marker {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+.agent-bazi-dir-group.good .agent-bazi-dir-marker { background: var(--bazi-jade); }
+.agent-bazi-dir-group.bad .agent-bazi-dir-marker { background: var(--bazi-red-light); }
+
+.agent-bazi-dir-label {
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.agent-bazi-dir-label.good { color: var(--bazi-jade-light); }
+.agent-bazi-dir-label.bad { color: #e39383; }
+
+.agent-bazi-dir-tags {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.agent-bazi-tag {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 0;
+  padding: 11px 2px;
+  border: 0;
+  border-bottom: 1px dashed rgba(212, 175, 55, .25);
+  border-radius: 0;
+  background: transparent;
+}
+
+.agent-bazi-tag:last-child { border-bottom: 0; }
+.agent-bazi-tag.good,
+.agent-bazi-tag.bad { border-left: 0; }
+
+.agent-bazi-tag-main {
+  display: flex;
+  min-width: 88px;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.agent-bazi-tag-dir {
+  color: var(--bazi-cream);
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.agent-bazi-tag-star {
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.agent-bazi-tag.good .agent-bazi-tag-star { color: var(--bazi-jade-light); }
+.agent-bazi-tag.bad .agent-bazi-tag-star { color: #e39383; }
+
+.agent-bazi-tag-desc {
+  flex: 1;
+  color: rgba(247, 236, 201, .7);
+  font-size: 11.5px;
+  line-height: 1.55;
+  text-align: right;
+}
+
+/* ---------- Element notes ---------- */
+.agent-bazi-relations {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin: 0 0 28px;
+  animation: baziTextRise 500ms 1570ms ease both;
+}
+
+.agent-bazi-relation-note {
+  display: block;
+  min-width: 0;
+  padding: 13px 16px;
+  border: 1px solid rgba(212, 175, 55, .25);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, .18);
+  color: rgba(247, 236, 201, .75);
+  font-size: 11.5px;
+  line-height: 1.65;
+}
+
+.agent-bazi-relation-note strong {
+  margin-right: 5px;
+  color: var(--bazi-gold-light);
+  font-weight: 700;
+}
+
+.agent-bazi-relation-note span { color: inherit; }
+
+.agent-bazi-followup {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 0;
+  padding: 18px 0 0;
+  border-top: 1px solid rgba(212, 175, 55, .25);
+  animation: baziTextRise 500ms 1660ms ease both;
+}
+
+.agent-bazi-followup-title {
+  margin: 0;
+  color: var(--bazi-gold-light);
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.agent-bazi-followup-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.agent-bazi-followup-item {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+  padding: 13px 14px;
+  border: 1px solid rgba(212, 175, 55, .24);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, .16);
+  color: var(--bazi-cream);
+  text-align: left;
+  cursor: pointer;
+  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease, box-shadow 180ms ease;
+}
+
+.agent-bazi-followup-item:hover:not(:disabled) {
+  transform: translateY(-2px);
+  border-color: rgba(240, 215, 140, .52);
+  background: rgba(126, 20, 22, .2);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, .2);
+}
+
+.agent-bazi-followup-item strong {
+  color: var(--bazi-gold-light);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.agent-bazi-followup-item span {
+  color: rgba(247, 236, 201, .65);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+.agent-bazi-disclaimer {
+  display: block;
+  margin-top: 18px;
+  padding-top: 15px;
+  border-top: 1px solid rgba(212, 175, 55, .25);
+  color: rgba(247, 236, 201, .52);
+  font-size: 10px;
+  line-height: 1.7;
+  text-align: center;
+  animation: baziTextRise 480ms 1740ms ease both;
+}
+
+@keyframes baziTextRise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+    filter: blur(1.5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+/* Give newly rendered secondary AI blocks the same soft entrance language. */
+.agent-options.is-revealed,
+.agent-services,
+.agent-quick-replies {
+  animation: agentSecondaryReveal 430ms cubic-bezier(.2,.8,.2,1) both;
+}
+
+@keyframes agentSecondaryReveal {
+  from { opacity: 0; transform: translateY(9px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 760px) {
+  .agent-message.has-bazi .agent-message-body {
+    max-width: calc(100% - 42px);
+  }
+
+  .agent-bazi-experience {
+    padding-top: 24px;
+  }
+
+  .agent-bazi-head {
+    gap: 16px;
+  }
+
+  .agent-bazi-title strong {
+    font-size: clamp(26px, 8vw, 36px);
+  }
+
+  .bazi-compass-frame {
+    width: min(100%, 520px);
+  }
+
+  .agent-bazi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .agent-bazi-badge-item:nth-child(2n) { border-right: 0; }
+  .agent-bazi-badge-item:nth-child(n + 3) { border-top: 1px solid rgba(212, 175, 55, .25); }
+
+  .agent-bazi-directions-section,
+  .agent-bazi-relations {
+    grid-template-columns: 1fr;
+    gap: 22px;
+  }
+
+  .agent-bazi-followup-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 540px) {
+  .agent-bazi-experience::before {
+    right: -12px;
+    left: -12px;
+  }
+
+  .agent-bazi-head {
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .agent-bazi-element-seal {
+    width: 56px;
+    height: 56px;
+  }
+
+  .bazi-compass-frame {
+    width: min(100%, 460px);
+  }
+
+  .bazi-svg-star { font-size: 12.2px; }
+  .bazi-svg-direction { font-size: 8px; }
+  .bazi-svg-trigram { font-size: 15px; }
+
+  .agent-bazi-tag {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .agent-bazi-tag-desc {
+    text-align: left;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-message.assistant .agent-message-bubble,
+  .agent-bazi-experience,
+  .agent-bazi-head,
+  .agent-bazi-element-seal,
+  .bazi-compass-container,
+  .bazi-compass-frame,
+  .bazi-svg-sector,
+  .bazi-svg-ring,
+  .bazi-svg-spoke,
+  .bazi-svg-label-group,
+  .bazi-svg-center-layer,
+  .bazi-compass-legend,
+  .agent-bazi-grid,
+  .agent-bazi-analysis,
+  .agent-bazi-directions-section,
+  .agent-bazi-relations,
+  .agent-bazi-followup,
+  .agent-bazi-disclaimer,
+  .agent-options.is-revealed,
+  .agent-services,
+  .agent-quick-replies {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+    stroke-dashoffset: 0 !important;
+  }
+}

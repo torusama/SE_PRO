@@ -47,7 +47,7 @@ describe('FeedbackService learning review', () => {
         {
           sessionId: 'SES-owned',
           messageId: 20,
-          feedbackType: 'correction',
+          feedbackType: 'wrong_information',
           correctedContent: 'Correct answer',
         },
         5,
@@ -71,7 +71,7 @@ describe('FeedbackService learning review', () => {
     missingConversation.database.queryOne.mockResolvedValueOnce(null);
     await expect(
       missingConversation.service.create(
-        { sessionId: 'SES-foreign', feedbackType: 'negative' },
+        { sessionId: 'SES-foreign', feedbackType: 'wrong_information' },
         5,
       ),
     ).rejects.toBeInstanceOf(NotFoundException);
@@ -86,7 +86,7 @@ describe('FeedbackService learning review', () => {
         {
           sessionId: 'SES-owned',
           messageId: 999,
-          feedbackType: 'negative',
+          feedbackType: 'wrong_information',
         },
         5,
       ),
@@ -183,7 +183,7 @@ describe('FeedbackService learning review', () => {
     const missing = createService();
     missing.client.query.mockResolvedValueOnce({ rows: [] });
     await expect(
-      missing.service.review(404, 9, 'approve', {}),
+      missing.service.review(404, 9, 'approve', { reviewNote: 'Note for testing' }),
     ).rejects.toBeInstanceOf(NotFoundException);
     expect(missing.client.query).toHaveBeenCalledTimes(1);
 
@@ -198,7 +198,7 @@ describe('FeedbackService learning review', () => {
       ],
     });
     await expect(
-      reviewed.service.review(7, 9, 'reject', {}),
+      reviewed.service.review(7, 9, 'reject', { reviewNote: 'Note for testing' }),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(reviewed.client.query).toHaveBeenCalledTimes(1);
   });

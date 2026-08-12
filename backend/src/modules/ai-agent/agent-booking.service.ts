@@ -2242,7 +2242,7 @@ export class AgentBookingService {
       /\bngay\s+\d{1,2}(?:\s+thang\s+\d{1,2})?(?:\s+nam\s+\d{4})?\b/.test(
         message,
       ) ||
-      /\b\d{1,2}[\/.\-]\d{1,2}(?:[\/.\-]\d{2,4})?\b/.test(value) ||
+      /\b\d{1,2}[/.-]\d{1,2}(?:[/.-]\d{2,4})?\b/.test(value) ||
       /\b\d{4}-\d{2}-\d{2}\b/.test(value)
     );
   }
