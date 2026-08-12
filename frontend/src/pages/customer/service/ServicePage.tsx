@@ -17,6 +17,7 @@ import {
   Clock,
   ChevronDown,
   ChevronUp,
+  X,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
@@ -1725,81 +1726,48 @@ function TrackTab(props: {
                               </div>
                             )}
 
-                          <div
-                            className={`detail-activity-grid ${detail.paymentStatus === "paid" ? "with-calendar" : ""}`}
-                          >
-                            {detail.paymentStatus === "paid" && (
-                              <ServiceScheduleCalendar
-                                requestedDate={detail.requestedDate}
-                                scheduledDate={detail.scheduledDate}
-                                serviceName={detail.serviceName}
-                                plotCode={detail.plotCode}
-                              />
-                            )}
+                          {(detail.paymentStatus === "paid" ||
+                            detail.status === "completed") && (
+                            <div
+                              className={`detail-activity-grid ${detail.paymentStatus === "paid" ? "with-calendar" : ""}`}
+                            >
+                              {detail.paymentStatus === "paid" && (
+                                <ServiceScheduleCalendar
+                                  requestedDate={detail.requestedDate}
+                                  scheduledDate={detail.scheduledDate}
+                                  serviceName={detail.serviceName}
+                                  plotCode={detail.plotCode}
+                                />
+                              )}
 
-                            <section className="detail-card history-block">
-                              <div className="detail-card-heading">
-                                <span>03</span>
-                                <h5>Lịch sử tiến độ</h5>
-                              </div>
-                              <div className="customer-history">
-                                {(detail.history ?? []).length === 0 ? (
-                                  <p className="history-empty">
-                                    Chưa có cập nhật mới.
+                              {detail.status === "completed" ? (
+                                <div className="completion-proof">
+                                  <div className="completion-proof-header">
+                                    <div>
+                                      <span>Dịch vụ đã hoàn thành</span>
+                                      <strong>Kết quả từ bộ phận thực hiện</strong>
+                                    </div>
+                                    <small>{formatDate(detail.completedAt)}</small>
+                                  </div>
+                                  <p>
+                                    {detail.completionNote ||
+                                      "Dịch vụ đã được xác nhận hoàn thành."}
                                   </p>
-                                ) : (
-                                  (detail.history ?? []).map(
-                                    (history, historyIndex) => (
-                                      <div
-                                        className={`customer-history-item ${historyIndex === (detail.history?.length ?? 0) - 1 ? "latest" : ""}`}
-                                        key={history.id}
-                                      >
-                                        <div
-                                          className="history-marker"
-                                          aria-hidden="true"
-                                        />
-                                        <div>
-                                          <strong>
-                                            {history.newStatus
-                                              ? STATUS_LABEL[history.newStatus]
-                                              : "Đã gửi yêu cầu"}
-                                          </strong>
-                                          <span>{formatDate(history.createdAt)}</span>
-                                        </div>
-                                      </div>
-                                    ),
-                                  )
-                                )}
-                              </div>
-                            </section>
-                          </div>
-
-                          {detail.status === "completed" && (
-                            <div className="completion-proof">
-                              <div className="completion-proof-header">
-                                <div>
-                                  <span>Dịch vụ đã hoàn thành</span>
-                                  <strong>Kết quả từ bộ phận thực hiện</strong>
-                                </div>
-                                <small>{formatDate(detail.completedAt)}</small>
-                              </div>
-                              <p>
-                                {detail.completionNote ||
-                                  "Dịch vụ đã được xác nhận hoàn thành."}
-                              </p>
-                              {(detail.completionImages ?? []).length > 0 && (
-                                <div className="customer-evidence-grid">
-                                  {(detail.completionImages ?? []).map(
-                                    (filename) => (
-                                      <CustomerEvidenceImage
-                                        key={filename}
-                                        orderId={detail.id}
-                                        filename={filename}
-                                      />
-                                    ),
+                                  {(detail.completionImages ?? []).length > 0 && (
+                                    <div className="customer-evidence-grid">
+                                      {(detail.completionImages ?? []).map(
+                                        (filename) => (
+                                          <CustomerEvidenceImage
+                                            key={filename}
+                                            orderId={detail.id}
+                                            filename={filename}
+                                          />
+                                        ),
+                                      )}
+                                    </div>
                                   )}
                                 </div>
-                              )}
+                              ) : null}
                             </div>
                           )}
                         </div>
@@ -1860,6 +1828,7 @@ function CustomerEvidenceImage({
 }) {
   const [url, setUrl] = useState("");
   const [failed, setFailed] = useState(false);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     let objectUrl = "";
@@ -1883,19 +1852,57 @@ function CustomerEvidenceImage({
     };
   }, [filename, orderId]);
 
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+
   if (failed)
     return <div className="customer-evidence-fallback">Không tải được ảnh</div>;
   if (!url)
     return <div className="customer-evidence-fallback">Đang tải ảnh...</div>;
+
   return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noreferrer"
-      aria-label="Mở ảnh bằng chứng hoàn thành"
-    >
-      <img src={url} alt="Bằng chứng hoàn thành dịch vụ" />
-    </a>
+    <>
+      <button
+        type="button"
+        className="customer-evidence-thumb"
+        onClick={() => setOpen(true)}
+        aria-label="Xem ảnh bằng chứng hoàn thành"
+      >
+        <img src={url} alt="Bằng chứng hoàn thành dịch vụ" />
+      </button>
+
+      {open && (
+        <div
+          className="customer-evidence-lightbox"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setOpen(false)}
+        >
+          <button
+            type="button"
+            className="customer-evidence-lightbox-close"
+            aria-label="Đóng"
+            onClick={(event) => {
+              event.stopPropagation();
+              setOpen(false);
+            }}
+          >
+            <X aria-hidden="true" />
+          </button>
+          <img
+            src={url}
+            alt="Bằng chứng hoàn thành dịch vụ"
+            onClick={(event) => event.stopPropagation()}
+          />
+        </div>
+      )}
+    </>
   );
 }
 

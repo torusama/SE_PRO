@@ -1791,13 +1791,19 @@
   gap: 9px;
 }
 
-.service-page .customer-evidence-grid a,
+.service-page .customer-evidence-thumb,
 .service-page .customer-evidence-fallback {
   aspect-ratio: 4 / 3;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface-deep);
+}
+
+.service-page .customer-evidence-thumb {
+  padding: 0;
+  display: block;
+  cursor: pointer;
 }
 
 .service-page .customer-evidence-grid img {
@@ -1808,8 +1814,75 @@
   transition: transform 0.25s ease;
 }
 
-.service-page .customer-evidence-grid a:hover img {
+.service-page .customer-evidence-thumb:hover img {
   transform: scale(1.025);
+}
+
+/* Lightbox xem ảnh bằng chứng hoàn thành, có nút X để đóng */
+.service-page .customer-evidence-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  background: rgba(2, 6, 14, 0.86);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  animation: service-lightbox-fade 160ms ease-out both;
+}
+
+.service-page .customer-evidence-lightbox img {
+  max-width: min(920px, 100%);
+  max-height: 86vh;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+  object-fit: contain;
+}
+
+.service-page .customer-evidence-lightbox-close {
+  position: absolute;
+  top: 22px;
+  right: 26px;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  color: #eef4f1;
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.service-page .customer-evidence-lightbox-close:hover {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: scale(1.05);
+}
+
+.service-page .customer-evidence-lightbox-close svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2;
+}
+
+@keyframes service-lightbox-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .service-page .customer-evidence-lightbox {
+    animation: none;
+  }
 }
 
 .service-page .customer-evidence-fallback {
@@ -2905,4 +2978,10 @@
   .service-page .detail-panel { animation: none; }
   .service-page .service-item,
   .service-page .service-detail-toggle { transition: none; }
+}
+
+.service-page .detail-activity-grid .completion-proof {
+  margin-top: 0;
+  height: 100%;
+  box-sizing: border-box;
 }
