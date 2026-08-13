@@ -203,6 +203,29 @@ function getMinBookableDateStr() {
   return d.toISOString().slice(0, 10);
 }
 
+// Số năm tối đa được phép đặt trước, để chặn việc gõ năm bất thường
+// (input type="date" của trình duyệt cho phép gõ tới 6 chữ số năm).
+const MAX_BOOKING_YEARS_AHEAD = 2;
+
+function getMaxBookableDateStr() {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() + MAX_BOOKING_YEARS_AHEAD);
+  return d.toISOString().slice(0, 10);
+}
+
+// Chặn giá trị ngày có năm nhập quá 4 chữ số hoặc vượt mốc tối đa cho phép,
+// để tránh lỗi gõ nhầm như "12/08/322332".
+function sanitizeDateInputValue(
+  rawValue: string,
+  maxDateStr: string,
+): string | null {
+  if (!rawValue) return "";
+  const [yearPart] = rawValue.split("-");
+  if (!yearPart || yearPart.length !== 4) return null;
+  if (rawValue > maxDateStr) return null;
+  return rawValue;
+}
+
 // So sánh 2 chuỗi ngày dạng 'YYYY-MM-DD' theo lịch (không phụ thuộc giờ/múi giờ)
 function isDateBeforeMin(dateStr: string, minDateStr: string) {
   return dateStr < minDateStr;
@@ -1137,6 +1160,7 @@ function BookTab(props: {
 
   const hasPlots = ownedPlots.length > 0;
   const minDateStr = getMinBookableDateStr();
+  const maxDateStr = getMaxBookableDateStr();
 
   if (!hasPlots) {
     return (
@@ -1252,8 +1276,17 @@ function BookTab(props: {
                   id="service-requested-date"
                   type="date"
                   min={minDateStr}
+                  max={maxDateStr}
                   value={requestedDate}
-                  onChange={(e) => setRequestedDate(e.target.value)}
+                  onChange={(e) => {
+                    const clean = sanitizeDateInputValue(
+                      e.target.value,
+                      maxDateStr,
+                    );
+                    // Giá trị năm không hợp lệ (VD gõ quá 4 chữ số) sẽ bị bỏ qua,
+                    // giữ nguyên giá trị hợp lệ gần nhất thay vì lưu số rác.
+                    if (clean !== null) setRequestedDate(clean);
+                  }}
                   required
                 />
                 <span className="field-hint">
@@ -1709,9 +1742,30 @@ function TrackTab(props: {
                             )}
                           </section>
 
+                          {(detail.status === "submitted" ||
+                            detail.status === "pending_confirm") && (
+                            <div className="detail-payment-zone">
+                              <section className="detail-note-card">
+                                <div>
+                                  <span className="detail-note-label">
+                                    Bước tiếp theo
+                                  </span>
+                                  <p>
+                                    Yêu cầu của bạn đang được quản trị viên
+                                    xem xét. Mã QR thanh toán sẽ hiển thị ở
+                                    đây ngay sau khi đơn được xác nhận.
+                                  </p>
+                                </div>
+                              </section>
+                            </div>
+                          )}
+
                           {detail.status !== "completed" &&
                             detail.status !== "cancelled" &&
-                            detail.paymentStatus !== "paid" && (
+                            detail.paymentStatus !== "paid" &&
+                            (detail.status === "confirmed" ||
+                              detail.paymentStatus ===
+                                "awaiting_confirmation") && (
                               <div className="detail-payment-zone">
                                 <DemoPaymentPanel
                                   orderId={detail.id}

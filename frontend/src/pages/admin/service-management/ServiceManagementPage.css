@@ -487,6 +487,58 @@
   margin-top: 14px;
 }
 
+/* Đồng bộ màu khung "Giao dịch dịch vụ" (DemoPaymentPanel, variant admin)
+   với các thẻ chi tiết khác (Thông tin yêu cầu, Thông tin khách hàng...):
+   nền trắng, viền nhạt, chữ tối thay vì nền tối như bản khách hàng. */
+.demo-payment--admin {
+  margin-top: 0;
+  padding: 17px;
+  border: 1px solid #e0e5e2;
+  border-radius: 11px;
+  background: #fff;
+  box-shadow: none;
+  color: #353841;
+}
+.demo-payment--admin .demo-payment-heading {
+  margin-bottom: 15px;
+}
+.demo-payment--admin .demo-payment-icon {
+  border-color: rgba(0, 35, 133, 0.18);
+  background: rgba(0, 35, 133, 0.06);
+  color: #002385;
+}
+.demo-payment--admin .demo-payment-kicker {
+  color: #8a9491;
+}
+.demo-payment--admin h3 {
+  color: #353841;
+}
+.demo-payment--admin .demo-payment-status--waiting {
+  border-color: #fff2d9;
+  background: #fff2d9;
+  color: #a96a09;
+}
+.demo-payment--admin .demo-payment-status--paid {
+  border-color: #e2e7f4;
+  background: #e2e7f4;
+  color: #002078;
+}
+.demo-payment--admin .demo-payment-status--confirmed {
+  border-color: #e7f5ea;
+  background: #e7f5ea;
+  color: #2e7a44;
+}
+.demo-payment--admin .demo-payment-hint {
+  color: #6b7573;
+}
+.demo-payment--admin .payment-primary {
+  background: #002385;
+  color: #fff;
+}
+.demo-payment--admin .payment-primary:hover:not(:disabled) {
+  background: #001c6b;
+}
+
 .detail-completion {
   border-color: #b8dec3;
   background: #f7fcf8;
