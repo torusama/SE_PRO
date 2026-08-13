@@ -429,6 +429,39 @@
   color: var(--admin-accent-2);
 }
 
+/* Urgent alert badges: unread notifications / pending requests / pending
+   appointment approvals. Red + a gentle pulse so admins notice them from
+   the sidebar without opening each page first. */
+.admin-nav-link__badge--urgent {
+  background: #e11d48;
+  color: #fff;
+  box-shadow: 0 0 0 0 rgba(225, 29, 72, 0.55);
+  animation: admin-nav-badge-pulse 1.8s ease-out infinite;
+}
+
+.admin-nav-link.is-active .admin-nav-link__badge--urgent {
+  background: #e11d48;
+  color: #fff;
+}
+
+@keyframes admin-nav-badge-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(225, 29, 72, 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(225, 29, 72, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(225, 29, 72, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-nav-link__badge--urgent {
+    animation: none;
+  }
+}
+
 @keyframes admin-nav-shine {
   from {
     left: -60%;
