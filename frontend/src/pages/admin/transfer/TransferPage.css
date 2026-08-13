@@ -93,6 +93,11 @@
   color: var(--admin-positive);
   border-color: rgba(31, 138, 95, 0.22);
 }
+.transfer-alert.info {
+  background: rgba(0, 133, 115, 0.08);
+  color: var(--admin-accent-2);
+  border-color: rgba(0, 133, 115, 0.22);
+}
 .transfer-alert button {
   margin-left: auto;
   border: 0;

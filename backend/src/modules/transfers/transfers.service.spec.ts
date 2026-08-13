@@ -21,8 +21,51 @@ describe('TransfersService', () => {
   });
 
   it('does not query the database for a one-character keyword', async () => {
-    await expect(service.search('plot', 'A')).resolves.toEqual([]);
+    await expect(service.search('plot', 'A')).resolves.toEqual({
+      items: [],
+      message: null,
+    });
     expect(database.query).not.toHaveBeenCalled();
+  });
+
+  it('returns specific message when customer exists but has no active plot ownership', async () => {
+    database.query.mockResolvedValue([]);
+    database.queryOne.mockResolvedValue({ count: '1' });
+    const result = await service.search('customer', 'Nguyen Van A');
+    expect(result).toEqual({
+      items: [],
+      message: 'Khách hàng chưa sở hữu lô đất nào',
+    });
+  });
+
+  it('returns specific message when user info is not found in system', async () => {
+    database.query.mockResolvedValue([]);
+    database.queryOne.mockResolvedValue({ count: '0' });
+    const result = await service.search('customer', 'Unknown User');
+    expect(result).toEqual({
+      items: [],
+      message: 'Thông tin người dùng chưa có hãy kiểm tra lại thông tin',
+    });
+  });
+
+  it('returns specific message when plot exists but is vacant/unowned', async () => {
+    database.query.mockResolvedValue([]);
+    database.queryOne.mockResolvedValue({ count: '1' });
+    const result = await service.search('plot', 'A-101');
+    expect(result).toEqual({
+      items: [],
+      message: 'Lô đất trống chưa có chủ sở hữu',
+    });
+  });
+
+  it('returns specific message when plot info is not found in system', async () => {
+    database.query.mockResolvedValue([]);
+    database.queryOne.mockResolvedValue({ count: '0' });
+    const result = await service.search('plot', 'Z-999');
+    expect(result).toEqual({
+      items: [],
+      message: 'Lô đất chưa có thông tin',
+    });
   });
 
   it('requires at least one contract document', async () => {

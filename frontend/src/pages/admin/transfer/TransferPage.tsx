@@ -51,6 +51,7 @@ export default function TransferPage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [searchMessage, setSearchMessage] = useState('')
   const [recipient, setRecipient] = useState(emptyRecipient)
   const [adminNote, setAdminNote] = useState('')
   const [documents, setDocuments] = useState<File[]>([])
@@ -81,6 +82,7 @@ export default function TransferPage() {
     setResults([])
     setSelected([])
     setError('')
+    setSearchMessage('')
   }
 
   async function search() {
@@ -90,9 +92,17 @@ export default function TransferPage() {
     }
     setSearching(true)
     setError('')
+    setSearchMessage('')
     try {
       const response = await api.get('/admin/transfers/search', { params: { mode, q: query.trim() } })
-      setResults(response.data.data)
+      const resData = response.data.data
+      if (Array.isArray(resData)) {
+        setResults(resData)
+        setSearchMessage('')
+      } else {
+        setResults(resData.items ?? [])
+        setSearchMessage(resData.message ?? '')
+      }
       setSelected([])
     } catch (requestError) {
       setError(apiMessage(requestError, 'Không thể tìm dữ liệu phần mộ.'))
@@ -150,6 +160,7 @@ export default function TransferPage() {
       setQuery('')
       setResults([])
       setSelected([])
+      setSearchMessage('')
       setRecipient(emptyRecipient)
       setAdminNote('')
       setDocuments([])
@@ -192,8 +203,9 @@ export default function TransferPage() {
           </section>
 
           <section className="transfer-card results-card">
-            <div className="section-title"><div><h2>Kết quả tìm kiếm</h2><p>{results.length ? `${results.length} lô đất được tìm thấy` : 'Nhập thông tin để bắt đầu tìm kiếm'}</p></div>{selected.length > 0 && <strong>{selected.length} lô đã chọn</strong>}</div>
-            {results.length === 0 ? <div className="empty-state"><span>Chưa có dữ liệu hiển thị</span></div> : (
+            <div className="section-title"><div><h2>Kết quả tìm kiếm</h2><p>{results.length ? `${results.length} lô đất được tìm thấy` : (searchMessage || 'Nhập thông tin để bắt đầu tìm kiếm')}</p></div>{selected.length > 0 && <strong>{selected.length} lô đã chọn</strong>}</div>
+            {searchMessage && results.length === 0 && <div className="transfer-alert info" role="status" style={{ marginBottom: 14 }}>{searchMessage}<button onClick={() => setSearchMessage('')}>Ẩn</button></div>}
+            {results.length === 0 ? <div className="empty-state"><span>{searchMessage || 'Chưa có dữ liệu hiển thị'}</span></div> : (
               <div className="plot-table-wrap"><table className="plot-table"><thead><tr><th /><th>LÔ ĐẤT</th><th>NGƯỜI ĐỨNG TÊN</th><th>LIÊN HỆ</th><th>HỢP ĐỒNG</th><th>TRẠNG THÁI</th></tr></thead><tbody>{results.map((plot) => {
                 const checked = selectedIds.has(plot.plotId)
                 const disabled = selected.length > 0 && selected[0].holderId !== plot.holderId

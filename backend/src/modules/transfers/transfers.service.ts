@@ -37,7 +37,7 @@ export class TransfersService {
       throw new BadRequestException('Chế độ tìm kiếm không hợp lệ');
     }
     const keyword = query.trim();
-    if (keyword.length < 2) return [];
+    if (keyword.length < 2) return { items: [], message: null };
     const customerCondition = `(
       u.full_name ILIKE $1 OR u.email ILIKE $1 OR u.phone_number ILIKE $1 OR
       COALESCE(u.id_card_number, '') ILIKE $1
@@ -47,7 +47,7 @@ export class TransfersService {
       mode === 'customer'
         ? [`%${keyword}%`]
         : [`%${keyword}%`, /^\d+$/.test(keyword) ? Number(keyword) : -1];
-    return this.database.query(
+    const items = await this.database.query(
       `SELECT p.plot_id AS "plotId", p.plot_code AS "plotCode", p.status AS "plotStatus",
               p.area_sqm::float AS "areaSqm", p.plot_type AS "plotType",
               z.zone_name AS "zoneName", c.contract_id AS "contractId",
@@ -64,6 +64,41 @@ export class TransfersService {
        ORDER BY u.full_name, p.plot_code LIMIT 100`,
       params,
     );
+
+    if (items.length > 0) {
+      return { items, message: null };
+    }
+
+    let message: string;
+    if (mode === 'customer') {
+      const userCheck = await this.database.queryOne<{ count: string }>(
+        `SELECT COUNT(*)::text AS count
+         FROM users u
+         WHERE u.is_deleted = FALSE AND ${customerCondition}`,
+        [`%${keyword}%`],
+      );
+      const userCount = Number(userCheck?.count ?? 0);
+      if (userCount > 0) {
+        message = 'Khách hàng chưa sở hữu lô đất nào';
+      } else {
+        message = 'Thông tin người dùng chưa có hãy kiểm tra lại thông tin';
+      }
+    } else {
+      const plotCheck = await this.database.queryOne<{ count: string }>(
+        `SELECT COUNT(*)::text AS count
+         FROM plots p
+         WHERE p.is_deleted = FALSE AND ${plotCondition}`,
+        params,
+      );
+      const plotCount = Number(plotCheck?.count ?? 0);
+      if (plotCount > 0) {
+        message = 'Lô đất trống chưa có chủ sở hữu';
+      } else {
+        message = 'Lô đất chưa có thông tin';
+      }
+    }
+
+    return { items: [], message };
   }
 
   async listRecent(query: AdminTransferQueryDto = new AdminTransferQueryDto()) {
