@@ -338,7 +338,7 @@ describe('agent planner', () => {
     );
 
     expect(recommendationDiscoveryQuestion(plan, 'tìm lô dòng tộc')).toContain(
-      'lô family chuyên dụng',
+      'lô gia đình chuyên dụng',
     );
   });
   it('parses a one-call conversational response and consultation-topic memory', () => {

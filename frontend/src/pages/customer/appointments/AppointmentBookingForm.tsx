@@ -3,13 +3,10 @@ import { formatCalendarDate } from "@/lib/utils";
 import "./AppointmentBookingForm.css";
 
 export const APPOINTMENT_TOPICS = [
-  "Tư vấn và chọn lô đất",
-  "Hợp đồng và quyền sở hữu",
-  "Thanh toán",
-  "Dịch vụ chăm sóc",
-  "Chuyển nhượng hoặc thừa kế",
-  "Khiếu nại và hỗ trợ",
-  "Công việc khác",
+  "Vấn đề lô đất",
+  "Vấn đề dịch vụ",
+  "Vấn đề website",
+  "Vấn đề khác",
 ];
 
 export interface AppointmentDraft {
@@ -17,6 +14,7 @@ export interface AppointmentDraft {
   startTime: string;
   endTime: string;
   topic: string;
+  plotCode?: string;
   note: string;
 }
 
@@ -129,7 +127,7 @@ export default function AppointmentBookingForm({
           </legend>
 
           <label className="booking-field booking-field-full">
-            <span>Chủ đề chính</span>
+            <span>Chủ đề chính *</span>
             <select
               value={value.topic}
               onChange={(event) => update({ topic: event.target.value })}
@@ -143,15 +141,37 @@ export default function AppointmentBookingForm({
             </select>
           </label>
 
+          {value.topic === "Vấn đề lô đất" ? (
+            <label className="booking-field booking-field-full">
+              <span>Mã lô mong muốn</span>
+              <input
+                type="text"
+                value={value.plotCode || ""}
+                onChange={(event) => update({ plotCode: event.target.value })}
+                placeholder="Nhập mã lô mong muốn (ví dụ: A-101, B-202)..."
+              />
+              <small>Không bắt buộc</small>
+            </label>
+          ) : null}
+
           <label className="booking-field booking-field-full">
-            <span>Thông tin chi tiết</span>
+            <span>
+              {value.topic === "Vấn đề khác" ? "Mô tả chi tiết *" : "Thông tin chi tiết"}
+            </span>
             <textarea
               value={value.note}
               maxLength={500}
+              required={value.topic === "Vấn đề khác"}
               onChange={(event) => update({ note: event.target.value })}
-              placeholder="Ghi rõ câu hỏi, mã lô hoặc hồ sơ liên quan để ban quản lý chuẩn bị trước."
+              placeholder={
+                value.topic === "Vấn đề khác"
+                  ? "Vui lòng mô tả chi tiết vấn đề của bạn (bắt buộc)."
+                  : "Ghi rõ câu hỏi hoặc thông tin liên quan để ban quản lý chuẩn bị trước."
+              }
             />
-            <small>Không bắt buộc</small>
+            <small>
+              {value.topic === "Vấn đề khác" ? "Bắt buộc nhập mô tả" : "Không bắt buộc"}
+            </small>
           </label>
         </fieldset>
       ) : null}
@@ -170,7 +190,12 @@ export default function AppointmentBookingForm({
         </div>
         <div>
           <span>Mục đích</span>
-          <strong>{fixedPurpose || value.topic || "Chưa chọn"}</strong>
+          <strong>
+            {fixedPurpose ||
+              (value.topic
+                ? `${value.topic}${value.topic === "Vấn đề lô đất" && value.plotCode?.trim() ? ` (${value.plotCode.trim()})` : ""}`
+                : "Chưa chọn")}
+          </strong>
         </div>
       </div>
 

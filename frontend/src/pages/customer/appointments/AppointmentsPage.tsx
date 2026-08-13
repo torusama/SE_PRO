@@ -58,23 +58,35 @@ function parseMeetingNote(note: string | null) {
   if (!note) {
     return {
       topic: "Nội dung trao đổi chưa được ghi chú",
+      plotCode: "",
       detail: "",
     };
   }
 
   const normalized = note.trim();
-  const topicMatch = normalized.match(
-    /^Công việc:\s*(.*?)(?:\.\s*Chi tiết:\s*(.*))?$/i,
-  );
+  let topic = normalized;
+  let plotCode = "";
+  let detail = "";
 
-  if (!topicMatch) {
-    return { topic: normalized, detail: "" };
+  if (normalized.startsWith("Công việc:")) {
+    const parts = normalized.split(/\.\s*/);
+    for (const part of parts) {
+      if (part.toLowerCase().startsWith("công việc:")) {
+        topic = part.replace(/^công việc:\s*/i, "").trim();
+      } else if (
+        part.toLowerCase().startsWith("mã lô mong muốn:") ||
+        part.toLowerCase().startsWith("mã lô:")
+      ) {
+        plotCode = part
+          .replace(/^(?:mã lô mong muốn|mã lô):\s*/i, "")
+          .trim();
+      } else if (part.toLowerCase().startsWith("chi tiết:")) {
+        detail = part.replace(/^chi tiết:\s*/i, "").trim();
+      }
+    }
   }
 
-  return {
-    topic: topicMatch[1]?.trim() || "Nội dung trao đổi",
-    detail: topicMatch[2]?.trim() || "",
-  };
+  return { topic: topic || "Nội dung trao đổi", plotCode, detail };
 }
 
 function getErrorMessage(error: unknown, fallback: string) {
@@ -90,6 +102,7 @@ export default function AppointmentsPage() {
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("10:00");
   const [topic, setTopic] = useState("");
+  const [plotCode, setPlotCode] = useState("");
   const [note, setNote] = useState("");
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [saving, setSaving] = useState(false);
@@ -220,7 +233,15 @@ export default function AppointmentsPage() {
     if (!draft.topic) {
       setFeedback({
         kind: "error",
-        text: "Vui lòng chọn công việc muốn trao đổi.",
+        text: "Vui lòng chọn chủ đề cần trao đổi.",
+      });
+      return;
+    }
+
+    if (draft.topic === "Vấn đề khác" && !draft.note.trim()) {
+      setFeedback({
+        kind: "error",
+        text: "Vui lòng mô tả chi tiết vấn đề của bạn trước khi gửi yêu cầu đặt lịch.",
       });
       return;
     }
@@ -228,9 +249,14 @@ export default function AppointmentsPage() {
     setSaving(true);
 
     try {
-      const meetingNote = `Công việc: ${draft.topic}${
-        draft.note.trim() ? `. Chi tiết: ${draft.note.trim()}` : ""
-      }`;
+      const meetingNoteParts = [`Công việc: ${draft.topic}`];
+      if (draft.topic === "Vấn đề lô đất" && draft.plotCode?.trim()) {
+        meetingNoteParts.push(`Mã lô mong muốn: ${draft.plotCode.trim()}`);
+      }
+      if (draft.note.trim()) {
+        meetingNoteParts.push(`Chi tiết: ${draft.note.trim()}`);
+      }
+      const meetingNote = meetingNoteParts.join(". ");
 
       await api.post("/schedule/appointments", {
         appointmentDate: draft.date,
@@ -245,6 +271,7 @@ export default function AppointmentsPage() {
       });
       setDate("");
       setTopic("");
+      setPlotCode("");
       setNote("");
       await loadAppointments();
     } catch (error: unknown) {
@@ -341,12 +368,13 @@ export default function AppointmentsPage() {
         <div className="appointments-layout">
           <AppointmentBookingPanel
             reveal
-            value={{ date, startTime, endTime, topic, note }}
+            value={{ date, startTime, endTime, topic, plotCode, note }}
             onChange={(draft) => {
               setDate(draft.date);
               setStartTime(draft.startTime);
               setEndTime(draft.endTime);
               setTopic(draft.topic);
+              setPlotCode(draft.plotCode || "");
               setNote(draft.note);
             }}
             onSubmit={book}
@@ -427,7 +455,10 @@ export default function AppointmentsPage() {
 
                         <div className="appointment-topic">
                           <span>Nội dung</span>
-                          <strong>{meeting.topic}</strong>
+                          <strong>
+                            {meeting.topic}
+                            {meeting.plotCode ? ` — Mã lô: ${meeting.plotCode}` : ""}
+                          </strong>
                           {meeting.detail ? <p>{meeting.detail}</p> : null}
                         </div>
 

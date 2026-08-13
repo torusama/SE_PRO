@@ -767,6 +767,7 @@ export default function AgentWorkflowPanel({
                   topic: directive.plotCode
                     ? `Hẹn xem lô đất ${directive.plotCode}`
                     : "Hẹn xem lô đất",
+                  plotCode: directive.plotCode ?? "",
                   note: "",
                 }}
                 onChange={(draft) => {
