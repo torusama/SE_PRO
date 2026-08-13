@@ -146,6 +146,35 @@ describe('KnowledgeService prompt retrieval', () => {
     expect(context).toContain('Fallback memory for user 5');
   });
 
+  it('pins verified spiritual KB for Bat Trach questions even without embeddings', async () => {
+    const database = {
+      query: jest.fn((sql: string) => {
+        if (sql.includes("category = 'spiritual_consultation'")) {
+          return [
+            {
+              id: 80,
+              title: 'Bát Trạch và Ngũ Hành',
+              content: 'Bát Trạch xếp hướng; Nạp Âm chỉ là lớp diễn giải phụ.',
+              knowledgeType: 'faq',
+              memoryKey: 'spiritual:bat_trach_method',
+            },
+          ];
+        }
+        return [];
+      }),
+    };
+    const service = new KnowledgeService(database as never);
+
+    const context = await service.getUserPromptContext(5, 'tư vấn Bát Trạch hướng mộ');
+
+    expect(context).toContain('Bát Trạch xếp hướng');
+    expect(
+      database.query.mock.calls.some(([sql]) =>
+        String(sql).includes("category = 'spiritual_consultation'"),
+      ),
+    ).toBe(true);
+  });
+
   it('returns empty context instead of interrupting chat when database retrieval fails', async () => {
     const database = {
       query: jest.fn().mockRejectedValue(new Error('database unavailable')),

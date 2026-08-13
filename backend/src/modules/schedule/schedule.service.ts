@@ -3,9 +3,11 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { PoolClient } from 'pg';
 import { DatabaseService } from '../../database/database.service';
+import { RealtimeService } from '../realtime/realtime.service';
 import { BookAppointmentDto } from './dto/book-appointment.dto';
 import { CreateAvailabilitySlotDto } from './dto/create-availability-slot.dto';
 import { UpdateAppointmentStatusDto } from './dto/update-appointment-status.dto';
@@ -40,7 +42,10 @@ const APPOINTMENT_SELECT = `
 
 @Injectable()
 export class ScheduleService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(
+    private readonly database: DatabaseService,
+    @Optional() private readonly realtime?: RealtimeService,
+  ) {}
 
   // ---------------------------------------------------------------------
   // Availability slots
@@ -158,81 +163,125 @@ export class ScheduleService {
   // ---------------------------------------------------------------------
 
   async bookAppointment(requesterId: number, dto: BookAppointmentDto) {
-    if (dto.endTime <= dto.startTime) {
-      throw new BadRequestException('endTime must be after startTime');
-    }
-    if (dto.hostUserId === requesterId) {
-      throw new BadRequestException('Cannot book an appointment with yourself');
+    const appointments = await this.bookAppointments(requesterId, [dto]);
+    return appointments[0] ?? null;
+  }
+
+  /**
+   * Books a group of customer appointments atomically. This is used by the AI
+   * multi-plot flow so "confirm all" cannot leave the customer with only the
+   * first appointment created when a later item fails validation/conflicts.
+   * The regular manual endpoint still calls bookAppointment(), which delegates
+   * to this same path with a single item.
+   */
+  async bookAppointments(requesterId: number, dtos: BookAppointmentDto[]) {
+    if (!dtos.length) return [];
+    for (const dto of dtos) {
+      if (dto.endTime <= dto.startTime) {
+        throw new BadRequestException('endTime must be after startTime');
+      }
+      if (dto.hostUserId === requesterId) {
+        throw new BadRequestException('Cannot book an appointment with yourself');
+      }
     }
 
-    return this.database.transaction(async (client) => {
-      let hostUserId = dto.hostUserId;
-      if (!hostUserId) {
-        const admin = await client.query(
-          `SELECT user_id FROM users
-           WHERE LOWER(role) = 'admin' AND is_active = TRUE AND is_deleted = FALSE
-           ORDER BY user_id LIMIT 1`,
+    const appointments = await this.database.transaction(async (client) => {
+      const results: unknown[] = [];
+      let defaultHostUserId: number | undefined;
+
+      for (const dto of dtos) {
+        let hostUserId = dto.hostUserId;
+        if (!hostUserId) {
+          if (!defaultHostUserId) {
+            const admin = await client.query(
+              `SELECT user_id FROM users
+               WHERE LOWER(role) = 'admin' AND is_active = TRUE AND is_deleted = FALSE
+               ORDER BY user_id LIMIT 1`,
+            );
+            if (!admin.rows.length) {
+              throw new BadRequestException(
+                'No active admin is available to receive this request',
+              );
+            }
+            defaultHostUserId = Number(admin.rows[0].user_id);
+          }
+          hostUserId = defaultHostUserId;
+        }
+
+        const host = await client.query(
+          `SELECT user_id FROM users WHERE user_id = $1 AND is_deleted = FALSE AND is_active = TRUE`,
+          [hostUserId],
         );
-        if (!admin.rows.length) {
+        if (!host.rows.length) throw new NotFoundException('Host user not found');
+
+        if (dto.slotId) {
+          const slot = await client.query(
+            `SELECT slot_id FROM availability_slots
+             WHERE slot_id = $1 AND user_id = $2 AND is_active = TRUE`,
+            [dto.slotId, requesterId],
+          );
+          if (!slot.rows.length) {
+            throw new BadRequestException(
+              'Availability slot does not belong to the requester',
+            );
+          }
+        }
+
+        // Rows inserted earlier in this same transaction are visible here, so
+        // overlapping times inside a multi-plot batch are rejected too.
+        const overlap = await client.query(
+          `SELECT appointment_id FROM schedule_appointments
+           WHERE host_user_id = $1 AND appointment_date = $2
+             AND status IN ('pending', 'confirmed')
+             AND start_time < $4 AND end_time > $3
+           FOR UPDATE`,
+          [hostUserId, dto.appointmentDate, dto.startTime, dto.endTime],
+        );
+        if (overlap.rows.length) {
           throw new BadRequestException(
-            'No active admin is available to receive this request',
+            'Ban quản lý đã có lịch hẹn trong khung giờ này. Bạn vui lòng chọn khung giờ khác.',
           );
         }
-        hostUserId = admin.rows[0].user_id;
-      }
 
-      const host = await client.query(
-        `SELECT user_id FROM users WHERE user_id = $1 AND is_deleted = FALSE AND is_active = TRUE`,
-        [hostUserId],
-      );
-      if (!host.rows.length) throw new NotFoundException('Host user not found');
-
-      if (dto.slotId) {
-        const slot = await client.query(
-          `SELECT slot_id FROM availability_slots
-           WHERE slot_id = $1 AND user_id = $2 AND is_active = TRUE`,
-          [dto.slotId, requesterId],
+        const inserted = await client.query(
+          `INSERT INTO schedule_appointments
+             (slot_id, host_user_id, requester_id, appointment_date, start_time, end_time, note, status)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
+           RETURNING appointment_id AS id`,
+          [
+            dto.slotId ?? null,
+            hostUserId,
+            requesterId,
+            dto.appointmentDate,
+            dto.startTime,
+            dto.endTime,
+            dto.note ?? null,
+          ],
         );
-        if (!slot.rows.length) {
-          throw new BadRequestException(
-            'Availability slot does not belong to the requester',
-          );
-        }
-      }
 
-      // Prevent double-booking: lock overlapping rows for this host/date first.
-      const overlap = await client.query(
-        `SELECT appointment_id FROM schedule_appointments
-         WHERE host_user_id = $1 AND appointment_date = $2
-           AND status IN ('pending', 'confirmed')
-           AND start_time < $4 AND end_time > $3
-         FOR UPDATE`,
-        [hostUserId, dto.appointmentDate, dto.startTime, dto.endTime],
-      );
-      if (overlap.rows.length) {
-        throw new BadRequestException(
-          'Ban quản lý đã có lịch hẹn trong khung giờ này. Bạn vui lòng chọn khung giờ khác.',
+        await client.query(
+          `INSERT INTO notifications
+             (user_id, type, title, message, related_entity_type, related_entity_id)
+           SELECT user_id, 'appointment_created', 'Lịch hẹn mới',
+                  CONCAT('Khách hàng vừa gửi lịch hẹn ngày ', $2::text,
+                         ' từ ', $3::text, ' đến ', $4::text, '.'),
+                  'schedule_appointment', $1
+           FROM users
+           WHERE LOWER(role) = 'admin' AND is_active = TRUE AND is_deleted = FALSE`,
+          [
+            inserted.rows[0].id,
+            dto.appointmentDate,
+            dto.startTime,
+            dto.endTime,
+          ],
         );
+
+        results.push(await this.getAppointment(client, inserted.rows[0].id));
       }
-
-      const inserted = await client.query(
-        `INSERT INTO schedule_appointments
-           (slot_id, host_user_id, requester_id, appointment_date, start_time, end_time, note, status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
-         RETURNING appointment_id AS id`,
-        [
-          dto.slotId ?? null,
-          hostUserId,
-          requesterId,
-          dto.appointmentDate,
-          dto.startTime,
-          dto.endTime,
-          dto.note ?? null,
-        ],
-      );
-
-      return this.getAppointment(client, inserted.rows[0].id);
+      return results;
     });
+    this.realtime?.publish(['appointments', 'notifications'], ['authenticated']);
+    return appointments;
   }
 
   async listMyAppointments(userId: number) {

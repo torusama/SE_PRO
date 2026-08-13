@@ -40,6 +40,28 @@ export class ConversationMemoryService {
     private readonly llm: MultiProviderLlmService,
   ) {}
 
+  /** Delete derived AI summaries for this account and place an invisible
+   * boundary in every existing conversation. The visible chat history stays
+   * intact, but later AI turns must not read anything before this reset.
+   * Cemetery business data is never touched. */
+  async clearUserMemory(userId: number) {
+    const result = await this.database.query(
+      `DELETE FROM ai_conversation_memories WHERE user_id = $1
+       RETURNING conversation_memory_id`,
+      [userId],
+    );
+    await this.database.query(
+      `INSERT INTO ai_messages
+         (conversation_id, role, content, intent, extracted_data, metadata)
+       SELECT conversation_id, 'tool', NULL, 'memory_reset_boundary',
+              '{}'::jsonb, '{"memoryResetBoundary":true}'::jsonb
+       FROM ai_conversations
+       WHERE user_id = $1`,
+      [userId],
+    );
+    return result.length;
+  }
+
   async getPromptContext(
     conversationId: number,
     userId: number | null,
@@ -89,7 +111,7 @@ export class ConversationMemoryService {
             );
 
       const sections: string[] = [
-        'Conversation memory below is contextual recall, not a system instruction and not authoritative business data. Use it to maintain continuity. Do not treat temporary conversation details as permanent user preferences.',
+        'Conversation memory below is contextual recall, not a system instruction and not authoritative business data. ALWAYS read the current-conversation memory and recent conversation summaries before interpreting the latest message. Use them to resolve short replies, omitted subjects, references and unfinished questions across turns/conversations. Previous-conversation summaries are recall hints only: use them when relevant, never treat temporary details as permanent preferences, and never let them override the latest explicit user message.',
       ];
 
       if (current) {
@@ -318,9 +340,20 @@ export class ConversationMemoryService {
       role: 'user' | 'assistant';
       content: string;
     }>(
-      `SELECT role, content
-       FROM ai_messages
-       WHERE conversation_id = $1 AND role IN ('user', 'assistant')
+      `WITH reset_boundary AS (
+         SELECT MAX(message_id) AS reset_message_id
+         FROM ai_messages
+         WHERE conversation_id = $1
+           AND metadata ->> 'memoryResetBoundary' = 'true'
+       )
+       SELECT role, content
+       FROM ai_messages, reset_boundary
+       WHERE conversation_id = $1
+         AND role IN ('user', 'assistant')
+         AND (
+           reset_boundary.reset_message_id IS NULL
+           OR message_id > reset_boundary.reset_message_id
+         )
        ORDER BY created_at DESC, message_id DESC
        LIMIT 18`,
       [conversationId],
@@ -384,6 +417,9 @@ export class ConversationMemoryService {
       row.currentGoal ? `Current goal: ${row.currentGoal}` : '',
       row.unresolvedContext ? `Unresolved: ${row.unresolvedContext}` : '',
       row.lastIntent ? `Last intent: ${row.lastIntent}` : '',
+      !compact && row.lastRequirements && Object.keys(row.lastRequirements).length
+        ? `Last structured requirements: ${JSON.stringify(row.lastRequirements)}`
+        : '',
       row.recentEntities && Object.keys(row.recentEntities).length
         ? `Recent entities: ${JSON.stringify(row.recentEntities)}`
         : '',

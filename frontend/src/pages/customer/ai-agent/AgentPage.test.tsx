@@ -354,4 +354,33 @@ describe("AgentPage automatic map presentation", () => {
       ),
     );
   });
+
+  it("keeps the stop button active while response is typing and stops typing immediately when clicked", async () => {
+    apiMock.post.mockResolvedValueOnce({ data: { data: response } });
+
+    render(
+      <MemoryRouter>
+        <AgentPage />
+      </MemoryRouter>,
+    );
+
+    const composer = screen.getByPlaceholderText("Nhắn tin cho trợ lý…");
+    fireEvent.change(composer, { target: { value: "Tư vấn cho tôi" } });
+    fireEvent.click(screen.getByTitle("Gửi tin nhắn"));
+
+    await waitFor(() =>
+      expect(screen.getByTitle("Dừng phản hồi")).toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getByTitle("Dừng phản hồi"));
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          "Đã dừng phản hồi. Bạn có thể chỉnh câu hỏi hoặc gửi lại.",
+        ),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.getByTitle("Gửi tin nhắn")).toBeInTheDocument();
+  });
 });

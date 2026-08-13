@@ -42,6 +42,29 @@ export class DashboardService {
     );
   }
 
+  // Lightweight counts used to drive the "cần xử lý ngay" badges in the
+  // admin sidebar (Thông báo / Xử lý yêu cầu / Phê duyệt lịch hẹn). Kept
+  // separate from summary() so the sidebar (mounted on every admin page)
+  // doesn't have to pay for the heavier revenue/aggregate queries above.
+  async pendingCounts() {
+    const row = await this.database.queryOne<Record<string, unknown>>(
+      `SELECT
+        (SELECT COUNT(*)::int FROM reservation_requests
+          WHERE is_deleted = FALSE AND status IN ('pending','submitted')) AS "pendingRequests",
+        (SELECT COUNT(*)::int FROM purchase_request_cancellations
+          WHERE status = 'pending') AS "pendingCancellations",
+        (SELECT COUNT(*)::int FROM schedule_appointments
+          WHERE status = 'pending') AS "pendingAppointments"`,
+    );
+    return (
+      row ?? {
+        pendingRequests: 0,
+        pendingCancellations: 0,
+        pendingAppointments: 0,
+      }
+    );
+  }
+
   plots() {
     return this.database.query(
       `SELECT zone_code AS "zoneCode", zone_name AS "zoneName", status,

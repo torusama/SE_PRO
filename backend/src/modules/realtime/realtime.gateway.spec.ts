@@ -32,9 +32,9 @@ function setup(options?: {
     ),
   };
   const realtime = { attachNamespace: jest.fn() };
-  const middleware: { current?: Function } = {};
+  const middleware: { current?: (...args: any[]) => any } = {};
   const namespace = {
-    use: jest.fn((value: Function) => {
+    use: jest.fn((value: (...args: any[]) => any) => {
       middleware.current = value;
     }),
   };
@@ -62,7 +62,10 @@ function socket(token?: string) {
   };
 }
 
-async function runMiddleware(middleware: Function, client: object) {
+async function runMiddleware(
+  middleware: (...args: any[]) => any,
+  client: object,
+) {
   return new Promise<unknown>((resolve) => middleware(client, resolve));
 }
 

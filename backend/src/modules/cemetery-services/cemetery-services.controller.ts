@@ -98,6 +98,19 @@ export class CemeteryServicesController {
     return { success: true, data: await this.service.one(Number(id), user.id) };
   }
 
+  @Post('service-orders/:id/cancel')
+  @UseGuards(JwtAuthGuard)
+  async cancel(
+    @CurrentUser() user: { id: number },
+    @Param('id') id: string,
+  ) {
+    return {
+      success: true,
+      message: 'Đã hủy đơn dịch vụ',
+      data: await this.service.cancelByCustomer(Number(id), user.id),
+    };
+  }
+
   @Get('admin/service-orders')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
@@ -188,16 +201,10 @@ export class CemeteryServicesController {
       message: 'Đã ghi nhận thanh toán, đang chờ xác nhận từ ban quản lý',
       data,
       uiDirective: {
-        type: 'OPEN_SERVICE_SCHEDULE_CALENDAR' as const,
+        type: 'SHOW_INLINE_SERVICE_PAYMENT' as const,
         orderId,
-        requestedDate:
-          typeof (data as Record<string, unknown>).requestedDate === 'string'
-            ? ((data as Record<string, unknown>).requestedDate as string)
-            : undefined,
-        scheduledDate:
-          typeof (data as Record<string, unknown>).scheduledDate === 'string'
-            ? ((data as Record<string, unknown>).scheduledDate as string)
-            : undefined,
+        amount: Number((data as Record<string, unknown>).amount ?? 0),
+        paymentStatus: 'awaiting_confirmation' as const,
       },
     };
   }

@@ -84,7 +84,14 @@ export function getContextualPrompts(
       category: String(item?.category ?? "").trim(),
       text: String(item?.text ?? "").trim(),
     }))
-    .filter((item) => item.category && item.text)
+    .filter(
+      (item) =>
+        item.category &&
+        item.text &&
+        !/(?:tham|thăm)\s*quan|xem\s+thực\s+tế|(?:đến|tới)\s+hoa\s+viên/i.test(
+          `${item.category} ${item.text}`,
+        ),
+    )
     .slice(0, 3);
 
   const response = lastMessage.response;
@@ -153,8 +160,8 @@ export function getContextualPrompts(
         text: "Tư vấn giúp mình các bước tiếp theo cần chuẩn bị.",
       });
       prompts.push({
-        category: "Tham quan thực tế",
-        text: "Đặt lịch hẹn đến tham quan thực tế hoa viên.",
+        category: "Tình trạng yêu cầu",
+        text: "Làm sao kiểm tra yêu cầu lô của mình đã được duyệt hay chưa?",
       });
       prompts.push({
         category: "Liên hệ tư vấn",
@@ -288,6 +295,10 @@ export default function AgentPage() {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const isPacing = messages.some(
+    (message) => message.role === "assistant" && message.animatePresentation,
+  );
+  const isBusy = loading || isPacing;
   const [elapsedMs, setElapsedMs] = useState(0);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [conversationLoading, setConversationLoading] = useState(false);
@@ -304,7 +315,8 @@ export default function AgentPage() {
   const [comparisonAssessmentLoading, setComparisonAssessmentLoading] =
     useState(false);
   const [mapOpen, setMapOpen] = useState(false);
-  const [workflowDirective, setWorkflowDirective] = useState<WorkflowDirective>();
+  const [workflowDirective, setWorkflowDirective] =
+    useState<WorkflowDirective>();
   const [mapRecommendations, setMapRecommendations] = useState<
     AgentRecommendation[]
   >([]);
@@ -312,6 +324,9 @@ export default function AgentPage() {
   const messageEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const accountIdRef = useRef(user?.id);
+  const knownApprovedRequestNotificationsRef = useRef<Set<number> | null>(
+    null,
+  );
   const requestControllerRef = useRef<AbortController | null>(null);
   const sendLockRef = useRef(false);
   const comparisonAssessmentControllerRef = useRef<AbortController | null>(
@@ -330,7 +345,7 @@ export default function AgentPage() {
       idleTimerRef.current = null;
     }
 
-    if (loading || input.trim() !== "") {
+    if (isBusy || input.trim() !== "") {
       setIsIdleAfterOneMin(false);
       return;
     }
@@ -353,7 +368,7 @@ export default function AgentPage() {
         clearTimeout(idleTimerRef.current);
       }
     };
-  }, [messages, loading, input]);
+  }, [messages, isBusy, input]);
 
   const lastAssistantMessage = [...messages]
     .reverse()
@@ -381,6 +396,62 @@ export default function AgentPage() {
   }, [canPersistConversations]);
 
   useRealtimeRefresh(["ai"], loadConversations);
+
+  const syncApprovedPlotNotifications = useCallback(async () => {
+    if (role !== "customer") return;
+    try {
+      const response = await api.get("/notifications");
+      const notifications = (response.data?.data ?? []) as Array<{
+        id?: number;
+        type?: string;
+        isRead?: boolean;
+      }>;
+      const approved = notifications.filter(
+        (item) =>
+          item.type === "request_approved" &&
+          typeof item.id === "number",
+      );
+      const known = knownApprovedRequestNotificationsRef.current;
+      let newlyApproved: typeof approved;
+      if (known === null) {
+        knownApprovedRequestNotificationsRef.current = new Set(
+          approved.map((item) => item.id!),
+        );
+        // If approval happened while the customer was away from the AI page,
+        // announce the still-unread approval the first time they come back.
+        // Read historical notifications are intentionally not replayed.
+        newlyApproved = approved.filter((item) => !item.isRead);
+      } else {
+        newlyApproved = approved.filter((item) => !known.has(item.id!));
+        knownApprovedRequestNotificationsRef.current = new Set(
+          approved.map((item) => item.id!),
+        );
+      }
+      if (!newlyApproved.length) return;
+      setMessages((current) => [
+        ...current,
+        {
+          localId: createLocalId(),
+          role: "assistant",
+          content:
+            newlyApproved.length === 1
+              ? "Ban quản lý đã duyệt yêu cầu mua lô của bạn. Khi bạn muốn đặt lịch, cứ nhắn “đặt lịch”; mình sẽ kiểm tra đúng các lô đã duyệt trong tài khoản rồi mới hỏi ngày/giờ, không tự tạo lịch trước."
+              : `Ban quản lý đã duyệt ${newlyApproved.length} yêu cầu mua lô của bạn. Khi bạn muốn đặt lịch, cứ nhắn “đặt lịch”; mình sẽ kiểm tra từng lô đủ điều kiện và hỏi lại ngày/giờ cần thiết trước khi gửi lịch.`,
+          createdAt: new Date(),
+        },
+      ]);
+    } catch {
+      // Notification bell remains the fallback when this passive chat update
+      // cannot be loaded; never interrupt the active conversation.
+    }
+  }, [role, user?.id]);
+
+  useEffect(() => {
+    knownApprovedRequestNotificationsRef.current = null;
+    void syncApprovedPlotNotifications();
+  }, [syncApprovedPlotNotifications, user?.id]);
+
+  useRealtimeRefresh(["notifications"], syncApprovedPlotNotifications);
 
   const restoreConversation = useCallback((detail: ConversationDetail) => {
     const restoredRecommendations =
@@ -414,7 +485,7 @@ export default function AgentPage() {
 
   useEffect(() => {
     messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
+  }, [messages, isBusy]);
 
   useEffect(() => {
     if (!sidebarOpen) return;
@@ -428,13 +499,13 @@ export default function AgentPage() {
   }, [sidebarOpen]);
 
   useEffect(() => {
-    if (!loading) return;
+    if (!isBusy) return;
     const updateElapsed = () =>
       setElapsedMs(Date.now() - requestStartedAtRef.current);
     updateElapsed();
     const timer = window.setInterval(updateElapsed, 100);
     return () => window.clearInterval(timer);
-  }, [loading]);
+  }, [isBusy]);
 
   useEffect(
     () => () => {
@@ -560,9 +631,21 @@ export default function AgentPage() {
   }, [user?.id]);
 
   function stopResponse() {
-    if (!requestControllerRef.current) return;
-    requestControllerRef.current.abort();
-    requestControllerRef.current = null;
+    if (requestControllerRef.current) {
+      requestControllerRef.current.abort();
+      requestControllerRef.current = null;
+    }
+    presentationTimersRef.current.forEach((timer) =>
+      window.clearTimeout(timer),
+    );
+    presentationTimersRef.current = [];
+    setMessages((current) =>
+      current.map((item) =>
+        item.animatePresentation
+          ? { ...item, animatePresentation: false }
+          : item,
+      ),
+    );
     sendLockRef.current = false;
     setLoading(false);
     setNotice("Đã dừng phản hồi. Bạn có thể chỉnh câu hỏi hoặc gửi lại.");
@@ -656,6 +739,20 @@ export default function AgentPage() {
   ) {
     const value = text.trim();
     if (!value || loading || sendLockRef.current) return;
+
+    if (isPacing) {
+      presentationTimersRef.current.forEach((timer) =>
+        window.clearTimeout(timer),
+      );
+      presentationTimersRef.current = [];
+      setMessages((current) =>
+        current.map((item) =>
+          item.animatePresentation
+            ? { ...item, animatePresentation: false }
+            : item,
+        ),
+      );
+    }
     sendLockRef.current = true;
 
     // A comparison is contextual to the current pause in the conversation.
@@ -759,7 +856,7 @@ export default function AgentPage() {
   }
 
   function editAndResend(_message: ChatMessage, content: string) {
-    if (loading) return;
+    if (isBusy) return;
     void sendMessage(content, {
       startNewConversation: true,
       replaceMessages: true,
@@ -767,7 +864,7 @@ export default function AgentPage() {
   }
 
   function resendMessage(message: ChatMessage) {
-    if (loading) return;
+    if (isBusy) return;
     void sendMessage(message.content);
   }
 
@@ -1023,7 +1120,9 @@ export default function AgentPage() {
           onClick={() => setSidebarOpen(false)}
         />
 
-        <div className={`agent-workspace ${mapOpen ? "has-context-map" : ""} ${workflowDirective ? "has-workflow-panel" : ""}`}>
+        <div
+          className={`agent-workspace ${mapOpen ? "has-context-map" : ""} ${workflowDirective ? "has-workflow-panel" : ""} ${workflowDirective?.type === "OPEN_APPOINTMENT_CALENDAR" ? "has-appointment-panel" : ""}`}
+        >
           <main className="agent-chat">
             <header className="agent-topbar">
               <button
@@ -1092,7 +1191,7 @@ export default function AgentPage() {
                     key={message.localId}
                     message={message}
                     comparedIds={compared.map(getRecommendationCompareKey)}
-                    busy={loading}
+                    busy={isBusy}
                     onToggleCompare={toggleCompare}
                     onViewMap={focusOnMap}
                     onStartRequest={startPlotRequest}
@@ -1143,7 +1242,7 @@ export default function AgentPage() {
                       followUpPrompt={comparisonFollowUpPrompt}
                       actions={comparisonActions}
                       loading={comparisonAssessmentLoading}
-                      disabled={loading}
+                      disabled={isBusy}
                       onAction={(message) => void sendMessage(message)}
                     />
                   </>
@@ -1159,7 +1258,7 @@ export default function AgentPage() {
               onMouseLeave={() => setIsInputHovered(false)}
             >
               <div className="agent-composer-inner">
-                {!loading &&
+                {!isBusy &&
                   !input.trim() &&
                   isIdleAfterOneMin &&
                   (isInputFocused || isInputHovered) && (
@@ -1208,7 +1307,7 @@ export default function AgentPage() {
                     placeholder="Nhắn tin cho trợ lý…"
                     maxLength={2000}
                   />
-                  {loading && (
+                  {isBusy && (
                     <span className="agent-composer-timer">
                       {(elapsedMs / 1000).toLocaleString("vi-VN", {
                         minimumFractionDigits: 1,
@@ -1218,13 +1317,13 @@ export default function AgentPage() {
                     </span>
                   )}
                   <button
-                    type={loading ? "button" : "submit"}
-                    onClick={loading ? stopResponse : undefined}
-                    disabled={!loading && !input.trim()}
-                    aria-label={loading ? "Dừng phản hồi" : "Gửi tin nhắn"}
-                    title={loading ? "Dừng phản hồi" : "Gửi tin nhắn"}
+                    type={isBusy ? "button" : "submit"}
+                    onClick={isBusy ? stopResponse : undefined}
+                    disabled={!isBusy && !input.trim()}
+                    aria-label={isBusy ? "Dừng phản hồi" : "Gửi tin nhắn"}
+                    title={isBusy ? "Dừng phản hồi" : "Gửi tin nhắn"}
                   >
-                    {loading ? (
+                    {isBusy ? (
                       <Square size={16} fill="currentColor" />
                     ) : (
                       <Send size={17} />
@@ -1256,6 +1355,23 @@ export default function AgentPage() {
               onDirectiveChange={(directive) => {
                 setWorkflowDirective(directive);
                 setMapOpen(false);
+              }}
+              onAssistantNotice={(content) => {
+                setMessages((current) => {
+                  const last = current[current.length - 1];
+                  if (last?.role === "assistant" && last.content === content) {
+                    return current;
+                  }
+                  return [
+                    ...current,
+                    {
+                      localId: createLocalId(),
+                      role: "assistant",
+                      content,
+                      createdAt: new Date(),
+                    },
+                  ];
+                });
               }}
               onClose={() => setWorkflowDirective(undefined)}
             />

@@ -26,6 +26,10 @@ export default function UserAccountMenu({
         { label: "Hồ sơ cá nhân", onSelect: () => navigate(ROUTES.PROFILE) },
         { label: "Lô của tôi", onSelect: () => navigate(ROUTES.MY_LOTS) },
         {
+          label: "Chuyển nhượng / Thừa kế lô",
+          onSelect: () => navigate(ROUTES.TRANSFER),
+        },
+        {
           label: "Lịch hẹn tư vấn",
           onSelect: () => navigate(ROUTES.APPOINTMENTS),
         },

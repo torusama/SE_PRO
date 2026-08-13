@@ -1,15 +1,14 @@
-import {
-  type FormEvent,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import { formatCalendarDate } from "@/lib/utils";
 import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
 import NavyStarfield from "@/components/decor/NavyStarfield";
+import {
+  AppointmentBookingPanel,
+  formatAppointmentTime,
+  type AppointmentDraft,
+} from "./AppointmentBookingForm";
 import "./AppointmentsPage.css";
 
 type AppointmentStatus = "pending" | "confirmed" | "cancelled" | "completed";
@@ -38,16 +37,6 @@ const STATUS: Record<string, string> = {
   completed: "Đã hoàn thành",
 };
 
-const TOPICS = [
-  "Tư vấn và chọn lô đất",
-  "Hợp đồng và quyền sở hữu",
-  "Thanh toán",
-  "Dịch vụ chăm sóc",
-  "Chuyển nhượng hoặc thừa kế",
-  "Khiếu nại và hỗ trợ",
-  "Công việc khác",
-];
-
 const FILTERS: Array<{ value: AppointmentFilter; label: string }> = [
   { value: "all", label: "Tất cả" },
   { value: "upcoming", label: "Sắp tới" },
@@ -55,14 +44,8 @@ const FILTERS: Array<{ value: AppointmentFilter; label: string }> = [
   { value: "history", label: "Lịch sử" },
 ];
 
-function getLocalToday() {
-  const today = new Date();
-  const offset = today.getTimezoneOffset();
-  return new Date(today.getTime() - offset * 60_000).toISOString().slice(0, 10);
-}
-
 function formatTime(value: string) {
-  return value?.slice(0, 5) || "--:--";
+  return formatAppointmentTime(value);
 }
 
 function getAppointmentTimestamp(appointment: Appointment) {
@@ -101,8 +84,7 @@ function getErrorMessage(error: unknown, fallback: string) {
 
 export default function AppointmentsPage() {
   const [searchParams] = useSearchParams();
-  const focusedAppointmentId =
-    Number(searchParams.get("appointment")) || null;
+  const focusedAppointmentId = Number(searchParams.get("appointment")) || null;
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [date, setDate] = useState("");
   const [startTime, setStartTime] = useState("09:00");
@@ -219,18 +201,15 @@ export default function AppointmentsPage() {
     return { pending, confirmed, completed };
   }, [appointments]);
 
-  const selectedDateLabel = date ? formatCalendarDate(date) : "Chưa chọn ngày";
-
-  async function book(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function book(draft: AppointmentDraft) {
     setFeedback(null);
 
-    if (!date) {
+    if (!draft.date) {
       setFeedback({ kind: "error", text: "Vui lòng chọn ngày bạn rảnh." });
       return;
     }
 
-    if (endTime <= startTime) {
+    if (draft.endTime <= draft.startTime) {
       setFeedback({
         kind: "error",
         text: "Giờ kết thúc phải sau giờ bắt đầu.",
@@ -238,7 +217,7 @@ export default function AppointmentsPage() {
       return;
     }
 
-    if (!topic) {
+    if (!draft.topic) {
       setFeedback({
         kind: "error",
         text: "Vui lòng chọn công việc muốn trao đổi.",
@@ -249,14 +228,14 @@ export default function AppointmentsPage() {
     setSaving(true);
 
     try {
-      const meetingNote = `Công việc: ${topic}${
-        note.trim() ? `. Chi tiết: ${note.trim()}` : ""
+      const meetingNote = `Công việc: ${draft.topic}${
+        draft.note.trim() ? `. Chi tiết: ${draft.note.trim()}` : ""
       }`;
 
       await api.post("/schedule/appointments", {
-        appointmentDate: date,
-        startTime,
-        endTime,
+        appointmentDate: draft.date,
+        startTime: draft.startTime,
+        endTime: draft.endTime,
         note: meetingNote,
       });
 
@@ -360,117 +339,20 @@ export default function AppointmentsPage() {
         ) : null}
 
         <div className="appointments-layout">
-          <section
-            className="appointment-booking-panel"
-            data-appointment-reveal
-          >
-            <div className="appointment-section-heading">
-              <div>
-                <p>Yêu cầu mới</p>
-                <h2>Chọn lịch phù hợp</h2>
-              </div>
-              <span>Thời lượng đề xuất: 30–60 phút</span>
-            </div>
-
-            <form
-              className="booking-form"
-              onSubmit={(event) => void book(event)}
-            >
-              <fieldset>
-                <legend>
-                  <span>01</span>
-                  Thời gian cuộc hẹn
-                </legend>
-
-                <label className="booking-field booking-field-full">
-                  <span>Ngày gặp</span>
-                  <input
-                    type="date"
-                    min={getLocalToday()}
-                    value={date}
-                    onChange={(event) => setDate(event.target.value)}
-                  />
-                </label>
-
-                <div className="appointment-time-row">
-                  <label className="booking-field">
-                    <span>Giờ bắt đầu</span>
-                    <input
-                      type="time"
-                      value={startTime}
-                      onChange={(event) => setStartTime(event.target.value)}
-                    />
-                  </label>
-
-                  <label className="booking-field">
-                    <span>Giờ kết thúc</span>
-                    <input
-                      type="time"
-                      value={endTime}
-                      onChange={(event) => setEndTime(event.target.value)}
-                    />
-                  </label>
-                </div>
-              </fieldset>
-
-              <fieldset>
-                <legend>
-                  <span>02</span>
-                  Nội dung cần trao đổi
-                </legend>
-
-                <label className="booking-field booking-field-full">
-                  <span>Chủ đề chính</span>
-                  <select
-                    value={topic}
-                    onChange={(event) => setTopic(event.target.value)}
-                  >
-                    <option value="">Chọn nội dung công việc</option>
-                    {TOPICS.map((item) => (
-                      <option key={item} value={item}>
-                        {item}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="booking-field booking-field-full">
-                  <span>Thông tin chi tiết</span>
-                  <textarea
-                    value={note}
-                    onChange={(event) => setNote(event.target.value)}
-                    placeholder="Ghi rõ câu hỏi, mã lô hoặc hồ sơ liên quan để ban quản lý chuẩn bị trước."
-                  />
-                  <small>Không bắt buộc</small>
-                </label>
-              </fieldset>
-
-              <div className="booking-review">
-                <div>
-                  <span>Ngày hẹn</span>
-                  <strong>{selectedDateLabel}</strong>
-                </div>
-                <div>
-                  <span>Khung giờ</span>
-                  <strong>
-                    {formatTime(startTime)}–{formatTime(endTime)}
-                  </strong>
-                </div>
-                <div>
-                  <span>Nội dung</span>
-                  <strong>{topic || "Chưa chọn"}</strong>
-                </div>
-              </div>
-
-              <button
-                className="booking-submit"
-                type="submit"
-                disabled={saving}
-              >
-                {saving ? "Đang gửi yêu cầu" : "Gửi yêu cầu đặt lịch"}
-              </button>
-            </form>
-          </section>
+          <AppointmentBookingPanel
+            reveal
+            value={{ date, startTime, endTime, topic, note }}
+            onChange={(draft) => {
+              setDate(draft.date);
+              setStartTime(draft.startTime);
+              setEndTime(draft.endTime);
+              setTopic(draft.topic);
+              setNote(draft.note);
+            }}
+            onSubmit={book}
+            submitting={saving}
+            submitLabel="Gửi yêu cầu đặt lịch"
+          />
 
           <section className="appointment-list-panel" data-appointment-reveal>
             <div className="appointment-list-heading">

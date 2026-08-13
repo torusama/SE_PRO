@@ -3,7 +3,7 @@ import { LearningAnalyticsService } from './learning-analytics.service';
 
 function setup(withData = true) {
   const database = {
-    queryOne: jest.fn((sql: string) => {
+    queryOne: jest.fn((sql: string, _params?: unknown[]) => {
       if (sql.includes('FROM ai_knowledge_entries')) {
         return withData
           ? {
@@ -28,7 +28,7 @@ function setup(withData = true) {
           }
         : null;
     }),
-    query: jest.fn((sql: string) => {
+    query: jest.fn((sql: string, _params?: unknown[]) => {
       if (!withData) return [];
       if (sql.includes('GROUP BY validation_status')) {
         return [
@@ -180,7 +180,7 @@ describe('LearningAnalyticsService', () => {
       ...database.queryOne.mock.calls,
       ...database.query.mock.calls,
     ].filter(([, params]) => Array.isArray(params) && params.length > 0);
-    expect(parameterizedCalls.every(([, params]) => params[0] === 7)).toBe(
+    expect(parameterizedCalls.every(([, params]) => params?.[0] === 7)).toBe(
       true,
     );
     const recentQuery = database.query.mock.calls.find(([sql]) =>

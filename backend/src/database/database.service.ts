@@ -22,7 +22,10 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     config: ConfigService,
     private readonly migrationRunner: MigrationRunnerService,
   ) {
-    const connectionString = config.get<string>('databaseUrl');
+    const connectionString =
+      config.get<string>('databaseUrl') ||
+      config.get<string>('DATABASE_URL') ||
+      process.env.DATABASE_URL;
     this.pool = new Pool({
       connectionString,
       ssl:

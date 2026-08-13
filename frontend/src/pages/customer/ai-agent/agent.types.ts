@@ -92,12 +92,15 @@ export interface AgentResponse {
         type: "SHOW_INLINE_SERVICE_PAYMENT";
         serviceTypeId?: number;
         orderId?: number;
+        orderIds?: number[];
         amount?: number;
         paymentStatus?: "unpaid" | "awaiting_confirmation" | "paid";
       }
     | {
+        /** Read-only calendar shown only after admin confirms payment. */
         type: "OPEN_SERVICE_SCHEDULE_CALENDAR";
         orderId: number;
+        orderIds?: number[];
         requestedDate?: string;
         scheduledDate?: string;
       }
@@ -109,6 +112,7 @@ export interface AgentResponse {
         startTime?: string;
         endTime?: string;
         topic?: string;
+        plotCode?: string;
       }
     | {
         type: "OPEN_REMINDER_CALENDAR";

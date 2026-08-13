@@ -60,4 +60,24 @@ describe("getContextualPrompts", () => {
     expect(result[0].text).toBe("Xem thêm lô khác?");
     expect(new Set(result.map((item) => item.text)).size).toBe(3);
   });
+
+  it("removes obsolete visit suggestions from both AI and local prompts", () => {
+    const result = getContextualPrompts(
+      assistantMessage([
+        {
+          category: "Tham quan thực tế",
+          text: "Mình muốn đến tham quan thực tế hoa viên.",
+        },
+      ]),
+    );
+
+    expect(result).toHaveLength(3);
+    expect(result).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          text: expect.stringMatching(/tham quan|xem thực tế/i),
+        }),
+      ]),
+    );
+  });
 });

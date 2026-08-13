@@ -15,6 +15,12 @@ class OpenAiHttpError extends Error {
   }
 }
 
+class EmptyOpenAiResponseError extends Error {
+  constructor() {
+    super('OpenAI API returned an empty assistant response');
+  }
+}
+
 type LlmCallOptions = {
   temperature?: number;
   maxTokens?: number;
@@ -23,6 +29,11 @@ type LlmCallOptions = {
   totalTimeoutMs?: number;
   enableThinking?: boolean;
   reasoningEffort?: 'low' | 'medium' | 'high';
+  // Consumed by MultiProviderLlmService when this provider participates in a
+  // shared route. Dedicated calls safely ignore these routing-only options.
+  validateResponse?: (response: NvidiaChatResponse) => boolean;
+  preferredProviderId?: string;
+  strictPreferredProvider?: boolean;
 };
 
 interface KeyCandidate {
@@ -165,10 +176,12 @@ export class OpenAiService {
         }
 
         const payload = (await response.json()) as NvidiaChatResponse;
-        if (!payload.choices?.[0]?.message) {
-          throw new ServiceUnavailableException(
-            'OpenAI API returned an invalid response',
-          );
+        const assistant = payload.choices?.[0]?.message;
+        if (
+          !assistant ||
+          (!assistant.content?.trim() && !assistant.tool_calls?.length)
+        ) {
+          throw new EmptyOpenAiResponseError();
         }
         this.rememberAffinity(options.routingKey, candidate.apiKey);
         return payload;
@@ -186,7 +199,11 @@ export class OpenAiService {
         const retryableHttp =
           error instanceof OpenAiHttpError &&
           this.isRetryableStatus(error.status);
-        const retryable = isTimeout || isNetworkFailure || retryableHttp;
+        const retryable =
+          isTimeout ||
+          isNetworkFailure ||
+          retryableHttp ||
+          error instanceof EmptyOpenAiResponseError;
 
         if (retryable) {
           this.cooldownKey(

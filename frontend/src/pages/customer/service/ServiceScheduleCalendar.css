@@ -1,0 +1,119 @@
+.service-schedule-calendar {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(66, 190, 161, 0.28);
+  border-radius: 12px;
+  background: rgba(8, 24, 36, 0.78);
+  color: #dce9eb;
+}
+
+.service-schedule-calendar > header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.service-schedule-calendar > header > span {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid rgba(37, 215, 203, 0.3);
+  border-radius: 9px;
+  color: #25d7cb;
+  background: rgba(0, 229, 196, 0.07);
+}
+
+.service-schedule-calendar > header > div {
+  display: grid;
+  gap: 2px;
+}
+
+.service-schedule-calendar > header small {
+  color: #78969d;
+  font-size: 10px;
+}
+
+.service-schedule-calendar > header strong {
+  color: #eef8f7;
+  font-size: 14px;
+}
+
+.service-schedule-calendar-month {
+  padding: 13px;
+  border: 1px solid rgba(81, 136, 140, 0.22);
+  border-radius: 10px;
+  background: #091624;
+}
+
+.service-schedule-calendar-month > strong {
+  display: block;
+  margin-bottom: 11px;
+  text-align: center;
+  font-size: 13px;
+}
+
+.service-schedule-calendar-weekdays,
+.service-schedule-calendar-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+  text-align: center;
+}
+
+.service-schedule-calendar-weekdays span {
+  padding-bottom: 5px;
+  color: #63858e;
+  font-size: 9px;
+}
+
+.service-schedule-calendar-days span {
+  display: grid;
+  min-height: 30px;
+  place-items: center;
+  border-radius: 7px;
+  color: #a9c0c4;
+  font-size: 11px;
+}
+
+.service-schedule-calendar-days span.is-selected {
+  background: #0f7774;
+  color: #fff;
+  font-weight: 800;
+  box-shadow: 0 0 0 1px rgba(78, 225, 211, 0.2);
+}
+
+.service-schedule-calendar > footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: #78969d;
+  font-size: 11px;
+}
+
+.service-schedule-calendar > footer strong {
+  color: #d7e6e8;
+  white-space: nowrap;
+}
+
+.service-schedule-calendar.is-empty {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  color: #78969d;
+}
+
+.service-schedule-calendar.is-empty > div {
+  display: grid;
+  gap: 3px;
+}
+
+.service-schedule-calendar.is-empty strong {
+  color: #dce9eb;
+  font-size: 12px;
+}
+
+.service-schedule-calendar.is-empty span {
+  font-size: 10px;
+  line-height: 1.5;
+}

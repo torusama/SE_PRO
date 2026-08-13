@@ -1,4 +1,5 @@
 import {
+  ensureRecommendationParagraphs,
   isConsultativeRecommendationNarrative,
   isGroundedRecommendationNarrative,
 } from './agent-grounding';
@@ -121,5 +122,19 @@ describe('agent recommendation consultation depth', () => {
     expect(isConsultativeRecommendationNarrative(consultative, result)).toBe(
       true,
     );
+  });
+});
+
+describe('recommendation paragraph formatting', () => {
+  it('separates the first analysis sentence for every recommended option', () => {
+    const formatted = ensureRecommendationParagraphs(
+      'Mình đã đối chiếu hai phương án. A-01-001 phù hợp ngân sách và cần kiểm tra hướng. B-01-001 rộng hơn nhưng giá cao hơn. Bạn muốn xem phương án nào?',
+      result,
+    );
+
+    expect(formatted).toContain(
+      'Mình đã đối chiếu hai phương án.\n\nA-01-001 phù hợp',
+    );
+    expect(formatted).toContain('kiểm tra hướng.\n\nB-01-001 rộng hơn');
   });
 });

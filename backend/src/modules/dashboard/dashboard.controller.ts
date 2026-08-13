@@ -16,6 +16,11 @@ export class DashboardController {
     return { success: true, data: await this.dashboardService.summary() };
   }
 
+  @Get('pending-counts')
+  async pendingCounts() {
+    return { success: true, data: await this.dashboardService.pendingCounts() };
+  }
+
   @Get('plots')
   async plots() {
     return { success: true, data: await this.dashboardService.plots() };

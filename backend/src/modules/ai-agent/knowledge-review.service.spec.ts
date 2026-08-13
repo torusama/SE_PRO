@@ -16,7 +16,7 @@ interface ReviewRow {
 
 function createReviewService(row: ReviewRow | null) {
   const client = {
-    query: jest.fn((sql: string) => {
+    query: jest.fn((sql: string, _params?: unknown[]) => {
       if (sql.includes('FOR UPDATE')) return { rows: row ? [row] : [] };
       if (sql.includes('COALESCE(MAX(version_number)')) {
         return { rows: [{ version: 2 }] };

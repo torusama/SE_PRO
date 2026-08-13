@@ -423,6 +423,10 @@
   grid-template-columns: minmax(520px, 1fr) minmax(330px, 390px);
 }
 
+.agent-workspace.has-appointment-panel {
+  grid-template-columns: minmax(520px, 52fr) minmax(460px, 48fr);
+}
+
 .agent-workspace.has-context-map .agent-message-column,
 .agent-workspace.has-context-map .agent-composer-inner,
 .agent-workspace.has-workflow-panel .agent-message-column,
@@ -709,36 +713,78 @@
   max-width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  margin: 14px 0;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 10px;
-  overflow: hidden;
-  font-size: 14px;
-  background: rgba(10, 18, 31, 0.6);
+  margin: 18px 0;
+  border: 0;
+  background: transparent;
 }
 
-.agent-markdown th {
-  padding: 10px 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.07);
-  color: #f8fafc;
+.agent-markdown thead th {
+  padding: 0 14px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--agent-border-strong);
+  background: transparent;
+  color: var(--agent-teal);
   font-weight: 700;
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
   text-align: left;
 }
 
+.agent-markdown thead th:first-child { padding-left: 0; }
+
 .agent-markdown td {
-  padding: 10px 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 13px 14px;
+  border: 0;
+  border-bottom: 1px solid var(--agent-border);
   color: #cbd5e1;
-  line-height: 1.55;
+  line-height: 1.6;
+  vertical-align: top;
+  text-align: left;
+}
+
+.agent-markdown td:first-child {
+  position: relative;
+  padding-left: 14px;
+}
+
+/* A slim gold tick instead of a full grid — reads as a ledger entry rather
+   than a spreadsheet cell. */
+.agent-markdown td:first-child::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 3px;
+  height: 60%;
+  transform: translateY(-50%);
+  border-radius: 2px;
+  background: var(--agent-gold);
+  opacity: 0.55;
+}
+
+.agent-markdown td:first-child {
+  color: #f1f7f8;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.agent-markdown td strong {
+  display: block;
+  margin-bottom: 2px;
+  color: #f1f7f8;
 }
 
 .agent-markdown tr:last-child td {
   border-bottom: none;
 }
 
-.agent-markdown tr:nth-child(even) {
-  background: rgba(255, 255, 255, 0.02);
+.agent-markdown tbody tr {
+  transition: background 140ms ease;
+}
+
+.agent-markdown tbody tr:hover td {
+  background: rgba(0, 229, 196, 0.035);
 }
 
 .agent-paced-message {
@@ -1354,144 +1400,8 @@
   background: rgba(251, 191, 36, 0.15);
 }
 
-.agent-bazi-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 12px;
-}
-
-.agent-bazi-badge-item {
-  display: flex;
-  flex-direction: column;
-  padding: 12px 14px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.agent-bazi-badge-item small {
-  color: #8fa2b0;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.agent-bazi-badge-item strong {
-  margin-top: 4px;
-  color: #ffffff;
-  font-size: 14px;
-  font-weight: 650;
-}
-
-.agent-bazi-analysis {
-  padding: 14px 16px;
-  border-left: 4px solid var(--agent-gold);
-  border-radius: 0 10px 10px 0;
-  background: rgba(201, 168, 76, 0.08);
-}
-
-.agent-bazi-analysis p,
-.agent-bazi-summary {
-  margin: 0;
-  color: #e2ebf0;
-  font-size: 14px;
-  line-height: 1.65;
-}
-
-.agent-bazi-directions-section {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.agent-bazi-dir-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.agent-bazi-dir-label {
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-.agent-bazi-dir-label.good {
-  color: #34d399;
-}
-
-.agent-bazi-dir-label.bad {
-  color: #f87171;
-}
-
-.agent-bazi-dir-tags {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-  gap: 10px;
-}
-
-.agent-bazi-tag {
-  display: flex;
-  flex-direction: column;
-  padding: 10px 14px;
-  border-radius: 10px;
-}
-
-.agent-bazi-tag.good {
-  border: 1px solid rgba(52, 211, 153, 0.25);
-  background: rgba(52, 211, 153, 0.07);
-}
-
-.agent-bazi-tag.bad {
-  border: 1px solid rgba(248, 113, 113, 0.25);
-  background: rgba(248, 113, 113, 0.07);
-}
-
-.agent-bazi-tag-dir {
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.agent-bazi-tag.good .agent-bazi-tag-dir {
-  color: #6ee7b7;
-}
-
-.agent-bazi-tag.bad .agent-bazi-tag-dir {
-  color: #fca5a5;
-}
-
-.agent-bazi-tag-star {
-  margin-top: 2px;
-  color: #f5e8c4;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.agent-bazi-tag-desc {
-  margin-top: 3px;
-  color: #94a3b8;
-  font-size: 12px;
-  line-height: 1.45;
-}
-
 .agent-bazi-simple-dirs {
   font-size: 14px;
-}
-
-.agent-bazi-relations {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 12px 14px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.03);
-  font-size: 13px;
-  line-height: 1.55;
-}
-
-.agent-bazi-relations strong {
-  color: #f1f5f9;
 }
 
 .agent-bazi-disclaimer {
@@ -2845,6 +2755,11 @@
   margin: 0;
 }
 
+.agent-markdown p {
+  text-align: justify;
+  text-justify: inter-word;
+}
+
 .agent-markdown ul,
 .agent-markdown ol {
   display: grid;
@@ -3250,4 +3165,1648 @@ button.agent-bazi-followup-item:disabled {
   opacity: 0.55;
   cursor: not-allowed;
   transform: none;
+}
+
+/* ========================================================================== */
+/* BÁT TRẠCH CONSULTATION · Vĩnh Phúc Viên integrated visual language        */
+/* Keeps the uploaded concept's hierarchy/compass, but uses the site's       */
+/* navy + teal + restrained-gold system instead of copying the red page.     */
+/* ========================================================================== */
+.agent-bazi-card {
+  --bazi-gold: var(--agent-gold);
+  --bazi-gold-light: #e7d28f;
+  --bazi-gold-soft: rgba(201, 168, 76, 0.11);
+  --bazi-teal: var(--agent-teal);
+  --bazi-teal-soft: rgba(0, 229, 196, 0.09);
+  --bazi-good: #63cdb8;
+  --bazi-good-soft: rgba(99, 205, 184, 0.1);
+  --bazi-bad: #d98787;
+  --bazi-bad-soft: rgba(217, 135, 135, 0.09);
+  --bazi-surface: #0b1422;
+  --bazi-surface-soft: #0d1929;
+  --bazi-line: rgba(126, 167, 174, 0.16);
+  --bazi-line-strong: rgba(0, 229, 196, 0.24);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-top: 18px;
+  padding: 22px;
+  overflow: hidden;
+  border: 1px solid var(--bazi-line-strong);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 86% -12%, rgba(0, 229, 196, 0.07), transparent 34%),
+    radial-gradient(circle at 8% 4%, rgba(201, 168, 76, 0.07), transparent 30%),
+    linear-gradient(160deg, rgba(13, 25, 41, 0.98), rgba(7, 13, 24, 0.99));
+  box-shadow:
+    0 18px 46px rgba(0, 0, 0, 0.26),
+    inset 0 1px 0 rgba(255, 255, 255, 0.02);
+  color: var(--agent-text);
+  font-family: "Be Vietnam Pro", "Inter", sans-serif;
+  font-size: 13px;
+  line-height: 1.65;
+  isolation: isolate;
+  animation: baziCardReveal 460ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.agent-bazi-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.8;
+  background:
+    linear-gradient(90deg, transparent 0 12%, rgba(0, 229, 196, 0.025) 50%, transparent 88%),
+    linear-gradient(180deg, rgba(201, 168, 76, 0.025), transparent 22%);
+}
+
+.agent-bazi-card::after {
+  content: "";
+  position: absolute;
+  inset: 7px;
+  z-index: -1;
+  pointer-events: none;
+  border: 1px solid rgba(201, 168, 76, 0.08);
+  border-radius: 12px;
+}
+
+.agent-bazi-corner {
+  position: absolute;
+  z-index: 1;
+  width: 26px;
+  height: 26px;
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+.agent-bazi-corner-tr {
+  top: -1px;
+  right: -1px;
+  border-top: 1px solid rgba(201, 168, 76, 0.9);
+  border-right: 1px solid rgba(201, 168, 76, 0.9);
+  border-top-right-radius: 15px;
+}
+
+.agent-bazi-corner-bl {
+  bottom: -1px;
+  left: -1px;
+  border-bottom: 1px solid rgba(0, 229, 196, 0.65);
+  border-left: 1px solid rgba(0, 229, 196, 0.65);
+  border-bottom-left-radius: 15px;
+}
+
+.agent-bazi-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 0 0 16px;
+  border-bottom: 1px solid var(--bazi-line);
+}
+
+.agent-bazi-title {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  text-align: left;
+}
+
+.agent-bazi-eyebrow {
+  margin-bottom: 5px;
+  color: var(--bazi-gold-light);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.agent-bazi-title strong {
+  color: var(--agent-text);
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: clamp(21px, 3vw, 27px);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+  text-shadow: none;
+}
+
+.agent-bazi-subtitle {
+  margin-top: 5px;
+  color: var(--agent-muted);
+  font-size: 10.5px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.agent-bazi-title-rule {
+  width: 72px;
+  height: 1px;
+  margin-top: 10px;
+  background: linear-gradient(90deg, var(--bazi-gold), rgba(201, 168, 76, 0));
+}
+
+.agent-bazi-element-badge {
+  display: none;
+}
+
+.agent-bazi-element-seal {
+  flex: 0 0 auto;
+  width: 52px;
+  height: 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(201, 168, 76, 0.35);
+  border-radius: 11px;
+  background:
+    linear-gradient(155deg, rgba(201, 168, 76, 0.12), rgba(0, 229, 196, 0.035)),
+    rgba(9, 17, 29, 0.96);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+  color: var(--bazi-gold-light);
+  transform: none;
+}
+
+.agent-bazi-element-glyph {
+  font-family: "Playfair Display", "Noto Serif SC", Georgia, serif;
+  font-size: 21px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.agent-bazi-element-name {
+  margin-top: 4px;
+  max-width: 46px;
+  overflow: hidden;
+  color: #b6c5cb;
+  font-size: 5.8px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Compact luopan: visual structure inspired by the supplied mock, recolored for the app. */
+.bazi-compass-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 15px 12px 12px;
+  border: 1px solid rgba(126, 167, 174, 0.12);
+  border-radius: 13px;
+  background:
+    radial-gradient(circle at 50% 34%, rgba(201, 168, 76, 0.035), transparent 42%),
+    rgba(4, 10, 19, 0.48);
+}
+
+.bazi-compass-frame {
+  width: min(100%, 430px);
+  aspect-ratio: 1 / 1;
+  animation: baziCompassRise 620ms 70ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes baziCompassRise {
+  from { opacity: 0; transform: translateY(8px) scale(0.975); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.bazi-compass-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.bazi-svg-outer-shadow {
+  fill: #020610;
+  opacity: 0.88;
+}
+
+.bazi-svg-disc {
+  stroke: rgba(201, 168, 76, 0.45);
+  stroke-width: 2;
+}
+
+.bazi-svg-sector {
+  stroke: rgba(201, 168, 76, 0.1);
+  stroke-width: 1;
+  transition: opacity 180ms ease, filter 180ms ease;
+}
+
+.bazi-svg-sector.good { fill: rgba(42, 129, 116, 0.72); }
+.bazi-svg-sector.bad { fill: rgba(124, 51, 59, 0.7); }
+.bazi-svg-sector.neutral { fill: rgba(35, 50, 68, 0.88); }
+
+.bazi-svg-ring {
+  fill: none;
+  stroke: rgba(201, 168, 76, 0.2);
+  stroke-width: 0.9;
+}
+
+.bazi-svg-ring.strong {
+  stroke-width: 2;
+  stroke: rgba(201, 168, 76, 0.52);
+}
+
+.bazi-svg-spoke,
+.bazi-svg-son-tick,
+.bazi-svg-degree-tick {
+  stroke: rgba(201, 168, 76, 0.15);
+  stroke-width: 0.75;
+}
+
+.bazi-svg-degree-tick.major { stroke-width: 1.1; }
+
+.bazi-svg-son,
+.bazi-svg-degree,
+.bazi-svg-trigram,
+.bazi-svg-star,
+.bazi-svg-direction,
+.bazi-svg-center-kicker,
+.bazi-svg-center-group,
+.bazi-svg-center-element,
+.bazi-svg-stamp text {
+  text-anchor: middle;
+  dominant-baseline: middle;
+  user-select: none;
+}
+
+.bazi-svg-son {
+  font-family: "Be Vietnam Pro", sans-serif;
+  font-size: 8px;
+  font-weight: 650;
+}
+
+.bazi-svg-son.good { fill: #7edbc9; }
+.bazi-svg-son.bad { fill: #dfa0a0; }
+.bazi-svg-son.neutral { fill: #93a5af; }
+
+.bazi-svg-degree {
+  fill: #7f929e;
+  font-size: 6.8px;
+  opacity: 0.8;
+}
+
+.bazi-svg-trigram {
+  fill: rgba(235, 243, 247, 0.92);
+  font-size: 16px;
+}
+
+.bazi-svg-star {
+  fill: #ead790;
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.bazi-svg-direction {
+  fill: rgba(221, 234, 239, 0.86);
+  font-size: 7.7px;
+  font-weight: 700;
+  letter-spacing: 0.025em;
+}
+
+.bazi-svg-stamp rect {
+  fill: rgba(4, 10, 18, 0.88);
+  stroke: rgba(201, 168, 76, 0.48);
+  stroke-width: 1;
+}
+
+.bazi-svg-stamp text {
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 9.5px;
+  font-weight: 600;
+}
+
+.bazi-svg-stamp.good text { fill: #78d5c2; }
+.bazi-svg-stamp.bad text { fill: #df9292; }
+
+.bazi-svg-pool {
+  fill: #091525;
+  stroke: rgba(201, 168, 76, 0.48);
+  stroke-width: 1.5;
+}
+
+.bazi-svg-crosshair {
+  stroke: rgba(0, 229, 196, 0.5);
+  stroke-width: 1.3;
+  opacity: 0.72;
+}
+
+.bazi-svg-center-dot { fill: #020610; }
+.bazi-svg-center-gold { fill: var(--bazi-gold); }
+
+.bazi-svg-center-kicker {
+  fill: #e8f0f4;
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.045em;
+}
+
+.bazi-svg-center-group {
+  fill: #72d4c2;
+  font-size: 8px;
+  font-weight: 750;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.bazi-svg-center-element {
+  fill: #aab9c1;
+  font-size: 7px;
+  font-weight: 600;
+}
+
+.bazi-compass-legend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 0;
+  color: #8fa2ad;
+  font-size: 10px;
+}
+
+.bazi-compass-legend .legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bazi-compass-legend .legend-swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  box-shadow: none;
+}
+
+.bazi-compass-legend .legend-item.good .legend-swatch { background: var(--bazi-good); }
+.bazi-compass-legend .legend-item.bad .legend-swatch { background: var(--bazi-bad); }
+
+/* Personal calculation summary */
+.agent-bazi-followup {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding-top: 1px;
+}
+
+.agent-bazi-followup-title {
+  margin: 0;
+  color: var(--agent-teal);
+  font-family: "Be Vietnam Pro", sans-serif;
+  font-size: 10.5px;
+  font-weight: 650;
+}
+
+.agent-bazi-followup-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.agent-bazi-followup-item,
+button.agent-bazi-followup-item {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 11px;
+  border: 1px solid var(--bazi-line);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.018);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.agent-bazi-followup-item:hover,
+button.agent-bazi-followup-item:hover {
+  border-color: rgba(0, 229, 196, 0.32);
+  background: rgba(0, 229, 196, 0.055);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
+  transform: translateY(-1px);
+}
+
+.agent-bazi-followup-item strong {
+  color: #dce8ed;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.agent-bazi-followup-item span {
+  color: #718691;
+  font-size: 8.8px;
+  line-height: 1.45;
+}
+
+.agent-bazi-disclaimer {
+  display: block;
+  margin-top: -1px;
+  padding-top: 11px;
+  border-top: 1px solid var(--bazi-line);
+  color: #607783;
+  font-size: 8.8px;
+  font-style: normal;
+  line-height: 1.55;
+  text-align: left;
+}
+
+@media (max-width: 760px) {
+  .agent-bazi-card {
+    gap: 15px;
+    padding: 17px;
+  }
+
+  .agent-bazi-head { gap: 12px; }
+  .agent-bazi-element-seal { width: 48px; height: 48px; }
+
+  .agent-bazi-directions-section,
+  .agent-bazi-relations,
+  .agent-bazi-followup-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-bazi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .agent-bazi-badge-item { border-bottom: 1px solid var(--bazi-line); }
+  .agent-bazi-badge-item:nth-child(even) { border-right: 1px solid var(--bazi-line); }
+}
+
+@media (max-width: 480px) {
+  .agent-bazi-card { padding-inline: 13px; }
+
+  .agent-bazi-title strong { font-size: 21px; }
+  .agent-bazi-eyebrow { font-size: 7.5px; letter-spacing: 0.14em; }
+  .agent-bazi-subtitle { font-size: 9.5px; }
+  .agent-bazi-element-seal { width: 44px; height: 44px; }
+  .agent-bazi-element-glyph { font-size: 18px; }
+  .agent-bazi-element-name { display: none; }
+
+  .bazi-compass-container { padding-inline: 5px; }
+  .bazi-compass-frame { width: min(100%, 360px); }
+
+  .bazi-compass-legend {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .agent-bazi-grid { grid-template-columns: 1fr 1fr; }
+  .agent-bazi-tag { grid-template-columns: 76px minmax(0, 1fr); }
+}
+
+
+/* ========================================================================== */
+/* BÁT TRẠCH CEREMONIAL RESULT — based directly on la-ban-bat-trach.html      */
+/* Rendered outside the assistant text bubble; no enclosing result card.      */
+/* ========================================================================== */
+.agent-message.has-bazi .agent-message-body {
+  max-width: min(940px, calc(100% - 42px));
+  width: 100%;
+}
+
+.agent-message.assistant .agent-message-bubble {
+  animation: agentAssistantTextReveal 380ms cubic-bezier(.2,.8,.2,1) both;
+}
+
+@keyframes agentAssistantTextReveal {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+    filter: blur(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+.agent-bazi-experience {
+  --bazi-red-deep: #5c0e10;
+  --bazi-red: #7e1416;
+  --bazi-red-light: #a4231a;
+  --bazi-red-glow: #c23b2d;
+  --bazi-gold: #d4af37;
+  --bazi-gold-light: #f0d78c;
+  --bazi-gold-deep: #a67c1e;
+  --bazi-cream: #f7ecc9;
+  --bazi-ink: #1c1008;
+  --bazi-jade: #2f6b45;
+  --bazi-jade-light: #6fa885;
+  --bazi-black-ring: #191008;
+
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: 100%;
+  margin: 22px 0 8px;
+  padding: 30px 0 8px;
+  color: var(--bazi-cream);
+  font-family: "Be Vietnam Pro", sans-serif;
+  animation: baziExperienceReveal 560ms cubic-bezier(.2,.8,.2,1) both;
+}
+
+/* Ambient color from the supplied HTML body, deliberately unbounded so the
+   result does not look like another card nested inside chat. */
+.agent-bazi-experience::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: -28px;
+  right: -28px;
+  bottom: -18px;
+  left: -28px;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% 7%, rgba(138, 26, 26, .38) 0%, rgba(92, 14, 16, .22) 43%, rgba(60, 8, 8, 0) 82%);
+  opacity: .86;
+}
+
+@keyframes baziExperienceReveal {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.agent-bazi-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  width: 100%;
+  margin: 0 0 24px;
+  padding: 4px 0;
+  border: 0;
+  overflow: hidden;
+  text-align: center;
+  animation: baziHeadSweepIn 680ms 90ms cubic-bezier(.22,.85,.2,1) both;
+}
+
+@keyframes baziHeadSweepIn {
+  0% {
+    opacity: 0;
+    clip-path: inset(0 100% 0 0);
+    transform: translateX(-18px);
+  }
+  55% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+    transform: translateX(0);
+  }
+}
+
+.agent-bazi-title {
+  display: flex;
+  min-width: 0;
+  flex: 0 1 auto;
+  align-items: center;
+  flex-direction: column;
+  gap: 0;
+  text-align: center;
+}
+
+.agent-bazi-eyebrow {
+  margin: 0 0 10px;
+  color: var(--bazi-gold-light);
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .28em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+.agent-bazi-title strong {
+  margin: 0;
+  color: var(--bazi-gold-light);
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: clamp(29px, 4.8vw, 43px);
+  font-weight: 700;
+  letter-spacing: .005em;
+  line-height: 1.08;
+  text-shadow: 0 0 24px rgba(212, 175, 55, .28);
+}
+
+.agent-bazi-subtitle {
+  margin-top: 8px;
+  color: rgba(247, 236, 201, .74);
+  font-size: 12px;
+  font-weight: 300;
+  line-height: 1.55;
+}
+
+.agent-bazi-title-rule {
+  width: 120px;
+  height: 1px;
+  margin-top: 13px;
+  background: linear-gradient(90deg, transparent, var(--bazi-gold), transparent);
+}
+
+.agent-bazi-element-seal {
+  flex: 0 0 auto;
+  width: 60px;
+  height: 60px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 6px;
+  background: linear-gradient(160deg, var(--bazi-gold-light), var(--bazi-gold-deep));
+  box-shadow: 0 4px 10px rgba(0, 0, 0, .4);
+  color: var(--bazi-red-light);
+  animation: baziSealSlam 640ms 260ms cubic-bezier(.17,.89,.32,1.28) both;
+}
+
+/* Mirrors the seal's footprint on the opposite side of the title, invisibly,
+   so the title text stays centered with the compass below while the real
+   seal still sits right next to the title instead of drifting to a corner. */
+.agent-bazi-element-seal--spacer {
+  visibility: hidden;
+  background: none;
+  box-shadow: none;
+  animation: none;
+  transform: none;
+}
+
+/* Punchier "slams into place" entrance: flies in oversized and rotated,
+   overshoots past its resting size/angle, then snaps back and settles —
+   much more impact than a plain fade/scale-in. */
+@keyframes baziSealSlam {
+  0% {
+    opacity: 0;
+    transform: scale(2.6) rotate(22deg);
+    filter: blur(3px) brightness(1.6);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, .4);
+  }
+  45% {
+    opacity: 1;
+    transform: scale(.82) rotate(-10deg);
+    filter: blur(0) brightness(1.25);
+    box-shadow: 0 10px 26px rgba(212, 175, 55, .5);
+  }
+  65% {
+    transform: scale(1.12) rotate(0deg);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, .45);
+  }
+  82% {
+    transform: scale(.96) rotate(-7deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(-4deg);
+    filter: brightness(1);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, .4);
+  }
+}
+
+.agent-bazi-element-glyph {
+  font-family: "Playfair Display", "Noto Serif SC", Georgia, serif;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.agent-bazi-element-name {
+  max-width: 56px;
+  margin-top: 3px;
+  overflow: visible;
+  color: var(--bazi-red-light);
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: .035em;
+  line-height: 1.05;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+/* ---------- Compass copied to the original red / gold / jade visual system ---------- */
+.bazi-compass-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  width: 100%;
+  margin: 0 0 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  animation: baziCompassBlockIn 260ms 140ms ease both;
+}
+
+@keyframes baziCompassBlockIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.bazi-compass-frame {
+  width: min(100%, 560px);
+  aspect-ratio: 1 / 1;
+  filter: drop-shadow(0 20px 36px rgba(0, 0, 0, .5));
+  animation: baziCompassBaseIn 1600ms 160ms cubic-bezier(.22,.8,.24,1) both;
+}
+
+@keyframes baziCompassBaseIn {
+  from { opacity: 0; transform: scale(.78) rotate(-360deg); }
+  70% { opacity: 1; }
+  to { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+
+.bazi-compass-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.bazi-svg-outer-shadow {
+  fill: rgba(25, 16, 8, .92);
+}
+
+.bazi-svg-disc {
+  stroke: var(--bazi-black-ring);
+  stroke-width: 5;
+}
+
+/* Fan-opening effect: all eight blades originate at the heavenly pool and
+   unfold clockwise until the full 360-degree wheel is visible. */
+.bazi-svg-sector {
+  transform-box: view-box;
+  transform-origin: 300px 300px;
+  stroke: rgba(25, 16, 8, .55);
+  stroke-width: 1;
+  opacity: 0;
+  animation: baziFanBladeOpen 700ms cubic-bezier(.16,.84,.2,1) both;
+  animation-delay: calc(280ms + var(--bazi-index) * 68ms);
+}
+
+.bazi-svg-sector.good { fill: #2f6b45; }
+.bazi-svg-sector.bad { fill: #8f2016; }
+.bazi-svg-sector.neutral { fill: #7d6328; }
+
+@keyframes baziFanBladeOpen {
+  0% {
+    opacity: 0;
+    transform: rotate(-18deg) scale(.03);
+  }
+  58% {
+    opacity: 1;
+    transform: rotate(3deg) scale(1.025);
+  }
+  100% {
+    opacity: 1;
+    transform: rotate(0) scale(1);
+  }
+}
+
+.bazi-svg-ring {
+  fill: none;
+  stroke: var(--bazi-black-ring);
+  stroke-width: .75;
+  opacity: .55;
+  stroke-dasharray: 1700;
+  stroke-dashoffset: 1700;
+  animation: baziRingDraw 980ms cubic-bezier(.2,.8,.2,1) forwards;
+  animation-delay: calc(410ms + var(--bazi-index) * 55ms);
+}
+
+.bazi-svg-ring.strong {
+  stroke-width: 2;
+  opacity: .95;
+}
+
+@keyframes baziRingDraw {
+  to { stroke-dashoffset: 0; }
+}
+
+.bazi-svg-spoke,
+.bazi-svg-son-tick,
+.bazi-svg-degree-tick {
+  stroke: rgba(25, 16, 8, .42);
+  stroke-width: .75;
+}
+
+.bazi-svg-spoke {
+  opacity: 0;
+  animation: baziLineIn 360ms ease forwards;
+  animation-delay: calc(560ms + var(--bazi-index) * 58ms);
+}
+
+.bazi-svg-degree-tick.major { stroke-width: 1; }
+
+@keyframes baziLineIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.bazi-svg-son,
+.bazi-svg-degree,
+.bazi-svg-trigram,
+.bazi-svg-star,
+.bazi-svg-direction,
+.bazi-svg-center-kicker,
+.bazi-svg-center-group,
+.bazi-svg-center-element,
+.bazi-svg-stamp text {
+  text-anchor: middle;
+  dominant-baseline: middle;
+  user-select: none;
+}
+
+.bazi-svg-label-group {
+  opacity: 0;
+  animation: baziSectorTextIn 460ms cubic-bezier(.2,.8,.2,1) forwards;
+  animation-delay: calc(780ms + var(--bazi-index) * 58ms);
+}
+
+@keyframes baziSectorTextIn {
+  from { opacity: 0; transform: scale(.88); transform-origin: center; }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.bazi-svg-son {
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.bazi-svg-son.good { fill: var(--bazi-jade); }
+.bazi-svg-son.bad { fill: var(--bazi-red-light); }
+.bazi-svg-son.neutral { fill: #6e5420; }
+
+.bazi-svg-degree {
+  fill: var(--bazi-ink);
+  font-size: 7.5px;
+  opacity: .8;
+}
+
+/* Extra vertical separation prevents Họa Hại / Đông Nam and other two-line
+   labels from colliding, even at narrower responsive sizes. */
+.bazi-svg-trigram {
+  fill: rgba(247, 236, 201, .9);
+  font-family: "Segoe UI Symbol", "Noto Sans Symbols 2", sans-serif;
+  font-size: 16px;
+  font-weight: 400;
+}
+
+.bazi-svg-star {
+  fill: var(--bazi-gold-light);
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 13.5px;
+  font-weight: 700;
+  paint-order: stroke fill;
+  stroke: rgba(25, 16, 8, .18);
+  stroke-width: .8px;
+}
+
+.bazi-svg-direction {
+  fill: var(--bazi-cream);
+  font-family: "Be Vietnam Pro", sans-serif;
+  font-size: 8.6px;
+  font-weight: 600;
+  letter-spacing: .035em;
+  opacity: .92;
+  paint-order: stroke fill;
+  stroke: rgba(25, 16, 8, .18);
+  stroke-width: .65px;
+}
+
+.bazi-svg-stamp rect {
+  fill: var(--bazi-black-ring);
+  stroke: var(--bazi-gold-light);
+  stroke-width: 1;
+}
+
+.bazi-svg-stamp text {
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 9.5px;
+  font-weight: 700;
+}
+
+.bazi-svg-stamp.good text { fill: var(--bazi-jade-light); }
+.bazi-svg-stamp.bad text { fill: #d98070; }
+
+.bazi-svg-center-layer {
+  opacity: 0;
+  transform-box: view-box;
+  transform-origin: 300px 300px;
+  animation: baziCenterReveal 520ms 1060ms cubic-bezier(.2,.8,.2,1) forwards;
+}
+
+@keyframes baziCenterReveal {
+  from { opacity: 0; transform: scale(.65) rotate(-12deg); }
+  to { opacity: 1; transform: scale(1) rotate(0); }
+}
+
+.bazi-svg-pool {
+  fill: #faf5e4;
+  stroke: var(--bazi-black-ring);
+  stroke-width: 2;
+}
+
+.bazi-svg-crosshair {
+  stroke: var(--bazi-red-light);
+  stroke-width: 2;
+}
+
+.bazi-svg-needle-dot { fill: var(--bazi-red-light); }
+.bazi-svg-center-dot { fill: var(--bazi-black-ring); }
+.bazi-svg-center-gold { fill: var(--bazi-gold); }
+
+.bazi-svg-center-kicker {
+  fill: var(--bazi-ink);
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .04em;
+}
+
+.bazi-svg-center-group {
+  fill: var(--bazi-red-light);
+  font-family: "Be Vietnam Pro", sans-serif;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: .035em;
+  text-transform: uppercase;
+}
+
+.bazi-svg-center-element {
+  fill: #5f4315;
+  font-family: "Be Vietnam Pro", sans-serif;
+  font-size: 7.3px;
+  font-weight: 600;
+}
+
+.bazi-compass-legend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px 22px;
+  margin-top: 16px;
+  color: rgba(247, 236, 201, .84);
+  font-size: 11.5px;
+  animation: baziTextRise 440ms 1850ms ease both;
+}
+
+.bazi-compass-legend .legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.bazi-compass-legend .legend-swatch {
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+}
+
+.bazi-compass-legend .legend-item.good .legend-swatch { background: var(--bazi-jade); }
+.bazi-compass-legend .legend-item.bad .legend-swatch { background: var(--bazi-red-light); }
+
+/* ---------- Good / bad directions as open ledger columns, no inner cards ---------- */
+.agent-bazi-directions-section {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 32px;
+  width: 100%;
+  margin: 0 0 26px;
+  animation: baziTextRise 520ms 2190ms ease both;
+}
+
+.agent-bazi-dir-group {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0;
+  padding: 16px 18px 6px;
+  border: 1px solid rgba(212, 175, 55, .16);
+  border-radius: 14px;
+  background: rgba(0, 0, 0, .16);
+}
+
+.agent-bazi-dir-group.good {
+  border-color: rgba(58, 138, 105, .45);
+  background: linear-gradient(180deg, rgba(47, 107, 69, .12), rgba(0, 0, 0, .16) 55%);
+}
+
+.agent-bazi-dir-group.bad {
+  border-color: rgba(143, 32, 22, .45);
+  background: linear-gradient(180deg, rgba(143, 32, 22, .12), rgba(0, 0, 0, .16) 55%);
+}
+
+.agent-bazi-dir-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 0;
+  padding: 0 0 10px;
+  border-bottom: 1px solid rgba(212, 175, 55, .18);
+}
+
+.agent-bazi-dir-group.good .agent-bazi-dir-heading { border-bottom-color: rgba(58, 138, 105, .3); }
+.agent-bazi-dir-group.bad .agent-bazi-dir-heading { border-bottom-color: rgba(143, 32, 22, .3); }
+
+.agent-bazi-dir-marker {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+.agent-bazi-dir-group.good .agent-bazi-dir-marker { background: var(--bazi-jade); }
+.agent-bazi-dir-group.bad .agent-bazi-dir-marker { background: var(--bazi-red-light); }
+
+.agent-bazi-dir-label {
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.agent-bazi-dir-label.good { color: var(--bazi-jade-light); }
+.agent-bazi-dir-label.bad { color: #e39383; }
+
+.agent-bazi-dir-tags {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.agent-bazi-tag {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-height: 0;
+  padding: 11px 0;
+  border: 0;
+  border-bottom: 1px dashed rgba(212, 175, 55, .18);
+  border-radius: 0;
+  background: transparent;
+}
+
+.agent-bazi-tag:last-child { border-bottom: 0; }
+
+.agent-bazi-tag-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.agent-bazi-tag-dir {
+  color: var(--bazi-cream);
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 14.5px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.agent-bazi-tag-star {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .03em;
+  line-height: 1.35;
+}
+
+.agent-bazi-tag.good .agent-bazi-tag-star { color: var(--bazi-jade-light); }
+.agent-bazi-tag.bad .agent-bazi-tag-star { color: #e39383; }
+
+.agent-bazi-tag-desc {
+  color: rgba(247, 236, 201, .68);
+  font-size: 11.5px;
+  line-height: 1.55;
+  text-align: left;
+}
+
+/* ---------- Element notes ---------- */
+.agent-bazi-relations {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin: 0 0 28px;
+  animation: baziTextRise 500ms 2310ms ease both;
+}
+
+.agent-bazi-relation-note {
+  display: block;
+  min-width: 0;
+  padding: 13px 16px;
+  border: 1px solid rgba(212, 175, 55, .25);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, .18);
+  color: rgba(247, 236, 201, .75);
+  font-size: 11.5px;
+  line-height: 1.65;
+}
+
+.agent-bazi-relation-note strong {
+  margin-right: 5px;
+  color: var(--bazi-gold-light);
+  font-weight: 700;
+}
+
+.agent-bazi-relation-note span { color: inherit; }
+
+.agent-bazi-followup {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 0;
+  padding: 18px 0 0;
+  border-top: 1px solid rgba(212, 175, 55, .25);
+  animation: baziTextRise 500ms 2430ms ease both;
+}
+
+.agent-bazi-followup-title {
+  margin: 0;
+  color: var(--bazi-gold-light);
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.agent-bazi-followup-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.agent-bazi-followup-item {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+  padding: 13px 14px;
+  border: 1px solid rgba(212, 175, 55, .24);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, .16);
+  color: var(--bazi-cream);
+  text-align: left;
+  cursor: pointer;
+  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease, box-shadow 180ms ease;
+}
+
+.agent-bazi-followup-item:hover:not(:disabled) {
+  transform: translateY(-2px);
+  border-color: rgba(240, 215, 140, .52);
+  background: rgba(126, 20, 22, .2);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, .2);
+}
+
+.agent-bazi-followup-item strong {
+  color: var(--bazi-gold-light);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.agent-bazi-followup-item span {
+  color: rgba(247, 236, 201, .65);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+.agent-bazi-disclaimer {
+  display: block;
+  margin-top: 18px;
+  padding-top: 15px;
+  border-top: 1px solid rgba(212, 175, 55, .25);
+  color: rgba(247, 236, 201, .52);
+  font-size: 10px;
+  line-height: 1.7;
+  text-align: center;
+  animation: baziTextRise 480ms 2550ms ease both;
+}
+
+@keyframes baziTextRise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+    filter: blur(1.5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+/* Give newly rendered secondary AI blocks the same soft entrance language. */
+.agent-options.is-revealed,
+.agent-services,
+.agent-quick-replies {
+  animation: agentSecondaryReveal 430ms cubic-bezier(.2,.8,.2,1) both;
+}
+
+@keyframes agentSecondaryReveal {
+  from { opacity: 0; transform: translateY(9px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 760px) {
+  .agent-message.has-bazi .agent-message-body {
+    max-width: calc(100% - 42px);
+  }
+
+  .agent-bazi-experience {
+    padding-top: 24px;
+  }
+
+  .agent-bazi-head {
+    gap: 16px;
+  }
+
+  .agent-bazi-title strong {
+    font-size: clamp(26px, 8vw, 36px);
+  }
+
+  .bazi-compass-frame {
+    width: min(100%, 520px);
+  }
+
+  .agent-bazi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .agent-bazi-badge-item:nth-child(2n) { border-right: 0; }
+  .agent-bazi-badge-item:nth-child(n + 3) { border-top: 1px solid rgba(212, 175, 55, .25); }
+
+  .agent-bazi-directions-section,
+  .agent-bazi-relations {
+    grid-template-columns: 1fr;
+    gap: 22px;
+  }
+
+  .agent-bazi-followup-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 540px) {
+  .agent-bazi-experience::before {
+    right: -12px;
+    left: -12px;
+  }
+
+  .agent-bazi-head {
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  /* Stacked layout centers the title on its own; the side spacer is no
+     longer needed (and would otherwise leave a blank gap above the title). */
+  .agent-bazi-element-seal--spacer {
+    display: none;
+  }
+
+  .agent-bazi-element-seal {
+    width: 56px;
+    height: 56px;
+  }
+
+  .bazi-compass-frame {
+    width: min(100%, 460px);
+  }
+
+  .bazi-svg-star { font-size: 10.8px; }
+  .bazi-svg-direction { font-size: 6.8px; }
+  .bazi-svg-trigram { font-size: 14px; }
+
+  .agent-bazi-tag {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .agent-bazi-tag-desc {
+    text-align: left;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-message.assistant .agent-message-bubble,
+  .agent-bazi-experience,
+  .agent-bazi-head,
+  .agent-bazi-element-seal,
+  .bazi-compass-container,
+  .bazi-compass-frame,
+  .bazi-svg-sector,
+  .bazi-svg-ring,
+  .bazi-svg-spoke,
+  .bazi-svg-label-group,
+  .bazi-svg-center-layer,
+  .bazi-compass-legend,
+  .agent-bazi-grid,
+  .agent-bazi-analysis,
+  .agent-bazi-directions-section,
+  .agent-bazi-relations,
+  .agent-bazi-followup,
+  .agent-bazi-disclaimer,
+  .agent-options.is-revealed,
+  .agent-services,
+  .agent-quick-replies {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+    stroke-dashoffset: 0 !important;
+  }
+}
+
+/* ========================================================================== */
+/* BÁT TRẠCH readability & staged-consultation polish                         */
+/* ========================================================================== */
+.agent-message.has-bazi .agent-message-body {
+  width: 100%;
+  max-width: min(1120px, calc(100% - 42px));
+}
+
+.agent-message.has-bazi .agent-message-bubble--continuation {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(212, 175, 55, .2);
+  animation: baziPlotNarrativeIn 520ms cubic-bezier(.2,.8,.2,1) both;
+}
+
+@keyframes baziPlotNarrativeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Give the wheel enough physical size for 24 Sơn labels + 8 sector labels.
+   Bumped up slightly so the wider label band in BaziCompassWidget (radial
+   trigram/star/direction/stamp stack) has more physical room, not just more
+   room in the abstract 600x600 viewBox. */
+.bazi-compass-frame {
+  width: min(100%, 860px);
+}
+
+.bazi-svg-son {
+  font-size: 10.2px;
+  font-weight: 700;
+  paint-order: stroke fill;
+  stroke: rgba(240, 215, 140, .16);
+  stroke-width: .45px;
+}
+
+.bazi-svg-degree {
+  font-size: 8.1px;
+  font-weight: 600;
+}
+
+.bazi-svg-trigram {
+  font-size: 15px;
+}
+
+.bazi-svg-star {
+  font-size: 12.5px;
+  stroke-width: 1px;
+}
+
+.bazi-svg-direction {
+  font-size: 7.6px;
+  letter-spacing: .02em;
+  stroke-width: .75px;
+}
+
+.bazi-svg-stamp text {
+  font-size: 8.5px;
+}
+
+/* Keep the inner heavenly-pool labels legible above the compass crosshair. */
+.bazi-svg-center-kicker,
+.bazi-svg-center-group,
+.bazi-svg-center-element {
+  paint-order: stroke fill;
+  stroke: #faf5e4;
+  stroke-linejoin: round;
+}
+
+.bazi-svg-center-kicker {
+  font-size: 10.4px;
+  stroke-width: 3.3px;
+}
+
+.bazi-svg-center-group {
+  font-size: 8.6px;
+  stroke-width: 3px;
+}
+
+.bazi-svg-center-element {
+  font-size: 7.1px;
+  stroke-width: 2.7px;
+}
+
+.bazi-svg-crosshair {
+  opacity: .58;
+}
+
+/* Column count tracks how many facts actually rendered (--bazi-fact-count,
+   set inline from JSX), so a missing optional field like birth-hour never
+   leaves a dangling empty track that shoves the row to the left. Falls back
+   to 5 if the variable isn't set for some reason. Held back until the
+   compass has fully finished revealing itself. */
+.agent-bazi-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--bazi-fact-count, 5), minmax(0, 1fr));
+  margin-bottom: 28px;
+  overflow: visible;
+  border: 0;
+  border-top: 1px solid rgba(212, 175, 55, .3);
+  border-bottom: 1px solid rgba(212, 175, 55, .3);
+  border-radius: 0;
+  background: transparent;
+  animation: baziTextRise 460ms 1960ms ease both;
+}
+
+.agent-bazi-badge-item {
+  display: flex;
+  min-height: 78px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 13px 12px;
+  border-right: 1px solid rgba(212, 175, 55, .22);
+  text-align: center;
+}
+
+.agent-bazi-badge-item:last-child {
+  border-right: 0;
+}
+
+.agent-bazi-badge-item small {
+  display: block;
+  width: 100%;
+  min-height: 24px;
+  margin-bottom: 7px;
+  font-size: 9px;
+  line-height: 1.3;
+  text-align: center;
+}
+
+.agent-bazi-badge-item strong {
+  display: block;
+  width: 100%;
+  font-size: 14.5px;
+  line-height: 1.35;
+  overflow-wrap: normal;
+  word-break: keep-all;
+  text-align: center;
+}
+
+/* Open editorial treatment instead of another boxed card inside chat. */
+.agent-bazi-analysis {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 34px;
+  padding: 17px 22px 17px 20px;
+  border: 0;
+  border-left: 3px solid var(--bazi-gold);
+  border-radius: 0;
+  background: linear-gradient(90deg, rgba(126, 20, 22, .16), rgba(0, 0, 0, .04) 62%, transparent);
+  animation: baziTextRise 460ms 2070ms ease both;
+}
+
+.agent-bazi-analysis p,
+.agent-bazi-summary {
+  margin: 0;
+  color: rgba(247, 236, 201, .88);
+  font-size: 13.2px;
+  line-height: 1.86;
+  text-align: justify;
+  text-justify: inter-word;
+}
+
+.agent-bazi-directions-section {
+  gap: 42px;
+}
+
+.agent-bazi-tag {
+  gap: 20px;
+  padding: 12px 2px;
+}
+
+.agent-bazi-tag-main {
+  min-width: 104px;
+}
+
+.agent-bazi-tag-desc {
+  font-size: 11.8px;
+  line-height: 1.62;
+}
+
+.agent-bazi-relations {
+  gap: 28px;
+}
+
+.agent-bazi-relation-note {
+  padding: 13px 2px;
+  border: 0;
+  border-top: 1px solid rgba(212, 175, 55, .22);
+  border-bottom: 1px solid rgba(212, 175, 55, .16);
+  border-radius: 0;
+  background: transparent;
+}
+
+.agent-bazi-relation-note strong {
+  display: block;
+  margin: 0 0 5px;
+}
+
+@media (max-width: 920px) {
+  .bazi-compass-frame {
+    width: min(100%, 620px);
+  }
+
+  .agent-bazi-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .agent-bazi-badge-item:nth-child(3n) {
+    border-right: 0;
+  }
+
+  .agent-bazi-badge-item:nth-child(n + 4) {
+    border-top: 1px solid rgba(212, 175, 55, .2);
+  }
+}
+
+@media (max-width: 620px) {
+  .agent-message.has-bazi .agent-message-body {
+    max-width: calc(100% - 38px);
+  }
+
+  .bazi-compass-frame {
+    width: min(100%, 520px);
+  }
+
+  .agent-bazi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .agent-bazi-badge-item,
+  .agent-bazi-badge-item:nth-child(3n) {
+    border-right: 1px solid rgba(212, 175, 55, .2);
+  }
+
+  .agent-bazi-badge-item:nth-child(2n) {
+    border-right: 0;
+  }
+
+  .agent-bazi-badge-item:nth-child(n + 3) {
+    border-top: 1px solid rgba(212, 175, 55, .2);
+  }
+
+  .bazi-svg-star { font-size: 11.4px; }
+  .bazi-svg-direction { font-size: 7px; }
+  .bazi-svg-son { font-size: 9.1px; }
+}
+
+@media (max-width: 420px) {
+  .agent-bazi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-bazi-badge-item,
+  .agent-bazi-badge-item:nth-child(2n),
+  .agent-bazi-badge-item:nth-child(3n) {
+    min-height: 64px;
+    border-right: 0;
+    border-top: 1px solid rgba(212, 175, 55, .18);
+  }
+
+  .agent-bazi-badge-item:first-child {
+    border-top: 0;
+  }
+
+  .agent-bazi-badge-item small {
+    min-height: 0;
+  }
+}
+
+/* Prefer CJK serif glyphs for the 吉 / 凶 seals instead of relying on the
+   Latin display font's browser fallback. */
+.bazi-svg-stamp text {
+  font-family: "Noto Serif SC", "Songti SC", "STSong", "SimSun", serif;
+  font-weight: 800;
 }

@@ -3,7 +3,6 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  Clock3,
   CreditCard,
   LoaderCircle,
   ReceiptText,
@@ -13,20 +12,24 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ROUTES } from "@/constants/routes";
 import { api } from "@/lib/api";
+import DemoPaymentPanel from "@/components/payment/DemoPaymentPanel";
+import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
+import {
+  AppointmentBookingPanel,
+  type AppointmentDraft,
+} from "@/pages/customer/appointments/AppointmentBookingForm";
+import ServiceScheduleCalendar from "@/pages/customer/service/ServiceScheduleCalendar";
 import type { AgentResponse } from "./agent.types";
 import "./AgentWorkflowPanel.css";
 
 type Directive = NonNullable<AgentResponse["uiDirective"]>;
-type ScheduleDirective = Extract<
-  Directive,
-  { type: "OPEN_SERVICE_SCHEDULE_CALENDAR" }
->;
 
 interface Props {
   directive: Directive;
   onClose: () => void;
   onDirectiveChange?: (directive: Directive) => void;
   onSendMessage?: (message: string) => void | Promise<void>;
+  onAssistantNotice?: (message: string) => void;
 }
 
 interface ServiceOrderDetail {
@@ -39,6 +42,8 @@ interface ServiceOrderDetail {
   status?: string;
   paymentStatus?: "unpaid" | "awaiting_confirmation" | "paid";
   paymentCode?: string | null;
+  paidAt?: string | null;
+  paymentConfirmedAt?: string | null;
 }
 
 interface CalendarEntry {
@@ -56,7 +61,9 @@ interface CalendarEntry {
 
 function formatMoney(value: number | string | undefined) {
   const amount = Number(value ?? 0);
-  return Number.isFinite(amount) ? `${amount.toLocaleString("vi-VN")} VND` : "—";
+  return Number.isFinite(amount)
+    ? `${amount.toLocaleString("vi-VN")} VND`
+    : "—";
 }
 
 function isoDate(year: number, month: number, day: number) {
@@ -186,20 +193,33 @@ function CalendarPreview({
 
 function ServiceProgress({ stage }: { stage: "payment" | "calendar" }) {
   return (
-    <div className="agent-workflow-progress" aria-label="Tiến trình đặt dịch vụ">
+    <div
+      className="agent-workflow-progress"
+      aria-label="Tiến trình đặt dịch vụ"
+    >
       <div className="is-complete">
-        <span><CheckCircle2 size={14} /></span>
+        <span>
+          <CheckCircle2 size={14} />
+        </span>
         <small>Đã đặt</small>
       </div>
       <i />
       <div className={stage === "payment" ? "is-current" : "is-complete"}>
-        <span>{stage === "calendar" ? <CheckCircle2 size={14} /> : <CreditCard size={14} />}</span>
+        <span>
+          {stage === "calendar" ? (
+            <CheckCircle2 size={14} />
+          ) : (
+            <CreditCard size={14} />
+          )}
+        </span>
         <small>Thanh toán</small>
       </div>
       <i />
       <div className={stage === "calendar" ? "is-current" : ""}>
-        <span><CalendarDays size={14} /></span>
-        <small>Chọn lịch</small>
+        <span>
+          <CalendarDays size={14} />
+        </span>
+        <small>Xem lịch</small>
       </div>
     </div>
   );
@@ -210,31 +230,43 @@ export default function AgentWorkflowPanel({
   onClose,
   onDirectiveChange,
   onSendMessage,
+  onAssistantNotice,
 }: Props) {
   const navigate = useNavigate();
-  const [order, setOrder] = useState<ServiceOrderDetail | null>(null);
+  const [orders, setOrders] = useState<ServiceOrderDetail[]>([]);
   const [entries, setEntries] = useState<CalendarEntry[]>([]);
-  const [selectedServiceDate, setSelectedServiceDate] = useState("");
   const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [paying, setPaying] = useState(false);
   const [appointmentSubmitting, setAppointmentSubmitting] = useState(false);
   const [appointmentDate, setAppointmentDate] = useState("");
   const [appointmentStartTime, setAppointmentStartTime] = useState("09:00");
   const [appointmentEndTime, setAppointmentEndTime] = useState("10:00");
-  const [appointmentTopic, setAppointmentTopic] = useState(
-    "Trao đổi với ban quản lý",
-  );
   const [appointmentDirty, setAppointmentDirty] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const autoAdvancedOrderRef = useRef<number | null>(null);
+  const previousPaymentStatusesRef = useRef<
+    Map<number, ServiceOrderDetail["paymentStatus"]>
+  >(new Map());
 
   const serviceOrderId =
     directive.type === "SHOW_INLINE_SERVICE_PAYMENT" ||
     directive.type === "OPEN_SERVICE_SCHEDULE_CALENDAR"
       ? directive.orderId
       : undefined;
+  const serviceOrderIds =
+    directive.type === "SHOW_INLINE_SERVICE_PAYMENT" ||
+    directive.type === "OPEN_SERVICE_SCHEDULE_CALENDAR"
+      ? Array.from(
+          new Set(
+            (directive.orderIds?.length
+              ? directive.orderIds
+              : [directive.orderId]
+            ).filter((id): id is number => typeof id === "number"),
+          ),
+        )
+      : [];
+  const serviceOrderIdsKey = serviceOrderIds.join(",");
+  const order = orders[0] ?? null;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -244,18 +276,22 @@ export default function AgentWorkflowPanel({
         directive.type === "SHOW_INLINE_SERVICE_PAYMENT" ||
         directive.type === "OPEN_SERVICE_SCHEDULE_CALENDAR"
       ) {
-        if (!serviceOrderId) {
+        const ids = serviceOrderIdsKey
+          .split(",")
+          .map(Number)
+          .filter((id) => Number.isInteger(id) && id > 0);
+        if (!ids.length) {
           setError("Chưa xác định được đơn dịch vụ cần xử lý.");
           return;
         }
-        const response = await api.get(`/my/service-orders/${serviceOrderId}`);
-        const detail = (response.data?.data ?? null) as ServiceOrderDetail | null;
-        setOrder(detail);
-        setSelectedServiceDate(
-          detail?.requestedDate ||
-            (directive.type === "OPEN_SERVICE_SCHEDULE_CALENDAR"
-              ? directive.requestedDate || directive.scheduledDate || ""
-              : ""),
+        const details = await Promise.all(
+          ids.map(async (id) => {
+            const response = await api.get(`/my/service-orders/${id}`);
+            return (response.data?.data ?? null) as ServiceOrderDetail | null;
+          }),
+        );
+        setOrders(
+          details.filter((item): item is ServiceOrderDetail => Boolean(item)),
         );
       } else if (directive.type === "OPEN_APPOINTMENT_CALENDAR") {
         const response = await api.get("/schedule/appointments/me");
@@ -274,7 +310,7 @@ export default function AgentWorkflowPanel({
     } finally {
       setLoading(false);
     }
-  }, [directive, serviceOrderId]);
+  }, [directive.type, serviceOrderIdsKey]);
 
   useEffect(() => {
     setNotice("");
@@ -282,41 +318,88 @@ export default function AgentWorkflowPanel({
     void load();
   }, [load]);
 
+  useRealtimeRefresh(["services"], load);
+
+  useEffect(() => {
+    if (!orders.length) return;
+    const previous = previousPaymentStatusesRef.current;
+    if (!previous.size) {
+      orders.forEach((item) => previous.set(item.id, item.paymentStatus));
+      return;
+    }
+    for (const item of orders) {
+      const before = previous.get(item.id);
+      if (
+        before === "awaiting_confirmation" &&
+        item.paymentStatus === "paid"
+      ) {
+        onAssistantNotice?.(
+          `Ban quản lý đã xác nhận thanh toán đơn dịch vụ #${item.id} – ${item.serviceName || "Dịch vụ chăm sóc"}. Mình đã chuyển đơn này sang lịch thực hiện với ngày ${item.scheduledDate || item.requestedDate || "đã ghi nhận"}.`,
+        );
+      }
+      previous.set(item.id, item.paymentStatus);
+    }
+  }, [onAssistantNotice, orders]);
+
+  useEffect(() => {
+    previousPaymentStatusesRef.current = new Map();
+    autoAdvancedOrderRef.current = null;
+  }, [serviceOrderIdsKey]);
+
   useEffect(() => {
     if (directive.type !== "OPEN_APPOINTMENT_CALENDAR") return;
     setAppointmentDate(directive.appointmentDate ?? "");
     setAppointmentStartTime(directive.startTime ?? "09:00");
     setAppointmentEndTime(directive.endTime ?? "10:00");
-    setAppointmentTopic(directive.topic ?? "Trao đổi với ban quản lý");
     setAppointmentDirty(false);
   }, [directive]);
 
   useEffect(() => {
     if (
       directive.type !== "SHOW_INLINE_SERVICE_PAYMENT" ||
-      !order?.id ||
-      !order.paymentStatus ||
-      order.paymentStatus === "unpaid" ||
-      autoAdvancedOrderRef.current === order.id
+      !orders.length ||
+      orders.some((item) => item.paymentStatus !== "paid") ||
+      autoAdvancedOrderRef.current === orders[0].id
     ) {
       return;
     }
-    autoAdvancedOrderRef.current = order.id;
+    autoAdvancedOrderRef.current = orders[0].id;
     const timer = window.setTimeout(() => {
       onDirectiveChange?.({
         type: "OPEN_SERVICE_SCHEDULE_CALENDAR",
-        orderId: order.id,
-        requestedDate: order.requestedDate ?? undefined,
-        scheduledDate: order.scheduledDate ?? undefined,
+        orderId: orders[0].id,
+        orderIds: orders.map((item) => item.id),
+        requestedDate: orders[0].requestedDate ?? undefined,
+        scheduledDate: orders[0].scheduledDate ?? undefined,
       });
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [directive.type, onDirectiveChange, order]);
+  }, [directive.type, onDirectiveChange, orders]);
+
+  useEffect(() => {
+    if (
+      directive.type !== "OPEN_SERVICE_SCHEDULE_CALENDAR" ||
+      !orders.length ||
+      orders.every((item) => item.paymentStatus === "paid")
+    ) {
+      return;
+    }
+    onDirectiveChange?.({
+      type: "SHOW_INLINE_SERVICE_PAYMENT",
+      orderId: orders[0].id,
+      orderIds: orders.map((item) => item.id),
+      amount: orders.reduce((total, item) => total + Number(item.amount ?? 0), 0),
+      paymentStatus: orders[0].paymentStatus ?? "unpaid",
+    });
+  }, [directive.type, onDirectiveChange, orders]);
 
   const selectedDate = useMemo(() => {
     if (directive.type === "OPEN_SERVICE_SCHEDULE_CALENDAR") {
       return (
-        selectedServiceDate || directive.requestedDate || directive.scheduledDate
+        order?.scheduledDate ||
+        order?.requestedDate ||
+        directive.requestedDate ||
+        directive.scheduledDate
       );
     }
     if (directive.type === "OPEN_APPOINTMENT_CALENDAR") {
@@ -326,89 +409,18 @@ export default function AgentWorkflowPanel({
       return directive.reminderDate;
     }
     return undefined;
-  }, [appointmentDate, directive, selectedServiceDate]);
+  }, [appointmentDate, directive, order]);
 
   const appointmentMode = useMemo(() => {
     if (directive.type !== "OPEN_APPOINTMENT_CALENDAR") return null;
     if (directive.mode) return directive.mode;
     if (directive.appointmentId) return "summary" as const;
-    if (directive.appointmentDate && directive.startTime) return "review" as const;
+    if (directive.appointmentDate && directive.startTime)
+      return "review" as const;
     return "collecting" as const;
   }, [directive]);
 
-  async function reportPayment() {
-    if (
-      directive.type !== "SHOW_INLINE_SERVICE_PAYMENT" ||
-      !serviceOrderId ||
-      paying
-    ) {
-      return;
-    }
-    setPaying(true);
-    setError("");
-    setNotice("");
-    try {
-      const response = await api.post(`/service-orders/${serviceOrderId}/pay`);
-      const detail = (response.data?.data ?? order) as ServiceOrderDetail;
-      setOrder(detail);
-      const returnedDirective = response.data?.uiDirective as
-        | ScheduleDirective
-        | undefined;
-      onDirectiveChange?.(
-        returnedDirective?.type === "OPEN_SERVICE_SCHEDULE_CALENDAR"
-          ? returnedDirective
-          : {
-              type: "OPEN_SERVICE_SCHEDULE_CALENDAR",
-              orderId: serviceOrderId,
-              requestedDate: detail?.requestedDate ?? undefined,
-              scheduledDate: detail?.scheduledDate ?? undefined,
-            },
-      );
-    } catch (paymentError) {
-      setError(
-        describeError(
-          paymentError,
-          "Chưa thể ghi nhận thanh toán. Vui lòng thử lại.",
-        ),
-      );
-    } finally {
-      setPaying(false);
-    }
-  }
-
-  async function saveServiceDate() {
-    if (
-      directive.type !== "OPEN_SERVICE_SCHEDULE_CALENDAR" ||
-      !selectedServiceDate ||
-      saving
-    ) {
-      return;
-    }
-    setSaving(true);
-    setError("");
-    setNotice("");
-    try {
-      const response = await api.patch(
-        `/service-orders/${directive.orderId}/requested-date`,
-        { requestedDate: selectedServiceDate },
-      );
-      setOrder((response.data?.data ?? order) as ServiceOrderDetail);
-      setNotice(
-        `Đã chốt ngày ${new Date(`${selectedServiceDate}T00:00:00`).toLocaleDateString("vi-VN")} cho dịch vụ. Bạn có thể xem lại trong lịch dịch vụ của tài khoản.`,
-      );
-    } catch (saveError) {
-      setError(
-        describeError(
-          saveError,
-          "Chưa thể lưu ngày thực hiện. Vui lòng thử lại.",
-        ),
-      );
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function submitAppointment() {
+  async function submitAppointment(draft?: AppointmentDraft) {
     if (
       directive.type !== "OPEN_APPOINTMENT_CALENDAR" ||
       appointmentMode === "summary" ||
@@ -429,27 +441,43 @@ export default function AgentWorkflowPanel({
       return;
     }
 
-    if (!appointmentDate || appointmentDate < todayIso()) {
+    const selectedDraft =
+      draft ??
+      ({
+        date: appointmentDate,
+        startTime: appointmentStartTime,
+        endTime: appointmentEndTime,
+        topic: directive.plotCode
+          ? `Hẹn xem lô đất ${directive.plotCode}`
+          : "Hẹn xem lô đất",
+        note: "",
+      } satisfies AppointmentDraft);
+
+    if (!selectedDraft.date || selectedDraft.date < todayIso()) {
       setError("Bạn chọn một ngày từ hôm nay trở đi để tiếp tục.");
       return;
     }
     if (
-      !appointmentStartTime ||
-      !appointmentEndTime ||
-      !Number.isFinite(clockMinutes(appointmentStartTime)) ||
-      !Number.isFinite(clockMinutes(appointmentEndTime)) ||
-      clockMinutes(appointmentEndTime) <= clockMinutes(appointmentStartTime)
+      !selectedDraft.startTime ||
+      !selectedDraft.endTime ||
+      !Number.isFinite(clockMinutes(selectedDraft.startTime)) ||
+      !Number.isFinite(clockMinutes(selectedDraft.endTime)) ||
+      clockMinutes(selectedDraft.endTime) <=
+        clockMinutes(selectedDraft.startTime)
     ) {
       setError("Giờ kết thúc phải sau giờ bắt đầu.");
       return;
     }
 
-    const topic = appointmentTopic.trim() || "Trao đổi với ban quản lý";
+    if (!directive.plotCode) {
+      setError("Chưa xác định được lô đã duyệt mà bạn muốn xem.");
+      return;
+    }
     setAppointmentSubmitting(true);
     setError("");
     try {
       await onSendMessage(
-        `Mình muốn đặt lịch với ban quản lý vào ngày ${appointmentDate}, từ ${appointmentStartTime} đến ${appointmentEndTime}. Nội dung: ${topic}.`,
+        `Mình muốn đặt lịch hẹn xem lô ${directive.plotCode} vào ngày ${selectedDraft.date}, từ ${selectedDraft.startTime} đến ${selectedDraft.endTime}.`,
       );
       setAppointmentDirty(false);
     } finally {
@@ -473,17 +501,11 @@ export default function AgentWorkflowPanel({
       <CalendarDays size={15} />
     );
 
-  const paymentStatus = order?.paymentStatus ??
-    (directive.type === "SHOW_INLINE_SERVICE_PAYMENT"
-      ? directive.paymentStatus
-      : undefined) ??
-    "unpaid";
-  const paymentCode =
-    order?.paymentCode ||
-    (serviceOrderId ? `VPV${String(serviceOrderId).padStart(5, "0")}` : "VPV");
-
   return (
-    <aside className="agent-workflow-panel" aria-label={title}>
+    <aside
+      className={`agent-workflow-panel ${directive.type === "OPEN_APPOINTMENT_CALENDAR" ? "is-appointment" : ""}`}
+      aria-label={title}
+    >
       <button
         className="agent-workflow-close"
         type="button"
@@ -510,73 +532,65 @@ export default function AgentWorkflowPanel({
 
       {directive.type === "SHOW_INLINE_SERVICE_PAYMENT" ? (
         <div
-          key={`service-payment-${serviceOrderId ?? "new"}`}
+          key={`service-payment-${serviceOrderIdsKey || "new"}`}
           className="agent-workflow-content"
         >
           <ServiceProgress stage="payment" />
-          {order && (
-            <section className="agent-workflow-order-summary is-payment-summary">
-              <small>Đơn dịch vụ #{order.id}</small>
-              <h3>{order.serviceName || "Dịch vụ chăm sóc"}</h3>
-              <div><span>Lô áp dụng</span><strong>{order.plotCode || "—"}</strong></div>
-              <div><span>Ngày mong muốn</span><strong>{order.requestedDate || "—"}</strong></div>
-              <div><span>Chi phí</span><strong>{formatMoney(order.amount ?? directive.amount)}</strong></div>
-            </section>
-          )}
-
-          <section className="agent-workflow-payment-box">
-            <div className="agent-workflow-payment-title">
-              <span><CreditCard size={15} /></span>
-              <div>
-                <small>Bước thanh toán</small>
-                <strong>Chuyển khoản minh họa</strong>
-              </div>
-            </div>
-            <div className="agent-workflow-payment-row">
-              <span>Ngân hàng</span>
-              <strong>VPV BANK</strong>
-            </div>
-            <div className="agent-workflow-payment-row">
-              <span>Số tài khoản</span>
-              <strong>0000 1234 5678</strong>
-            </div>
-            <div className="agent-workflow-payment-row">
-              <span>Nội dung</span>
-              <strong className="is-code">{paymentCode}</strong>
-            </div>
-            <div className="agent-workflow-payment-row is-total">
-              <span>Số tiền</span>
-              <strong>{formatMoney(order?.amount ?? directive.amount)}</strong>
-            </div>
-          </section>
-
-          {paymentStatus === "unpaid" ? (
-            <>
-              <p className="agent-workflow-calendar-note">
-                Sau khi bạn báo đã chuyển khoản, trợ lý sẽ ghi nhận trạng thái chờ xác minh và chuyển panel này sang lịch để bạn kiểm tra, chốt ngày thực hiện dịch vụ.
-              </p>
-              <button
-                type="button"
-                className="agent-workflow-primary"
-                onClick={() => void reportPayment()}
-                disabled={!serviceOrderId || paying}
+          {orders.length ? (
+            orders.map((item) => (
+              <section
+                key={item.id}
+                className="agent-workflow-service-item"
+                aria-label={`Đơn dịch vụ #${item.id}`}
               >
-                {paying ? <LoaderCircle size={15} className="spin" /> : <CreditCard size={15} />}
-                {paying ? "Đang ghi nhận…" : "Tôi đã chuyển khoản"}
-              </button>
-            </>
+                <section className="agent-workflow-order-summary is-payment-summary">
+                  <small>Đơn dịch vụ #{item.id}</small>
+                  <h3>{item.serviceName || "Dịch vụ chăm sóc"}</h3>
+                  <div>
+                    <span>Lô áp dụng</span>
+                    <strong>{item.plotCode || "—"}</strong>
+                  </div>
+                  <div>
+                    <span>Ngày mong muốn</span>
+                    <strong>{item.requestedDate || "—"}</strong>
+                  </div>
+                  <div>
+                    <span>Chi phí</span>
+                    <strong>{formatMoney(item.amount)}</strong>
+                  </div>
+                </section>
+
+                {item.paymentStatus === "paid" ? (
+                  <ServiceScheduleCalendar
+                    requestedDate={item.requestedDate ?? undefined}
+                    scheduledDate={item.scheduledDate ?? undefined}
+                    serviceName={item.serviceName}
+                    plotCode={item.plotCode}
+                  />
+                ) : (
+                  <DemoPaymentPanel
+                    orderId={item.id}
+                    amount={Number(item.amount ?? 0)}
+                    paymentStatus={item.paymentStatus ?? "unpaid"}
+                    paymentCode={item.paymentCode}
+                    paidAt={item.paidAt}
+                    paymentConfirmedAt={item.paymentConfirmedAt}
+                    variant="customer"
+                    onChanged={load}
+                  />
+                )}
+                {item.paymentStatus === "awaiting_confirmation" && (
+                  <p className="agent-workflow-calendar-note">
+                    Đơn #{item.id} đang chờ ban quản lý duyệt thanh toán. Khi
+                    được duyệt, lịch của riêng dịch vụ này sẽ tự xuất hiện.
+                  </p>
+                )}
+              </section>
+            ))
           ) : (
-            <div className="agent-workflow-payment-detected">
-              <CheckCircle2 size={18} />
-              <div>
-                <strong>
-                  {paymentStatus === "paid"
-                    ? "Thanh toán đã được xác nhận"
-                    : "Đã nhận tín hiệu thanh toán"}
-                </strong>
-                <span>Đang chuyển sang lịch thực hiện dịch vụ…</span>
-              </div>
-            </div>
+            <p className="agent-workflow-error">
+              Chưa xác định được đơn dịch vụ cần thanh toán.
+            </p>
           )}
           <button
             type="button"
@@ -594,48 +608,51 @@ export default function AgentWorkflowPanel({
         </div>
       ) : directive.type === "OPEN_SERVICE_SCHEDULE_CALENDAR" ? (
         <div
-          key={`service-calendar-${directive.orderId}`}
+          key={`service-calendar-${serviceOrderIdsKey}`}
           className="agent-workflow-content"
         >
           <ServiceProgress stage="calendar" />
-          {order && (
-            <section className="agent-workflow-order-summary">
-              <small>Đơn dịch vụ #{order.id}</small>
-              <h3>{order.serviceName || "Dịch vụ chăm sóc"}</h3>
-              <div><span>Lô áp dụng</span><strong>{order.plotCode || "—"}</strong></div>
-              <div><span>Chi phí</span><strong>{formatMoney(order.amount)}</strong></div>
-              <div>
-                <span>Thanh toán</span>
-                <strong>
-                  {order.paymentStatus === "paid" ? "Đã xác nhận" : "Đã ghi nhận"}
-                </strong>
-              </div>
+          {orders.map((item) => (
+            <section
+              key={item.id}
+              className="agent-workflow-service-item"
+              aria-label={`Lịch dịch vụ #${item.id}`}
+            >
+              <section className="agent-workflow-order-summary">
+                <small>Đơn dịch vụ #{item.id}</small>
+                <h3>{item.serviceName || "Dịch vụ chăm sóc"}</h3>
+                <div>
+                  <span>Lô áp dụng</span>
+                  <strong>{item.plotCode || "—"}</strong>
+                </div>
+                <div>
+                  <span>Chi phí</span>
+                  <strong>{formatMoney(item.amount)}</strong>
+                </div>
+                <div>
+                  <span>Thanh toán</span>
+                  <strong>Đã xác nhận</strong>
+                </div>
+              </section>
+              <ServiceScheduleCalendar
+                requestedDate={item.requestedDate ?? undefined}
+                scheduledDate={item.scheduledDate ?? undefined}
+                serviceName={item.serviceName}
+                plotCode={item.plotCode}
+              />
             </section>
-          )}
-          <div>
-            <p className="agent-workflow-section-title">Chọn ngày thực hiện</p>
-            <CalendarPreview
-              date={selectedDate}
-              interactive
-              onSelect={setSelectedServiceDate}
-            />
-            <p className="agent-workflow-calendar-note">
-              Ngày bạn đã nói với trợ lý trước đó được tô sáng sẵn. Bạn có thể giữ nguyên hoặc chọn lại ngày khác trước khi chốt.
-            </p>
-          </div>
-          <button
-            type="button"
-            className="agent-workflow-primary"
-            onClick={() => void saveServiceDate()}
-            disabled={!selectedServiceDate || saving}
-          >
-            {saving ? "Đang lưu…" : "Xác nhận ngày thực hiện"}
-          </button>
+          ))}
+          <p className="agent-workflow-calendar-note">
+            Đây là ngày bạn đã xác nhận trong cuộc trò chuyện. Muốn đổi ngày,
+            hãy nhắn lại cho trợ lý thay vì phải xác nhận thêm trong panel.
+          </p>
           <button
             type="button"
             className="agent-workflow-link"
             onClick={() =>
-              navigate(`${ROUTES.SERVICES}?tab=track&order=${directive.orderId}`)
+              navigate(
+                `${ROUTES.SERVICES}?tab=track&order=${directive.orderId}`,
+              )
             }
           >
             Xem lịch & đơn dịch vụ của tôi
@@ -646,33 +663,15 @@ export default function AgentWorkflowPanel({
           key={`appointment-${appointmentMode}-${directive.appointmentId ?? "draft"}`}
           className="agent-workflow-content agent-workflow-appointment-content"
         >
-          <div className="agent-workflow-appointment-progress" aria-label="Tiến trình đặt lịch hẹn">
-            <span className={appointmentDate ? "is-complete" : "is-current"}>
-              <b>1</b> Chọn ngày
-            </span>
-            <span
-              className={
-                appointmentMode === "review" || appointmentMode === "summary"
-                  ? "is-complete"
-                  : appointmentDate
-                    ? "is-current"
-                    : ""
-              }
+          {directive.plotCode && (
+            <section
+              className="agent-workflow-selected-plot"
+              aria-label="Lô đã chọn cho lịch hẹn"
             >
-              <b>2</b> Chọn giờ
-            </span>
-            <span
-              className={
-                appointmentMode === "summary"
-                  ? "is-complete"
-                  : appointmentMode === "review"
-                    ? "is-current"
-                    : ""
-              }
-            >
-              <b>3</b> Xác nhận
-            </span>
-          </div>
+              <span>Lô đã được duyệt và do bạn chọn</span>
+              <strong>{directive.plotCode}</strong>
+            </section>
+          )}
 
           {appointmentMode === "summary" ? (
             <>
@@ -696,6 +695,10 @@ export default function AgentWorkflowPanel({
                   </strong>
                 </div>
                 <div>
+                  <span>Lô trao đổi</span>
+                  <strong>{directive.plotCode || "—"}</strong>
+                </div>
+                <div>
                   <span>Trạng thái</span>
                   <strong>Chờ ban quản lý xác nhận</strong>
                 </div>
@@ -703,18 +706,28 @@ export default function AgentWorkflowPanel({
 
               {entries.length > 0 && (
                 <section className="agent-workflow-schedule">
-                  <div><span>Lịch gần đây</span><strong>{entries.length}</strong></div>
+                  <div>
+                    <span>Lịch gần đây</span>
+                    <strong>{entries.length}</strong>
+                  </div>
                   {entries.slice(0, 3).map((entry) => (
                     <article
                       key={entry.id}
-                      className={entry.id === directive.appointmentId ? "is-current" : ""}
+                      className={
+                        entry.id === directive.appointmentId ? "is-current" : ""
+                      }
                     >
                       <strong>{entry.title || "Hẹn với ban quản lý"}</strong>
-                      <span>{entry.appointmentDate || "Chưa xác định ngày"}</span>
+                      <span>
+                        {entry.appointmentDate || "Chưa xác định ngày"}
+                      </span>
                       {entry.startTime && (
                         <small>
                           {entry.startTime.slice(0, 5)}
-                          {entry.endTime ? `–${entry.endTime.slice(0, 5)}` : ""} · {entry.status || "đang chờ"}
+                          {entry.endTime
+                            ? `–${entry.endTime.slice(0, 5)}`
+                            : ""}{" "}
+                          · {entry.status || "đang chờ"}
                         </small>
                       )}
                     </article>
@@ -738,88 +751,59 @@ export default function AgentWorkflowPanel({
             </>
           ) : (
             <>
-              <div>
-                <p className="agent-workflow-section-title">Chọn ngày gặp ban quản lý</p>
-                <CalendarPreview
-                  date={appointmentDate}
-                  interactive
-                  onSelect={(value) => {
-                    setAppointmentDate(value);
-                    setAppointmentDirty(true);
-                  }}
-                />
-              </div>
-
-              <section className="agent-workflow-appointment-fields">
-                <div className="agent-workflow-time-grid">
-                  <label>
-                    <span><Clock3 size={13} /> Bắt đầu</span>
-                    <input
-                      type="time"
-                      value={appointmentStartTime}
-                      onChange={(event) => {
-                        setAppointmentStartTime(event.target.value);
-                        setAppointmentDirty(true);
-                      }}
-                    />
-                  </label>
-                  <label>
-                    <span><Clock3 size={13} /> Kết thúc</span>
-                    <input
-                      type="time"
-                      value={appointmentEndTime}
-                      onChange={(event) => {
-                        setAppointmentEndTime(event.target.value);
-                        setAppointmentDirty(true);
-                      }}
-                    />
-                  </label>
-                </div>
-                <label className="agent-workflow-topic-field">
-                  <span>Nội dung trao đổi</span>
-                  <input
-                    type="text"
-                    value={appointmentTopic}
-                    maxLength={180}
-                    onChange={(event) => {
-                      setAppointmentTopic(event.target.value);
-                      setAppointmentDirty(true);
-                    }}
-                    placeholder="Ví dụ: Tham quan và tư vấn lô A-01-001"
-                  />
-                </label>
-              </section>
-
-              {appointmentMode === "review" && !appointmentDirty ? (
-                <p className="agent-workflow-review-note">
-                  Thời gian đã đủ. Hệ thống chỉ tạo lịch sau khi bạn bấm xác nhận; trước đó chưa có yêu cầu nào được gửi cho ban quản lý.
-                </p>
-              ) : (
-                <p className="agent-workflow-calendar-note">
-                  Bạn có thể chọn ngày và giờ ngay trong panel. Trợ lý sẽ đọc lựa chọn này, tóm tắt lại một lần rồi mới xin xác nhận cuối cùng.
-                </p>
-              )}
-
-              <button
-                type="button"
-                className="agent-workflow-primary agent-workflow-appointment-primary"
-                onClick={() => void submitAppointment()}
-                disabled={appointmentSubmitting || !onSendMessage}
-              >
-                {appointmentSubmitting ? (
-                  <LoaderCircle size={15} className="spin" />
-                ) : appointmentMode === "review" && !appointmentDirty ? (
-                  <CheckCircle2 size={15} />
-                ) : (
-                  <CalendarDays size={15} />
-                )}
-                {appointmentSubmitting
-                  ? "Đang xử lý…"
-                  : appointmentMode === "review" && !appointmentDirty
+              <AppointmentBookingPanel
+                eyebrow="Hẹn xem lô đã duyệt"
+                title={`Chọn lịch xem lô ${directive.plotCode ?? ""}`.trim()}
+                meta="Mục đích cố định: xem lô đất"
+                fixedPurpose={
+                  directive.plotCode
+                    ? `Hẹn xem lô đất ${directive.plotCode}`
+                    : "Hẹn xem lô đất"
+                }
+                value={{
+                  date: appointmentDate,
+                  startTime: appointmentStartTime,
+                  endTime: appointmentEndTime,
+                  topic: directive.plotCode
+                    ? `Hẹn xem lô đất ${directive.plotCode}`
+                    : "Hẹn xem lô đất",
+                  note: "",
+                }}
+                onChange={(draft) => {
+                  setAppointmentDate(draft.date);
+                  setAppointmentStartTime(draft.startTime);
+                  setAppointmentEndTime(draft.endTime);
+                  setAppointmentDirty(true);
+                }}
+                onSubmit={submitAppointment}
+                submitting={appointmentSubmitting}
+                disabled={!onSendMessage}
+                submitIcon={
+                  appointmentMode === "review" && !appointmentDirty ? (
+                    <CheckCircle2 size={15} />
+                  ) : (
+                    <CalendarDays size={15} />
+                  )
+                }
+                submitLabel={
+                  appointmentMode === "review" && !appointmentDirty
                     ? "Xác nhận đặt lịch"
                     : appointmentMode === "review"
                       ? "Cập nhật lịch hẹn"
-                      : "Tiếp tục với lịch này"}
+                      : "Tiếp tục với lịch này"
+                }
+                helperText={
+                  appointmentMode === "review" && !appointmentDirty
+                    ? "Thời gian đã đủ. Hệ thống chỉ tạo lịch sau khi bạn xác nhận; trước đó chưa có yêu cầu nào được gửi cho ban quản lý."
+                    : "Chọn ngày và giờ trong biểu mẫu dùng chung của trang Lịch hẹn. Trợ lý sẽ dùng đúng lô ở trên để chuẩn bị yêu cầu."
+                }
+              />
+              <button
+                type="button"
+                className="agent-workflow-link agent-workflow-appointment-page-link"
+                onClick={() => navigate(ROUTES.APPOINTMENTS)}
+              >
+                <CalendarDays size={15} /> Mở trang Lịch hẹn của tôi
               </button>
             </>
           )}
@@ -831,11 +815,16 @@ export default function AgentWorkflowPanel({
         >
           <CalendarPreview date={selectedDate} />
           <section className="agent-workflow-schedule">
-            <div><span>Tổng lịch</span><strong>{entries.length}</strong></div>
+            <div>
+              <span>Tổng lịch</span>
+              <strong>{entries.length}</strong>
+            </div>
             {entries.slice(0, 4).map((entry) => (
               <article
                 key={entry.id}
-                className={entry.id === directive.reminderId ? "is-current" : ""}
+                className={
+                  entry.id === directive.reminderId ? "is-current" : ""
+                }
               >
                 <strong>{entry.title || "Lịch tưởng niệm"}</strong>
                 <span>
@@ -848,7 +837,9 @@ export default function AgentWorkflowPanel({
                 {entry.startTime && (
                   <small>
                     {entry.startTime.slice(0, 5)}
-                    {entry.endTime ? `–${entry.endTime.slice(0, 5)}` : ""} · {entry.status || "đang chờ"}
+                    {entry.endTime
+                      ? `–${entry.endTime.slice(0, 5)}`
+                      : ""} · {entry.status || "đang chờ"}
                   </small>
                 )}
               </article>
@@ -857,11 +848,7 @@ export default function AgentWorkflowPanel({
           <button
             type="button"
             className="agent-workflow-primary"
-            onClick={() =>
-              navigate(
-                ROUTES.REMINDERS,
-              )
-            }
+            onClick={() => navigate(ROUTES.REMINDERS)}
           >
             Xem lịch đầy đủ
           </button>

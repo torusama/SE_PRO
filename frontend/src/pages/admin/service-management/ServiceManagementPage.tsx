@@ -567,7 +567,9 @@ function OrderDetail({
           </div>
         </section>
 
-        {order.status === "confirmed" && (
+        {(order.status === "confirmed" ||
+          order.paymentStatus === "awaiting_confirmation" ||
+          order.paymentStatus === "paid") && (
           <DemoPaymentPanel
             orderId={order.id}
             amount={order.amount}

@@ -348,9 +348,16 @@ You are writing the first proactive message of a new or resumed Vĩnh Phúc Viê
        FROM ai_conversations c
        JOIN LATERAL (
          SELECT extracted_data->'pendingAction' AS "pendingAction"
-         FROM ai_messages
-         WHERE conversation_id = c.conversation_id AND role = 'assistant'
-         ORDER BY created_at DESC, message_id DESC
+         FROM ai_messages message
+         WHERE message.conversation_id = c.conversation_id
+           AND message.role = 'assistant'
+           AND message.message_id > COALESCE((
+             SELECT MAX(marker.message_id)
+             FROM ai_messages marker
+             WHERE marker.conversation_id = c.conversation_id
+               AND marker.metadata ->> 'memoryResetBoundary' = 'true'
+           ), 0)
+         ORDER BY message.created_at DESC, message.message_id DESC
          LIMIT 1
        ) latest ON latest."pendingAction" IS NOT NULL
        WHERE c.user_id = $1 AND c.status = 'active'

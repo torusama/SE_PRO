@@ -15,6 +15,12 @@ class NvidiaHttpError extends Error {
   }
 }
 
+class EmptyNvidiaResponseError extends Error {
+  constructor() {
+    super('NVIDIA API returned an empty assistant response');
+  }
+}
+
 type LlmCallOptions = {
   temperature?: number;
   maxTokens?: number;
@@ -146,10 +152,12 @@ export class NvidiaNemotronService {
           );
         }
         const payload = (await response.json()) as NvidiaChatResponse;
-        if (!payload.choices?.[0]?.message) {
-          throw new ServiceUnavailableException(
-            'NVIDIA API returned an invalid response',
-          );
+        const assistant = payload.choices?.[0]?.message;
+        if (
+          !assistant ||
+          (!assistant.content?.trim() && !assistant.tool_calls?.length)
+        ) {
+          throw new EmptyNvidiaResponseError();
         }
         this.rememberAffinity(options.routingKey, candidate.apiKey);
         return payload;
@@ -167,7 +175,11 @@ export class NvidiaNemotronService {
         const retryableHttp =
           error instanceof NvidiaHttpError &&
           this.isRetryableStatus(error.status);
-        const retryable = isTimeout || isNetworkFailure || retryableHttp;
+        const retryable =
+          isTimeout ||
+          isNetworkFailure ||
+          retryableHttp ||
+          error instanceof EmptyNvidiaResponseError;
 
         if (retryable) {
           this.cooldownKey(

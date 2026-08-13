@@ -11,6 +11,8 @@ import { NvidiaChatResponse, NvidiaMessage } from './types/nvidia.types';
 export interface LlmCallOptions {
   temperature?: number;
   maxTokens?: number;
+  enableThinking?: boolean;
+  reasoningEffort?: 'low' | 'medium' | 'high';
   /**
    * Stable only for one user turn. The router uses it to keep planner + composer
    * on the same provider/key, while the next turn rotates to a different route.
@@ -24,6 +26,13 @@ export interface LlmCallOptions {
   preferredProviderId?: 'openai-primary' | 'openai-secondary' | 'nvidia';
   /** Keep an auxiliary workload on its dedicated pool and do not borrow chat capacity. */
   strictPreferredProvider?: boolean;
+  /**
+   * Optional workload-level validation. A syntactically non-empty response may
+   * still be unusable (for example malformed planner JSON or an ungrounded
+   * recommendation). Rejecting it here lets the router continue to the next
+   * model instead of stopping failover too early.
+   */
+  validateResponse?: (response: NvidiaChatResponse) => boolean;
 }
 
 export interface LlmProvider {
@@ -74,19 +83,9 @@ export class MultiProviderLlmService {
   getProviders(): LlmProvider[] {
     const providers: LlmProvider[] = [];
 
-    // Main customer chat starts with the deeper 120B model. The 20B pool is
-    // borrowed only when 120B fails; suggested follow-ups still target it
-    // directly with their own short timeout. Mistral remains the final route.
-    if (this.openAiSecondary.isConfigured()) {
-      providers.push({
-        id: 'openai-secondary',
-        name: `OpenAI Secondary (${this.openAiSecondary.model})`,
-        isConfigured: () => this.openAiSecondary.isConfigured(),
-        model: this.openAiSecondary.model,
-        chat: (...args) => this.openAiSecondary.chat(...args),
-      });
-    }
-
+    // Live provider probes show the 20B route reliably returns final text while
+    // 120B and Mistral can remain queued beyond twenty seconds. Keep the
+    // responsive route first; the larger model is still available as backup.
     if (this.openAiPrimary.isConfigured()) {
       providers.push({
         id: 'openai-primary',
@@ -104,6 +103,16 @@ export class MultiProviderLlmService {
         isConfigured: () => this.nvidia.isConfigured(),
         model: this.nvidia.model,
         chat: (...args) => this.nvidia.chat(...args),
+      });
+    }
+
+    if (this.openAiSecondary.isConfigured()) {
+      providers.push({
+        id: 'openai-secondary',
+        name: `OpenAI Secondary (${this.openAiSecondary.model})`,
+        isConfigured: () => this.openAiSecondary.isConfigured(),
+        model: this.openAiSecondary.model,
+        chat: (...args) => this.openAiSecondary.chat(...args),
       });
     }
 
@@ -174,6 +183,20 @@ export class MultiProviderLlmService {
           timeoutMs: attemptTimeoutMs,
           totalTimeoutMs: attemptTimeoutMs,
         });
+        const assistant = result.choices?.[0]?.message;
+        if (
+          !assistant ||
+          (!assistant.content?.trim() && !assistant.tool_calls?.length)
+        ) {
+          throw new ServiceUnavailableException(
+            `${provider.name} returned an empty assistant response`,
+          );
+        }
+        if (options.validateResponse && !options.validateResponse(result)) {
+          throw new ServiceUnavailableException(
+            `${provider.name} returned an unusable assistant response`,
+          );
+        }
         this.rememberAffinity(options.routingKey, provider.id);
         this.providerCooldownUntil.delete(provider.id);
         this.logger.log(`[Multi-LLM] Provider ${provider.name} succeeded`);
