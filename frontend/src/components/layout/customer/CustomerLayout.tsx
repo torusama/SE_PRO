@@ -3,7 +3,6 @@ import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { ROUTES } from "@/constants/routes";
 import { useAuthStore } from "@/store/authStore";
 import Navbar from "./Navbar";
-import Footer from "./Footer";
 
 export default function CustomerLayout() {
   const location = useLocation();
@@ -46,14 +45,6 @@ export default function CustomerLayout() {
       >
         <Outlet />
       </main>
-      {!isAgentPage &&
-        (isMapPage ? (
-          <div className="min-[1181px]:hidden">
-            <Footer />
-          </div>
-        ) : (
-          <Footer />
-        ))}
     </div>
   );
 }

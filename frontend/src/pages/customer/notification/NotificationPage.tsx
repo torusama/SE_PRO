@@ -398,18 +398,9 @@ export default function NotificationPage() {
         />
       </div>
 
-      <div className="breadcrumb">
-        <a onClick={() => navigate(ROUTES.HOME)}>Trang chủ</a>
-        <span className="sep">›</span>
-        <span className="current">Thông báo</span>
-      </div>
-
       <div className="page-wrap">
         <header className="page-header">
-          <h1 className="page-title">
-            <small>Customer Portal</small>
-            Trung Tâm Thông Báo
-          </h1>
+          <h1 className="page-title">Trung Tâm Thông Báo</h1>
           <div className="header-actions">
             <button
               className="btn-outline"

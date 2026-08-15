@@ -195,8 +195,7 @@ const T = {
     "Vui l\u00f2ng ch\u1ecdn \u00edt nh\u1ea5t 2 l\u00f4 li\u1ec1n k\u1ec1 cho nh\u00f3m gia \u0111\u00ecnh.",
   loginRequired:
     "B\u1ea1n c\u1ea7n \u0111\u0103ng nh\u1eadp \u0111\u1ec3 g\u1eedi y\u00eau c\u1ea7u mua l\u00f4.",
-  submitFailed:
-    "Kh\u00f4ng th\u1ec3 g\u1eedi y\u00eau c\u1ea7u mua l\u00f4.",
+  submitFailed: "Kh\u00f4ng th\u1ec3 g\u1eedi y\u00eau c\u1ea7u mua l\u00f4.",
   unavailable: "L\u00f4 n\u00e0y hi\u1ec7n kh\u00f4ng th\u1ec3 ch\u1ecdn.",
   pendingUnavailable:
     "L\u00f4 n\u00e0y \u0111ang ch\u1edd duy\u1ec7t y\u00eau c\u1ea7u, kh\u00f4ng th\u1ec3 g\u1eedi th\u00eam y\u00eau c\u1ea7u.",
@@ -705,8 +704,9 @@ export default function MapPage() {
   const [myReservations, setMyReservations] = useState<CustomerReservation[]>(
     [],
   );
-  const [cancelTarget, setCancelTarget] =
-    useState<CustomerReservation | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<CustomerReservation | null>(
+    null,
+  );
   const [cancelReason, setCancelReason] = useState("");
   const [cancelError, setCancelError] = useState("");
   const [cancelBusy, setCancelBusy] = useState(false);
@@ -1091,7 +1091,10 @@ export default function MapPage() {
     : undefined;
 
   function openMapCancellation() {
-    if (!selectedMyReservation || !canCancelMapReservation(selectedMyReservation)) {
+    if (
+      !selectedMyReservation ||
+      !canCancelMapReservation(selectedMyReservation)
+    ) {
       return;
     }
     setCancelTarget(selectedMyReservation);
@@ -1243,10 +1246,7 @@ export default function MapPage() {
     if (tooltipRef.current) tooltipRef.current.style.display = "none";
   }
 
-  async function submitReservation(
-    targetPlots: MapPlot[],
-    multiPlot = false,
-  ) {
+  async function submitReservation(targetPlots: MapPlot[], multiPlot = false) {
     const realAvailablePlots = targetPlots.filter(
       (plot) => !plot.isPlaceholder && plot.status === "available",
     );
@@ -1348,9 +1348,6 @@ export default function MapPage() {
       </div>
 
       <div className="breadcrumb">
-        <a href={ROUTES.HOME}>{T.home}</a>
-        <span className="sep">/</span>
-        <span className="current">{T.pageTitle}</span>
         <button
           type="button"
           className="map-help-btn"
@@ -2071,16 +2068,16 @@ export default function MapPage() {
                 <div className="detail-actions route-actions">
                   {selectedMyReservation &&
                     canCancelMapReservation(selectedMyReservation) && (
-                    <button
-                      className="btn-cancel-request"
-                      type="button"
-                      onClick={openMapCancellation}
-                    >
-                      {selectedMyReservation.status === "approved"
-                        ? "Gửi yêu cầu hủy"
-                        : "Hủy yêu cầu mua lô"}
-                    </button>
-                  )}
+                      <button
+                        className="btn-cancel-request"
+                        type="button"
+                        onClick={openMapCancellation}
+                      >
+                        {selectedMyReservation.status === "approved"
+                          ? "Gửi yêu cầu hủy"
+                          : "Hủy yêu cầu mua lô"}
+                      </button>
+                    )}
                   <button
                     className="btn-secondary"
                     type="button"
@@ -2209,9 +2206,7 @@ export default function MapPage() {
                           disabled={submitting}
                           onClick={() => submitReservation([selectedPlot])}
                         >
-                          {submitting
-                            ? T.submitting
-                            : T.continuePlot}
+                          {submitting ? T.submitting : T.continuePlot}
                         </button>
                       ) : (
                         <div className="selection-message">
@@ -2286,9 +2281,7 @@ export default function MapPage() {
                       disabled={submitting}
                       onClick={() => submitReservation(clusterPlots, true)}
                     >
-                      {submitting
-                        ? T.submitting
-                        : T.purchaseSelected}
+                      {submitting ? T.submitting : T.purchaseSelected}
                     </button>
                     <button
                       className="btn-secondary"
@@ -2357,7 +2350,9 @@ export default function MapPage() {
                 disabled={cancelBusy}
               />
             </label>
-            {cancelError && <div className="map-cancel-error">{cancelError}</div>}
+            {cancelError && (
+              <div className="map-cancel-error">{cancelError}</div>
+            )}
             <footer>
               <button
                 type="button"

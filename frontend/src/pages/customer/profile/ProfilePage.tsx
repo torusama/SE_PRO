@@ -7,7 +7,7 @@
 // liên hệ khẩn cấp, ghi chú đặc biệt, tuỳ chọn nhận thông báo, đổi email/SĐT (cần OTP),
 // người được uỷ quyền, 2FA/Authenticator, lịch sử phiên đăng nhập, chuyển nhượng/thừa kế.
 import { useEffect, useRef, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { ROUTES } from "@/constants/routes";
 import { API_BASE_URL, api } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
@@ -1045,12 +1045,6 @@ export default function ProfilePage() {
   return (
     <div className="profile-page">
       <NavyStarfield />
-      <div className="breadcrumb">
-        <Link to={ROUTES.HOME}>{T.home}</Link>
-        <span className="sep">›</span>
-        <span className="current">{T.pageTitle}</span>
-      </div>
-
       <div className="page-wrap">
         <div>
           <div className="profile-card">

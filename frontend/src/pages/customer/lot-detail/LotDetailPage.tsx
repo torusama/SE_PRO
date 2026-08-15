@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import NavyStarfield from "@/components/decor/NavyStarfield";
 import "./LotDetail.css";
 
 type TransferType = "chuyen" | "thua" | "tang";
@@ -17,71 +18,7 @@ const LotDetailPage: React.FC = () => {
 
   return (
     <div className="lot-detail-page">
-      <div className="bg-canvas">
-        <div
-          className="glow-orb glow-orb-gold"
-          aria-hidden="true"
-        />
-        <div
-          className="glow-orb glow-orb-teal"
-          aria-hidden="true"
-        />
-
-        <svg
-          className="mountain-layer"
-          viewBox="0 0 1440 320"
-          preserveAspectRatio="none"
-          xmlns="http://www.w3.org/2000/svg"
-          aria-hidden="true"
-        >
-          <path
-            d="M0,320 L0,200 Q180,120 360,170 Q540,220 720,130 Q900,40 1080,90 Q1200,125 1440,60 L1440,320 Z"
-            fill="rgba(201,168,76,0.05)"
-          />
-          <path
-            d="M0,320 L0,250 Q300,210 600,240 Q900,270 1200,210 Q1350,180 1440,190 L1440,320 Z"
-            fill="rgba(0,229,196,0.04)"
-          />
-        </svg>
-
-        <div className="stars" aria-hidden="true">
-          {Array.from({ length: 80 }, (_, index) => {
-            const size = Math.random() * 1.8 + 0.4;
-            const gold = Math.random() < 0.08;
-            const delay = -Math.random() * 6;
-            const duration = 2 + Math.random() * 4;
-
-            return (
-              <div
-                key={index}
-                className="star"
-                style={
-                  {
-                    width: `${size}px`,
-                    height: `${size}px`,
-                    left: `${Math.random() * 100}%`,
-                    top: `${Math.random() * 65}%`,
-                    "--d": `${duration}s`,
-                    "--delay": `${delay}s`,
-                    background: gold ? "#c9a84c" : "#fff",
-                  } as React.CSSProperties
-                }
-              />
-            );
-          })}
-        </div>
-      </div>
-
-
-      <div className="breadcrumb">
-        <a href="#">Trang chủ</a>
-        <span className="sep">›</span>
-        <a href="#">Lô của tôi</a>
-        <span className="sep">›</span>
-        <a href="#">A-12</a>
-        <span className="sep">›</span>
-        <span className="current">Chuyển nhượng / Thừa kế</span>
-      </div>
+      <NavyStarfield />
 
       <div className="stepper">
         <div className="step-track">
@@ -122,7 +59,6 @@ const LotDetailPage: React.FC = () => {
 
       <main className="transfer-main">
         <div className="page-header">
-          <div className="page-tag">FR-05 · Customer Portal</div>
           <h1 className="page-title">Chuyển Nhượng / Thừa Kế Lô</h1>
           <p className="page-desc">
             Thực hiện thủ tục chuyển quyền sử dụng lô phần mộ sang người khác
@@ -156,8 +92,8 @@ const LotDetailPage: React.FC = () => {
             <div className="type-body">
               <h3>Thừa kế</h3>
               <p>
-                Chuyển quyền sở hữu theo di chúc hoặc thừa kế hợp pháp. Cần
-                giấy tờ pháp lý.
+                Chuyển quyền sở hữu theo di chúc hoặc thừa kế hợp pháp. Cần giấy
+                tờ pháp lý.
               </p>
             </div>
             <div className="type-radio" />
@@ -274,38 +210,22 @@ const LotDetailPage: React.FC = () => {
                 <div className="field-row">
                   <div className="field">
                     <label>Họ và tên</label>
-                    <input
-                      type="text"
-                      value="Nguyễn Văn Thành"
-                      readOnly
-                    />
+                    <input type="text" value="Nguyễn Văn Thành" readOnly />
                   </div>
                   <div className="field">
                     <label>CCCD / Hộ chiếu</label>
-                    <input
-                      type="text"
-                      value="079 123 456 789"
-                      readOnly
-                    />
+                    <input type="text" value="079 123 456 789" readOnly />
                   </div>
                 </div>
 
                 <div className="field-row">
                   <div className="field">
                     <label>Số điện thoại</label>
-                    <input
-                      type="text"
-                      value="0901 234 567"
-                      readOnly
-                    />
+                    <input type="text" value="0901 234 567" readOnly />
                   </div>
                   <div className="field">
                     <label>Email</label>
-                    <input
-                      type="text"
-                      value="thanh.nv@email.com"
-                      readOnly
-                    />
+                    <input type="text" value="thanh.nv@email.com" readOnly />
                   </div>
                 </div>
               </div>
@@ -369,10 +289,7 @@ const LotDetailPage: React.FC = () => {
 
                   <div className="field">
                     <label>Email</label>
-                    <input
-                      type="email"
-                      placeholder="Email để nhận thông báo"
-                    />
+                    <input type="email" placeholder="Email để nhận thông báo" />
                   </div>
                 </div>
 
@@ -554,9 +471,7 @@ const LotDetailPage: React.FC = () => {
                   <div className="ps-num">2</div>
                   <div className="ps-body">
                     <div className="ps-title">Xét duyệt</div>
-                    <div className="ps-sub">
-                      Ban quản lý xem xét 5–7 ngày
-                    </div>
+                    <div className="ps-sub">Ban quản lý xem xét 5–7 ngày</div>
                   </div>
                 </div>
 

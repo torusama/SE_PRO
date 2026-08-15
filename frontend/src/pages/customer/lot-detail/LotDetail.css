@@ -20,7 +20,7 @@
 
   min-height: 100vh;
   overflow-x: hidden;
-  background: var(--ink-void);
+  background: #05090b;
   color: var(--text-main);
   font-family: "Be Vietnam Pro", sans-serif;
   position: relative;
@@ -37,91 +37,6 @@
 .lot-detail-page select,
 .lot-detail-page textarea {
   font-family: inherit;
-}
-
-.lot-detail-page .bg-canvas {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  overflow: hidden;
-}
-
-.lot-detail-page .glow-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(100px);
-  animation: transfer-pulse-orb 8s ease-in-out infinite;
-}
-
-.lot-detail-page .glow-orb-gold {
-  width: 600px;
-  height: 600px;
-  background: radial-gradient(
-    circle,
-    rgba(201, 168, 76, 0.1),
-    transparent 70%
-  );
-  top: -120px;
-  right: -100px;
-}
-
-.lot-detail-page .glow-orb-teal {
-  width: 500px;
-  height: 500px;
-  background: radial-gradient(
-    circle,
-    rgba(0, 229, 196, 0.07),
-    transparent 70%
-  );
-  bottom: 0;
-  left: -80px;
-  animation-delay: -5s;
-}
-
-@keyframes transfer-pulse-orb {
-  0%,
-  100% {
-    opacity: 0.1;
-  }
-
-  50% {
-    opacity: 0.18;
-  }
-}
-
-.lot-detail-page .mountain-layer {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  width: 100%;
-  height: 50vh;
-  opacity: 0.12;
-}
-
-.lot-detail-page .stars {
-  position: absolute;
-  inset: 0;
-}
-
-.lot-detail-page .star {
-  position: absolute;
-  background: #fff;
-  border-radius: 50%;
-  animation: transfer-twinkle var(--d, 3s) ease-in-out infinite
-    var(--delay, 0s);
-}
-
-@keyframes transfer-twinkle {
-  0%,
-  100% {
-    opacity: 0.1;
-  }
-
-  50% {
-    opacity: 0.8;
-  }
 }
 
 /* NAV */
@@ -322,7 +237,8 @@
 }
 
 .lot-detail-page .page-tag {
-  font-size: 11px;
+  font-size: 10px;
+  font-weight: 700;
   letter-spacing: 0.15em;
   color: var(--gold);
   text-transform: uppercase;
@@ -332,16 +248,18 @@
 
 .lot-detail-page .page-title {
   font-family: "Playfair Display", serif;
-  font-size: 30px;
-  font-weight: 600;
+  font-size: clamp(38px, 5vw, 58px);
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: -0.025em;
   color: #e8f4f0;
-  margin: 0 0 8px;
+  margin: 12px 0 16px;
 }
 
 .lot-detail-page .page-desc {
-  font-size: 14px;
+  font-size: 15px;
   color: var(--text-muted);
-  line-height: 1.7;
+  line-height: 1.85;
   max-width: 540px;
 }
 
@@ -507,8 +425,9 @@
 }
 
 .lot-detail-page .section-label {
-  font-size: 11px;
-  letter-spacing: 0.12em;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
   text-transform: uppercase;
   color: var(--teal-soft);
   margin-bottom: 20px;
@@ -755,9 +674,10 @@
 
 .lot-detail-page .summary-title {
   font-family: "Playfair Display", serif;
-  font-size: 17px;
+  font-size: 24px;
+  font-weight: 500;
   color: var(--gold);
-  margin-bottom: 20px;
+  margin: 8px 0 19px;
 }
 
 .lot-detail-page .summary-row {
@@ -774,10 +694,14 @@
 
 .lot-detail-page .summary-row .k {
   color: var(--text-muted);
+  font-size: 10px;
 }
 
 .lot-detail-page .summary-row .v {
   color: var(--text-main);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.45;
   text-align: right;
   max-width: 160px;
 }
@@ -796,13 +720,14 @@
 }
 
 .lot-detail-page .summary-total .k {
-  font-size: 13px;
+  font-size: 11px;
+  font-weight: 600;
   color: var(--text-main);
 }
 
 .lot-detail-page .summary-total .v {
   font-family: "Playfair Display", serif;
-  font-size: 20px;
+  font-size: 25px;
   color: var(--gold);
 }
 
@@ -976,10 +901,6 @@
 
   .lot-detail-page .form-block {
     padding: 20px;
-  }
-
-  .lot-detail-page .page-title {
-    font-size: 26px;
   }
 
   .lot-detail-page .party-verified {

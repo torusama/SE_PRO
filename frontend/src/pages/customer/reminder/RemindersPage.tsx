@@ -624,14 +624,6 @@ export default function RemindersPage() {
       <div className="bg-canvas" aria-hidden="true" />
       <NavyStarfield starsOnly starCount={60} />
 
-      <div className="breadcrumb">
-        <button type="button" onClick={() => navigate(ROUTES.HOME)}>
-          Trang chủ
-        </button>
-        <Icon name="chevronRight" size={14} />
-        <span className="current">Nhắc lịch</span>
-      </div>
-
       <main>
         <header className="page-header rm-reveal">
           <div className="page-header-copy">

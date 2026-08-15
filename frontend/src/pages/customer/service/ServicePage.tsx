@@ -651,11 +651,6 @@ export default function ServicePage() {
     <div className="service-page">
       <NavyStarfield />
       <div className="breadcrumb" data-reveal>
-        <button type="button" onClick={() => navigate(ROUTES.HOME)}>
-          Trang chủ
-        </button>
-        <span className="sep">/</span>
-        <span className="current">Dịch vụ</span>
         <button
           type="button"
           className="service-help-btn"
@@ -1576,7 +1571,10 @@ function TrackTab(props: {
                           <h3 className="s-name">{order.serviceName}</h3>
                         </div>
                         <span className={`status-badge ${group}`}>
-                          {displayStatusLabel(order.status, order.paymentStatus)}
+                          {displayStatusLabel(
+                            order.status,
+                            order.paymentStatus,
+                          )}
                         </span>
                       </div>
 
@@ -1659,15 +1657,18 @@ function TrackTab(props: {
                         <div className="detail-surface">
                           <div className="detail-header">
                             <div>
-                              <span className="detail-eyebrow">Chi tiết yêu cầu</span>
+                              <span className="detail-eyebrow">
+                                Chi tiết yêu cầu
+                              </span>
                               <h4>Thông tin đơn dịch vụ</h4>
                               <p>
-                                Thông tin được chia theo từng nhóm để bạn dễ kiểm tra
-                                trước khi theo dõi hoặc thanh toán.
+                                Thông tin được chia theo từng nhóm để bạn dễ
+                                kiểm tra trước khi theo dõi hoặc thanh toán.
                               </p>
                             </div>
                             <span className="detail-updated">
-                              Cập nhật {formatDate(detail.updatedAt || detail.createdAt)}
+                              Cập nhật{" "}
+                              {formatDate(detail.updatedAt || detail.createdAt)}
                             </span>
                           </div>
 
@@ -1688,11 +1689,17 @@ function TrackTab(props: {
                                 </div>
                                 <div>
                                   <dt>Lô áp dụng</dt>
-                                  <dd>{detail.plotCode ? `Lô ${detail.plotCode}` : "—"}</dd>
+                                  <dd>
+                                    {detail.plotCode
+                                      ? `Lô ${detail.plotCode}`
+                                      : "—"}
+                                  </dd>
                                 </div>
                                 <div>
                                   <dt>Chi phí dịch vụ</dt>
-                                  <dd className="detail-money">{money.format(detail.amount)}</dd>
+                                  <dd className="detail-money">
+                                    {money.format(detail.amount)}
+                                  </dd>
                                 </div>
                               </dl>
                             </section>
@@ -1709,11 +1716,18 @@ function TrackTab(props: {
                                 </div>
                                 <div>
                                   <dt>Người phụ trách</dt>
-                                  <dd>{detail.assignedToName || "Đang phân công"}</dd>
+                                  <dd>
+                                    {detail.assignedToName || "Đang phân công"}
+                                  </dd>
                                 </div>
                                 <div>
                                   <dt>Trạng thái đơn</dt>
-                                  <dd>{displayStatusLabel(detail.status, detail.paymentStatus)}</dd>
+                                  <dd>
+                                    {displayStatusLabel(
+                                      detail.status,
+                                      detail.paymentStatus,
+                                    )}
+                                  </dd>
                                 </div>
                                 <div>
                                   <dt>Thanh toán</dt>
@@ -1731,7 +1745,9 @@ function TrackTab(props: {
 
                           <section className="detail-note-card">
                             <div>
-                              <span className="detail-note-label">Ghi chú của gia đình</span>
+                              <span className="detail-note-label">
+                                Ghi chú của gia đình
+                              </span>
                               <p>{detail.note || "Không có ghi chú thêm."}</p>
                             </div>
                             {detail.paymentCode && (
@@ -1751,9 +1767,9 @@ function TrackTab(props: {
                                     Bước tiếp theo
                                   </span>
                                   <p>
-                                    Yêu cầu của bạn đang được quản trị viên
-                                    xem xét. Mã QR thanh toán sẽ hiển thị ở
-                                    đây ngay sau khi đơn được xác nhận.
+                                    Yêu cầu của bạn đang được quản trị viên xem
+                                    xét. Mã QR thanh toán sẽ hiển thị ở đây ngay
+                                    sau khi đơn được xác nhận.
                                   </p>
                                 </div>
                               </section>
@@ -1770,7 +1786,9 @@ function TrackTab(props: {
                                 <DemoPaymentPanel
                                   orderId={detail.id}
                                   amount={detail.amount}
-                                  paymentStatus={detail.paymentStatus ?? "unpaid"}
+                                  paymentStatus={
+                                    detail.paymentStatus ?? "unpaid"
+                                  }
                                   paymentCode={detail.paymentCode}
                                   paidAt={detail.paidAt}
                                   paymentConfirmedAt={detail.paymentConfirmedAt}
@@ -1799,15 +1817,20 @@ function TrackTab(props: {
                                   <div className="completion-proof-header">
                                     <div>
                                       <span>Dịch vụ đã hoàn thành</span>
-                                      <strong>Kết quả từ bộ phận thực hiện</strong>
+                                      <strong>
+                                        Kết quả từ bộ phận thực hiện
+                                      </strong>
                                     </div>
-                                    <small>{formatDate(detail.completedAt)}</small>
+                                    <small>
+                                      {formatDate(detail.completedAt)}
+                                    </small>
                                   </div>
                                   <p>
                                     {detail.completionNote ||
                                       "Dịch vụ đã được xác nhận hoàn thành."}
                                   </p>
-                                  {(detail.completionImages ?? []).length > 0 && (
+                                  {(detail.completionImages ?? []).length >
+                                    0 && (
                                     <div className="customer-evidence-grid">
                                       {(detail.completionImages ?? []).map(
                                         (filename) => (
