@@ -1,16 +1,54 @@
 import React, { useEffect, useState } from "react";
+import { HelpCircle } from "lucide-react";
 import NavyStarfield from "@/components/decor/NavyStarfield";
+import GuidePopup, { type GuideStep } from "@/components/guide/GuidePopup";
 import "./LotDetail.css";
 
 type TransferType = "chuyen" | "thua" | "tang";
 
+const TRANSFER_GUIDE_STORAGE_KEY = "hideGuide_transferPage";
+const TRANSFER_GUIDE_STEPS: GuideStep[] = [
+  {
+    title: "Bước 1: Chọn loại giao dịch",
+    desc: "Chọn hình thức phù hợp: Chuyển nhượng (có thể kèm giao dịch tài chính), Thừa kế (theo di chúc hoặc pháp luật) hoặc Tặng / Cho tặng cho người thân.",
+  },
+  {
+    title: "Bước 2: Nhập thông tin bên nhận",
+    desc: "Điền đầy đủ họ tên, số CCCD/hộ chiếu và thông tin liên hệ của người sẽ nhận quyền sử dụng lô.",
+  },
+  {
+    title: "Bước 3: Nộp hồ sơ giấy tờ",
+    desc: "Tải lên các giấy tờ pháp lý cần thiết (CCCD, di chúc, giấy tờ chứng minh quan hệ,...) tuỳ theo loại giao dịch đã chọn.",
+  },
+  {
+    title: "Bước 4: Xác nhận & ký số",
+    desc: "Sau khi hồ sơ được ban quản lý xem xét trong 5–7 ngày làm việc, cả hai bên sẽ nhận thông báo để ký số xác nhận.",
+  },
+  {
+    title: "Bước 5: Hoàn tất",
+    desc: "Hợp đồng mới được cấp và quyền sử dụng lô chính thức chuyển sang bên nhận.",
+  },
+];
+
 const LotDetailPage: React.FC = () => {
-  const [transferType, setTransferType] = useState<TransferType>("chuyen");
+  const [transferType, setTransferType] = useState<TransferType | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
 
   useEffect(() => {
     document.title = "Chuyển Nhượng / Thừa Kế — FR-05";
   }, []);
+
+  useEffect(() => {
+    // Chỉ tự động hiện hướng dẫn nếu người dùng chưa tick "Không hiển thị lại".
+    if (localStorage.getItem(TRANSFER_GUIDE_STORAGE_KEY) !== "true") {
+      setGuideOpen(true);
+    }
+  }, []);
+
+  const toggleTransferType = (type: TransferType) => {
+    setTransferType((current) => (current === type ? null : type));
+  };
 
   const handleUpload = () => {
     setUploading(true);
@@ -20,57 +58,80 @@ const LotDetailPage: React.FC = () => {
     <div className="lot-detail-page">
       <NavyStarfield />
 
-      <div className="stepper">
-        <div className="step-track">
-          <div className="step done">
-            <div className="step-circle">✓</div>
-            <div className="step-label">Chọn loại</div>
-          </div>
+      {transferType && (
+        <div className="stepper">
+          <div className="step-track">
+            <div className="step done">
+              <div className="step-circle">✓</div>
+              <div className="step-label">Chọn loại</div>
+            </div>
 
-          <div className="step-line filled" />
+            <div className="step-line filled" />
 
-          <div className="step active">
-            <div className="step-circle">2</div>
-            <div className="step-label">Thông tin bên nhận</div>
-          </div>
+            <div className="step active">
+              <div className="step-circle">2</div>
+              <div className="step-label">Thông tin bên nhận</div>
+            </div>
 
-          <div className="step-line" />
+            <div className="step-line" />
 
-          <div className="step pending">
-            <div className="step-circle">3</div>
-            <div className="step-label">Hồ sơ giấy tờ</div>
-          </div>
+            <div className="step pending">
+              <div className="step-circle">3</div>
+              <div className="step-label">Hồ sơ giấy tờ</div>
+            </div>
 
-          <div className="step-line" />
+            <div className="step-line" />
 
-          <div className="step pending">
-            <div className="step-circle">4</div>
-            <div className="step-label">Xác nhận & ký số</div>
-          </div>
+            <div className="step pending">
+              <div className="step-circle">4</div>
+              <div className="step-label">Xác nhận & ký số</div>
+            </div>
 
-          <div className="step-line" />
+            <div className="step-line" />
 
-          <div className="step pending">
-            <div className="step-circle">5</div>
-            <div className="step-label">Hoàn tất</div>
+            <div className="step pending">
+              <div className="step-circle">5</div>
+              <div className="step-label">Hoàn tất</div>
+            </div>
           </div>
         </div>
-      </div>
+      )}
+
+      <GuidePopup
+        open={guideOpen}
+        onClose={() => setGuideOpen(false)}
+        title="Quy trình chuyển nhượng / thừa kế"
+        steps={TRANSFER_GUIDE_STEPS}
+        storageKey={TRANSFER_GUIDE_STORAGE_KEY}
+        finishLabel="Bắt đầu"
+      />
 
       <main className="transfer-main">
         <div className="page-header">
-          <h1 className="page-title">Chuyển Nhượng / Thừa Kế Lô</h1>
-          <p className="page-desc">
-            Thực hiện thủ tục chuyển quyền sử dụng lô phần mộ sang người khác
-            theo quy định pháp luật.
-          </p>
+          <div className="page-header-top">
+            <div>
+              <h1 className="page-title">Chuyển Nhượng / Thừa Kế Lô</h1>
+              <p className="page-desc">
+                Thực hiện thủ tục chuyển quyền sử dụng lô phần mộ sang người
+                khác theo quy định pháp luật.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="lot-help-btn"
+              aria-label="Xem hướng dẫn chuyển nhượng / thừa kế"
+              onClick={() => setGuideOpen(true)}
+            >
+              <HelpCircle size={18} strokeWidth={1.8} />
+            </button>
+          </div>
         </div>
 
         <div className="type-switch">
           <button
             type="button"
             className={`type-card ${transferType === "chuyen" ? "active" : ""}`}
-            onClick={() => setTransferType("chuyen")}
+            onClick={() => toggleTransferType("chuyen")}
           >
             <div className="type-icon-wrap">🤝</div>
             <div className="type-body">
@@ -86,7 +147,7 @@ const LotDetailPage: React.FC = () => {
           <button
             type="button"
             className={`type-card ${transferType === "thua" ? "active" : ""}`}
-            onClick={() => setTransferType("thua")}
+            onClick={() => toggleTransferType("thua")}
           >
             <div className="type-icon-wrap">📜</div>
             <div className="type-body">
@@ -102,7 +163,7 @@ const LotDetailPage: React.FC = () => {
           <button
             type="button"
             className={`type-card ${transferType === "tang" ? "active" : ""}`}
-            onClick={() => setTransferType("tang")}
+            onClick={() => toggleTransferType("tang")}
           >
             <div className="type-icon-wrap">🎁</div>
             <div className="type-body">
@@ -408,7 +469,9 @@ const LotDetailPage: React.FC = () => {
                     ? "Chuyển nhượng"
                     : transferType === "thua"
                       ? "Thừa kế"
-                      : "Tặng / Cho tặng"}
+                      : transferType === "tang"
+                        ? "Tặng / Cho tặng"
+                        : "Chưa chọn loại giao dịch"}
                 </span>
               </div>
 

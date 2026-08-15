@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import "./GuidePopup.css";
 
 export interface GuideStep {
@@ -58,7 +59,7 @@ export default function GuidePopup({
     if (current > 0) setCurrent((value) => value - 1);
   }
 
-  return (
+  return createPortal(
     <div
       className="guide-popup-overlay"
       role="dialog"
@@ -118,12 +119,17 @@ export default function GuidePopup({
             >
               Quay lại
             </button>
-            <button type="button" className="guide-popup__next" onClick={handleNext}>
+            <button
+              type="button"
+              className="guide-popup__next"
+              onClick={handleNext}
+            >
               {isLast ? finishLabel : "Tiếp theo"}
             </button>
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

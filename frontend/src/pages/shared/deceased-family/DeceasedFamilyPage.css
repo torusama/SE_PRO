@@ -58,6 +58,37 @@
   z-index: 1;
 }
 
+.df-toolbar .df-help-btn {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  min-height: 0;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(10, 255, 212, 0.3);
+  background: transparent;
+  color: var(--df-teal, #00e5c4);
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    border-color 160ms ease;
+}
+
+.df-toolbar .df-help-btn:hover {
+  background: rgba(10, 255, 212, 0.1);
+  color: var(--df-text, #e4edf1);
+  border-color: var(--df-teal, #00e5c4);
+  transform: none;
+}
+
+.df-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+
 .df-hero {
   position: relative;
   display: flex;
@@ -423,7 +454,9 @@
   border-radius: 11px;
   background: rgba(3, 9, 18, 0.46);
   cursor: pointer;
-  transition: border-color 160ms ease, background 160ms ease;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease;
 }
 
 .df-profile-item:hover,

@@ -1,9 +1,35 @@
 import { useCallback, useEffect, useState } from "react";
+import { HelpCircle } from "lucide-react";
 import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
 import NavyStarfield from "@/components/decor/NavyStarfield";
+import GuidePopup, { type GuideStep } from "@/components/guide/GuidePopup";
 import "./DeceasedFamilyPage.css";
+
+const FAMILY_GUIDE_STORAGE_KEY = "hideGuide_deceasedFamilyPage";
+const FAMILY_GUIDE_STEPS: GuideStep[] = [
+  {
+    title: "Bước 1: Xem hồ sơ người thân",
+    desc: "Truy cập mục Gia đình tưởng niệm để xem danh sách hồ sơ người đã khuất đang được gia đình lưu giữ.",
+  },
+  {
+    title: "Bước 2: Tham gia hoặc tạo nhóm gia đình",
+    desc: "Tạo một nhóm gia đình mới hoặc tham gia nhóm sẵn có để cùng quản lý và chăm sóc hồ sơ tưởng niệm.",
+  },
+  {
+    title: "Bước 3: Mời thành viên",
+    desc: "Gửi lời mời đến người thân bằng địa chỉ email đã đăng ký để họ cùng tham gia không gian chung.",
+  },
+  {
+    title: "Bước 4: Cấp quyền truy cập",
+    desc: "Chỉ định chính xác nội dung (hồ sơ, lô đất, đơn dịch vụ) mà từng thành viên được phép xem hoặc thao tác.",
+  },
+  {
+    title: "Bước 5: Theo dõi lời mời",
+    desc: "Phản hồi các lời mời tham gia nhóm gia đình khác và theo dõi trạng thái quyền truy cập bất cứ lúc nào.",
+  },
+];
 
 type Profile = {
   id: number;
@@ -101,6 +127,7 @@ export default function DeceasedFamilyPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [guideOpen, setGuideOpen] = useState(false);
 
   const run = async (
     operation: () => Promise<void>,
@@ -129,24 +156,37 @@ export default function DeceasedFamilyPage() {
       const data = unwrap<{ items?: Profile[] } | Profile[]>(response);
       setProfiles(Array.isArray(data) ? data : (data.items ?? []));
       if (!admin) {
-        const contracts = contractsResponse ? unwrap<Contract[]>(contractsResponse) : [];
+        const contracts = contractsResponse
+          ? unwrap<Contract[]>(contractsResponse)
+          : [];
         const plots = contracts
-          .filter((contract) => ["active", "completed"].includes(contract.status))
-          .flatMap((contract) => contract.plots?.length
-            ? contract.plots.map((plot) => ({
-                plotId: plot.id,
-                plotCode: plot.code,
-                zoneName: plot.zoneName ?? undefined,
-              }))
-            : [{
-                plotId: contract.plotId,
-                plotCode: contract.plotCode,
-                zoneName: contract.zoneName,
-              }])
+          .filter((contract) =>
+            ["active", "completed"].includes(contract.status),
+          )
+          .flatMap((contract) =>
+            contract.plots?.length
+              ? contract.plots.map((plot) => ({
+                  plotId: plot.id,
+                  plotCode: plot.code,
+                  zoneName: plot.zoneName ?? undefined,
+                }))
+              : [
+                  {
+                    plotId: contract.plotId,
+                    plotCode: contract.plotCode,
+                    zoneName: contract.zoneName,
+                  },
+                ],
+          )
           .filter((plot) => plot.plotId && plot.plotCode);
-        setOwnedPlots(plots.filter((plot, index) =>
-          plots.findIndex((candidate) => candidate.plotId === plot.plotId) === index,
-        ));
+        setOwnedPlots(
+          plots.filter(
+            (plot, index) =>
+              plots.findIndex(
+                (candidate) => candidate.plotId === plot.plotId,
+              ) === index,
+          ),
+        );
         const [familyResponse, inviteResponse] = await Promise.all([
           api.get("/families"),
           api.get("/my/family-invitations"),
@@ -163,6 +203,13 @@ export default function DeceasedFamilyPage() {
     const timeoutId = window.setTimeout(() => void load(), 0);
     return () => window.clearTimeout(timeoutId);
   }, [load]);
+
+  useEffect(() => {
+    // Chỉ tự động hiện hướng dẫn cho khách hàng, và nếu chưa tick "Không hiển thị lại".
+    if (!admin && localStorage.getItem(FAMILY_GUIDE_STORAGE_KEY) !== "true") {
+      setGuideOpen(true);
+    }
+  }, [admin]);
 
   const selectFamily = async (id: number) => {
     setFamilyId(id);
@@ -191,7 +238,32 @@ export default function DeceasedFamilyPage() {
   return (
     <main className="df-page">
       <NavyStarfield />
+
+      {!admin && (
+        <GuidePopup
+          open={guideOpen}
+          onClose={() => setGuideOpen(false)}
+          title="Gia đình tưởng niệm"
+          steps={FAMILY_GUIDE_STEPS}
+          storageKey={FAMILY_GUIDE_STORAGE_KEY}
+          finishLabel="Bắt đầu"
+        />
+      )}
+
       <div className="df-shell">
+        {!admin && (
+          <div className="df-toolbar">
+            <button
+              type="button"
+              className="df-help-btn"
+              aria-label="Xem hướng dẫn gia đình tưởng niệm"
+              onClick={() => setGuideOpen(true)}
+            >
+              <HelpCircle size={18} strokeWidth={1.8} />
+            </button>
+          </div>
+        )}
+
         <header className="df-hero">
           <div className="df-hero-copy">
             <span className="df-eyebrow">
@@ -504,22 +576,42 @@ function CreateProfileForm({
           <span>Mã số lô đang sở hữu</span>
           <select name="plotId" required defaultValue="">
             <option value="" disabled>
-              {ownedPlots.length ? "Chọn lô đang sở hữu" : "Bạn chưa có lô đủ điều kiện"}
+              {ownedPlots.length
+                ? "Chọn lô đang sở hữu"
+                : "Bạn chưa có lô đủ điều kiện"}
             </option>
             {ownedPlots.map((plot) => (
               <option key={plot.plotId} value={plot.plotId}>
-                {plot.plotCode}{plot.zoneName ? ` · ${plot.zoneName}` : ""}
+                {plot.plotCode}
+                {plot.zoneName ? ` · ${plot.zoneName}` : ""}
               </option>
             ))}
           </select>
         </label>
         <Field name="fullName" label="Họ và tên" />
-        <DateField name="dateOfBirth" label="Ngày sinh" value={dateOfBirth}
-          max={dateOfDeath || burialDate || today} onChange={setDateOfBirth} />
-        <DateField name="dateOfDeath" label="Ngày mất" value={dateOfDeath}
-          min={dateOfBirth || undefined} max={burialDate || today} onChange={setDateOfDeath} />
-        <DateField name="burialDate" label="Ngày an táng" value={burialDate}
-          min={dateOfDeath || dateOfBirth || undefined} max={today} onChange={setBurialDate} />
+        <DateField
+          name="dateOfBirth"
+          label="Ngày sinh"
+          value={dateOfBirth}
+          max={dateOfDeath || burialDate || today}
+          onChange={setDateOfBirth}
+        />
+        <DateField
+          name="dateOfDeath"
+          label="Ngày mất"
+          value={dateOfDeath}
+          min={dateOfBirth || undefined}
+          max={burialDate || today}
+          onChange={setDateOfDeath}
+        />
+        <DateField
+          name="burialDate"
+          label="Ngày an táng"
+          value={burialDate}
+          min={dateOfDeath || dateOfBirth || undefined}
+          max={today}
+          onChange={setBurialDate}
+        />
         <Field name="hometown" label="Quê quán" optional />
       </div>
       <label className="df-field">
@@ -532,14 +624,25 @@ function CreateProfileForm({
           placeholder="Ghi lại đôi nét về cuộc đời và những điều gia đình muốn lưu giữ..."
         />
       </label>
-      <button className="df-primary-button" disabled={busy || ownedPlots.length === 0} type="submit">
+      <button
+        className="df-primary-button"
+        disabled={busy || ownedPlots.length === 0}
+        type="submit"
+      >
         Tạo hồ sơ tưởng niệm
       </button>
     </form>
   );
 }
 
-function DateField({ name, label, value, min, max, onChange }: {
+function DateField({
+  name,
+  label,
+  value,
+  min,
+  max,
+  onChange,
+}: {
   name: string;
   label: string;
   value: string;
@@ -549,9 +652,18 @@ function DateField({ name, label, value, min, max, onChange }: {
 }) {
   return (
     <label className="df-field">
-      <span>{label}<small>Không bắt buộc</small></span>
-      <input name={name} type="date" value={value} min={min} max={max}
-        onChange={(event) => onChange(event.target.value)} />
+      <span>
+        {label}
+        <small>Không bắt buộc</small>
+      </span>
+      <input
+        name={name}
+        type="date"
+        value={value}
+        min={min}
+        max={max}
+        onChange={(event) => onChange(event.target.value)}
+      />
     </label>
   );
 }
@@ -573,7 +685,7 @@ function ProfileList({
 }) {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const toggleProfile = (id: number) =>
-    setExpandedId((current) => current === id ? null : id);
+    setExpandedId((current) => (current === id ? null : id));
 
   return (
     <section className="df-panel df-profile-panel">
@@ -674,12 +786,25 @@ function ProfileList({
               </div>
               {expandedId === profile.id && (
                 <div className="df-profile-detail">
-                  <div><span>Ngày sinh</span><strong>{formatDate(profile.dateOfBirth)}</strong></div>
-                  <div><span>Ngày mất</span><strong>{formatDate(profile.dateOfDeath)}</strong></div>
-                  <div><span>Ngày an táng</span><strong>{formatDate(profile.burialDate)}</strong></div>
-                  <div><span>Quê quán</span><strong>{profile.hometown || "Chưa cập nhật"}</strong></div>
+                  <div>
+                    <span>Ngày sinh</span>
+                    <strong>{formatDate(profile.dateOfBirth)}</strong>
+                  </div>
+                  <div>
+                    <span>Ngày mất</span>
+                    <strong>{formatDate(profile.dateOfDeath)}</strong>
+                  </div>
+                  <div>
+                    <span>Ngày an táng</span>
+                    <strong>{formatDate(profile.burialDate)}</strong>
+                  </div>
+                  <div>
+                    <span>Quê quán</span>
+                    <strong>{profile.hometown || "Chưa cập nhật"}</strong>
+                  </div>
                   <div className="df-profile-biography">
-                    <span>Tiểu sử</span><p>{profile.biography || "Chưa có tiểu sử."}</p>
+                    <span>Tiểu sử</span>
+                    <p>{profile.biography || "Chưa có tiểu sử."}</p>
                   </div>
                 </div>
               )}
@@ -802,29 +927,42 @@ function FamilyPanel({
         <details className="df-tool" open>
           <summary>Liên kết lô đất</summary>
           <p>Đưa một lô thuộc sở hữu hợp lệ vào không gian chung.</p>
-          <form className="df-compact-form" onSubmit={(event) => {
-            event.preventDefault();
-            const data = new FormData(event.currentTarget);
-            void post(`/families/${familyId}/plots`,
-              { plotId: Number(data.get("plotId")) }, "Đã thêm lô vào nhóm.");
-          }}>
+          <form
+            className="df-compact-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const data = new FormData(event.currentTarget);
+              void post(
+                `/families/${familyId}/plots`,
+                { plotId: Number(data.get("plotId")) },
+                "Đã thêm lô vào nhóm.",
+              );
+            }}
+          >
             <label className="df-field">
               <span>Mã số lô</span>
               <select name="plotId" required defaultValue="">
-                <option value="" disabled>Chọn lô đang sở hữu</option>
+                <option value="" disabled>
+                  Chọn lô đang sở hữu
+                </option>
                 {ownedPlots.map((plot) => (
                   <option key={plot.plotId} value={plot.plotId}>
-                    {plot.plotCode}{plot.zoneName ? ` · ${plot.zoneName}` : ""}
+                    {plot.plotCode}
+                    {plot.zoneName ? ` · ${plot.zoneName}` : ""}
                   </option>
                 ))}
               </select>
             </label>
-            <button disabled={busy || ownedPlots.length === 0} type="submit">Thêm lô</button>
+            <button disabled={busy || ownedPlots.length === 0} type="submit">
+              Thêm lô
+            </button>
           </form>
         </details>
         <details className="df-tool">
           <summary>Mời thành viên</summary>
-          <p>Gửi lời mời đến tài khoản người thân bằng địa chỉ email đã đăng ký.</p>
+          <p>
+            Gửi lời mời đến tài khoản người thân bằng địa chỉ email đã đăng ký.
+          </p>
           <CompactForm
             button="Gửi lời mời"
             fields={[["email", "Email người dùng", "email"]]}

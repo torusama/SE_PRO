@@ -236,6 +236,37 @@
   margin-bottom: 32px;
 }
 
+.lot-detail-page .page-header-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.lot-detail-page .lot-help-btn {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  margin-top: 4px;
+  border-radius: 50%;
+  border: 1px solid var(--border-soft);
+  background: transparent;
+  color: var(--teal-glow);
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    border-color 160ms ease;
+}
+
+.lot-detail-page .lot-help-btn:hover {
+  background: rgba(0, 229, 196, 0.1);
+  color: var(--text-main);
+  border-color: var(--teal-glow);
+}
+
 .lot-detail-page .page-tag {
   font-size: 10px;
   font-weight: 700;
