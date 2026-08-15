@@ -72,24 +72,6 @@ const LotDetailPage: React.FC = () => {
         </div>
       </div>
 
-      <nav className="transfer-nav">
-        <div className="nav-logo">
-          Vĩnh Hằng
-          <span>CEMETERY MANAGEMENT</span>
-        </div>
-
-        <div className="nav-links">
-          <a href="#">Bản đồ</a>
-          <a href="#" className="active">Lô của tôi</a>
-          <a href="#">Dịch vụ</a>
-          <a href="#">Thông báo</a>
-        </div>
-
-        <div className="nav-user">
-          <div className="nav-avatar">NT</div>
-          Nguyễn Thành
-        </div>
-      </nav>
 
       <div className="breadcrumb">
         <a href="#">Trang chủ</a>
