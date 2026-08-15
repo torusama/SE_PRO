@@ -298,6 +298,11 @@
   font-size: 13px;
   color: var(--text-muted);
   line-height: 1.6;
+  /* Một số thông báo (vd: nhắc giấy tờ cần mang theo khi ký kết) có nhiều
+     dòng và có gạch đầu dòng ("•"); giữ nguyên xuống dòng và căn đều lề để
+     hiển thị đúng như nội dung đã soạn, thay vì gộp thành một đoạn liền. */
+  white-space: pre-line;
+  text-align: justify;
 }
 .notification-page .notif-tags {
   display: flex;

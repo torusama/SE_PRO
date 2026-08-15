@@ -15,7 +15,9 @@ import AlertModal from "@/components/ui/AlertModal";
 import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
 import NavyStarfield from "@/components/decor/NavyStarfield";
 import {
+  getDateOfBirthError,
   getEmailError,
+  getMaxDateOfBirthForAge,
   getPhoneNumberError,
   getPostalCodeError,
 } from "@/utils/validators";
@@ -131,15 +133,14 @@ function formatCurrency(v: number) {
 }
 
 // FIX BUG: input ngày sinh trước đây không giới hạn "max" nên cho phép nhập
-// năm vượt lố (VD: 900000) hoặc ngày trong tương lai. `todayISODate` dùng để
-// chặn ở HTML lẫn khi validate trước khi lưu.
-const todayISODate = new Date().toISOString().slice(0, 10);
+// năm vượt lố (VD: 900000) hoặc ngày trong tương lai.
+// Khách hàng phải đủ 18 tuổi trở lên. `maxDobFor18` là ngày sinh trễ nhất được
+// phép chọn (giới hạn ngay trên input ngày, không cho chọn ngày khiến chưa đủ
+// 18 tuổi), song song với validate lại lúc lưu bằng getDateOfBirthError.
+const maxDobFor18 = getMaxDateOfBirthForAge(18);
 
 function isDobValid(value: string): boolean {
-  if (!value.trim()) return false;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return false;
-  return value >= "1900-01-01" && value <= todayISODate;
+  return getDateOfBirthError(value, { minAge: 18 }) === null;
 }
 
 function formatDate(d: string | null | undefined) {
@@ -864,8 +865,9 @@ export default function ProfilePage() {
 
   async function handleSaveInfo() {
     setAttemptedSaveInfo(true);
-    if (dob.trim() && !isDobValid(dob)) {
-      showToast("Ngày sinh không hợp lệ (không được vượt quá ngày hiện tại).");
+    const dobError = getDateOfBirthError(dob, { minAge: 18 });
+    if (dob.trim() && dobError) {
+      showToast(dobError);
       return;
     }
     if (getMissingInfoFields().length > 0) {
@@ -1203,8 +1205,13 @@ export default function ProfilePage() {
                     </label>
                     <input
                       type="tel"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={11}
                       value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
+                      onChange={(e) =>
+                        setPhone(e.target.value.replace(/\D/g, "").slice(0, 11))
+                      }
                       placeholder="09xx xxx xxx"
                       className={
                         attemptedSaveInfo && getPhoneNumberError(phone)
@@ -1212,6 +1219,11 @@ export default function ProfilePage() {
                           : undefined
                       }
                     />
+                    {attemptedSaveInfo && getPhoneNumberError(phone) && (
+                      <p className="field-error-text">
+                        {getPhoneNumberError(phone)}
+                      </p>
+                    )}
                   </div>
                   <div className="field">
                     <label>
@@ -1222,13 +1234,18 @@ export default function ProfilePage() {
                       value={dob}
                       onChange={(e) => setDob(e.target.value)}
                       min="1900-01-01"
-                      max={todayISODate}
+                      max={maxDobFor18}
                       className={
                         attemptedSaveInfo && (!dob.trim() || !isDobValid(dob))
                           ? "field-invalid"
                           : undefined
                       }
                     />
+                    {attemptedSaveInfo && dob.trim() && !isDobValid(dob) && (
+                      <p className="field-error-text">
+                        {getDateOfBirthError(dob, { minAge: 18 })}
+                      </p>
+                    )}
                   </div>
                   <div className="field">
                     <label>
@@ -1433,13 +1450,17 @@ export default function ProfilePage() {
                   </label>
                   <input
                     type="tel"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={11}
                     value={emergencyContact.phone}
                     onChange={(e) =>
                       setEmergencyContact((v) => ({
                         ...v,
-                        phone: e.target.value,
+                        phone: e.target.value.replace(/\D/g, "").slice(0, 11),
                       }))
                     }
+                    placeholder="09xx xxx xxx"
                     className={
                       attemptedSaveInfo &&
                       getPhoneNumberError(emergencyContact.phone)
@@ -1447,6 +1468,12 @@ export default function ProfilePage() {
                         : undefined
                     }
                   />
+                  {attemptedSaveInfo &&
+                    getPhoneNumberError(emergencyContact.phone) && (
+                      <p className="field-error-text">
+                        {getPhoneNumberError(emergencyContact.phone)}
+                      </p>
+                    )}
                 </div>
                 <div className="field">
                   <label>Email</label>

@@ -24,6 +24,7 @@ const TYPE_LABELS: Record<string, string> = {
   appointment_updated: "Lịch hẹn đã cập nhật",
   appointment_response: "Phản hồi lịch hẹn",
   appointment_status_updated: "Trạng thái lịch hẹn",
+  appointment_confirmed: "Lịch hẹn đã được chốt",
   contract_created: "Hợp đồng mới",
   contract_updated: "Cập nhật hợp đồng",
   service_submitted: "Dịch vụ mới",

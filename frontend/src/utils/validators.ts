@@ -52,6 +52,73 @@ export function getPostalCodeError(value: string): string | null {
   return null;
 }
 
+/**
+ * Tính tuổi (theo năm/tháng/ngày) tính đến thời điểm hiện tại dựa trên ngày sinh
+ * dạng "YYYY-MM-DD". Dùng chung cho validate ngày sinh ở các form.
+ */
+function calculateAge(dob: Date, now: Date = new Date()): number {
+  let age = now.getFullYear() - dob.getFullYear();
+  const monthDiff = now.getMonth() - dob.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < dob.getDate())) {
+    age -= 1;
+  }
+  return age;
+}
+
+/**
+ * Trả về ngày sinh trễ nhất (dạng "YYYY-MM-DD") để người dùng đủ `minAge` tuổi
+ * tính đến hôm nay. Dùng để giới hạn thuộc tính `max` của input ngày sinh.
+ */
+export function getMaxDateOfBirthForAge(
+  minAge: number,
+  now: Date = new Date(),
+): string {
+  const d = new Date(now);
+  d.setFullYear(d.getFullYear() - minAge);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Kiểm tra ngày sinh hợp lệ: đúng định dạng, không ở tương lai, không quá xa
+ * trong quá khứ, và người dùng phải đủ 18 tuổi trở lên tính đến ngày hiện tại.
+ * Trả về thông báo lỗi tiếng Việt rõ ràng, mang tính hướng dẫn, hoặc null nếu hợp lệ.
+ */
+export function getDateOfBirthError(
+  value: string,
+  opts?: { minAge?: number },
+): string | null {
+  const minAge = opts?.minAge ?? 18;
+  const trimmed = value.trim();
+  if (!trimmed) return "Vui lòng chọn ngày sinh.";
+
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) {
+    return "Ngày sinh không hợp lệ. Vui lòng chọn lại theo định dạng ngày/tháng/năm.";
+  }
+
+  const todayISO = new Date().toISOString().slice(0, 10);
+  if (trimmed > todayISO) {
+    return "Ngày sinh không được lớn hơn ngày hiện tại. Vui lòng kiểm tra lại.";
+  }
+  if (trimmed < "1900-01-01") {
+    return "Năm sinh không hợp lệ. Vui lòng kiểm tra lại ngày sinh.";
+  }
+
+  const age = calculateAge(parsed);
+  if (age < minAge) {
+    return `Bạn phải đủ ${minAge} tuổi trở lên để sử dụng chức năng này. Vui lòng kiểm tra lại ngày sinh đã nhập.`;
+  }
+
+  return null;
+}
+
+export function isValidDateOfBirth(
+  value: string,
+  opts?: { minAge?: number },
+): boolean {
+  return getDateOfBirthError(value, opts) === null;
+}
+
 /** Kiểm tra định dạng email nói chung (RFC-lite, đủ dùng cho form phía client). */
 export function isValidEmailFormat(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
@@ -79,7 +146,10 @@ export function isValidGmailIfApplicable(value: string): boolean {
  * thì phải đúng thêm quy tắc riêng của Gmail. Trả về thông báo lỗi tiếng Việt
  * rõ ràng để hiển thị cho khách, hoặc null nếu hợp lệ.
  */
-export function getEmailError(value: string, opts?: { required?: boolean }): string | null {
+export function getEmailError(
+  value: string,
+  opts?: { required?: boolean },
+): string | null {
   const trimmed = value.trim();
   if (!trimmed) {
     return opts?.required ? "Vui lòng nhập địa chỉ email." : null;

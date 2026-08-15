@@ -284,8 +284,13 @@ export class AppointmentsService {
       );
       const current = result.rows[0];
       if (!current) throw new NotFoundException('Appointment not found');
-      if (current.status !== 'scheduled' || current.customerStatus !== 'pending') {
-        throw new BadRequestException('This appointment no longer needs a response');
+      if (
+        current.status !== 'scheduled' ||
+        current.customerStatus !== 'pending'
+      ) {
+        throw new BadRequestException(
+          'This appointment no longer needs a response',
+        );
       }
       if (dto.status === 'confirmed') {
         this.assertCustomerSelectedTime(current, dto.selectedAt);
@@ -320,9 +325,10 @@ export class AppointmentsService {
                    updated_at AS "updatedAt"`,
         [id, userId, dto.status, dto.note ?? null, dto.selectedAt ?? null],
       );
-      const selectedTimeMessage = dto.status === 'confirmed' && dto.selectedAt
-        ? ` vào ${vietnamDateTimeFormatter.format(new Date(dto.selectedAt))}`
-        : '';
+      const selectedTimeMessage =
+        dto.status === 'confirmed' && dto.selectedAt
+          ? ` vào ${vietnamDateTimeFormatter.format(new Date(dto.selectedAt))}`
+          : '';
       await client.query(
         `INSERT INTO notifications
            (user_id, type, title, message, related_entity_type, related_entity_id)
@@ -340,6 +346,24 @@ export class AppointmentsService {
           id,
         ],
       );
+
+      // Khi khách hàng chọn giờ hẹn cụ thể, lịch hẹn ký kết mua đất coi như đã
+      // được chốt giữa hai bên (khách hàng và ban quản lý). Gửi thêm một thông
+      // báo riêng cho khách hàng, nhắc họ mang theo giấy tờ cần thiết khi đến
+      // buổi ký kết, để tránh việc khách đến nơi mà thiếu giấy tờ.
+      if (dto.status === 'confirmed' && dto.selectedAt) {
+        await this.notify(
+          client,
+          userId,
+          'appointment_confirmed',
+          'Lịch hẹn ký kết mua đất đã được chốt',
+          this.buildPurchaseAppointmentConfirmedMessage(
+            dto.selectedAt,
+            current.location,
+          ),
+          id,
+        );
+      }
       return this.mapAppointment(updated.rows[0]);
     });
   }
@@ -428,7 +452,7 @@ export class AppointmentsService {
     requestId: number,
   ) {
     const result = await client.query<ReservationForAppointment>(
-       `SELECT request_id, user_id, request_type, status,
+      `SELECT request_id, user_id, request_type, status,
                EXISTS (
                  SELECT 1 FROM purchase_request_cancellations cancellation
                  WHERE cancellation.request_id = reservation_requests.request_id
@@ -544,7 +568,9 @@ export class AppointmentsService {
       Number.isNaN(endAt.getTime()) ||
       endAt.getTime() <= startAt.getTime()
     ) {
-      throw new BadRequestException('Appointment end time must be after start time');
+      throw new BadRequestException(
+        'Appointment end time must be after start time',
+      );
     }
   }
 
@@ -589,6 +615,28 @@ export class AppointmentsService {
         'Selected meeting time must be in the future',
       );
     }
+  }
+
+  /**
+   * Nội dung thông báo gửi cho khách hàng khi lịch hẹn ký kết mua đất đã được
+   * chốt (khách hàng đã chọn giờ hẹn cụ thể trong khoảng thời gian do quản trị
+   * viên đề xuất). Nhắc khách chuẩn bị giấy tờ cần mang theo khi đến ký kết.
+   */
+  private buildPurchaseAppointmentConfirmedMessage(
+    selectedAt: string,
+    location: string,
+  ): string {
+    const whenText = vietnamDateTimeFormatter.format(new Date(selectedAt));
+    return [
+      `Lịch hẹn ký kết hợp đồng mua đất của bạn đã được chốt vào ${whenText}, tại ${location}.`,
+      'Vui lòng chuẩn bị đầy đủ giấy tờ sau và mang theo khi đến buổi ký kết:',
+      '• CCCD/Thẻ căn cước của người đứng tên',
+      '• Phiếu xác nhận đặt mua/đặt chỗ (nếu có)',
+      '• Thông tin liên hệ',
+      '• Thông tin thanh toán theo thỏa thuận',
+      '• Giấy ủy quyền nếu người ký không trực tiếp đứng tên',
+      'Vui lòng mang theo bản gốc để đối chiếu khi ký kết.',
+    ].join('\n');
   }
 
   private async notify(

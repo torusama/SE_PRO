@@ -85,6 +85,12 @@ const TYPE_META: Record<
     tagClass: "tag-done",
     group: "request",
   },
+  appointment_confirmed: {
+    icon: "📅",
+    iconClass: "type-service",
+    tagClass: "tag-done",
+    group: "request",
+  },
   contract_updated: {
     icon: "📄",
     iconClass: "type-payment",
