@@ -129,6 +129,9 @@ export class RemindersService {
     );
 
     await this.notifyAdmins(row!);
+    
+    await this.notifyCustomerOnCreate(row!, userId, dto.notifyEmails ?? []);
+    
 
     return this.decorate(row!);
   }
@@ -149,7 +152,53 @@ export class RemindersService {
       [title, message, row.id],
     );
   }
+  /** Gửi thông báo xác nhận cho customer ngay khi tạo nhắc lịch. */
+  private async notifyCustomerOnCreate(
+    row: ReminderRow,
+    userId: number,
+    emails: string[],
+  ) {
+    const decorated = this.decorate(row);
 
+    const when = decorated.nextDate
+      ? ` — ngày ${decorated.nextDate}${
+          decorated.daysUntil !== null && decorated.daysUntil > 0
+            ? ` (còn ${decorated.daysUntil} ngày)`
+            : decorated.daysUntil === 0
+            ? ' (hôm nay)'
+            : ''
+        }`
+      : '';
+
+    const message = `Nhắc lịch "${row.title}"${when} đã được thiết lập. Hệ thống sẽ tự động nhắc bạn ${row.notifyDaysBefore} ngày trước.`;
+
+    // Thông báo in-app
+    await this.notificationsService.createInApp(
+      userId,
+      'memorial_reminder',
+      `Đã thiết lập: ${row.title}`,
+      message,
+      'reminder',
+      row.id,
+    );
+
+    // Email nếu người dùng có nhập email nhắc
+    if (row.notifyEmail && emails.length > 0) {
+      for (const email of emails) {
+        try {
+          await this.emailService.sendReminderEmail(
+            email,
+            `Xác nhận nhắc lịch: ${row.title}`,
+            message,
+          );
+        } catch (err) {
+          this.logger.error(
+            `Gửi email xác nhận tới ${email} thất bại: ${(err as Error).message}`,
+          );
+        }
+      }
+    }
+  }
   private resolveDate(
     isRecurring: boolean,
     remindMonth?: number,
@@ -475,7 +524,8 @@ export class RemindersService {
     for (const row of rows) {
       const decorated = this.decorate(row);
       if (decorated.daysUntil === null) continue;
-      if (decorated.daysUntil !== row.notifyDaysBefore) continue;
+      if (decorated.daysUntil > row.notifyDaysBefore) continue;
+      if (decorated.daysUntil < 0) continue;
       if (row.isRecurring && row.lastSentYear === currentYear) continue;
       if (!row.isRecurring && row.lastSentAt) continue;
 
