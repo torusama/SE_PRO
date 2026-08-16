@@ -1,0 +1,144 @@
+/* src/pages/customer/map/Map3DPage.css */
+
+.map3d-page {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  background: #0e1a1f;
+  overflow: hidden;
+}
+
+.map3d-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+}
+
+.map3d-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: #0e1a1f;
+  color: var(--text-main, #eafff8);
+  font-family: "Be Vietnam Pro", sans-serif;
+  font-size: 13px;
+}
+
+.map3d-loading-spinner {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 3px solid rgba(0, 229, 196, 0.18);
+  border-top-color: var(--teal-glow, #00e5c4);
+  animation: map3d-spin 0.9s linear infinite;
+}
+
+@keyframes map3d-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.map3d-back-btn {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 25;
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  border: 0.5px solid var(--border-dim, rgba(255, 255, 255, 0.14));
+  background: rgba(8, 13, 26, 0.78);
+  backdrop-filter: blur(8px);
+  color: var(--text-main, #eafff8);
+  font-size: 19px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  transition: all 0.2s ease;
+}
+.map3d-back-btn:hover {
+  border-color: var(--border-soft, rgba(0, 229, 196, 0.4));
+  color: var(--teal-glow, #00e5c4);
+}
+
+/* Minimap 2D kiểu Google Maps — góc trái trên (tránh đè lên nút back nên
+   đặt cách nút back một khoảng). */
+.map3d-minimap {
+  position: absolute;
+  top: 70px;
+  left: 16px;
+  z-index: 24;
+  width: 150px;
+  height: 150px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 0.5px solid var(--border-soft, rgba(0, 229, 196, 0.35));
+  background: rgba(8, 13, 26, 0.9);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+
+.map3d-minimap-content {
+  width: 100%;
+  height: 100%;
+  transition: transform 0.12s linear;
+  transform-origin: 50% 50%;
+}
+
+/* Style tối giản cho các lớp của bản đồ 2D thật khi hiển thị thu nhỏ trong
+   minimap (không dùng chung style của trang Bản đồ 2D vì nó gắn với class
+   cha .map-page — ở đây định nghĩa lại phần cần thiết, giữ đúng tông màu). */
+.map3d-minimap-content .map-land {
+  fill: rgba(220, 38, 38, 0.03);
+  stroke: none;
+}
+.map3d-minimap-content .map-boundary-line {
+  fill: none;
+  stroke: rgba(220, 38, 38, 0.6);
+  stroke-width: 3;
+}
+.map3d-minimap-content .map-road {
+  fill: rgba(0, 229, 196, 0.14);
+  stroke: none;
+}
+.map3d-minimap-content .spirit-park-rect {
+  fill: rgba(82, 183, 136, 0.18);
+  stroke: rgba(82, 183, 136, 0.55);
+  stroke-width: 2;
+}
+.map3d-minimap-content .spirit-park-circle {
+  fill: rgba(82, 183, 136, 0.26);
+  stroke: rgba(82, 183, 136, 0.7);
+  stroke-width: 2;
+}
+.map3d-minimap-content .map-gate-marker {
+  fill: rgba(125, 255, 232, 0.75);
+}
+.map3d-minimap-content .map-gate-secondary {
+  fill: rgba(123, 107, 204, 0.75);
+}
+/* nhãn chữ (KHU A, KHU B...) quá nhỏ để đọc được ở kích thước minimap nên
+   ẩn đi, chỉ giữ lại hình khối cho gọn mắt */
+.map3d-minimap-content text {
+  display: none;
+}
+
+@media (max-width: 520px) {
+  .map3d-minimap {
+    width: 108px;
+    height: 108px;
+    top: 66px;
+  }
+}

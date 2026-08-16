@@ -1958,6 +1958,20 @@ export default function MapPage() {
               </text>
             </svg>
 
+            {/* Nút mở bản đồ 3D — cùng bán kính với la bàn, đặt ngay dưới.
+                Cảnh 3D chỉ được khởi tạo (nặng, dùng WebGL) khi người dùng
+                thật sự bấm vào xem, ở trang Map3DPage riêng; không preload
+                ở đây để tránh làm nặng/giật trang Bản đồ 2D. */}
+            <button
+              type="button"
+              className="map-3d-btn"
+              title="Xem bản đồ 3D"
+              aria-label="Xem bản đồ 3D"
+              onClick={() => navigate(ROUTES.MAP_3D)}
+            >
+              3D
+            </button>
+
             <div className="map-rotate">
               <button
                 className="zoom-btn"

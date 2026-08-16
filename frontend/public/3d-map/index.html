@@ -1,0 +1,4521 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ban do 3D tuong tac - Cinematic Realism</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        font-family: Arial, Helvetica, sans-serif;
+        background: #0e1a1f;
+      }
+      #canvasWrap {
+        position: absolute;
+        inset: 0;
+      }
+      #canvasWrap canvas {
+        display: block;
+      }
+      #fade {
+        position: absolute;
+        inset: 0;
+        background: #0e1a1f;
+        z-index: 20;
+        pointer-events: none;
+        transition: opacity 1.4s ease;
+      }
+      #fade.hide {
+        opacity: 0;
+      }
+      #topbar {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        padding: 14px 18px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: linear-gradient(rgba(10, 15, 10, 0.6), rgba(10, 15, 10, 0));
+        pointer-events: none;
+        z-index: 5;
+      }
+      #topbar h1 {
+        color: #fff;
+        font-size: 16px;
+        font-weight: 600;
+        margin: 0;
+        text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+        letter-spacing: 0.2px;
+      }
+      #topbar span {
+        display: block;
+        color: #e7e2cf;
+        font-size: 11px;
+        font-weight: 400;
+        margin-top: 2px;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+      }
+      #legend {
+        position: absolute;
+        top: 14px;
+        right: 14px;
+        width: 230px;
+        max-height: calc(100% - 100px);
+        overflow: auto;
+        background: rgba(255, 255, 255, 0.72);
+        border-radius: 12px;
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.28);
+        padding: 12px;
+        z-index: 5;
+        backdrop-filter: blur(6px);
+      }
+      #legend h2 {
+        font-size: 13px;
+        margin: 0 0 8px;
+        color: #222;
+      }
+      .zbtn {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        background: none;
+        border: none;
+        text-align: left;
+        padding: 6px 4px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 12.5px;
+        color: #222;
+      }
+      .zbtn:hover {
+        background: #f1efe6;
+      }
+      .zbtn .sw {
+        width: 12px;
+        height: 12px;
+        border-radius: 3px;
+        flex: none;
+        box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
+      }
+      .zbtn .cnt {
+        margin-left: auto;
+        color: #888;
+        font-size: 11px;
+      }
+      #controls {
+        position: absolute;
+        bottom: 16px;
+        right: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        z-index: 5;
+      }
+      .ctrlbtn {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.95);
+        border: none;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+        font-size: 18px;
+        cursor: pointer;
+        color: #333;
+      }
+      .ctrlbtn.active {
+        background: #2d9d6f;
+        color: #fff;
+      }
+      #info {
+        position: absolute;
+        left: 14px;
+        bottom: 16px;
+        max-width: 300px;
+        background: rgba(255, 255, 255, 0.72);
+        border-radius: 12px;
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.28);
+        padding: 14px 16px;
+        z-index: 5;
+        display: none;
+        backdrop-filter: blur(6px);
+      }
+      #backBtn3d {
+        position: absolute;
+        top: 14px;
+        left: 14px;
+        z-index: 6;
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        border: none;
+        background: rgba(8, 13, 26, 0.72);
+        backdrop-filter: blur(8px);
+        color: #eafff8;
+        font-size: 18px;
+        cursor: pointer;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.2s ease;
+      }
+      #backBtn3d:hover {
+        background: rgba(0, 229, 196, 0.28);
+      }
+      #info h3 {
+        margin: 0 0 4px;
+        font-size: 14px;
+      }
+      #info p {
+        margin: 0;
+        font-size: 12px;
+        color: #555;
+        line-height: 1.6;
+      }
+      #hint {
+        position: absolute;
+        left: 14px;
+        top: 60px;
+        background: rgba(0, 0, 0, 0.5);
+        color: #fff;
+        font-size: 11.5px;
+        padding: 9px 11px;
+        border-radius: 10px;
+        z-index: 5;
+        max-width: 240px;
+        line-height: 1.6;
+        backdrop-filter: blur(4px);
+      }
+      .label {
+        color: #1c1c1a;
+        background: rgba(255, 255, 255, 0.9);
+        padding: 3px 8px;
+        border-radius: 6px;
+        font-size: 11.5px;
+        font-weight: 600;
+        white-space: nowrap;
+        pointer-events: auto;
+        cursor: pointer;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+      }
+      .label.gate {
+        background: rgba(181, 67, 44, 0.94);
+        color: #fff;
+      }
+      .label.poi {
+        background: rgba(20, 80, 70, 0.88);
+        color: #fff;
+        font-weight: 500;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="canvasWrap"></div>
+    <div id="fade"></div>
+    <button
+      id="backBtn3d"
+      title="Quay lại bản đồ 2D"
+      aria-label="Quay lại bản đồ 2D"
+      onclick="goBackToMap2D()"
+    >
+      &#8592;
+    </button>
+    <div id="legend">
+      <div id="zoneList"></div>
+      <button class="zbtn" onclick="flyToOverview()">
+        <span class="sw" style="background: #888"></span>Toan canh
+      </button>
+    </div>
+    <div id="controls">
+      <button class="ctrlbtn" onclick="zoomBy(0.8)" title="Phong to">+</button>
+      <button class="ctrlbtn" onclick="zoomBy(1.25)" title="Thu nho">-</button>
+      <button class="ctrlbtn" onclick="flyToOverview()" title="Toan canh">
+        &#8635;
+      </button>
+      <button
+        class="ctrlbtn"
+        id="rotateBtn"
+        onclick="toggleAutoRotate()"
+        title="Xoay tu dong"
+      >
+        &#9654;
+      </button>
+    </div>
+    <div id="info">
+      <h3 id="infoTitle"></h3>
+      <p id="infoBody"></p>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/renderers/CSS2DRenderer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/BufferGeometryUtils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/RGBELoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/math/SimplexNoise.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/SSAOShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/SSAOPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/BokehShader2.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/BokehPass.js"></script>
+    <script>
+      /* ------------------------------------------------------------------
+       * Cau noi voi trang React ben ngoai (khi trang nay duoc nhung trong
+       * <iframe> cua trang "Ban do 3D"): bao "back" de trang cha dieu huong
+       * ve lai ban do 2D (va go bo iframe nay khoi DOM de dung han render
+       * 3D, tranh ton tai nguyen khi khong xem nua).
+       * ------------------------------------------------------------------ */
+      function goBackToMap2D() {
+        try {
+          if (window.parent && window.parent !== window) {
+            window.parent.postMessage({ type: "vpv3d:back" }, "*");
+            return;
+          }
+        } catch (e) {}
+        // fallback khi mo truc tiep file nay (khong o trong iframe)
+        window.history.back();
+      }
+
+      /* ------------------------------------------------------------------
+       * Du lieu bo cuc lay dung theo du lieu that cua trang "mua ban mo
+       * phan" (frontend/src/lib/cemeteryMapLayout.ts + cemeteryMapVisuals.ts)
+       * trong du an - toa do khu, duong, cong, khu tam linh deu khop 1:1.
+       * ------------------------------------------------------------------ */
+      const SC = 0.02;
+      const PLATFORM_H = 0.05;
+
+      const ZONES = {
+        A: {
+          name: "Khu A - Cao cap",
+          color: 0x00b89e,
+          price: "65 trieu / lo",
+          blurb:
+            "Khong gian trang trong, mat do thoang, phu hop gia dinh chon vi tri cao cap.",
+        },
+        B: {
+          name: "Khu B - Tieu chuan",
+          color: 0xc9a84c,
+          price: "45 trieu / lo",
+          blurb: "Can bang giua chi phi va vi tri, de tiep can.",
+        },
+        D: {
+          name: "Khu D - Binh dan",
+          color: 0x4da6ff,
+          price: "32 trieu / lo",
+          blurb: "Muc gia de tiep can, loi di ro rang.",
+        },
+        E: {
+          name: "Khu E - Cai tang",
+          color: 0x00b4d8,
+          price: "28 trieu / lo",
+          blurb: "Danh cho mo cai tang, ho tro dung nghi thuc.",
+        },
+        F: {
+          name: "Khu F - Mat do cao",
+          color: 0x52b788,
+          price: "24 trieu / lo",
+          blurb: "Mat do cao, dien tich nho gon, ngan sach vua phai.",
+        },
+        G: {
+          name: "Khu G - Mo rong",
+          color: 0x2d9d6f,
+          price: "36 trieu / lo",
+          blurb: "Khu mo rong moi, khong gian rong rai.",
+        },
+        H: {
+          name: "Khu H - Mo don",
+          color: 0xf4a340,
+          price: "30 trieu / lo",
+          blurb: "Mo don le, chi phi hop ly.",
+        },
+        C: {
+          name: "Khu C - Lo gia toc",
+          color: 0x7b6bcc,
+          price: "120 trieu / lo",
+          blurb:
+            "Lo gia toc, chia 4 cum C1-C4 rieng biet, khong gian quay quan.",
+        },
+      };
+
+      const LAYOUT = {
+        A: { x: 100, y: 60, w: 330, h: 250, cols: 6, rows: 7, gap: 6 },
+        B: { x: 490, y: 60, w: 330, h: 250, cols: 7, rows: 6, gap: 6 },
+        D: { x: 100, y: 380, w: 330, h: 250, cols: 6, rows: 8, gap: 5 },
+        E: { x: 490, y: 380, w: 330, h: 250, cols: 7, rows: 7, gap: 5 },
+        F: { x: 100, y: 930, w: 330, h: 250, cols: 8, rows: 6, gap: 5 },
+        G: { x: 490, y: 930, w: 330, h: 250, cols: 6, rows: 7, gap: 6 },
+        H: { x: 100, y: 1250, w: 330, h: 250, cols: 7, rows: 6, gap: 6 },
+        C: {
+          x: 1000,
+          y: 60,
+          w: 620,
+          h: 1440,
+          cols: 10,
+          rows: 20,
+          gap: 8,
+          groups: { cols: 1, rows: 4, gap: 80 },
+        },
+      };
+
+      const ROADS = [
+        { x: 880, y: 15, w: 30, h: 1535 },
+        { x: 50, y: 15, w: 26, h: 1535 },
+        { x: 445, y: 15, w: 30, h: 663 },
+        { x: 445, y: 874, w: 30, h: 650 },
+        { x: 1634, y: 15, w: 26, h: 1535 },
+        { x: 50, y: 1524, w: 1610, h: 26 },
+        { x: 50, y: 15, w: 1610, h: 26 },
+        { x: 50, y: 332, w: 860, h: 26 },
+        { x: 50, y: 652, w: 860, h: 26 },
+        { x: 50, y: 874, w: 860, h: 26 },
+        { x: 50, y: 1202, w: 860, h: 26 },
+        { x: 880, y: 767, w: 780, h: 26 },
+        { x: 880, y: 387, w: 780, h: 26 },
+        { x: 880, y: 1147, w: 780, h: 26 },
+        { x: 1297, y: 15, w: 26, h: 1535 },
+      ];
+
+      const SPIRIT_PARK = { x: 240, y: 700, w: 440, h: 152 };
+      const LAKE = { cx: 460, cy: 776, r: 58 };
+      const MAP_GATE = { x: 460, y: 1560 };
+      const SECONDARY_GATE = { x: 1310, y: 1560 };
+      const BOUNDARY = [
+        [160, -40],
+        [1560, -40],
+        [1660, 60],
+        [1660, 1460],
+        [1590, 1600],
+        [960, 1600],
+        [140, 1600],
+        [-80, 1480],
+        [-80, 160],
+      ];
+
+      function wx(x) {
+        return x * SC;
+      }
+      function wz(y) {
+        return y * SC;
+      }
+
+      function cellGrid(layout) {
+        const cells = [];
+        if (layout.groups) {
+          const g = layout.groups;
+          const colsPerG = layout.cols / g.cols,
+            rowsPerG = layout.rows / g.rows;
+          const gw = (layout.w - g.gap * (g.cols - 1)) / g.cols;
+          const gh = (layout.h - g.gap * (g.rows - 1)) / g.rows;
+          const cw = (gw - layout.gap * (colsPerG - 1)) / colsPerG;
+          const ch = (gh - layout.gap * (rowsPerG - 1)) / rowsPerG;
+          for (let gr = 0; gr < g.rows; gr++) {
+            for (let gc = 0; gc < g.cols; gc++) {
+              const gx = layout.x + gc * (gw + g.gap);
+              const gy = layout.y + gr * (gh + g.gap);
+              for (let r = 0; r < rowsPerG; r++) {
+                for (let c = 0; c < colsPerG; c++) {
+                  cells.push({
+                    cx: gx + c * (cw + layout.gap),
+                    cy: gy + r * (ch + layout.gap),
+                    cw,
+                    ch,
+                  });
+                }
+              }
+            }
+          }
+        } else {
+          const cw = (layout.w - layout.gap * (layout.cols - 1)) / layout.cols;
+          const ch = (layout.h - layout.gap * (layout.rows - 1)) / layout.rows;
+          for (let r = 0; r < layout.rows; r++) {
+            for (let c = 0; c < layout.cols; c++) {
+              cells.push({
+                cx: layout.x + c * (cw + layout.gap),
+                cy: layout.y + r * (ch + layout.gap),
+                cw,
+                ch,
+              });
+            }
+          }
+        }
+        return cells;
+      }
+
+      function groupBackdrops(layout) {
+        const pad = 14;
+        if (!layout.groups)
+          return [
+            {
+              x: layout.x - pad,
+              y: layout.y - pad,
+              w: layout.w + 2 * pad,
+              h: layout.h + 2 * pad,
+            },
+          ];
+        const g = layout.groups;
+        const gw = (layout.w - g.gap * (g.cols - 1)) / g.cols;
+        const gh = (layout.h - g.gap * (g.rows - 1)) / g.rows;
+        const out = [];
+        for (let gr = 0; gr < g.rows; gr++) {
+          for (let gc = 0; gc < g.cols; gc++) {
+            out.push({
+              x: layout.x + gc * (gw + g.gap) - pad,
+              y: layout.y + gr * (gh + g.gap) - pad,
+              w: gw + 2 * pad,
+              h: gh + 2 * pad,
+            });
+          }
+        }
+        return out;
+      }
+
+      /* ------------------------------------------------------------------
+       * Procedural textures (khong can fetch anh ngoai - tu ve bang canvas)
+       * ------------------------------------------------------------------ */
+      function makeGrassTexture() {
+        const c = document.createElement("canvas");
+        c.width = c.height = 256;
+        const ctx = c.getContext("2d");
+        ctx.fillStyle = "#5c8a44";
+        ctx.fillRect(0, 0, 256, 256);
+        for (let i = 0; i < 4200; i++) {
+          const x = Math.random() * 256,
+            y = Math.random() * 256;
+          const shade = 30 + Math.random() * 70;
+          const g = Math.random() > 0.5 ? 1 : -1;
+          ctx.fillStyle = `rgba(${70 + g * 14},${130 + shade * 0.55},${50 + g * 10},0.55)`;
+          ctx.fillRect(x, y, 1.4, 3.2);
+        }
+        // diem la kho / co ha am de tao cam giac tu nhien, am ap thay vi troc trang
+        for (let i = 0; i < 260; i++) {
+          const x = Math.random() * 256,
+            y = Math.random() * 256;
+          ctx.fillStyle = `rgba(${170 + Math.random() * 40},${110 + Math.random() * 40},${40 + Math.random() * 30},0.5)`;
+          ctx.fillRect(x, y, 2 + Math.random() * 2, 1.4);
+        }
+        const tex = new THREE.CanvasTexture(c);
+        tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+        tex.repeat.set(50, 50);
+        tex.encoding = THREE.sRGBEncoding;
+        return tex;
+      }
+
+      function makeGraniteTexture() {
+        const c = document.createElement("canvas");
+        c.width = c.height = 256;
+        const ctx = c.getContext("2d");
+        ctx.fillStyle = "#5b6870";
+        ctx.fillRect(0, 0, 256, 256);
+        for (let i = 0; i < 2600; i++) {
+          const x = Math.random() * 256,
+            y = Math.random() * 256;
+          const v = Math.random() * 34;
+          ctx.fillStyle = `rgba(${86 + v},${98 + v},${104 + v},0.5)`;
+          ctx.fillRect(
+            x,
+            y,
+            Math.random() * 1.6 + 0.4,
+            Math.random() * 1.6 + 0.4,
+          );
+        }
+        for (let i = 0; i < 160; i++) {
+          const x = Math.random() * 256,
+            y = Math.random() * 256;
+          ctx.fillStyle = "rgba(225,230,232,0.4)";
+          ctx.fillRect(x, y, 1, 1);
+        }
+        const tex = new THREE.CanvasTexture(c);
+        tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+        tex.repeat.set(2, 2);
+        tex.encoding = THREE.sRGBEncoding;
+        return tex;
+      }
+
+      // texture da hoa cuong SANG MAU (nen trang nga, lom dom nhat/toi nhe) - dung cho
+      // mo cac khu (thay the ban toi 5b6870 qua dam lam an het mau nen khi nhan vao)
+      function makeGraniteTextureBright() {
+        const c = document.createElement("canvas");
+        c.width = c.height = 256;
+        const ctx = c.getContext("2d");
+        ctx.fillStyle = "#ece8de";
+        ctx.fillRect(0, 0, 256, 256);
+        for (let i = 0; i < 3000; i++) {
+          const x = Math.random() * 256,
+            y = Math.random() * 256;
+          const v = Math.random() * 40;
+          if (Math.random() < 0.5) {
+            ctx.fillStyle = `rgba(${150 - v},${148 - v},${142 - v},0.3)`;
+          } else {
+            ctx.fillStyle = "rgba(255,253,247,0.55)";
+          }
+          ctx.fillRect(
+            x,
+            y,
+            Math.random() * 1.6 + 0.4,
+            Math.random() * 1.6 + 0.4,
+          );
+        }
+        for (let i = 0; i < 170; i++) {
+          const x = Math.random() * 256,
+            y = Math.random() * 256;
+          ctx.fillStyle = "rgba(96,94,88,0.22)";
+          ctx.fillRect(x, y, 1, 1);
+        }
+        const tex = new THREE.CanvasTexture(c);
+        tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+        tex.repeat.set(2, 2);
+        tex.encoding = THREE.sRGBEncoding;
+        return tex;
+      }
+
+      function makeForestFloorTexture() {
+        const c = document.createElement("canvas");
+        c.width = c.height = 256;
+        const ctx = c.getContext("2d");
+        ctx.fillStyle = "#4d6b3a";
+        ctx.fillRect(0, 0, 256, 256);
+        for (let i = 0; i < 3600; i++) {
+          const x = Math.random() * 256,
+            y = Math.random() * 256;
+          const shade = 20 + Math.random() * 60;
+          const g = Math.random() > 0.5 ? 1 : -1;
+          ctx.fillStyle = `rgba(${50 + g * 12},${95 + shade * 0.5},${38 + g * 8},0.55)`;
+          ctx.fillRect(x, y, 1.5, 3.4);
+        }
+        for (let i = 0; i < 420; i++) {
+          const x = Math.random() * 256,
+            y = Math.random() * 256;
+          ctx.fillStyle = `rgba(${140 + Math.random() * 50},${95 + Math.random() * 40},${45 + Math.random() * 25},0.55)`;
+          ctx.fillRect(x, y, 2.2 + Math.random() * 2, 1.6);
+        }
+        const tex = new THREE.CanvasTexture(c);
+        tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+        tex.repeat.set(70, 70);
+        tex.encoding = THREE.sRGBEncoding;
+        return tex;
+      }
+
+      function makeGrassBladeTexture() {
+        const c = document.createElement("canvas");
+        c.width = 64;
+        c.height = 64;
+        const ctx = c.getContext("2d");
+        ctx.clearRect(0, 0, 64, 64);
+        for (let i = 0; i < 7; i++) {
+          const bx = 5 + i * 8 + (Math.random() * 3 - 1.5);
+          const hue = 88 + Math.random() * 30;
+          ctx.fillStyle = `hsl(${hue},42%,${30 + Math.random() * 16}%)`;
+          ctx.beginPath();
+          ctx.moveTo(bx - 2.6, 64);
+          ctx.quadraticCurveTo(bx - 1, 28, bx + (Math.random() * 5 - 2.5), 3);
+          ctx.quadraticCurveTo(bx + 1, 28, bx + 2.6, 64);
+          ctx.closePath();
+          ctx.fill();
+        }
+        const tex = new THREE.CanvasTexture(c);
+        tex.encoding = THREE.sRGBEncoding;
+        return tex;
+      }
+
+      function makePoolFloorTexture() {
+        // gach lat day ho: nhat va it bao hoa hon vien mosaic ngoai, tao cam giac day ho co lat gach that
+        const c = document.createElement("canvas");
+        c.width = c.height = 128;
+        const ctx = c.getContext("2d");
+        const cell = 16;
+        for (let y = 0; y < 128; y += cell) {
+          for (let x = 0; x < 128; x += cell) {
+            const hue = 195 + Math.random() * 15;
+            const light = 68 + Math.random() * 18;
+            ctx.fillStyle = `hsl(${hue},26%,${light}%)`;
+            ctx.fillRect(x, y, cell - 1.6, cell - 1.6);
+          }
+        }
+        const tex = new THREE.CanvasTexture(c);
+        tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+        tex.repeat.set(10, 10);
+        tex.encoding = THREE.sRGBEncoding;
+        return tex;
+      }
+
+      function makeMosaicTexture() {
+        const c = document.createElement("canvas");
+        c.width = c.height = 128;
+        const ctx = c.getContext("2d");
+        const cell = 14;
+        for (let y = 0; y < 128; y += cell) {
+          for (let x = 0; x < 128; x += cell) {
+            const hue = 200 + Math.random() * 18;
+            const light = 46 + Math.random() * 24; // sang hon truoc (34-56% -> 46-70%)
+            ctx.fillStyle = `hsl(${hue},30%,${light}%)`; // giam sat (58% -> 30%) de bot xanh dam, them sac xam
+            ctx.fillRect(x, y, cell - 1.4, cell - 1.4);
+          }
+        }
+        const tex = new THREE.CanvasTexture(c);
+        tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+        tex.repeat.set(28, 3);
+        tex.encoding = THREE.sRGBEncoding;
+        return tex;
+      }
+
+      function makeWaterJetTexture() {
+        const c = document.createElement("canvas");
+        c.width = 32;
+        c.height = 128;
+        const ctx = c.getContext("2d");
+        const g = ctx.createLinearGradient(0, 0, 0, 128);
+        g.addColorStop(0, "rgba(255,255,255,0.04)");
+        g.addColorStop(0.45, "rgba(225,248,252,0.5)");
+        g.addColorStop(1, "rgba(255,255,255,0.92)");
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, 32, 128);
+        return new THREE.CanvasTexture(c);
+      }
+
+      function makeFoamTexture() {
+        const c = document.createElement("canvas");
+        c.width = c.height = 128;
+        const ctx = c.getContext("2d");
+        const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+        g.addColorStop(0, "rgba(255,255,255,0.75)");
+        g.addColorStop(0.6, "rgba(255,255,255,0.28)");
+        g.addColorStop(1, "rgba(255,255,255,0)");
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, 128, 128);
+        return new THREE.CanvasTexture(c);
+      }
+
+      function makeStoneTexture() {
+        const c = document.createElement("canvas");
+        c.width = c.height = 256;
+        const ctx = c.getContext("2d");
+        ctx.fillStyle = "#d9d3c2";
+        ctx.fillRect(0, 0, 256, 256);
+        for (let i = 0; i < 1400; i++) {
+          const x = Math.random() * 256,
+            y = Math.random() * 256;
+          const v = Math.random() * 40 - 20;
+          ctx.fillStyle = `rgba(${170 + v},${164 + v},${148 + v},0.35)`;
+          ctx.fillRect(x, y, Math.random() * 2 + 0.5, Math.random() * 2 + 0.5);
+        }
+        ctx.strokeStyle = "rgba(140,132,110,0.25)";
+        for (let i = 0; i < 6; i++) {
+          ctx.beginPath();
+          let x = Math.random() * 256,
+            y = Math.random() * 256;
+          ctx.moveTo(x, y);
+          for (let j = 0; j < 5; j++) {
+            x += (Math.random() - 0.5) * 60;
+            y += (Math.random() - 0.5) * 60;
+            ctx.lineTo(x, y);
+          }
+          ctx.stroke();
+        }
+        const tex = new THREE.CanvasTexture(c);
+        tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+        tex.repeat.set(3, 3);
+        tex.encoding = THREE.sRGBEncoding;
+        return tex;
+      }
+
+      function makeGlowTexture(inner, outer) {
+        const c = document.createElement("canvas");
+        c.width = c.height = 256;
+        const ctx = c.getContext("2d");
+        const g = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
+        g.addColorStop(0, inner);
+        g.addColorStop(1, outer);
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, 256, 256);
+        return new THREE.CanvasTexture(c);
+      }
+
+      /* ------------------------------------------------------------------
+       * Scene / renderer setup
+       * ------------------------------------------------------------------ */
+      const scene = new THREE.Scene();
+      const skyTop = 0x8ec2df,
+        skyBottom = 0xffe0ab;
+      scene.background = new THREE.Color(0x8fcdf2);
+      scene.fog = new THREE.FogExp2(0xecdcb2, 0.0055);
+
+      const camera = new THREE.PerspectiveCamera(
+        45,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        300,
+      );
+      const renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        powerPreference: "high-performance",
+      });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.outputEncoding = THREE.sRGBEncoding;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.05;
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFShadowMap;
+      document.getElementById("canvasWrap").appendChild(renderer.domElement);
+      const MAX_ANISO = renderer.capabilities.getMaxAnisotropy
+        ? renderer.capabilities.getMaxAnisotropy()
+        : 4;
+
+      /* ------------------------------------------------------------------
+       * Loader cho texture that (be gui) + ham tien ich load + set repeat.
+       * Cac file nam trong thu muc assets/ ke ben file HTML nay khi host web.
+       * ------------------------------------------------------------------ */
+      const texLoader = new THREE.TextureLoader();
+      function loadRepeatTex(path, repeatX, repeatY, isColor) {
+        const t = texLoader.load(path);
+        t.wrapS = t.wrapT = THREE.RepeatWrapping;
+        t.repeat.set(repeatX, repeatY);
+        t.anisotropy = MAX_ANISO;
+        if (isColor) t.encoding = THREE.sRGBEncoding;
+        return t;
+      }
+
+      /* ------------------------------------------------------------------
+       * Height -> Normal map helper (PBR-lite): tu mot canvas grayscale/mau,
+       * suy ra ban do phap tuyen de vat lieu bat sang co chieu sau vi mo
+       * thay vi phang mot mau nhu truoc (khong can tai file normal map ngoai).
+       * ------------------------------------------------------------------ */
+      function heightToNormalMap(srcCanvas, strength) {
+        strength = strength || 1.8;
+        const w = srcCanvas.width,
+          h = srcCanvas.height;
+        const sctx = srcCanvas.getContext("2d");
+        const src = sctx.getImageData(0, 0, w, h).data;
+        const lum = new Float32Array(w * h);
+        for (let i = 0; i < w * h; i++) {
+          const r = src[i * 4],
+            g = src[i * 4 + 1],
+            b = src[i * 4 + 2];
+          lum[i] = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+        }
+        const out = document.createElement("canvas");
+        out.width = w;
+        out.height = h;
+        const octx = out.getContext("2d");
+        const img = octx.createImageData(w, h);
+        const at = (x, y) => lum[((y + h) % h) * w + ((x + w) % w)];
+        for (let y = 0; y < h; y++) {
+          for (let x = 0; x < w; x++) {
+            const l = at(x - 1, y),
+              r = at(x + 1, y),
+              u = at(x, y - 1),
+              d = at(x, y + 1);
+            let nx = (l - r) * strength,
+              ny = (u - d) * strength,
+              nz = 1.0;
+            const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
+            nx /= len;
+            ny /= len;
+            nz /= len;
+            const idx = (y * w + x) * 4;
+            img.data[idx] = (nx * 0.5 + 0.5) * 255;
+            img.data[idx + 1] = (ny * 0.5 + 0.5) * 255;
+            img.data[idx + 2] = (nz * 0.5 + 0.5) * 255;
+            img.data[idx + 3] = 255;
+          }
+        }
+        octx.putImageData(img, 0, 0);
+        const tex = new THREE.CanvasTexture(out);
+        tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+        return tex;
+      }
+      // gan normal map + roughness/anisotropy hoan chinh cho 1 texture PBR co san,
+      // tra ve {map, normalMap} de gan truc tiep vao MeshStandardMaterial
+      function upgradeToPBR(tex, repeatX, repeatY, normalStrength) {
+        if (tex.image && tex.image.getContext) {
+          const nrm = heightToNormalMap(tex.image, normalStrength);
+          nrm.repeat.copy(tex.repeat);
+          nrm.wrapS = tex.wrapS;
+          nrm.wrapT = tex.wrapT;
+          nrm.anisotropy = MAX_ANISO;
+          tex.anisotropy = MAX_ANISO;
+          return nrm;
+        }
+        return null;
+      }
+
+      const labelRenderer = new THREE.CSS2DRenderer();
+      labelRenderer.setSize(window.innerWidth, window.innerHeight);
+      labelRenderer.domElement.style.position = "absolute";
+      labelRenderer.domElement.style.top = "0";
+      labelRenderer.domElement.style.pointerEvents = "none";
+      document
+        .getElementById("canvasWrap")
+        .appendChild(labelRenderer.domElement);
+
+      // sky dome (gradient, khong can anh)
+      (function buildSky() {
+        const skyGeo = new THREE.SphereGeometry(140, 24, 16);
+        const skyMat = new THREE.ShaderMaterial({
+          uniforms: {
+            topColor: { value: new THREE.Color(skyTop) },
+            bottomColor: { value: new THREE.Color(skyBottom) },
+            offset: { value: 18 },
+            exponent: { value: 0.7 },
+          },
+          vertexShader: `varying vec3 vWorldPosition; void main(){ vec4 wp = modelMatrix*vec4(position,1.0); vWorldPosition = wp.xyz; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+          fragmentShader: `uniform vec3 topColor; uniform vec3 bottomColor; uniform float offset; uniform float exponent; varying vec3 vWorldPosition;
+      void main(){ float h = normalize(vWorldPosition + vec3(0.0, offset, 0.0)).y; gl_FragColor = vec4( mix(bottomColor, topColor, max(pow(max(h,0.0), exponent),0.0)), 1.0 ); }`,
+          side: THREE.BackSide,
+        });
+        scene.add(new THREE.Mesh(skyGeo, skyMat));
+      })();
+
+      const sceneCenter = new THREE.Vector3(wx(800), 0, wz(800));
+      // Truc mat troi: dinh huong lai theo yeu cau - phuong SONG SONG voi duong
+      // thang noi 2 cong (MAP_GATE - SECONDARY_GATE, hai cong co cung y=1560 nen
+      // duong noi la phuong ngang thuan tuy, khong lech), TINH TIEN phuong do di
+      // qua dung khu bon nuoc (LAKE) o Khu Tam Linh. Ben "phai" (x lon hon, phia
+      // Khu C) duoc quy uoc la huong DONG; mat troi dat o phia dong (x+) de anh
+      // sang + bong do nhat quan voi quy uoc dong/tay/nam/bac cua khu dat.
+      const sunAxisTarget = new THREE.Vector3(wx(LAKE.cx), 0, wz(LAKE.cy));
+
+      const hemi = new THREE.HemisphereLight(0xffe6bd, 0x4a5a3a, 0.72);
+      scene.add(hemi);
+      const sun = new THREE.DirectionalLight(0xffcd8a, 1.5);
+      sun.position.set(sunAxisTarget.x + 60, 34, sunAxisTarget.z);
+      sun.target.position.copy(sunAxisTarget);
+      sun.castShadow = true;
+      sun.shadow.mapSize.set(1536, 1536);
+      sun.shadow.camera.left = -30;
+      sun.shadow.camera.right = 30;
+      sun.shadow.camera.top = 30;
+      sun.shadow.camera.bottom = -30;
+      sun.shadow.camera.near = 1;
+      sun.shadow.camera.far = 100;
+      sun.shadow.bias = -0.0015;
+      scene.add(sun, sun.target);
+      const fill = new THREE.AmbientLight(0xfff2df, 0.22);
+      scene.add(fill);
+
+      // Vien nang nhe (rim light) - anh sang toc do thap, chieu gan nguoc voi
+      // mat troi chinh, khong do bong (khong castShadow) nen re, chi tao vien
+      // sang nhe o canh mo/cay quay ve huong do - tu nhien la "mot vai cai co,
+      // khong phai cai nao cung co" vi phu thuoc huong quay cua tung vat the.
+      const rimLight = new THREE.DirectionalLight(0xffe9b0, 0.55);
+      rimLight.position.set(sunAxisTarget.x - 30, 10, sunAxisTarget.z);
+      rimLight.target.position.copy(sunAxisTarget);
+      scene.add(rimLight, rimLight.target);
+
+      // sun glow sprite (duoc bloom lam sang len)
+      const sunGlow = new THREE.Sprite(
+        new THREE.SpriteMaterial({
+          map: makeGlowTexture("rgba(255,250,225,1)", "rgba(255,250,225,0)"),
+          transparent: true,
+          depthWrite: false,
+          depthTest: false,
+          blending: THREE.AdditiveBlending,
+        }),
+      );
+      sunGlow.scale.set(5.5, 5.5, 1);
+      sunGlow.position.copy(sun.position);
+      sunGlow.renderOrder = 999; // luon ve tren cung, khong bi tuong/cong/cay che (mat troi o rat xa, khong the bi vat the gan che that)
+      scene.add(sunGlow);
+
+      /* ------------------------------------------------------------------
+       * HDRI THAT (do be gui) -> PMREM. 3 file .hdr da duoc minh xu ly san:
+       * tai anh .exr 4K goc, gioi han highlight qua sang (clamp), giam con
+       * 2048x1024 va nen lai dinh dang Radiance .hdr (~1.7MB/anh, hop web)
+       * roi nen bang PMREMGenerator. Day la anh sang moi truong THAT (chup
+       * tu ngoai doi), khong con la gradient gia lap nhu ban truoc.
+       * Co the doi "khong khi" (nang som/chieu/vuon hoa) bang nut trong bang
+       * dieu khien; moi luc doi se doi luon mau fog + huong nang cho khop.
+       * ------------------------------------------------------------------ */
+      const HDRI_PRESETS = {
+        morning: {
+          file: "assets/hdri/sky_charolettenbrunn_1k.hdr",
+          fog: 0xdceaf5,
+          sunColor: 0xfff6e0,
+          sunPos: [46, 60, 0],
+          exposure: 1.35,
+          sunIntensity: 2.15,
+          hemiIntensity: 0.95,
+          fillIntensity: 0.32,
+          label: "8h sang - nang ro",
+        },
+        rose: {
+          file: "assets/hdri/sky_rose_garden_1k.hdr",
+          fog: 0xf3e6c8,
+          sunColor: 0xffdba0,
+          sunPos: [58, 32, 0],
+          exposure: 1.08,
+          sunIntensity: 1.5,
+          hemiIntensity: 0.72,
+          fillIntensity: 0.22,
+          label: "Nang som - vuon hoa",
+        },
+        driveway: {
+          file: "assets/hdri/sky_driveway_1k.hdr",
+          fog: 0xe9dcc0,
+          sunColor: 0xffe6b8,
+          sunPos: [54, 30, 0],
+          exposure: 1.0,
+          sunIntensity: 1.5,
+          hemiIntensity: 0.72,
+          fillIntensity: 0.22,
+          label: "Dai lo hang cay",
+        },
+        park: {
+          file: "assets/hdri/sky_charolettenbrunn_1k.hdr",
+          fog: 0xdfe6da,
+          sunColor: 0xfff2da,
+          sunPos: [48, 36, 0],
+          exposure: 0.98,
+          sunIntensity: 1.5,
+          hemiIntensity: 0.72,
+          fillIntensity: 0.22,
+          label: "Cong vien am u nhe",
+        },
+      };
+      let currentHDRI = "morning";
+      function applyEnvironment(key) {
+        const preset = HDRI_PRESETS[key];
+        if (!preset || typeof THREE.RGBELoader === "undefined") return;
+        new THREE.RGBELoader().load(
+          preset.file,
+          (tex) => {
+            tex.mapping = THREE.EquirectangularReflectionMapping;
+            const pmrem = new THREE.PMREMGenerator(renderer);
+            pmrem.compileEquirectangularShader();
+            const envRT = pmrem.fromEquirectangular(tex);
+            scene.environment = envRT.texture;
+            tex.dispose();
+            pmrem.dispose();
+            scene.fog.color.setHex(preset.fog);
+            sun.color.setHex(preset.sunColor);
+            sun.position.set(
+              sunAxisTarget.x + preset.sunPos[0],
+              preset.sunPos[1],
+              sunAxisTarget.z + preset.sunPos[2],
+            );
+            sun.target.position.copy(sunAxisTarget);
+            sun.intensity = preset.sunIntensity || 1.5;
+            hemi.intensity = preset.hemiIntensity || 0.72;
+            fill.intensity = preset.fillIntensity || 0.22;
+            sunGlow.position.copy(sun.position);
+            renderer.toneMappingExposure = preset.exposure;
+            currentHDRI = key;
+          },
+          undefined,
+          (err) => {
+            console.warn(
+              "Khong tai duoc HDRI " + preset.file + ", dung ban giai lap.",
+              err,
+            );
+            buildFallbackEnvironment();
+          },
+        );
+      }
+      // fallback: neu vi ly do gi khong tai duoc file .hdr that (thieu mang, sai
+      // duong dan khi host web), dung lai gradient procedural nhu ban truoc de
+      // scene khong bi mat anh sang moi truong hoan toan
+      function buildFallbackEnvironment() {
+        const c = document.createElement("canvas");
+        c.width = 512;
+        c.height = 256;
+        const ctx = c.getContext("2d");
+        const g = ctx.createLinearGradient(0, 0, 0, 256);
+        g.addColorStop(0.0, "#bfe0f2");
+        g.addColorStop(0.3, "#8fc3df");
+        g.addColorStop(0.52, "#f7dfae");
+        g.addColorStop(0.6, "#e7c98f");
+        g.addColorStop(0.75, "#5c6a52");
+        g.addColorStop(1.0, "#2c3527");
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, 512, 256);
+        const sg = ctx.createRadialGradient(145, 77, 2, 145, 77, 70);
+        sg.addColorStop(0, "rgba(255,247,225,1)");
+        sg.addColorStop(0.15, "rgba(255,238,195,0.9)");
+        sg.addColorStop(1, "rgba(255,238,195,0)");
+        ctx.fillStyle = sg;
+        ctx.fillRect(0, 0, 512, 256);
+        const envTex = new THREE.CanvasTexture(c);
+        envTex.mapping = THREE.EquirectangularReflectionMapping;
+        envTex.encoding = THREE.sRGBEncoding;
+        const pmrem = new THREE.PMREMGenerator(renderer);
+        pmrem.compileEquirectangularShader();
+        scene.environment = pmrem.fromEquirectangular(envTex).texture;
+        pmrem.dispose();
+      }
+      if (typeof THREE.RGBELoader !== "undefined") {
+        applyEnvironment(currentHDRI);
+      } else {
+        buildFallbackEnvironment();
+      }
+      const HDRI_ORDER = ["morning", "rose", "driveway", "park"];
+      window.cycleEnvironment = function () {
+        const idx = HDRI_ORDER.indexOf(currentHDRI);
+        const next = HDRI_ORDER[(idx + 1) % HDRI_ORDER.length];
+        applyEnvironment(next);
+        const btn = document.getElementById("envBtn");
+        if (btn) {
+          btn.title = "Khong khi: " + HDRI_PRESETS[next].label;
+        }
+      };
+
+      // ground
+      // tai texture co that va NHUOM LAI mau ngay tren canvas: giam kenh do (bot vang),
+      // tang nhe kenh xanh duong (them lanh) -> co trong tuoi, tong lanh thay vi vang/kho
+      function loadRecoloredGrassTex(path, repeatX, repeatY) {
+        const tex = new THREE.Texture();
+        tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+        tex.repeat.set(repeatX, repeatY);
+        tex.anisotropy = MAX_ANISO;
+        tex.encoding = THREE.sRGBEncoding;
+        const imgEl = new Image();
+        imgEl.onload = function () {
+          const c = document.createElement("canvas");
+          c.width = imgEl.width;
+          c.height = imgEl.height;
+          const ctx = c.getContext("2d");
+          ctx.drawImage(imgEl, 0, 0);
+          const id = ctx.getImageData(0, 0, c.width, c.height);
+          const d = id.data;
+          for (let i = 0; i < d.length; i += 4) {
+            const r = d[i],
+              g = d[i + 1],
+              b = d[i + 2];
+            d[i] = r * 0.88; // bot vang nhe, khong bot qua tay
+            d[i + 1] = g * 1.02; // giu / nhinh xanh la, tuoi hon
+            d[i + 2] = Math.min(255, b * 1.18 + 4); // them chut xanh duong vua phai, khong lanh gat
+          }
+          ctx.putImageData(id, 0, 0);
+          tex.image = c;
+          tex.needsUpdate = true;
+        };
+        imgEl.src = path;
+        return tex;
+      }
+      const grassTex = loadRecoloredGrassTex(
+        "assets/textures/ground/grass_real.jpg",
+        60,
+        60,
+      );
+      const grassNormal = (function () {
+        // ban do phap tuyen suy tu chinh anh co that (ham heightToNormalMap can
+        // canvas da ve xong; voi anh tai bang TextureLoader ta doi callback load
+        // xong roi moi tinh, tranh doc canvas rong)
+        const holder = { tex: null };
+        texLoader.load("assets/textures/ground/grass_real.jpg", (img) => {
+          const c = document.createElement("canvas");
+          c.width = img.image.width;
+          c.height = img.image.height;
+          c.getContext("2d").drawImage(img.image, 0, 0);
+          const n = heightToNormalMap(c, 1.6);
+          n.wrapS = n.wrapT = THREE.RepeatWrapping;
+          n.repeat.set(60, 60);
+          n.anisotropy = MAX_ANISO;
+          holder.tex = n;
+          if (groundMat) {
+            groundMat.normalMap = n;
+            groundMat.needsUpdate = true;
+          }
+          if (parkMat) {
+            parkMat.normalMap = n;
+            parkMat.needsUpdate = true;
+          }
+        });
+        return holder;
+      })();
+      const stoneTex = makeStoneTexture();
+      const forestFloorTex = makeForestFloorTexture();
+      const shape = new THREE.Shape(
+        BOUNDARY.map((p) => new THREE.Vector2(wx(p[0]), wz(p[1]))),
+      );
+      const groundGeo = new THREE.ShapeGeometry(shape);
+      const groundMat = new THREE.MeshStandardMaterial({
+        color: 0xb3e0ab,
+        map: grassTex,
+        normalMap: upgradeToPBR(grassTex, 50, 50, 2.2),
+        normalScale: new THREE.Vector2(0.6, 0.6),
+        roughness: 0.95,
+      });
+      const ground = new THREE.Mesh(groundGeo, groundMat);
+      ground.rotation.x = -Math.PI / 2;
+      ground.position.y = 0;
+      ground.receiveShadow = true;
+      scene.add(ground);
+
+      // nen rung bao quanh - mo rong ra ngoai ranh gioi lo dat de cay vien co mat dat that
+      const outerFloorGeo = new THREE.CircleGeometry(80, 48);
+      const outerFloorMat = new THREE.MeshStandardMaterial({
+        color: 0xb3e0ab,
+        map: grassTex,
+        roughness: 0.95,
+      });
+      const outerFloor = new THREE.Mesh(outerFloorGeo, outerFloorMat);
+      outerFloor.rotation.x = -Math.PI / 2;
+      outerFloor.position.set(sceneCenter.x, -0.01, sceneCenter.z);
+      outerFloor.receiveShadow = true;
+      scene.add(outerFloor);
+
+      const boundaryPts = BOUNDARY.map(
+        (p) => new THREE.Vector3(wx(p[0]), 0.03, wz(p[1])),
+      );
+      boundaryPts.push(boundaryPts[0].clone());
+      const boundaryGeo = new THREE.BufferGeometry().setFromPoints(boundaryPts);
+      const boundaryMat = new THREE.LineDashedMaterial({
+        color: 0xb4552e,
+        dashSize: 0.4,
+        gapSize: 0.25,
+        linewidth: 1,
+      });
+      const boundaryLine = new THREE.Line(boundaryGeo, boundaryMat);
+      boundaryLine.computeLineDistances();
+      scene.add(boundaryLine);
+
+      // roads
+      const roadMat = new THREE.MeshStandardMaterial({
+        color: 0xdccdaa,
+        map: stoneTex,
+        normalMap: upgradeToPBR(stoneTex, 1, 1, 2.6),
+        normalScale: new THREE.Vector2(0.7, 0.7),
+        roughness: 0.95,
+      });
+      ROADS.forEach((r) => {
+        const geo = new THREE.BoxGeometry(r.w * SC, 0.05, r.h * SC);
+        const m = new THREE.Mesh(geo, roadMat);
+        m.position.set(
+          wx(r.x) + (r.w * SC) / 2,
+          0.025,
+          wz(r.y) + (r.h * SC) / 2,
+        );
+        m.receiveShadow = true;
+        scene.add(m);
+      });
+
+      /* ------------------------------------------------------------------
+       * Khu Tam Linh + Ho nuoc tuong niem (dung toa do that: tam 460,776 r58)
+       * ------------------------------------------------------------------ */
+      const parkMat = new THREE.MeshStandardMaterial({
+        color: 0x74c17a,
+        map: grassTex,
+        roughness: 0.95,
+      });
+      const parkGeo = new THREE.BoxGeometry(
+        SPIRIT_PARK.w * SC,
+        0.06,
+        SPIRIT_PARK.h * SC,
+      );
+      const parkMesh = new THREE.Mesh(parkGeo, parkMat);
+      parkMesh.position.set(
+        wx(SPIRIT_PARK.x) + (SPIRIT_PARK.w * SC) / 2,
+        0.03,
+        wz(SPIRIT_PARK.y) + (SPIRIT_PARK.h * SC) / 2,
+      );
+      parkMesh.receiveShadow = true;
+      scene.add(parkMesh);
+
+      /* --- Ho tuong niem duoc xay lai thanh mot BON HO HINH TRU that su (khong con la
+       * hinh trang tri phang dan len mat dat nua): co thanh cong (curb) noi cao hon mat co,
+       * mep tren PHANG - GOC CANH (khong bo tron kieu Torus nua), long ho khoet sau xuong
+       * duoi mat dat mot chut, day ho co lat gach, va mat nuoc nam gan sat mep tren thanh
+       * cong nen luon nhin "day nuoc", khong bi lap voi tham co dat / tia sang ep xuong. --- */
+      const GROUND_Y = 0.06; // dung mat tren tham co lam moc chung
+      const CURB_WALL_H = 0.16; // thanh cong nhoi cao hon mat co
+      const BASIN_DEPTH = 0.04; // long ho khoet xuong duoi mat dat mot chut ("bi khoet trong")
+      const CURB_THICK = 0.14; // do day thanh cong
+
+      const lakeCenter = new THREE.Vector3(
+        wx(LAKE.cx),
+        GROUND_Y + CURB_WALL_H - 0.02,
+        wz(LAKE.cy),
+      ); // mat nuoc nam gan sat mep tren thanh cong
+      const lakeRadius = LAKE.r * SC;
+
+      const mosaicTex = makeMosaicTexture();
+      const curbMat = new THREE.MeshStandardMaterial({
+        color: 0x9fd0e0,
+        map: mosaicTex,
+        roughness: 0.45,
+        metalness: 0.05,
+      }); // thanh cong lat gach mosaic xanh
+      // mep da tren cung: doi sang marble that (be gui - LatheColor tu bo fountain
+      // simulation) thay vi mau phang, nhin nhu da hoa cuong that duoi nang
+      const marbleRealTex = loadRepeatTex(
+        "assets/textures/water/basin_marble.jpg",
+        3,
+        3,
+        true,
+      );
+      const marbleRealNormal = (function () {
+        const holder = { tex: null };
+        texLoader.load("assets/textures/water/basin_marble.jpg", (img) => {
+          const c = document.createElement("canvas");
+          c.width = img.image.width;
+          c.height = img.image.height;
+          c.getContext("2d").drawImage(img.image, 0, 0);
+          const n = heightToNormalMap(c, 1.4);
+          n.wrapS = n.wrapT = THREE.RepeatWrapping;
+          n.repeat.set(3, 3);
+          n.anisotropy = MAX_ANISO;
+          holder.tex = n;
+          rimCapMat.normalMap = n;
+          rimCapMat.needsUpdate = true;
+        });
+        return holder;
+      })();
+      const rimCapMat = new THREE.MeshStandardMaterial({
+        color: 0xf3efe4,
+        map: marbleRealTex,
+        roughness: 0.38,
+        envMapIntensity: 0.6,
+      }); // mep da hoa cuong that, phang, goc canh ro
+      const floorTex = makePoolFloorTexture();
+      const floorMat = new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        map: floorTex,
+        roughness: 0.6,
+      }); // day ho co lat gach
+
+      const curbTopY = GROUND_Y + CURB_WALL_H;
+      const basinFloorY = GROUND_Y - BASIN_DEPTH;
+
+      // --- 1) Vach ngoai thanh cong (tu mat dat len den mep tren) - hinh tru dac, lat mosaic
+      const curbOuterGeo = new THREE.CylinderGeometry(
+        lakeRadius + CURB_THICK,
+        lakeRadius + CURB_THICK,
+        CURB_WALL_H,
+        56,
+        1,
+        true,
+      );
+      const curbOuterMesh = new THREE.Mesh(curbOuterGeo, curbMat);
+      curbOuterMesh.position.set(
+        lakeCenter.x,
+        GROUND_Y + CURB_WALL_H / 2,
+        lakeCenter.z,
+      );
+      curbOuterMesh.castShadow = true;
+      curbOuterMesh.receiveShadow = true;
+      scene.add(curbOuterMesh);
+
+      // --- 2) Mep tren thanh cong - mat PHANG hinh vanh khuyen, goc canh ro rang (thay Torus tron)
+      const curbTopCapGeo = new THREE.RingGeometry(
+        lakeRadius,
+        lakeRadius + CURB_THICK,
+        56,
+        1,
+      );
+      const curbTopCapMesh = new THREE.Mesh(curbTopCapGeo, rimCapMat);
+      curbTopCapMesh.rotation.x = -Math.PI / 2;
+      curbTopCapMesh.position.set(lakeCenter.x, curbTopY, lakeCenter.z);
+      curbTopCapMesh.receiveShadow = true;
+      scene.add(curbTopCapMesh);
+
+      // --- 3) Vach trong long ho (long ho khoet vao trong, tu mep tren xuong toi day ho) - lat mosaic
+      const basinWallH = curbTopY - basinFloorY;
+      const basinWallGeo = new THREE.CylinderGeometry(
+        lakeRadius,
+        lakeRadius,
+        basinWallH,
+        56,
+        1,
+        true,
+      );
+      const basinWallMesh = new THREE.Mesh(basinWallGeo, curbMat);
+      basinWallMesh.position.set(
+        lakeCenter.x,
+        (curbTopY + basinFloorY) / 2,
+        lakeCenter.z,
+      );
+      scene.add(basinWallMesh);
+
+      // --- 4) Day ho - lat gach
+      const floorGeo = new THREE.CircleGeometry(lakeRadius, 56);
+      const floorMesh = new THREE.Mesh(floorGeo, floorMat);
+      floorMesh.rotation.x = -Math.PI / 2;
+      floorMesh.position.set(lakeCenter.x, basinFloorY, lakeCenter.z);
+      floorMesh.receiveShadow = true;
+      scene.add(floorMesh);
+
+      const waterUniforms = {
+        uTime: { value: 0 },
+        uDeep: { value: new THREE.Color(0x1c7fa0) }, // xanh bien vua, sang hon ban cu (0c5064 qua toi/den)
+        uShallow: { value: new THREE.Color(0x7fd4e8) }, // xanh bien nhat, sang de nhan ra la nuoc
+        uSun: {
+          value: new THREE.Vector3()
+            .copy(sun.position)
+            .sub(lakeCenter)
+            .normalize(),
+        },
+      };
+      const waterMat = new THREE.ShaderMaterial({
+        uniforms: waterUniforms,
+        transparent: true,
+        vertexShader: `
+    uniform float uTime;
+    varying vec2 vXy;
+    varying float vRipple;
+    void main(){
+      vXy = position.xy;
+      float r = length(position.xy);
+      float ripple = sin(r*7.0 - uTime*1.6) * 0.012 + sin(position.x*3.0+uTime*0.8)*0.006;
+      vRipple = ripple;
+      vec3 p = position + vec3(0.0,0.0, ripple);
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+    }`,
+        fragmentShader: `
+    uniform float uTime; uniform vec3 uDeep; uniform vec3 uShallow; uniform vec3 uSun;
+    varying vec2 vXy; varying float vRipple;
+    float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233)))*43758.5453); }
+    void main(){
+      float r = length(vXy);
+      float t = smoothstep(0.0, 1.0, r);
+      vec3 base = mix(uDeep, uShallow, t*0.85 + vRipple*4.0);
+      vec2 cell = floor(vXy*22.0 + uTime*0.15);
+      float spark = hash(cell);
+      float twinkle = step(0.986, spark) * (0.5 + 0.5*sin(uTime*6.0 + spark*40.0));
+      vec3 col = base + vec3(twinkle*0.9);
+      float edge = smoothstep(1.0, 0.88, r);
+      float alpha = mix(0.8, 0.97, edge);
+      gl_FragColor = vec4(col, alpha);
+    }`,
+      });
+      const lakeGeo = new THREE.CircleGeometry(1, 64);
+      const lakeMesh = new THREE.Mesh(lakeGeo, waterMat);
+      lakeMesh.rotation.x = -Math.PI / 2; // nam phang xuong day ho (truoc day thieu dong nay nen mat nuoc dung thang, cat ngang thap)
+      lakeMesh.scale.set(lakeRadius, lakeRadius, 1);
+      lakeMesh.position.copy(lakeCenter);
+      scene.add(lakeMesh);
+
+      // nen gach mong lot duoi toan bo khu dai phun ("Khu tam linh") - tham chieu anh mau
+      const plazaPaveTex = makeStoneTexture();
+      // SUA LAI (LOI THAT SU): day truoc gio la 1 HINH TRON DAC (CircleGeometry) phu kin
+      // tu tam ra ngoai, va no nam qua sat mat tham co (chi cao hon 0.006) -> bi z-fighting,
+      // tham co de len che mat gach. Gio doi sang HINH VANH KHUYEN (co lo tron o giua, khong
+      // dam vao thanh cong) VA nang cao han len (GROUND_Y+0.08) de khong con bi tham co lan at.
+      const PLAZA_Y = GROUND_Y + 0.08;
+      const plazaInnerR = lakeRadius + CURB_THICK + 0.05; // vua het thanh cong ngoai
+      const plazaOuterRX = lakeRadius + 2.15; // chieu dai (doc theo khu dat) - giu nguyen nhu ban goc
+      const plazaOuterRZ = Math.min(
+        lakeRadius + 2.15,
+        (SPIRIT_PARK.h * SC) / 2 - 0.03,
+      ); // chieu hep - bi gioi han, tranh tran duong
+      const plazaGeo = new THREE.RingGeometry(plazaInnerR, plazaOuterRZ, 64, 1);
+      const plazaMat = new THREE.MeshStandardMaterial({
+        color: 0xdcd6c0,
+        map: plazaPaveTex,
+        roughness: 0.88,
+      });
+      const plazaMesh = new THREE.Mesh(plazaGeo, plazaMat);
+      plazaMesh.rotation.x = -Math.PI / 2;
+      plazaMesh.scale.set(plazaOuterRX / plazaOuterRZ, 1, 1); // keo dai theo truc X de thanh hinh oval nhu ban goc
+      plazaMesh.position.set(lakeCenter.x, PLAZA_Y, lakeCenter.z);
+      plazaMesh.receiveShadow = true;
+      scene.add(plazaMesh);
+
+      /* --- Dai phun nuoc trung tam: thap da nhieu tang, nuoc tran xuong tung tang,
+       * vong tia cong parabol toa ra vien ho (khong con la mang phang vuong vuc) --- */
+      (function buildFountain() {
+        const fountainGroup = new THREE.Group();
+        const stoneLightMat = new THREE.MeshStandardMaterial({
+          color: 0xece6d6,
+          roughness: 0.5,
+          metalness: 0.05,
+        });
+        const tierTops = [];
+        let curY = lakeCenter.y + 0.02;
+        function addTier(rTop, rBottom, height) {
+          const g = new THREE.CylinderGeometry(rTop, rBottom, height, 28);
+          const m = new THREE.Mesh(g, stoneLightMat);
+          m.position.y = curY + height / 2;
+          m.castShadow = true;
+          m.receiveShadow = true;
+          fountainGroup.add(m);
+          curY += height;
+          tierTops.push({ r: rTop, y: curY });
+          return m;
+        }
+        addTier(lakeRadius * 0.5, lakeRadius * 0.56, 0.09);
+        addTier(lakeRadius * 0.42, lakeRadius * 0.47, 0.045);
+        addTier(lakeRadius * 0.26, lakeRadius * 0.3, 0.11);
+        addTier(lakeRadius * 0.19, lakeRadius * 0.23, 0.04);
+        addTier(lakeRadius * 0.1, lakeRadius * 0.14, 0.14);
+        const cap = new THREE.Mesh(
+          new THREE.SphereGeometry(lakeRadius * 0.06, 12, 10),
+          stoneLightMat,
+        );
+        cap.position.y = curY + lakeRadius * 0.03;
+        cap.castShadow = true;
+        fountainGroup.add(cap);
+        const spoutTopY = cap.position.y + lakeRadius * 0.05;
+        fountainGroup.position.set(lakeCenter.x, 0, lakeCenter.z);
+        scene.add(fountainGroup);
+
+        // man nuoc mong phu tren mep tung tang, mo phong nuoc tran chay xuong thap da
+        // dung anh nuoc chay THAT (be gui - "0028-falling-water") thay vi noise ve tay,
+        // nhin co dong nuoc/tia nuoc that thay vi cham xam mo
+        const veilTex = loadRepeatTex(
+          "assets/textures/water/water_curtain.jpg",
+          2,
+          1,
+          true,
+        );
+        veilTex.wrapT = THREE.ClampToEdgeWrapping;
+        // giam opacity + doi mau nhat hon (bot trang) de khong lan at mau xanh nuoc ben duoi khi cong bloom
+        const veilBaseMat = new THREE.MeshBasicMaterial({
+          map: veilTex,
+          color: 0xdcf1f7,
+          transparent: true,
+          opacity: 0.4,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+        });
+        window.__fountainVeils = [];
+        tierTops.slice(0, -1).forEach((tp) => {
+          const vg = new THREE.CylinderGeometry(
+            tp.r * 1.03,
+            tp.r * 1.12,
+            0.16,
+            24,
+            1,
+            true,
+          );
+          const vm = new THREE.Mesh(vg, veilBaseMat.clone());
+          vm.position.set(lakeCenter.x, tp.y - 0.06, lakeCenter.z);
+          scene.add(vm);
+          window.__fountainVeils.push({
+            mesh: vm,
+            phase: Math.random() * Math.PI * 2,
+          });
+        });
+
+        // tia phun trung tam dang non thon tron (khong con la tam phang vuong vuc)
+        const jetMat = new THREE.MeshBasicMaterial({
+          color: 0xcdeaf5,
+          transparent: true,
+          opacity: 0.4,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        });
+        const centerJet = new THREE.Mesh(
+          new THREE.CylinderGeometry(
+            0.012,
+            lakeRadius * 0.09,
+            lakeRadius * 0.8,
+            12,
+            6,
+            true,
+          ),
+          jetMat.clone(),
+        );
+        centerJet.position.set(
+          lakeCenter.x,
+          spoutTopY + lakeRadius * 0.4,
+          lakeCenter.z,
+        );
+        scene.add(centerJet);
+        window.__centerJet = { mesh: centerJet, baseY: centerJet.position.y };
+
+        // vong tia cong hinh parabol, toa tu chan thap ra vien ho (Tube theo duong cong bezier -
+        // dung y "cong parabol" thay vi duong thang, giai quyet cam giac vuong vuc truoc do)
+        const arcMat = new THREE.MeshBasicMaterial({
+          color: 0xcdeaf5,
+          transparent: true,
+          opacity: 0.42,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+        });
+        window.__waterArcs = [];
+        const arcCount = 18;
+        const innerR = lakeRadius * 0.3,
+          outerR = lakeRadius * 0.86,
+          peakY = lakeRadius * 0.6;
+        for (let i = 0; i < arcCount; i++) {
+          const ang = (i / arcCount) * Math.PI * 2;
+          const ix = lakeCenter.x + Math.cos(ang) * innerR,
+            iz = lakeCenter.z + Math.sin(ang) * innerR;
+          const ox = lakeCenter.x + Math.cos(ang) * outerR,
+            oz = lakeCenter.z + Math.sin(ang) * outerR;
+          const mx = lakeCenter.x + Math.cos(ang) * (innerR + outerR) * 0.42,
+            mz = lakeCenter.z + Math.sin(ang) * (innerR + outerR) * 0.42;
+          const curve = new THREE.QuadraticBezierCurve3(
+            new THREE.Vector3(ix, lakeCenter.y + 0.22, iz),
+            new THREE.Vector3(mx, lakeCenter.y + peakY, mz),
+            new THREE.Vector3(ox, lakeCenter.y + 0.03, oz),
+          );
+          const tubeGeo = new THREE.TubeGeometry(curve, 18, 0.016, 6, false);
+          const m = new THREE.Mesh(tubeGeo, arcMat.clone());
+          scene.add(m);
+          window.__waterArcs.push({
+            mesh: m,
+            phase: Math.random() * Math.PI * 2,
+          });
+        }
+
+        // vong tia nho quanh mep, dang non tron (thay cho 3 mang phang cheo nhau truoc day)
+        const smallJetMat = new THREE.MeshBasicMaterial({
+          color: 0xcdeaf5,
+          transparent: true,
+          opacity: 0.4,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        });
+        window.__smallJets = [];
+        const smallJetCount = 8;
+        for (let i = 0; i < smallJetCount; i++) {
+          const ang = (i / smallJetCount) * Math.PI * 2 + 0.2;
+          const jx = lakeCenter.x + Math.cos(ang) * lakeRadius * 0.84;
+          const jz = lakeCenter.z + Math.sin(ang) * lakeRadius * 0.84;
+          const g = new THREE.CylinderGeometry(
+            0.006,
+            lakeRadius * 0.032,
+            lakeRadius * 0.24,
+            8,
+            4,
+            true,
+          );
+          const m = new THREE.Mesh(g, smallJetMat.clone());
+          m.position.set(jx, lakeCenter.y + 0.02 + lakeRadius * 0.12, jz);
+          scene.add(m);
+          window.__smallJets.push({
+            mesh: m,
+            baseY: m.position.y,
+            phase: Math.random() * Math.PI * 2,
+          });
+        }
+
+        // bot nuoc dang tron (thay cho tam phang vuong truoc day) quanh chan thap
+        // dung anh bot sang THAT (be gui - "cc.jpeg", mot glow tron mem) thay vi
+        // texture bot ve tay bang canvas
+        const foamMat = new THREE.MeshBasicMaterial({
+          map: loadRepeatTex("assets/textures/water/foam_glow.jpg", 1, 1, true),
+          color: 0xdcf1f7,
+          transparent: true,
+          opacity: 0.4,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        });
+        const foamGeo = new THREE.CircleGeometry(lakeRadius * 0.4, 28);
+        const foam = new THREE.Mesh(foamGeo, foamMat);
+        foam.rotation.x = -Math.PI / 2;
+        foam.position.set(lakeCenter.x, lakeCenter.y + 0.03, lakeCenter.z);
+        scene.add(foam);
+        window.__fountainFoam = foam;
+      })();
+
+      /* --- 4 bon co/hoa vien cong quanh dai phun, dung nen gach mong o duoi (tham chieu anh mau) --- */
+      (function buildFountainBeds() {
+        const bedInnerR = lakeRadius + 0.65,
+          bedOuterR = lakeRadius + 1.55;
+        const arcSpan = Math.PI * 0.34;
+        const borderMat = new THREE.MeshStandardMaterial({
+          color: 0x2b2f26,
+          roughness: 0.85,
+        });
+        const grassMat = new THREE.MeshStandardMaterial({
+          color: 0x4f9a4f,
+          map: makeGrassTexture(),
+          roughness: 0.9,
+        });
+        const ballGeo = new THREE.SphereGeometry(0.17, 10, 8);
+        const ballMat = new THREE.MeshStandardMaterial({
+          color: 0x3f7a44,
+          roughness: 0.85,
+        });
+        const potGeo = new THREE.CylinderGeometry(0.1, 0.12, 0.08, 8);
+        const potMat = new THREE.MeshStandardMaterial({
+          color: 0x8a8378,
+          roughness: 0.8,
+        });
+        [0, Math.PI / 2, Math.PI, Math.PI * 1.5].forEach((baseAng, gi) => {
+          const start = baseAng - arcSpan / 2;
+          const border = new THREE.Mesh(
+            new THREE.RingGeometry(
+              bedInnerR - 0.07,
+              bedOuterR + 0.07,
+              32,
+              1,
+              start,
+              arcSpan,
+            ),
+            borderMat,
+          );
+          border.rotation.x = -Math.PI / 2;
+          border.position.set(lakeCenter.x, 0.012, lakeCenter.z);
+          border.receiveShadow = true;
+          scene.add(border);
+          const grass = new THREE.Mesh(
+            new THREE.RingGeometry(bedInnerR, bedOuterR, 32, 1, start, arcSpan),
+            grassMat,
+          );
+          grass.rotation.x = -Math.PI / 2;
+          grass.position.set(lakeCenter.x, 0.018, lakeCenter.z);
+          grass.receiveShadow = true;
+          scene.add(grass);
+          // bui canh tron o hai dau bon + cay nho o giua
+          [start + 0.05, start + arcSpan - 0.05].forEach((a) => {
+            const bx =
+                lakeCenter.x + (Math.cos(a) * (bedInnerR + bedOuterR)) / 2,
+              bz = lakeCenter.z + (Math.sin(a) * (bedInnerR + bedOuterR)) / 2;
+            const pot = new THREE.Mesh(potGeo, potMat);
+            pot.position.set(bx, 0.05, bz);
+            pot.receiveShadow = true;
+            const ball = new THREE.Mesh(ballGeo, ballMat);
+            ball.position.set(bx, 0.26, bz);
+            ball.castShadow = true;
+            scene.add(pot, ball);
+          });
+          const midA = baseAng;
+          const midX =
+              lakeCenter.x + (Math.cos(midA) * (bedInnerR + bedOuterR)) / 2,
+            midZ =
+              lakeCenter.z + (Math.sin(midA) * (bedInnerR + bedOuterR)) / 2;
+          const midBush = new THREE.Mesh(
+            new THREE.SphereGeometry(0.22, 10, 8),
+            ballMat,
+          );
+          midBush.position.set(midX, 0.2, midZ);
+          midBush.scale.set(1, 1.15, 1);
+          midBush.castShadow = true;
+          scene.add(midBush);
+        });
+      })();
+
+      /* ------------------------------------------------------------------
+       * Cay xanh (rung da dang, cao thap khac nhau, lay lung gio) + Da lung linh
+       * ------------------------------------------------------------------ */
+      /* ------------------------------------------------------------------
+       * Bong tiep xuc (contact shadow) gia lap: mot dia gradient mo duoi
+       * chan cay / tru da de vat khong bi "lo lung" tren mat dat khi nhin gan
+       * (thay the mot phan cho GTAO/contact shadow that vi WebGL thuan khong
+       * co AO theo khong gian man hinh full nhu game engine).
+       * ------------------------------------------------------------------ */
+      const contactShadowTex = (function () {
+        const c = document.createElement("canvas");
+        c.width = c.height = 128;
+        const ctx = c.getContext("2d");
+        const g = ctx.createRadialGradient(64, 64, 4, 64, 64, 62);
+        g.addColorStop(0, "rgba(0,0,0,0.55)");
+        g.addColorStop(0.6, "rgba(0,0,0,0.28)");
+        g.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, 128, 128);
+        return new THREE.CanvasTexture(c);
+      })();
+      const contactShadowGeo = new THREE.PlaneGeometry(1, 1);
+      contactShadowGeo.rotateX(-Math.PI / 2);
+      // Toi uu hieu nang: thay vi tao 1 Mesh + 1 Material rieng cho MOI cay
+      // (hang nghin draw call), gom tat ca bong tiep xuc vao 1 InstancedMesh
+      // duy nhat (dung chung 1 material, opacity trung binh). Cac vi tri duoc
+      // gom lai truoc, dung InstancedMesh xay 1 lan duy nhat o cuoi (xem
+      // finalizeContactShadows() goi truoc animate()).
+      const contactShadowMat = new THREE.MeshBasicMaterial({
+        map: contactShadowTex,
+        transparent: true,
+        opacity: 0.4,
+        depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -1,
+      });
+      const pendingContactShadows = [];
+      function addContactShadow(x, z, radius, opacity) {
+        pendingContactShadows.push({ x, z, radius });
+      }
+      function finalizeContactShadows() {
+        if (!pendingContactShadows.length) return;
+        const inst = new THREE.InstancedMesh(
+          contactShadowGeo,
+          contactShadowMat,
+          pendingContactShadows.length,
+        );
+        const dummy = new THREE.Object3D();
+        pendingContactShadows.forEach((s, i) => {
+          dummy.position.set(s.x, 0.006, s.z);
+          dummy.scale.set(s.radius * 2, 1, s.radius * 2);
+          dummy.rotation.set(0, 0, 0);
+          dummy.updateMatrix();
+          inst.setMatrixAt(i, dummy.matrix);
+        });
+        inst.instanceMatrix.needsUpdate = true;
+        inst.renderOrder = 1;
+        inst.frustumCulled = false;
+        scene.add(inst);
+        pendingContactShadows.length = 0;
+      }
+
+      const trunkMat = new THREE.MeshStandardMaterial({
+        color: 0x5b3d24,
+        roughness: 0.95,
+      });
+
+      /* ------------------------------------------------------------------
+       * CAY THAT (tu texture be gui - tree_small_02, chi lay chat lieu vi
+       * khong mo duoc file .blend goc trong sandbox). Ky thuat "leaf card":
+       * than cay dung anh vo cay that (bark), tan la dung 2 loai the la that
+       * cat tu texture atlas Poly Haven - "sprig" (nhanh la ro net, dung gan
+       * truc than) va "blob" (mang tan la mo, dung lam khoi tan day xung
+       * quanh cho khoi bi lo lo). Day la ky thuat dung pho bien trong game
+       * AAA (vd Genshin, TLOU) de tao cay that ma khong can hang trieu polygon.
+       * ------------------------------------------------------------------ */
+      const realBarkAlbedo = loadRepeatTex(
+        "assets/textures/tree/bark_diff.jpg",
+        1,
+        3,
+        true,
+      );
+      const realBarkNormal = loadRepeatTex(
+        "assets/textures/tree/bark_normal.jpg",
+        1,
+        3,
+        false,
+      );
+      const realBarkRough = loadRepeatTex(
+        "assets/textures/tree/bark_rough.jpg",
+        1,
+        3,
+        false,
+      );
+      const realBarkMat = new THREE.MeshStandardMaterial({
+        map: realBarkAlbedo,
+        normalMap: realBarkNormal,
+        roughnessMap: realBarkRough,
+        roughness: 1,
+        envMapIntensity: 0.25,
+      });
+
+      const realSprigTex = loadRepeatTex(
+        "assets/textures/tree/leaf_sprig.png",
+        1,
+        1,
+        true,
+      );
+      const realSprigNorm = loadRepeatTex(
+        "assets/textures/tree/leaf_sprig_normal.jpg",
+        1,
+        1,
+        false,
+      );
+      const realSprigRough = loadRepeatTex(
+        "assets/textures/tree/leaf_sprig_rough.jpg",
+        1,
+        1,
+        false,
+      );
+      const realBlobTex = loadRepeatTex(
+        "assets/textures/tree/leaf_canopy_blob.png",
+        1,
+        1,
+        true,
+      );
+      const realBlobNorm = loadRepeatTex(
+        "assets/textures/tree/leaf_blob_normal.jpg",
+        1,
+        1,
+        false,
+      );
+      const realBlobRough = loadRepeatTex(
+        "assets/textures/tree/leaf_blob_rough.jpg",
+        1,
+        1,
+        false,
+      );
+      const realSprigMat = new THREE.MeshStandardMaterial({
+        map: realSprigTex,
+        normalMap: realSprigNorm,
+        roughnessMap: realSprigRough,
+        roughness: 1,
+        transparent: true,
+        alphaTest: 0.35,
+        side: THREE.DoubleSide,
+        envMapIntensity: 0.3,
+      });
+      const realBlobMat = new THREE.MeshStandardMaterial({
+        map: realBlobTex,
+        normalMap: realBlobNorm,
+        roughnessMap: realBlobRough,
+        roughness: 1,
+        transparent: true,
+        alphaTest: 0.22,
+        side: THREE.DoubleSide,
+        envMapIntensity: 0.3,
+      });
+
+      // tao 1 the la (plane) da xoay/dat vi tri, tra ve BufferGeometry rieng de
+      // gop lai sau (mergeBufferGeometries) - giu so draw call thap du co nhieu the
+      function makeLeafCardGeo(w, h, x, y, z, rotY, rotX, rotZ) {
+        const g = new THREE.PlaneGeometry(w, h);
+        g.translate(0, h * 0.5, 0);
+        const m = new THREE.Matrix4().makeRotationFromEuler(
+          new THREE.Euler(rotX || 0, rotY || 0, rotZ || 0),
+        );
+        m.setPosition(x, y, z);
+        g.applyMatrix4(m);
+        return g;
+      }
+      // dung mot cum "sprig" (nhanh la chi tiet) quanh 1 tam, nhieu the cheo nhau
+      function buildSprigCluster(cx, cy, cz, radius, count) {
+        const geos = [];
+        for (let i = 0; i < count; i++) {
+          const a = (i / count) * Math.PI * 2 + Math.random() * 0.6;
+          const r = radius * (0.35 + Math.random() * 0.65);
+          const x = cx + Math.cos(a) * r,
+            z = cz + Math.sin(a) * r;
+          const y = cy + (Math.random() - 0.3) * radius * 0.7;
+          const w = radius * (0.9 + Math.random() * 0.5),
+            h = w * 1.3;
+          geos.push(
+            makeLeafCardGeo(
+              w,
+              h,
+              x,
+              y,
+              z,
+              a + Math.PI / 2,
+              (Math.random() - 0.5) * 0.5,
+              (Math.random() - 0.5) * 0.3,
+            ),
+          );
+          geos.push(
+            makeLeafCardGeo(
+              w,
+              h,
+              x,
+              y,
+              z,
+              a + Math.PI / 2 + Math.PI / 2,
+              (Math.random() - 0.5) * 0.5,
+              (Math.random() - 0.5) * 0.3,
+            ),
+          );
+        }
+        return THREE.BufferGeometryUtils.mergeBufferGeometries(geos);
+      }
+      // vai the "blob" lon, mo, dat sau/quanh cum sprig de lap day khoi tan,
+      // tranh cam giac "thua la" khi nhin tu xa
+      function buildBlobFiller(cx, cy, cz, radius, count) {
+        const geos = [];
+        for (let i = 0; i < count; i++) {
+          const a = Math.random() * Math.PI * 2;
+          const r = radius * 0.3;
+          const x = cx + Math.cos(a) * r,
+            z = cz + Math.sin(a) * r;
+          const y = cy + (Math.random() - 0.4) * radius * 0.6;
+          const s = radius * (1.3 + Math.random() * 0.6);
+          geos.push(
+            makeLeafCardGeo(
+              s,
+              s,
+              x,
+              y,
+              z,
+              Math.random() * Math.PI,
+              (Math.random() - 0.5) * 0.4,
+              0,
+            ),
+          );
+        }
+        return THREE.BufferGeometryUtils.mergeBufferGeometries(geos);
+      }
+
+      /* ------------------------------------------------------------------
+       * Cay/hoa THAT tu model 3D (be gui - goi "Ultimate Stylized Nature":
+       * BirchTree/MapleTree/Flower_Clump). TOI UU HIEU NANG: thay vi clone
+       * rieng tung cay (hang nghin Object3D + hang nghin draw call), ta chi
+       * GOM VI TRI truoc (dong bo, luc script chay), roi khi GLTFLoader tai
+       * xong model, dung 1 InstancedMesh CHO MOI (giong cay x bien the x
+       * than/tan la) de ve toan bo cay cung loai trong DUY NHAT 1 draw call
+       * (~14 draw call cho toan bo rung, thay vi hang nghin). Lac nhe theo
+       * gio van co, nhung chi ap dung cho InstancedMesh cua tan la (khong
+       * dung Group rieng tung cay nua) bang cach cap nhat lai ma tran instance
+       * moi frame - re hon rat nhieu so voi hang nghin draw call rieng.
+       * ------------------------------------------------------------------ */
+      const REAL_TREE_LIB = {
+        birch: [],
+        maple: [],
+        flower: [],
+        birchGreen: [],
+        mapleGreen: [],
+      };
+      const pendingRealModelReqs = {
+        birch: [],
+        maple: [],
+        flower: [],
+        birchGreen: [],
+        mapleGreen: [],
+      };
+      let realTreeAssetsLoaded = false;
+      const leafSwayBatches = []; // {mesh, base:[{i,pos,rotY,scale,phase}]}
+      (function loadRealTreeModels() {
+        if (typeof THREE.GLTFLoader === "undefined") return;
+        const loader = new THREE.GLTFLoader();
+        const files = {
+          birch: [
+            "assets/models/trees/BirchTree_2.gltf",
+            "assets/models/trees/BirchTree_3.gltf",
+            "assets/models/trees/BirchTree_4.gltf",
+          ],
+          maple: [
+            "assets/models/trees/MapleTree_1.gltf",
+            "assets/models/trees/MapleTree_2.gltf",
+            "assets/models/trees/MapleTree_4.gltf",
+          ],
+          flower: [
+            "assets/models/trees/Flower_2_Clump.gltf",
+            "assets/models/trees/Flower_4_Clump.gltf",
+          ],
+        };
+        let toLoad = 0,
+          loaded = 0;
+        Object.values(files).forEach((arr) => (toLoad += arr.length));
+        function onOneLoaded() {
+          loaded++;
+          if (loaded >= toLoad) buildRealTreeInstances();
+        }
+        Object.keys(files).forEach((kind) => {
+          files[kind].forEach((path) => {
+            loader.load(
+              path,
+              (gltf) => {
+                // tach rieng mesh "than/vo cay" (Bark) va "tan la" (Leaves) de
+                // xay 2 InstancedMesh rieng (tan la se duoc lac theo gio)
+                let trunkGeo = null,
+                  trunkMat = null,
+                  leafGeo = null,
+                  leafMat = null;
+                gltf.scene.traverse((n) => {
+                  if (!n.isMesh || !n.material) return;
+                  n.material.envMapIntensity = 0.55;
+                  const nm = n.material.name || "";
+                  if (nm.includes("Leaves") || nm.includes("Flowers")) {
+                    leafGeo = n.geometry;
+                    leafMat = n.material;
+                    leafMat.side = THREE.DoubleSide;
+                    leafMat.alphaTest = 0.4;
+                    leafMat.transparent = false;
+                  } else {
+                    trunkGeo = n.geometry;
+                    trunkMat = n.material;
+                  }
+                });
+                REAL_TREE_LIB[kind].push({
+                  trunkGeo,
+                  trunkMat,
+                  leafGeo,
+                  leafMat,
+                });
+                onOneLoaded();
+              },
+              undefined,
+              () => {
+                onOneLoaded();
+              },
+            );
+          });
+        });
+      })();
+      function buildRealTreeInstances() {
+        realTreeAssetsLoaded = true;
+        // "birchGreen": dung lai dung hinh cay Birch (than+tan la) nhung nhuom
+        // mau la xanh la thay vi vang - dung rieng cho khu vuc quanh Khu Tam
+        // Linh (ho phun nuoc, gan ghe da nghi chan) theo yeu cau
+        REAL_TREE_LIB.birchGreen = REAL_TREE_LIB.birch.map((v) => ({
+          trunkGeo: v.trunkGeo,
+          trunkMat: v.trunkMat,
+          leafGeo: v.leafGeo,
+          leafMat: v.leafMat ? v.leafMat.clone() : null,
+        }));
+        REAL_TREE_LIB.birchGreen.forEach((v) => {
+          if (v.leafMat) v.leafMat.color.setHex(0x4f9256);
+        });
+        // "mapleGreen": dung lai dung hinh cay Maple (than+tan la) nhung nhuom
+        // nhe sang mau vang am (thay vi xanh la) - vi texture goc cua maple la
+        // do/cam, nhan (multiply) voi mau xanh la se ra mau nau-do lem nhem rat
+        // xau (kenh xanh la trong texture goc qua yeu). Nhuom vang thi hop mau
+        // hon, giong tong voi cay birch, nhin tu nhien va sang hon nhieu.
+        REAL_TREE_LIB.mapleGreen = REAL_TREE_LIB.maple.map((v) => ({
+          trunkGeo: v.trunkGeo,
+          trunkMat: v.trunkMat,
+          leafGeo: v.leafGeo,
+          leafMat: v.leafMat ? v.leafMat.clone() : null,
+        }));
+        REAL_TREE_LIB.mapleGreen.forEach((v) => {
+          if (v.leafMat) v.leafMat.color.setHex(0xe0b24a);
+        });
+        const dummy = new THREE.Object3D();
+        Object.keys(pendingRealModelReqs).forEach((libKind) => {
+          const reqs = pendingRealModelReqs[libKind];
+          const variants = REAL_TREE_LIB[libKind];
+          if (!reqs.length || !variants || !variants.length) return;
+          // chia deu request cho tung bien the (Birch_2/3/4, Maple_1/2/4, ...)
+          const perVariant = variants.map(() => []);
+          reqs.forEach((r, i) => perVariant[i % variants.length].push(r));
+          variants.forEach((v, vi) => {
+            const list = perVariant[vi];
+            if (!list.length) return;
+            if (v.trunkGeo) {
+              const trunkMesh = new THREE.InstancedMesh(
+                v.trunkGeo,
+                v.trunkMat,
+                list.length,
+              );
+              trunkMesh.castShadow = libKind !== "flower";
+              trunkMesh.receiveShadow = true;
+              trunkMesh.frustumCulled = false;
+              list.forEach((r, i) => {
+                dummy.position.set(r.px, 0, r.pz);
+                dummy.rotation.set(0, r.rotY, 0);
+                dummy.scale.setScalar(r.modelScale);
+                dummy.updateMatrix();
+                trunkMesh.setMatrixAt(i, dummy.matrix);
+              });
+              trunkMesh.instanceMatrix.needsUpdate = true;
+              scene.add(trunkMesh);
+            }
+            if (v.leafGeo) {
+              const leafMesh = new THREE.InstancedMesh(
+                v.leafGeo,
+                v.leafMat,
+                list.length,
+              );
+              leafMesh.castShadow = libKind !== "flower";
+              leafMesh.receiveShadow = true;
+              leafMesh.frustumCulled = false;
+              const base = [];
+              list.forEach((r, i) => {
+                dummy.position.set(r.px, 0, r.pz);
+                dummy.rotation.set(0, r.rotY, 0);
+                dummy.scale.setScalar(r.modelScale);
+                dummy.updateMatrix();
+                leafMesh.setMatrixAt(i, dummy.matrix);
+                base.push({
+                  i,
+                  x: r.px,
+                  z: r.pz,
+                  rotY: r.rotY,
+                  scale: r.modelScale,
+                  phase: Math.random() * Math.PI * 2,
+                  amp: 0.018 + Math.random() * 0.014,
+                });
+              });
+              leafMesh.instanceMatrix.needsUpdate = true;
+              scene.add(leafMesh);
+              if (libKind !== "flower")
+                leafSwayBatches.push({ mesh: leafMesh, base });
+            }
+          });
+        });
+        Object.keys(pendingRealModelReqs).forEach(
+          (k) => (pendingRealModelReqs[k].length = 0),
+        );
+      }
+      // Chi GOM vi tri (khong tao Object3D/scene.add nao ca) - hinh dang that
+      // se duoc dung 1 lan bang InstancedMesh sau khi model tai xong (xem tren)
+      function makeRealModelPlaceholder(
+        px,
+        pz,
+        scale,
+        libKind,
+        modelScale,
+        yOffset,
+      ) {
+        pendingRealModelReqs[libKind].push({
+          px,
+          pz,
+          modelScale,
+          rotY: Math.random() * Math.PI * 2,
+        });
+        addContactShadow(px, pz, scale * 0.36, 0.42);
+      }
+
+      function makeRealTree(px, pz, scale) {
+        const group = new THREE.Group();
+        const trunkH = 0.95 * scale;
+        const trunk = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.028 * scale, 0.06 * scale, trunkH, 7),
+          realBarkMat,
+        );
+        trunk.position.y = trunkH * 0.5;
+        trunk.castShadow = true;
+        group.add(trunk);
+        // vai canh nho xien ra tu than, cung dung bark, de tan la khong "moc" thang tren dinh cot
+        const branchCount = 3;
+        for (let i = 0; i < branchCount; i++) {
+          const by = trunkH * (0.55 + 0.16 * i);
+          const ang = Math.random() * Math.PI * 2;
+          const blen = scale * (0.28 + Math.random() * 0.16);
+          const br = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.012 * scale, 0.02 * scale, blen, 5),
+            realBarkMat,
+          );
+          br.position.set(
+            Math.cos(ang) * blen * 0.4,
+            by,
+            Math.sin(ang) * blen * 0.4,
+          );
+          br.rotation.z = Math.PI / 2 - 0.5;
+          br.rotation.y = ang;
+          br.castShadow = true;
+          group.add(br);
+        }
+        const canopyY = trunkH * 0.92;
+        const canopyR = scale * 0.62;
+        const sprigGeo = buildSprigCluster(0, canopyY, 0, canopyR, 7);
+        const sprigMesh = new THREE.Mesh(sprigGeo, realSprigMat);
+        sprigMesh.castShadow = true;
+        group.add(sprigMesh);
+        const blobGeo = buildBlobFiller(0, canopyY * 0.96, 0, canopyR, 3);
+        const blobMesh = new THREE.Mesh(blobGeo, realBlobMat);
+        blobMesh.castShadow = true;
+        group.add(blobMesh);
+        group.position.set(px, 0, pz);
+        scene.add(group);
+        addContactShadow(px, pz, scale * 0.36, 0.42);
+        swayItems.push({
+          group,
+          f1: sprigMesh,
+          f2: blobMesh,
+          phase: Math.random() * Math.PI * 2,
+          amp: 0.035 + Math.random() * 0.02,
+        });
+        return group;
+      }
+
+      const foliagePalettes = [
+        [0x529a4f, 0x428046], // xanh la chuan - tuoi, can bang (khong lanh gat nua)
+        [0x69a659, 0x568e52], // xanh sang non
+        [0xc9822f, 0xa8631f], // cam thu - autumn (giu nguyen, mau trang tri chu dich)
+        [0xb5451f, 0x8f3417], // do cam dam - autumn dam (giu nguyen, mau trang tri chu dich)
+        [0x437052, 0x345c42], // xanh rung dam
+      ];
+      const trunkGeoBase = new THREE.CylinderGeometry(0.03, 0.045, 0.42, 6);
+      const foliageGeoA = new THREE.ConeGeometry(0.3, 0.5, 8);
+      const foliageGeoB = new THREE.ConeGeometry(0.22, 0.42, 8);
+      const canopyGeo = new THREE.SphereGeometry(0.34, 8, 7);
+      const shrubGeo = new THREE.SphereGeometry(0.22, 7, 6);
+      const tallTrunkGeo = new THREE.CylinderGeometry(0.028, 0.06, 0.95, 6);
+      const tallTierGeo = new THREE.ConeGeometry(0.26, 0.42, 7);
+      // Toi uu: dung 1 pool material CO SAN (5 bang mau x 2 = 10 material) thay
+      // vi tao moi THREE.MeshStandardMaterial cho MOI cay procedural (truoc day
+      // moi cay tallpine/normal tao 2 material rieng -> hang nghin material rac,
+      // ton bo nho + ep trinh duyet bien dich lai shader nhieu lan khong can thiet).
+      const foliageMatPool = foliagePalettes.map((p) => [
+        new THREE.MeshStandardMaterial({ color: p[0], roughness: 0.85 }),
+        new THREE.MeshStandardMaterial({ color: p[1], roughness: 0.85 }),
+      ]);
+
+      const swayItems = [];
+      function makeTree(px, pz, scale, forceKind) {
+        // Theo yeu cau: bo het cay "ve tay" bang hinh khoi three.js (cone/sphere)
+        // -> chi con 2 loai: cay 3D that (birch/maple) va khom hoa 3D that.
+        // forceKind='shrub' (tu doan kenh nuoc) gio se ra khom hoa that.
+        // forceKind='green' -> cay la xanh (dung rieng quanh Khu Tam Linh).
+        if (forceKind === "shrub") {
+          return makeRealModelPlaceholder(
+            px,
+            pz,
+            scale,
+            "flower",
+            scale * 0.5,
+            0,
+          );
+        }
+        if (forceKind === "green") {
+          return makeRealModelPlaceholder(
+            px,
+            pz,
+            scale,
+            "birchGreen",
+            scale * 0.32,
+            0,
+          );
+        }
+        // Theo yeu cau: bo mau la vang/do (autumn), toan bo cay dung ban la
+        // xanh (birchGreen/mapleGreen) - van giu 2 kieu hinh dang (birch/maple)
+        // de rung co chut da dang, chi khac mau la
+        const isMaple = Math.random() < 0.05;
+        return makeRealModelPlaceholder(
+          px,
+          pz,
+          scale,
+          isMaple ? "mapleGreen" : "birchGreen",
+          scale * 0.32,
+          0,
+        );
+      }
+      function makeTree_OLD_UNUSED(px, pz, scale, forceKind) {
+        const group = new THREE.Group();
+        const roll = Math.random();
+        // Da phan cay la model 3D that (Birch/Maple, be gui) - 'realtree3d';
+        // giu lai mot it 'tallpine'/'normal' procedural de tao chieu cao/mau
+        // sac da dang va do nhe cho nhung vung rung rat day (vien ranh gioi)
+        const kind =
+          forceKind ||
+          (roll < 0.1
+            ? "tallpine"
+            : roll < 0.16
+              ? "shrub"
+              : roll < 0.22
+                ? "normal"
+                : "realtree3d");
+        if (kind === "realtree3d") {
+          // model goc cao ~6-7m (ty le that ngoai doi) -> nhan he so nho de
+          // khop voi ty le "scale" cua he thong cay procedural hien tai (~1-3m)
+          const isMaple = Math.random() < 0.5;
+          return makeRealModelPlaceholder(
+            px,
+            pz,
+            scale,
+            isMaple ? "maple" : "birch",
+            scale * 0.32,
+            0,
+          );
+        }
+        if (kind === "realtree") {
+          return makeRealTree(px, pz, scale);
+        }
+        if (kind === "shrub" && Math.random() < 0.55) {
+          return makeRealModelPlaceholder(
+            px,
+            pz,
+            scale,
+            "flower",
+            scale * 0.5,
+            0,
+          );
+        }
+        const [foliageMatA, foliageMatB] =
+          foliageMatPool[Math.floor(Math.random() * foliageMatPool.length)];
+
+        if (kind === "shrub") {
+          const bush = new THREE.Mesh(shrubGeo, foliageMatA);
+          bush.position.y = 0.16 * scale;
+          bush.scale.set(scale * 1.15, scale * 0.75, scale * 1.15);
+          bush.castShadow = true;
+          group.add(bush);
+          group.position.set(px, 0, pz);
+          scene.add(group);
+          addContactShadow(px, pz, scale * 0.3, 0.32);
+          swayItems.push({
+            group,
+            f1: bush,
+            f2: bush,
+            phase: Math.random() * Math.PI * 2,
+            amp: 0.03 + Math.random() * 0.02,
+          });
+          return group;
+        }
+
+        if (kind === "tallpine") {
+          const trunk = new THREE.Mesh(tallTrunkGeo, trunkMat);
+          trunk.position.y = 0.46 * scale;
+          trunk.scale.set(scale * 0.8, scale * 1.35, scale * 0.8);
+          trunk.castShadow = true;
+          group.add(trunk);
+          const tierYs = [0.62, 0.86, 1.1];
+          let midMesh = null,
+            topMesh = null;
+          tierYs.forEach((ty, ti) => {
+            const m = new THREE.Mesh(
+              tallTierGeo,
+              ti % 2 === 0 ? foliageMatA : foliageMatB,
+            );
+            const s = scale * (1.12 - ti * 0.2);
+            m.position.y = ty * scale;
+            m.scale.set(s, s, s);
+            m.castShadow = true;
+            group.add(m);
+            if (ti === 1) midMesh = m;
+            if (ti === 2) topMesh = m;
+          });
+          group.position.set(px, 0, pz);
+          scene.add(group);
+          addContactShadow(px, pz, scale * 0.32, 0.4);
+          swayItems.push({
+            group,
+            f1: midMesh,
+            f2: topMesh,
+            phase: Math.random() * Math.PI * 2,
+            amp: 0.045 + Math.random() * 0.025,
+          });
+          return group;
+        }
+
+        const trunk = new THREE.Mesh(trunkGeoBase, trunkMat);
+        trunk.position.y = 0.21 * scale;
+        trunk.scale.set(scale, scale, scale);
+        trunk.castShadow = true;
+        group.add(trunk);
+        const broadleaf = Math.random() < 0.4;
+        const f1 = new THREE.Mesh(
+          broadleaf ? canopyGeo : foliageGeoA,
+          foliageMatA,
+        );
+        f1.position.y = (broadleaf ? 0.62 : 0.56) * scale;
+        f1.scale.set(scale, scale, scale);
+        f1.castShadow = true;
+        group.add(f1);
+        const f2 = new THREE.Mesh(foliageGeoB, foliageMatB);
+        f2.position.y = 0.82 * scale;
+        f2.scale.set(scale * 0.85, scale * 0.9, scale * 0.85);
+        f2.castShadow = true;
+        group.add(f2);
+        group.position.set(px, 0, pz);
+        scene.add(group);
+        addContactShadow(
+          px,
+          pz,
+          scale * 0.34 * (kind === "tallpine" ? 0.8 : 1),
+          0.4,
+        );
+        swayItems.push({
+          group,
+          f1,
+          f2,
+          phase: Math.random() * Math.PI * 2,
+          amp: 0.05 + Math.random() * 0.03,
+        });
+        return group;
+      }
+
+      // cay trong Khu Tam Linh (quanh ho, tranh dam vao mat nuoc) - doi sang cay
+      // LA XANH (khong dung do/vang nua) theo yeu cau, vi day la khu vuc gan
+      // ghe da nghi chan ke khu H
+      const parkTreeSpotsMap = [
+        [20, 20],
+        [420, 20],
+        [20, 132],
+        [420, 132],
+        [70, 70],
+        [370, 82],
+      ];
+      parkTreeSpotsMap.forEach(([dx, dy]) => {
+        const mx = SPIRIT_PARK.x + dx,
+          my = SPIRIT_PARK.y + dy;
+        const dist = Math.hypot(mx - LAKE.cx, my - LAKE.cy);
+        if (dist < LAKE.r + 30) return;
+        makeTree(wx(mx), wz(my), 0.85 + Math.random() * 0.35, "green");
+      });
+
+      // rung bao quanh toan bo lo dat - nhieu vong cay mat do khac nhau de tao khu rung
+      // thua bao boc tu 4 phia (khong chi mot khoang trong nhu truoc), cao thap dan xen
+      (function scatterForestBelt() {
+        const cx0 = BOUNDARY.reduce((s, p) => s + p[0], 0) / BOUNDARY.length;
+        const cy0 = BOUNDARY.reduce((s, p) => s + p[1], 0) / BOUNDARY.length;
+        const rings = [
+          {
+            offset: 35,
+            jitter: 22,
+            spacing: 165,
+            scaleMin: 0.7,
+            scaleMax: 1.2,
+          },
+          {
+            offset: 105,
+            jitter: 28,
+            spacing: 150,
+            scaleMin: 1.0,
+            scaleMax: 1.9,
+          },
+        ];
+        for (let i = 0; i < BOUNDARY.length; i++) {
+          const p1 = BOUNDARY[i],
+            p2 = BOUNDARY[(i + 1) % BOUNDARY.length];
+          // bo hoan toan hang cay doc theo canh co 2 cong ra vao (canh phia
+          // truoc, y ~1600) - khong rai cay tren toan bo doan duong nay nua
+          if (Math.abs(p1[1] - 1600) < 5 && Math.abs(p2[1] - 1600) < 5)
+            continue;
+          const len = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
+          let nx = -(p2[1] - p1[1]),
+            ny = p2[0] - p1[0];
+          const nl = Math.hypot(nx, ny) || 1;
+          nx /= nl;
+          ny /= nl;
+          const midx = (p1[0] + p2[0]) / 2,
+            midy = (p1[1] + p2[1]) / 2;
+          if (nx * (midx - cx0) + ny * (midy - cy0) < 0) {
+            nx = -nx;
+            ny = -ny;
+          }
+          rings.forEach((ring) => {
+            const segs = Math.max(1, Math.floor(len / ring.spacing));
+            for (let s = 0; s < segs; s++) {
+              const t = (s + 0.5) / segs;
+              const mx = p1[0] + (p2[0] - p1[0]) * t;
+              const my = p1[1] + (p2[1] - p1[1]) * t;
+              const ox =
+                mx + nx * ring.offset + (Math.random() - 0.5) * ring.jitter;
+              const oy =
+                my + ny * ring.offset + (Math.random() - 0.5) * ring.jitter;
+              if (Math.hypot(ox - MAP_GATE.x, oy - MAP_GATE.y) < 95) continue;
+              if (Math.hypot(ox - SECONDARY_GATE.x, oy - SECONDARY_GATE.y) < 95)
+                continue;
+              // duong truoc 2 cong (noi giua MAP_GATE va SECONDARY_GATE, cung
+              // truc y~1560) - khong rai cay tren doan duong nay
+              if (
+                oy > 1560 - 45 &&
+                oy < 1560 + 70 &&
+                ox > MAP_GATE.x - 70 &&
+                ox < SECONDARY_GATE.x + 70
+              )
+                continue;
+              const scale =
+                ring.scaleMin + Math.random() * (ring.scaleMax - ring.scaleMin);
+              makeTree(wx(ox), wz(oy), scale);
+            }
+          });
+        }
+      })();
+
+      /* ------------------------------------------------------------------
+       * Kenh nuoc chay doc dai co trong ben trai (giua vien cay cheo phia
+       * Tay va duong noi bo canh khu A/D/F/H) - nam BEN TRONG ranh gioi
+       * khu mo, co thanh chan (tuong thap) doc 2 ben bo de an toan, va
+       * bui cay / cay nho moc quanh kenh cho tu nhien.
+       * ------------------------------------------------------------------ */
+      const CANAL = { x1: -58, y1: 150, x2: 2, y2: 1480 }; // toa do "raw", nam trong dai co trong giua vien cay cheo (Tay) va duong noi khu A/D/F/H
+      let canalWaterUniforms = null;
+      (function buildCanal() {
+        const CANAL_CURB_THICK = 0.09;
+        const CANAL_CURB_H = 0.26; // thanh chan nhoi cao hon mat dat - lam lan can an toan
+        const CANAL_BASIN_DEPTH = 0.3; // long kenh khoet sau xuong duoi mat dat
+
+        const xW = wx(CANAL.x1),
+          xE = wx(CANAL.x2); // xW < xE
+        const zN = wz(CANAL.y1),
+          zS = wz(CANAL.y2); // zN < zS
+        const canalWidth = xE - xW;
+        const canalLen = zS - zN;
+        const centerX = (xW + xE) / 2,
+          centerZ = (zN + zS) / 2;
+        const curbTopY = GROUND_Y + CANAL_CURB_H;
+        const basinFloorY = GROUND_Y - CANAL_BASIN_DEPTH;
+
+        const canalStoneTex = makeStoneTexture();
+        const canalWallMat = new THREE.MeshStandardMaterial({
+          color: 0x9aa39c,
+          map: canalStoneTex,
+          roughness: 0.75,
+          metalness: 0.03,
+        });
+        const canalCapMat = new THREE.MeshStandardMaterial({
+          color: 0xe6e2d4,
+          roughness: 0.55,
+        }); // mep tren phang, sang, de nhan bien lam moc an toan
+        const canalFloorMat = new THREE.MeshStandardMaterial({
+          color: 0x5f6f66,
+          roughness: 0.9,
+        });
+
+        // long kenh - nen day kenh thut xuong duoi mat dat
+        const floorGeo = new THREE.BoxGeometry(
+          canalWidth - CANAL_CURB_THICK * 2,
+          0.04,
+          canalLen,
+        );
+        const floorMesh = new THREE.Mesh(floorGeo, canalFloorMat);
+        floorMesh.position.set(centerX, basinFloorY, centerZ);
+        floorMesh.receiveShadow = true;
+        scene.add(floorMesh);
+
+        // 2 vach thanh chay doc theo kenh (tuong chan + lan can an toan, tu day len mep tren)
+        [xW + CANAL_CURB_THICK / 2, xE - CANAL_CURB_THICK / 2].forEach(
+          (wallX) => {
+            const wallH = curbTopY - basinFloorY;
+            const wallGeo = new THREE.BoxGeometry(
+              CANAL_CURB_THICK,
+              wallH,
+              canalLen,
+            );
+            const wallMesh = new THREE.Mesh(wallGeo, canalWallMat);
+            wallMesh.position.set(wallX, (curbTopY + basinFloorY) / 2, centerZ);
+            wallMesh.castShadow = true;
+            wallMesh.receiveShadow = true;
+            scene.add(wallMesh);
+
+            const capGeo = new THREE.BoxGeometry(
+              CANAL_CURB_THICK + 0.06,
+              0.04,
+              canalLen,
+            );
+            const capMesh = new THREE.Mesh(capGeo, canalCapMat);
+            capMesh.position.set(wallX, curbTopY + 0.02, centerZ);
+            capMesh.receiveShadow = true;
+            scene.add(capMesh);
+          },
+        );
+
+        // be be 2 dau Bac/Nam - dong kin long kenh
+        [zN, zS].forEach((endZ) => {
+          const endGeo = new THREE.BoxGeometry(
+            canalWidth,
+            curbTopY - basinFloorY,
+            CANAL_CURB_THICK,
+          );
+          const endMesh = new THREE.Mesh(endGeo, canalWallMat);
+          endMesh.position.set(centerX, (curbTopY + basinFloorY) / 2, endZ);
+          endMesh.castShadow = true;
+          endMesh.receiveShadow = true;
+          scene.add(endMesh);
+        });
+
+        // mat nuoc kenh - dang trai dai, gon song nhe chay doc theo chieu dai kenh
+        canalWaterUniforms = {
+          uTime: { value: 0 },
+          uDeep: { value: new THREE.Color(0x1c7fa0) },
+          uShallow: { value: new THREE.Color(0x7fd4e8) },
+        };
+        const canalWaterMat = new THREE.ShaderMaterial({
+          uniforms: canalWaterUniforms,
+          transparent: true,
+          vertexShader: `
+      uniform float uTime;
+      varying vec2 vXy;
+      void main(){
+        vXy = position.xy;
+        float ripple = sin(position.y*2.2 - uTime*1.3)*0.01 + sin(position.x*6.0+uTime*0.7)*0.006;
+        vec3 p = position + vec3(0.0,0.0, ripple);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+      }`,
+          fragmentShader: `
+      uniform float uTime; uniform vec3 uDeep; uniform vec3 uShallow;
+      varying vec2 vXy;
+      float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233)))*43758.5453); }
+      void main(){
+        float bank = abs(vXy.x);
+        vec3 base = mix(uShallow, uDeep, smoothstep(0.0, 1.0, bank*2.0));
+        vec2 cell = floor(vXy*14.0 + vec2(0.0, uTime*0.25));
+        float spark = hash(cell);
+        float twinkle = step(0.986, spark) * (0.5+0.5*sin(uTime*6.0+spark*40.0));
+        vec3 col = base + vec3(twinkle*0.85);
+        gl_FragColor = vec4(col, 0.92);
+      }`,
+        });
+        const waterW = canalWidth - CANAL_CURB_THICK * 2 - 0.03;
+        const canalWaterGeo = new THREE.PlaneGeometry(waterW, canalLen);
+        const canalWaterMesh = new THREE.Mesh(canalWaterGeo, canalWaterMat);
+        canalWaterMesh.rotation.x = -Math.PI / 2;
+        canalWaterMesh.position.set(centerX, curbTopY - 0.03, centerZ);
+        scene.add(canalWaterMesh);
+
+        // bui cay + cay nho moc quanh kenh, ca 2 ben bo, so le tu nhien, tranh dam vao thanh
+        const bushRows = Math.floor(canalLen / 7);
+        for (let i = 0; i < bushRows; i++) {
+          const t = (i + 0.5) / bushRows;
+          const z = zN + canalLen * t + (Math.random() - 0.5) * 0.25;
+          // ben ngoai (phia Tay, giap vien cay/ranh gioi) - day bui cay hon
+          if (Math.random() < 0.5) {
+            const bx = xW - 0.08 - Math.random() * 0.22;
+            makeTree(bx, z, 0.55 + Math.random() * 0.45, "shrub");
+          }
+          // ben trong (phia Dong, giap duong noi bo / khu mo) - thua hon
+          if (Math.random() < 0.3) {
+            const bx2 = xE + 0.15 + Math.random() * 0.3;
+            makeTree(bx2, z, 0.5 + Math.random() * 0.35, "shrub");
+          }
+        }
+      })();
+      (function scatterGrassClumps() {
+        function pointInBoundary(x, y) {
+          let inside = false;
+          for (
+            let i = 0, j = BOUNDARY.length - 1;
+            i < BOUNDARY.length;
+            j = i++
+          ) {
+            const xi = BOUNDARY[i][0],
+              yi = BOUNDARY[i][1],
+              xj = BOUNDARY[j][0],
+              yj = BOUNDARY[j][1];
+            const intersect =
+              yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
+            if (intersect) inside = !inside;
+          }
+          return inside;
+        }
+        function isBlocked(x, y) {
+          for (const key in LAYOUT) {
+            const L = LAYOUT[key];
+            if (
+              x > L.x - 12 &&
+              x < L.x + L.w + 12 &&
+              y > L.y - 12 &&
+              y < L.y + L.h + 12
+            )
+              return true;
+          }
+          for (const r of ROADS) {
+            if (
+              x > r.x - 6 &&
+              x < r.x + r.w + 6 &&
+              y > r.y - 6 &&
+              y < r.y + r.h + 6
+            )
+              return true;
+          }
+          if (
+            x > SPIRIT_PARK.x - 15 &&
+            x < SPIRIT_PARK.x + SPIRIT_PARK.w + 15 &&
+            y > SPIRIT_PARK.y - 15 &&
+            y < SPIRIT_PARK.y + SPIRIT_PARK.h + 15
+          )
+            return true;
+          if (Math.hypot(x - MAP_GATE.x, y - MAP_GATE.y) < 60) return true;
+          if (Math.hypot(x - SECONDARY_GATE.x, y - SECONDARY_GATE.y) < 60)
+            return true;
+          return false;
+        }
+        const bladeTex = makeGrassBladeTexture();
+        const p1 = new THREE.PlaneGeometry(0.5, 0.4);
+        p1.translate(0, 0.2, 0);
+        const p2 = p1.clone();
+        p2.rotateY(Math.PI / 2);
+        const clumpGeo = THREE.BufferGeometryUtils.mergeBufferGeometries([
+          p1,
+          p2,
+        ]);
+        const clumpMat = new THREE.MeshStandardMaterial({
+          map: bladeTex,
+          transparent: true,
+          alphaTest: 0.35,
+          side: THREE.DoubleSide,
+          roughness: 0.9,
+        });
+        const maxClumps = 260;
+        const clumpMesh = new THREE.InstancedMesh(
+          clumpGeo,
+          clumpMat,
+          maxClumps,
+        );
+        const dummyC = new THREE.Object3D();
+        let placed = 0,
+          attempts = 0;
+        const clumpItems = [];
+        while (placed < maxClumps && attempts < maxClumps * 12) {
+          attempts++;
+          const x = -80 + Math.random() * 1740;
+          const y = -40 + Math.random() * 1640;
+          if (!pointInBoundary(x, y) || isBlocked(x, y)) continue;
+          const s = 0.7 + Math.random() * 0.9;
+          dummyC.position.set(wx(x), 0, wz(y));
+          dummyC.rotation.set(0, Math.random() * Math.PI * 2, 0);
+          dummyC.scale.set(s, s, s);
+          dummyC.updateMatrix();
+          clumpMesh.setMatrixAt(placed, dummyC.matrix);
+          clumpItems.push({
+            index: placed,
+            base: dummyC.rotation.y,
+            x: wx(x),
+            z: wz(y),
+            s,
+            phase: Math.random() * Math.PI * 2,
+          });
+          placed++;
+        }
+        clumpMesh.count = placed;
+        clumpMesh.instanceMatrix.needsUpdate = true;
+        scene.add(clumpMesh);
+
+        swayItems.push({
+          isClumpField: true,
+          update(t) {
+            clumpItems.forEach((ci) => {
+              const wob = Math.sin(t * 1.1 + ci.phase) * 0.12;
+              dummyC.position.set(ci.x, 0, ci.z);
+              dummyC.rotation.set(0, ci.base + wob * 0.3, 0);
+              dummyC.scale.set(ci.s, ci.s, ci.s);
+              dummyC.updateMatrix();
+              clumpMesh.setMatrixAt(ci.index, dummyC.matrix);
+            });
+            clumpMesh.instanceMatrix.needsUpdate = true;
+          },
+        });
+      })();
+
+      /* ------------------------------------------------------------------
+       * Den da (stone lantern) - dat canh cong, ben ho, dung tinh than da my
+       * nghe cua thuong hieu
+       * ------------------------------------------------------------------ */
+      const lanternStoneMat = new THREE.MeshStandardMaterial({
+        color: 0x8f9083,
+        map: stoneTex,
+        roughness: 0.8,
+      });
+      function buildLantern(px, pz) {
+        const g = new THREE.Group();
+        const base = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.11, 0.13, 0.12, 6),
+          lanternStoneMat,
+        );
+        base.position.y = 0.06;
+        g.add(base);
+        const pillar = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.055, 0.065, 0.42, 6),
+          lanternStoneMat,
+        );
+        pillar.position.y = 0.33;
+        g.add(pillar);
+        const box = new THREE.Mesh(
+          new THREE.BoxGeometry(0.22, 0.22, 0.22),
+          lanternStoneMat,
+        );
+        box.position.y = 0.66;
+        g.add(box);
+        const roof = new THREE.Mesh(
+          new THREE.ConeGeometry(0.19, 0.16, 6),
+          lanternStoneMat,
+        );
+        roof.position.y = 0.85;
+        g.add(roof);
+        const lightCore = new THREE.PointLight(0xffcf8f, 0.55, 2.2, 2);
+        lightCore.position.y = 0.66;
+        g.add(lightCore);
+        g.traverse((o) => {
+          if (o.isMesh) {
+            o.castShadow = true;
+            o.receiveShadow = true;
+          }
+        });
+        g.position.set(px, 0, pz);
+        scene.add(g);
+      }
+      [
+        [LAKE.cx - LAKE.r - 20, LAKE.cy],
+        [LAKE.cx + LAKE.r + 20, LAKE.cy],
+        [LAKE.cx, LAKE.cy - LAKE.r - 16],
+        [LAKE.cx, LAKE.cy + LAKE.r + 16],
+      ].forEach(([mx, my]) => buildLantern(wx(mx), wz(my)));
+
+      // unit tomb geometry - mo don kieu da xam hien dai (3 bac them + ban tho + bia
+      // da doc + mai che nghieng), tham chieu anh mau: benh da xam, mai vat ngang,
+      // ngoi sao vang tren ban tho, khung anh tho tren bia.
+      const graniteTex = makeGraniteTexture();
+      const GRAY_STONE = 0x6d7f8c; // mau xam xanh theo yeu cau, dung cho tat ca mo don
+
+      // 3 bac them thu nho dan (giong anh: 210 / 230 / 210mm)
+      const step1Geo = new THREE.BoxGeometry(1.02, 0.07, 1.34);
+      step1Geo.translate(0, 0.035, 0.06);
+      const step2Geo = new THREE.BoxGeometry(0.9, 0.07, 1.12);
+      step2Geo.translate(0, 0.105, 0.02);
+      const step3Geo = new THREE.BoxGeometry(0.8, 0.07, 0.94);
+      step3Geo.translate(0, 0.175, -0.02);
+      // ban tho / mat ban dat do (1050mm dai) tren cung cac bac them
+      const slabGeo = new THREE.BoxGeometry(0.78, 0.06, 0.62);
+      slabGeo.translate(0, 0.24, -0.16);
+      // tru dung phia sau nang bia + mai
+      const wallGeo = new THREE.BoxGeometry(0.58, 0.5, 0.07);
+      wallGeo.translate(0, 0.21 + 0.5 / 2, -0.46);
+      // tam bia phu truoc tru (nhu o anh: tam kinh/da nho long vao tru)
+      const steleGeo = new THREE.BoxGeometry(0.4, 0.42, 0.03);
+      steleGeo.translate(0, 0.24 + 0.22, -0.435);
+      // mai che phang, hoi nghieng, nhoi ra phia truoc (tuong tu tam da vat ngang tren cung)
+      const roofGeo = new THREE.BoxGeometry(0.7, 0.05, 0.5);
+      roofGeo.translate(0, 0, 0.14); // dua mep truoc ra xa truc xoay de tao do nhoi khi nghieng
+      roofGeo.rotateX(-0.1);
+      roofGeo.translate(0, 0.21 + 0.5 + 0.05, -0.5);
+
+      const tombGeo = THREE.BufferGeometryUtils.mergeBufferGeometries([
+        step1Geo,
+        step2Geo,
+        step3Geo,
+        slabGeo,
+        wallGeo,
+        steleGeo,
+        roofGeo,
+      ]);
+      // mau rieng theo khu: A/B/D/E = vang dat SANG (da hoa cuong vang), F/G/H = trang xam SANG (da hoa cuong trang) - khong choi nhung sang ro
+      // Chat lieu da THAT (be gui bo texture Gravestones PBR - chi lay chat lieu,
+      // KHONG lay hinh khoi cua bo do vi khong dung kieu mo Viet Nam) ap len
+      // dung hinh khoi mo hien tai. Mau tint EARTH_YELLOW/OFFWHITE_GRAY nhan
+      // (multiply) len anh albedo that de van phan biet duoc khu ma khong mat
+      // chi tiet van da that.
+      const graniteRealAlbedo = loadRepeatTex(
+        "assets/textures/gravestone/albedo.jpg",
+        2,
+        2,
+        true,
+      );
+      const graniteRealNormal = loadRepeatTex(
+        "assets/textures/gravestone/normal.png",
+        2,
+        2,
+        false,
+      );
+      const graniteRealRough = loadRepeatTex(
+        "assets/textures/gravestone/roughness.jpg",
+        2,
+        2,
+        false,
+      );
+      const graniteRealMetal = loadRepeatTex(
+        "assets/textures/gravestone/metalness.jpg",
+        2,
+        2,
+        false,
+      );
+      const EARTH_YELLOW = 0xdfe4e6; // tint gan trang - de anh da hoa cuong xam xanh + vang that hien ro, khong bi toi/den
+      const OFFWHITE_GRAY = 0xe6eaec; // tint gan trang, hoi lanh hon mot chut - phan biet nhe giua cac khu
+      const tombMatYellow = new THREE.MeshStandardMaterial({
+        color: EARTH_YELLOW,
+        map: graniteRealAlbedo,
+        normalMap: graniteRealNormal,
+        normalScale: new THREE.Vector2(0.75, 0.75),
+        roughnessMap: graniteRealRough,
+        roughness: 0.75,
+        metalnessMap: graniteRealMetal,
+        metalness: 0.12,
+        envMapIntensity: 0.8,
+      });
+      const tombMatGray = new THREE.MeshStandardMaterial({
+        color: OFFWHITE_GRAY,
+        map: graniteRealAlbedo,
+        normalMap: graniteRealNormal,
+        normalScale: new THREE.Vector2(0.75, 0.75),
+        roughnessMap: graniteRealRough,
+        roughness: 0.75,
+        metalnessMap: graniteRealMetal,
+        metalness: 0.12,
+        envMapIntensity: 0.8,
+      });
+      // Khu A, F: mo mau vang sang trong, khong choi (tone vang dong/vang champagne dam,
+      // khong phai vang chanh). Khu D, H: mo mau do gach tram, khong choi (do dat nung/
+      // terracotta tram, khong phai do tuoi/do sang). Van dung chung 1 bo texture da
+      // hoa cuong (albedo/normal/rough/metal) nhu cac khu khac, chi doi mau tint.
+      // Khu A, F: mo mau vang sa thach am (dung texture sandstone rieng, giong
+      // mau lang mo dieu khac da vang trong anh tham khao). Khu D, H: mo mau
+      // hong pastel (giong mo son hong trong anh tham khao) - mau son phang,
+      // khong can van da granite, chi giu chut normal map de co do nham nhe.
+      // Khu A, F: mo mau vang sa thach am, dung MAU PHANG (khong dung anh
+      // texture rieng nua - texture moi bi loi tai/hien mau den o mot so may,
+      // nen chuyen ve mau phang dang tin cay giong cach lam mo hong o duoi,
+      // van giu normal map da that (graniteRealNormal) de co do nham/chieu sau
+      // nhe, nhung khong con phu thuoc anh albedo ngoai nua).
+      const tombMatGold = new THREE.MeshStandardMaterial({
+        color: 0xd1a76e,
+        normalMap: graniteRealNormal,
+        normalScale: new THREE.Vector2(0.35, 0.35),
+        roughness: 0.72,
+        metalness: 0.03,
+        envMapIntensity: 0.78,
+      });
+      const tombMatBrickRed = new THREE.MeshStandardMaterial({
+        color: 0xe08fae,
+        normalMap: graniteRealNormal,
+        normalScale: new THREE.Vector2(0.25, 0.25),
+        roughness: 0.55,
+        metalness: 0.02,
+        envMapIntensity: 0.7,
+      });
+      const ZONE_TOMB_MAT = {
+        A: tombMatGold,
+        B: tombMatYellow,
+        D: tombMatBrickRed,
+        E: tombMatYellow,
+        F: tombMatGold,
+        G: tombMatGray,
+        H: tombMatBrickRed,
+      };
+
+      // ngoi sao vang nho tren ban tho (dang octahedron det, mo phong ngoi sao)
+      const starGeo = new THREE.OctahedronGeometry(0.075, 0);
+      starGeo.scale(1, 0.35, 1);
+      starGeo.translate(0, 0.24 + 0.03 + 0.04, 0.02);
+      const starMat = new THREE.MeshStandardMaterial({
+        color: 0xd8b24a,
+        roughness: 0.35,
+        metalness: 0.5,
+      });
+
+      // khung anh tho trang nho tren bia
+      const photoGeo = new THREE.BoxGeometry(0.18, 0.24, 0.012);
+      photoGeo.translate(0, 0.24 + 0.22, -0.42);
+      const photoMat = new THREE.MeshStandardMaterial({
+        color: 0xf3efe4,
+        roughness: 0.5,
+      });
+
+      // collect cells per zone, build instanced meshes (Khu C - lo gia toc dung bo cuc rieng, xem buildFamilyClusters)
+      let totalCells = 0;
+      const zoneCellCounts = {};
+      const allCells = [];
+      Object.keys(LAYOUT).forEach((key) => {
+        if (key === "C") return;
+        const cells = cellGrid(LAYOUT[key]);
+        zoneCellCounts[key] = cells.length;
+        totalCells += cells.length;
+        cells.forEach((c) => allCells.push({ key, ...c }));
+      });
+
+      const starMesh = new THREE.InstancedMesh(starGeo, starMat, totalCells);
+      starMesh.castShadow = true;
+      const photoMesh = new THREE.InstancedMesh(photoGeo, photoMat, totalCells);
+      const dummy = new THREE.Object3D();
+
+      function placeDummy(c) {
+        const cx = wx(c.cx + c.cw / 2),
+          cz = wz(c.cy + c.ch / 2);
+        const sx = Math.max(c.cw * SC * 0.82, 0.15),
+          sz = Math.max(c.ch * SC * 0.82, 0.15);
+        dummy.position.set(cx, PLATFORM_H, cz);
+        dummy.scale.set(sx, 1, sz);
+        dummy.rotation.set(0, 0, 0);
+        dummy.updateMatrix();
+      }
+
+      // Gom mo theo TUNG material rieng (gio co 4 loai: vang, do gach, xam trang,
+      // xam trung tinh) - dung generic thay vi code cung 2 loai nhu truoc, de de
+      // mo rong/doi mau tung khu sau nay ma khong phai sua lai cau truc.
+      const TOMB_MAT_LIST = [
+        tombMatGold,
+        tombMatBrickRed,
+        tombMatYellow,
+        tombMatGray,
+      ];
+      const tombMeshesByMat = TOMB_MAT_LIST.map((mat) => {
+        const cells = allCells.filter((c) => ZONE_TOMB_MAT[c.key] === mat);
+        const mesh = new THREE.InstancedMesh(
+          tombGeo,
+          mat,
+          Math.max(cells.length, 1),
+        );
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        cells.forEach((c, i) => {
+          placeDummy(c);
+          mesh.setMatrixAt(i, dummy.matrix);
+        });
+        mesh.count = cells.length;
+        mesh.instanceMatrix.needsUpdate = true;
+        return mesh;
+      });
+      allCells.forEach((c, i) => {
+        placeDummy(c);
+        starMesh.setMatrixAt(i, dummy.matrix);
+        photoMesh.setMatrixAt(i, dummy.matrix);
+      });
+      starMesh.instanceMatrix.needsUpdate = true;
+      photoMesh.instanceMatrix.needsUpdate = true;
+      scene.add(...tombMeshesByMat, starMesh, photoMesh);
+
+      /* ------------------------------------------------------------------
+       * Khu C - Lo gia toc: moi cum (C1-C4) la mot khu lang mo gia toc rieng
+       * gom cong/dai tho nhieu tang o phia sau, dinh huong o giua, khoang
+       * ~10 mo gia toc lon hai ben loi di, hang rao da va hoa doc loi di,
+       * tham chieu bo cuc anh mau 2.
+       * ------------------------------------------------------------------ */
+      const familyStoneTex = graniteRealAlbedo;
+      const GRANITE_WHITE_GRAY = 0xc4c2b8; // trang xam da hoa cuong SANG, trung tinh am - khu C, dong bo voi ghe da (gardenStoneMat)
+      // mo trang da cam thach (marble) sang hon, giong anh mau tham khao (mo trang
+      // don gian, khong choi, gan nhu trang nga) - giam do anh huong cua map/normal
+      // granite de be mat min hon, giong da hoa cuong trang thay vi granite tham
+      const FAMILY_MARBLE_WHITE = 0xe9e6da;
+      const familyBodyMat = new THREE.MeshStandardMaterial({
+        color: FAMILY_MARBLE_WHITE,
+        map: familyStoneTex,
+        normalMap: graniteRealNormal,
+        normalScale: new THREE.Vector2(0.32, 0.32),
+        roughnessMap: graniteRealRough,
+        roughness: 0.5,
+        metalnessMap: graniteRealMetal,
+        metalness: 0.04,
+        envMapIntensity: 0.95,
+      }); // trang da cam thach sang, min hon
+      const familyTrimMat = new THREE.MeshStandardMaterial({
+        color: 0x22302a,
+        roughness: 0.6,
+      });
+      const familyAltarMat = new THREE.MeshStandardMaterial({
+        color: 0xd6d4c8,
+        map: familyStoneTex,
+        normalMap: graniteRealNormal,
+        normalScale: new THREE.Vector2(0.6, 0.6),
+        roughnessMap: graniteRealRough,
+        roughness: 0.72,
+        envMapIntensity: 0.7,
+      });
+      const familyRoofMat = new THREE.MeshStandardMaterial({
+        color: 0x263028,
+        roughness: 0.55,
+      });
+      const familyGoldMat = new THREE.MeshStandardMaterial({
+        color: 0xc9a227,
+        roughness: 0.25,
+        metalness: 0.75,
+        envMapIntensity: 1.3,
+      });
+      const familyPathMat = new THREE.MeshStandardMaterial({
+        color: 0xd7d0be,
+        map: stoneTex,
+        roughness: 0.9,
+      });
+      const familyFlowerMat = new THREE.MeshStandardMaterial({
+        color: 0xc23b3b,
+        roughness: 0.6,
+      });
+      const familyLeafMat = new THREE.MeshStandardMaterial({
+        color: 0x2f5a37,
+        roughness: 0.8,
+      });
+
+      function familyGroupRects(layout) {
+        const g = layout.groups;
+        const gw = (layout.w - g.gap * (g.cols - 1)) / g.cols;
+        const gh = (layout.h - g.gap * (g.rows - 1)) / g.rows;
+        const out = [];
+        for (let gr = 0; gr < g.rows; gr++) {
+          for (let gc = 0; gc < g.cols; gc++) {
+            out.push({
+              x: layout.x + gc * (gw + g.gap),
+              y: layout.y + gr * (gh + g.gap),
+              w: gw,
+              h: gh,
+            });
+          }
+        }
+        return out;
+      }
+
+      // mo da cam thach trang, khoi vuong vuc thap, bia phang gan lien tren mat
+      // (khong dung bia dung dung rieng) - tham chieu bo cuc anh mau: khoi da
+      // hinh hop thon dan 3 cap, mat tren co tam bia nho phang va vong tron
+      // vang nho o giua, dang mo pho bien trong nghia trang da hoa cuong.
+      const famTombBase = new THREE.BoxGeometry(1.08, 0.22, 1.62);
+      famTombBase.translate(0, 0.11, 0);
+      const famTombMid = new THREE.BoxGeometry(0.9, 0.14, 1.38);
+      famTombMid.translate(0, 0.22 + 0.07, 0.02);
+      const famTombTop = new THREE.BoxGeometry(0.72, 0.08, 1.02);
+      famTombTop.translate(0, 0.22 + 0.14 + 0.04, 0.05);
+      const famPlaque = new THREE.BoxGeometry(0.42, 0.018, 0.28);
+      famPlaque.translate(0, 0.22 + 0.14 + 0.08 + 0.01, -0.26);
+      const familyTombGeo = THREE.BufferGeometryUtils.mergeBufferGeometries([
+        famTombBase,
+        famTombMid,
+        famTombTop,
+        famPlaque,
+      ]);
+      const famEmblemGeo = new THREE.TorusGeometry(0.075, 0.013, 8, 20);
+      famEmblemGeo.rotateX(Math.PI / 2);
+      famEmblemGeo.translate(0, 0.22 + 0.14 + 0.08 + 0.021, -0.26);
+
+      function buildFamilyTomb(px, pz, rotY, scale) {
+        const g = new THREE.Group();
+        const body = new THREE.Mesh(familyTombGeo, familyBodyMat);
+        body.castShadow = true;
+        body.receiveShadow = true;
+        const emblem = new THREE.Mesh(famEmblemGeo, familyGoldMat);
+        emblem.castShadow = true;
+        g.add(body, emblem);
+        g.position.set(px, 0, pz);
+        g.rotation.y = rotY || 0;
+        g.scale.setScalar(scale || 1);
+        scene.add(g);
+      }
+
+      // cong / dai tho nhieu tang phia sau cum (mo phong kien truc anh mau 2)
+      function buildFamilyAltar(px, pz, rotY, scale) {
+        const g = new THREE.Group();
+        const tier = (w, h, d, y, mat) => {
+          const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+          m.position.y = y;
+          m.castShadow = true;
+          m.receiveShadow = true;
+          g.add(m);
+          return m;
+        };
+        // canh 2 ben (tuong thap co hoa van khung)
+        tier(1.6, 0.7, 0.22, 0.35, familyAltarMat).position.x = -1.15;
+        tier(1.6, 0.7, 0.22, 0.35, familyAltarMat).position.x = 1.15;
+        tier(0.28, 0.9, 0.22, 0.45, familyAltarMat).position.x = -1.95;
+        tier(0.28, 0.9, 0.22, 0.45, familyAltarMat).position.x = 1.95;
+        // than chinh 3 tang thu nho dan, moi tang co mai vuon xa hai ben
+        tier(1.0, 0.75, 0.7, 0.375, familyAltarMat);
+        tier(1.18, 0.06, 0.86, 0.78, familyRoofMat);
+        tier(0.74, 0.55, 0.5, 1.08, familyAltarMat);
+        tier(0.9, 0.05, 0.64, 1.38, familyRoofMat);
+        tier(0.5, 0.4, 0.34, 1.62, familyAltarMat);
+        tier(0.64, 0.05, 0.46, 1.85, familyRoofMat);
+        const finial = new THREE.Mesh(
+          new THREE.ConeGeometry(0.12, 0.28, 8),
+          familyGoldMat,
+        );
+        finial.position.y = 2.02;
+        finial.castShadow = true;
+        g.add(finial);
+        // cua vom nho tren than chinh
+        const door = new THREE.Mesh(
+          new THREE.BoxGeometry(0.34, 0.5, 0.02),
+          familyRoofMat,
+        );
+        door.position.set(0, 0.28, 0.36);
+        g.add(door);
+        g.position.set(px, 0, pz);
+        g.rotation.y = rotY || 0;
+        g.scale.setScalar(scale || 1);
+        scene.add(g);
+      }
+
+      // dinh huong dat truoc dai tho
+      function buildIncenseBurner(px, pz, scale) {
+        const g = new THREE.Group();
+        const base = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.14, 0.18, 0.1, 16),
+          familyGoldMat,
+        );
+        base.position.y = 0.05;
+        g.add(base);
+        const body = new THREE.Mesh(
+          new THREE.SphereGeometry(
+            0.16,
+            16,
+            12,
+            0,
+            Math.PI * 2,
+            0,
+            Math.PI * 0.62,
+          ),
+          familyGoldMat,
+        );
+        body.position.y = 0.16;
+        g.add(body);
+        const rim = new THREE.Mesh(
+          new THREE.TorusGeometry(0.17, 0.018, 8, 20),
+          familyGoldMat,
+        );
+        rim.position.y = 0.25;
+        rim.rotation.x = Math.PI / 2;
+        g.add(rim);
+        const lid = new THREE.Mesh(
+          new THREE.ConeGeometry(0.09, 0.16, 12),
+          familyGoldMat,
+        );
+        lid.position.y = 0.36;
+        g.add(lid);
+        g.traverse((o) => {
+          if (o.isMesh) {
+            o.castShadow = true;
+          }
+        });
+        g.position.set(px, 0, pz);
+        g.scale.setScalar(scale || 1);
+        scene.add(g);
+      }
+
+      // hang rao da quanh cum (chi con tru da, da bo thanh sat ngang lien ket theo yeu cau)
+      function buildFamilyFence(rectW, rectH) {
+        const postGeo = new THREE.CylinderGeometry(0.035, 0.04, 0.42, 8);
+        const hw = rectW / 2,
+          hh = rectH / 2;
+        const spacing = 0.9;
+        const edges = [
+          { from: [-hw, -hh], to: [hw, -hh] },
+          { from: [-hw, hh], to: [hw, hh] },
+          { from: [-hw, -hh], to: [-hw, hh] },
+          { from: [hw, -hh], to: [hw, hh] },
+        ];
+        const parts = [];
+        edges.forEach((e) => {
+          const dx = e.to[0] - e.from[0],
+            dz = e.to[1] - e.from[1];
+          const len = Math.hypot(dx, dz);
+          const n = Math.max(2, Math.round(len / spacing));
+          for (let i = 0; i <= n; i++) {
+            const t = i / n;
+            const x = e.from[0] + dx * t,
+              z = e.from[1] + dz * t;
+            // bo qua cac tru trung tam canh truoc (chua loi di)
+            if (Math.abs(z - hh) < 0.01 && Math.abs(x) < 0.7) continue;
+            const p = postGeo.clone();
+            p.translate(x, 0.21, z);
+            parts.push(p);
+          }
+        });
+        const merged = THREE.BufferGeometryUtils.mergeBufferGeometries(parts);
+        const mesh = new THREE.Mesh(merged, familyTrimMat);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        return mesh;
+      }
+
+      // binh hoa doc theo path (chau da + cum hoa do + la xanh), dat hai ben loi di
+      const vasePotGeo = new THREE.CylinderGeometry(0.09, 0.13, 0.22, 10);
+      vasePotGeo.translate(0, 0.11, 0);
+      const vaseRimGeo = new THREE.TorusGeometry(0.095, 0.014, 6, 12);
+      vaseRimGeo.translate(0, 0.22, 0);
+      const vaseFoliageGeo = new THREE.SphereGeometry(0.16, 8, 6);
+      vaseFoliageGeo.translate(0, 0.34, 0);
+      const vasePotMat = new THREE.MeshStandardMaterial({
+        color: 0xcdb693,
+        roughness: 0.8,
+      });
+      const vaseFoliageMat = new THREE.MeshStandardMaterial({
+        color: 0x3f6f47,
+        roughness: 0.85,
+      });
+      const vaseFlowerGeo = new THREE.SphereGeometry(0.045, 6, 5);
+
+      function buildFlowerVase(px, pz, scale) {
+        const g = new THREE.Group();
+        const pot = new THREE.Mesh(vasePotGeo, vasePotMat);
+        pot.castShadow = true;
+        pot.receiveShadow = true;
+        const rim = new THREE.Mesh(vaseRimGeo, vasePotMat);
+        rim.rotation.x = Math.PI / 2;
+        const foliage = new THREE.Mesh(vaseFoliageGeo, vaseFoliageMat);
+        foliage.castShadow = true;
+        g.add(pot, rim, foliage);
+        for (let i = 0; i < 6; i++) {
+          const a = (i / 6) * Math.PI * 2;
+          const fl = new THREE.Mesh(vaseFlowerGeo, familyFlowerMat);
+          fl.position.set(
+            Math.cos(a) * 0.13,
+            0.36 + Math.sin(i) * 0.03,
+            Math.sin(a) * 0.13,
+          );
+          fl.castShadow = true;
+          g.add(fl);
+        }
+        g.position.set(px, 0, pz);
+        g.scale.setScalar(scale || 1);
+        scene.add(g);
+      }
+
+      /* ------------------------------------------------------------------
+       * Dai hoa sen (lotus altar) - dat giua cac cum nho C1-C4 cua Khu C,
+       * tham chieu anh mau nguoi dung gui: binh phong da hinh quat cham
+       * hoa van cuon thu 2 ben, phu dieu chu tron mau giua, be tron phia
+       * truoc co hoa sen no.
+       * ------------------------------------------------------------------ */
+      const lotusPetalMat = new THREE.MeshStandardMaterial({
+        color: 0xe888b0,
+        roughness: 0.5,
+      });
+      const lotusCenterMat = new THREE.MeshStandardMaterial({
+        color: 0xf2c94c,
+        roughness: 0.45,
+        metalness: 0.15,
+      });
+      const lotusLeafMat = new THREE.MeshStandardMaterial({
+        color: 0x3c7a4a,
+        roughness: 0.75,
+      });
+      const lotusStemMat = new THREE.MeshStandardMaterial({
+        color: 0x4f8a5c,
+        roughness: 0.8,
+      });
+      const lotusBasinMat = new THREE.MeshStandardMaterial({
+        color: 0xd9d6c8,
+        map: familyStoneTex,
+        normalMap: graniteRealNormal,
+        normalScale: new THREE.Vector2(0.4, 0.4),
+        roughnessMap: graniteRealRough,
+        roughness: 0.6,
+        metalnessMap: graniteRealMetal,
+        metalness: 0.05,
+        envMapIntensity: 0.9,
+      });
+      const lotusWaterMat = new THREE.MeshStandardMaterial({
+        color: 0x9fc2b0,
+        roughness: 0.25,
+        metalness: 0.1,
+        transparent: true,
+        opacity: 0.85,
+      });
+      const lotusScreenMat = familyAltarMat;
+
+      function buildLotusFlower(px, py, pz, scale) {
+        const g = new THREE.Group();
+        const stem = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.01, 0.014, 0.16, 6),
+          lotusStemMat,
+        );
+        stem.position.y = 0.08;
+        g.add(stem);
+        for (let i = 0; i < 6; i++) {
+          const a = (i / 6) * Math.PI * 2;
+          const petal = new THREE.Mesh(
+            new THREE.SphereGeometry(0.045, 8, 6),
+            lotusPetalMat,
+          );
+          petal.scale.set(0.55, 1, 0.32);
+          petal.position.set(Math.cos(a) * 0.032, 0.16, Math.sin(a) * 0.032);
+          petal.rotation.y = a;
+          petal.rotation.x = -0.5;
+          g.add(petal);
+        }
+        const center = new THREE.Mesh(
+          new THREE.SphereGeometry(0.022, 8, 6),
+          lotusCenterMat,
+        );
+        center.position.y = 0.185;
+        g.add(center);
+        g.traverse((o) => {
+          if (o.isMesh) o.castShadow = true;
+        });
+        g.position.set(px, py, pz);
+        g.scale.setScalar(scale || 1);
+        return g;
+      }
+      function buildLotusPad(px, py, pz, scale) {
+        const pad = new THREE.Mesh(
+          new THREE.CircleGeometry(0.11, 10),
+          lotusLeafMat,
+        );
+        pad.rotation.x = -Math.PI / 2;
+        pad.position.set(px, py, pz);
+        pad.scale.setScalar(scale || 1);
+        pad.receiveShadow = true;
+        return pad;
+      }
+
+      function buildLotusAltar(px, pz, rotY, scale) {
+        const g = new THREE.Group();
+
+        // de tang duoi binh phong
+        const pedestal = new THREE.Mesh(
+          new THREE.BoxGeometry(1.0, 0.22, 0.2),
+          lotusScreenMat,
+        );
+        pedestal.position.set(0, 0.11, -0.32);
+        pedestal.castShadow = true;
+        pedestal.receiveShadow = true;
+        g.add(pedestal);
+
+        // binh phong da hinh quat/vom cong, tham chieu bo cuc anh mau (khoi cong
+        // uon tu de len, cham hoa van bang texture da that)
+        const screenGeo = new THREE.CylinderGeometry(
+          0.66,
+          0.66,
+          0.1,
+          28,
+          1,
+          false,
+          0,
+          Math.PI,
+        );
+        screenGeo.rotateZ(Math.PI / 2);
+        screenGeo.rotateY(Math.PI / 2);
+        screenGeo.translate(0, 0.2, -0.35);
+        const screen = new THREE.Mesh(screenGeo, lotusScreenMat);
+        screen.castShadow = true;
+        screen.receiveShadow = true;
+        g.add(screen);
+
+        // phu dieu tron mau giua binh phong (thay cho chu Tho/Phuc cham tay)
+        const medallion = new THREE.Mesh(
+          new THREE.TorusGeometry(0.16, 0.02, 8, 24),
+          familyGoldMat,
+        );
+        medallion.position.set(0, 0.5, -0.33);
+        g.add(medallion);
+        const medallionCenter = new THREE.Mesh(
+          new THREE.CircleGeometry(0.13, 24),
+          lotusScreenMat,
+        );
+        medallionCenter.position.set(0, 0.5, -0.34);
+        g.add(medallionCenter);
+
+        // cuon thu (scroll) hai ben chan binh phong
+        const scrollGeo = new THREE.TorusGeometry(0.09, 0.05, 10, 20);
+        [-0.48, 0.48].forEach((sx) => {
+          const scroll = new THREE.Mesh(scrollGeo, lotusScreenMat);
+          scroll.position.set(sx, 0.2, -0.3);
+          scroll.rotation.y = Math.PI / 2;
+          scroll.castShadow = true;
+          g.add(scroll);
+        });
+
+        // be tron phia truoc, hoa sen no
+        const basin = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.55, 0.6, 0.16, 24),
+          lotusBasinMat,
+        );
+        basin.position.y = 0.08;
+        basin.castShadow = true;
+        basin.receiveShadow = true;
+        g.add(basin);
+        const basinRim = new THREE.Mesh(
+          new THREE.TorusGeometry(0.55, 0.035, 8, 24),
+          lotusBasinMat,
+        );
+        basinRim.position.y = 0.16;
+        basinRim.rotation.x = Math.PI / 2;
+        g.add(basinRim);
+        const water = new THREE.Mesh(
+          new THREE.CircleGeometry(0.48, 24),
+          lotusWaterMat,
+        );
+        water.rotation.x = -Math.PI / 2;
+        water.position.y = 0.165;
+        g.add(water);
+
+        [
+          [-0.16, 0.05],
+          [0, 0.14],
+          [0.16, 0.05],
+        ].forEach(([fx, fz]) => {
+          g.add(buildLotusFlower(fx, 0.165, fz, 1));
+          g.add(buildLotusPad(fx + 0.1, 0.167, fz - 0.09, 1));
+        });
+
+        g.position.set(px, 0, pz);
+        g.rotation.y = rotY || 0;
+        g.scale.setScalar(scale || 1);
+        scene.add(g);
+      }
+
+      // dat mot dai hoa sen o moi khoang trong giua 4 cum nho C1-C4
+      function buildLotusAltarsForZoneC() {
+        const layout = LAYOUT.C;
+        const rects = familyGroupRects(layout);
+        const cx = wx(layout.x + layout.w / 2);
+        for (let i = 0; i < rects.length - 1; i++) {
+          const gapStart = rects[i].y + rects[i].h;
+          const gapEnd = rects[i + 1].y;
+          const midY = (gapStart + gapEnd) / 2;
+          buildLotusAltar(cx, wz(midY), 0, 1);
+        }
+      }
+
+      function buildFamilyClusters() {
+        const rects = familyGroupRects(LAYOUT.C);
+        let famCount = 0;
+        const blockCols = 5,
+          blockRows = 5; // moi khoi 5x5 = 25 mo, 2 khoi = 50 mo/cum
+        rects.forEach((r, idx) => {
+          const worldW = r.w * SC,
+            worldH = r.h * SC;
+          const cx = wx(r.x + r.w / 2),
+            cz = wz(r.y + r.h / 2);
+          const marginX = 0.55,
+            marginZ = 0.5,
+            pathWidth = 0.85;
+
+          const usableW = worldW - marginX * 2 - pathWidth;
+          const blockW = usableW / 2;
+          const colW = blockW / blockCols;
+          const usableH = worldH - marginZ * 2;
+          const rowH = usableH / blockRows;
+          const tombScale = Math.max(
+            0.32,
+            Math.min(colW / 1.25, rowH / 1.75, 0.85),
+          );
+
+          // 2 khoi 25 mo, ngan cach boi loi di chinh giua (khong xay thap o giua)
+          [-1, 1].forEach((side) => {
+            const blockStartX =
+              side < 0 ? -(pathWidth / 2 + blockW) : pathWidth / 2;
+            for (let row = 0; row < blockRows; row++) {
+              for (let col = 0; col < blockCols; col++) {
+                const x = cx + blockStartX + (col + 0.5) * colW;
+                const z = cz - usableH / 2 + (row + 0.5) * rowH;
+                buildFamilyTomb(x, z, 0, tombScale);
+                famCount++;
+              }
+            }
+          });
+
+          // loi di trung tam (giua 2 khoi 25 mo)
+          const path = new THREE.Mesh(
+            new THREE.BoxGeometry(pathWidth, 0.03, worldH * 0.94),
+            familyPathMat,
+          );
+          path.position.set(cx, 0.015, cz);
+          path.receiveShadow = true;
+          scene.add(path);
+
+          // binh hoa doc theo loi di, hai ben xen ke
+          const vaseCount = 6;
+          for (let i = 0; i < vaseCount; i++) {
+            const t = (i + 0.5) / vaseCount - 0.5;
+            const vz = cz + t * worldH * 0.85;
+            buildFlowerVase(cx - pathWidth / 2 - 0.16, vz, 0.9);
+            buildFlowerVase(cx + pathWidth / 2 + 0.16, vz, 0.9);
+          }
+          // dinh huong nho o dau loi di (khong phai thap, chi la vat pham nho)
+          buildIncenseBurner(cx, cz - worldH / 2 + marginZ * 0.55, 0.85);
+
+          // hang rao da quanh cum
+          const fence = buildFamilyFence(worldW - 0.3, worldH - 0.3);
+          fence.position.set(cx, 0, cz);
+          scene.add(fence);
+        });
+        zoneCellCounts.C = famCount;
+      }
+      buildFamilyClusters();
+      buildLotusAltarsForZoneC();
+
+      /* ------------------------------------------------------------------
+       * Bo da noi that san vuon dung chung: ghe da (mat + tua lung + chan
+       * cong lieu) va bo ban tron + ghe don da (kieu san vuon truyen thong),
+       * tham chieu 2 anh mau nguoi dung gui.
+       * ------------------------------------------------------------------ */
+      const gardenStoneMat = new THREE.MeshStandardMaterial({
+        color: GRANITE_WHITE_GRAY,
+        map: graniteRealAlbedo,
+        normalMap: graniteRealNormal,
+        normalScale: new THREE.Vector2(0.7, 0.7),
+        roughnessMap: graniteRealRough,
+        roughness: 0.68,
+        metalnessMap: graniteRealMetal,
+        metalness: 0.08,
+        envMapIntensity: 0.85,
+      });
+
+      // chan ghe da hinh cong (S-curve) tu mat dat len do ghe roi vong len do tua lung
+      const benchLegCurve = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(0, 0.0, 0.2),
+        new THREE.Vector3(0, 0.1, 0.17),
+        new THREE.Vector3(0, 0.22, 0.1),
+        new THREE.Vector3(0, 0.34, 0.02),
+        new THREE.Vector3(0, 0.42, -0.03),
+        new THREE.Vector3(0, 0.58, -0.1),
+        new THREE.Vector3(0, 0.74, -0.18),
+        new THREE.Vector3(0, 0.9, -0.24),
+      ]);
+      const benchLegGeo = new THREE.TubeGeometry(
+        benchLegCurve,
+        24,
+        0.045,
+        8,
+        false,
+      );
+
+      function buildStoneBench(px, pz, rotY) {
+        const g = new THREE.Group();
+        const legL = new THREE.Mesh(benchLegGeo, gardenStoneMat);
+        legL.position.set(-0.58, 0, 0);
+        legL.castShadow = true;
+        legL.receiveShadow = true;
+        const legR = new THREE.Mesh(benchLegGeo, gardenStoneMat);
+        legR.position.set(0.58, 0, 0);
+        legR.castShadow = true;
+        legR.receiveShadow = true;
+        g.add(legL, legR);
+        const seat = new THREE.Mesh(
+          new THREE.BoxGeometry(1.3, 0.06, 0.42),
+          gardenStoneMat,
+        );
+        seat.position.set(0, 0.42, -0.02);
+        seat.castShadow = true;
+        seat.receiveShadow = true;
+        g.add(seat);
+        const back = new THREE.Mesh(
+          new THREE.BoxGeometry(1.3, 0.5, 0.06),
+          gardenStoneMat,
+        );
+        back.position.set(0, 0.68, -0.22);
+        back.rotation.x = -0.18;
+        back.castShadow = true;
+        back.receiveShadow = true;
+        g.add(back);
+        g.position.set(px, 0, pz);
+        g.rotation.y = rotY || 0;
+        scene.add(g);
+        return g;
+      }
+
+      // bo ban tron da + 4 ghe don da (drum stool) quanh ban, kieu san vuon
+      function buildStoneTableSet(px, pz, rotY) {
+        const g = new THREE.Group();
+        const pedestal = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.2, 0.24, 0.4, 16),
+          gardenStoneMat,
+        );
+        pedestal.position.y = 0.2;
+        pedestal.castShadow = true;
+        pedestal.receiveShadow = true;
+        g.add(pedestal);
+        const top = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.56, 0.56, 0.06, 28),
+          gardenStoneMat,
+        );
+        top.position.y = 0.43;
+        top.castShadow = true;
+        top.receiveShadow = true;
+        g.add(top);
+        for (let i = 0; i < 4; i++) {
+          const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+          const stool = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.19, 0.22, 0.38, 14),
+            gardenStoneMat,
+          );
+          stool.position.set(Math.cos(a) * 0.92, 0.19, Math.sin(a) * 0.92);
+          stool.castShadow = true;
+          stool.receiveShadow = true;
+          g.add(stool);
+        }
+        g.position.set(px, 0, pz);
+        g.rotation.y = rotY || 0;
+        scene.add(g);
+        return g;
+      }
+
+      /* ------------------------------------------------------------------
+       * Thanh (tuong da thap) bao quanh toan bo Khu C - Lo gia toc (khu mo
+       * lon ben phai ban do), chua co san o cac khu con lai nen chi lam
+       * rieng cho khu nay. Co 2 loi vao (Bac/Nam) khop voi duong noi bo
+       * doc theo x=1297, va bon hoa trong doc theo mat ngoai tuong.
+       * ------------------------------------------------------------------ */
+      (function buildZoneCWall() {
+        const layout = LAYOUT.C;
+        const cx = wx(layout.x + layout.w / 2),
+          cz = wz(layout.y + layout.h / 2);
+        const rectW = layout.w * SC + 0.7,
+          rectH = layout.h * SC + 0.7;
+        const hw = rectW / 2,
+          hh = rectH / 2;
+
+        // doi mau tuong/tru sang trang da cam thach, dong bo voi mo va ghe da
+        // Khu C (theo anh mau: hang rao da trang xam co hoa van cham khac)
+        const wallBodyMat = new THREE.MeshStandardMaterial({
+          color: 0xdcd9cc,
+          map: familyStoneTex,
+          normalMap: graniteRealNormal,
+          normalScale: new THREE.Vector2(0.4, 0.4),
+          roughnessMap: graniteRealRough,
+          roughness: 0.55,
+          metalnessMap: graniteRealMetal,
+          metalness: 0.05,
+          envMapIntensity: 0.9,
+        });
+        const wallCapMat = new THREE.MeshStandardMaterial({
+          color: 0xc9c5b6,
+          roughness: 0.5,
+        });
+        const pillarMat = new THREE.MeshStandardMaterial({
+          color: 0xd2cfc0,
+          map: familyStoneTex,
+          normalMap: graniteRealNormal,
+          normalScale: new THREE.Vector2(0.35, 0.35),
+          roughness: 0.55,
+          envMapIntensity: 0.9,
+        });
+
+        const wallH = 0.5,
+          wallThick = 0.12,
+          capH = 0.06;
+        const gateGap = 1.7; // khoang ho lam loi vao, khop voi duong noi bo giua khu
+        const pillarSpacing = 2.4;
+        const pillarSize = 0.22,
+          pillarH = wallH + 0.28;
+
+        const wallGroup = new THREE.Group();
+
+        function addWallSeg(x1, z1, x2, z2) {
+          const dx = x2 - x1,
+            dz = z2 - z1;
+          const len = Math.hypot(dx, dz);
+          if (len < 0.05) return;
+          const seg = new THREE.Mesh(
+            new THREE.BoxGeometry(len, wallH, wallThick),
+            wallBodyMat,
+          );
+          seg.position.set((x1 + x2) / 2, wallH / 2, (z1 + z2) / 2);
+          seg.rotation.y = -Math.atan2(dz, dx);
+          seg.castShadow = true;
+          seg.receiveShadow = true;
+          wallGroup.add(seg);
+          const cap = new THREE.Mesh(
+            new THREE.BoxGeometry(len + 0.05, capH, wallThick + 0.05),
+            wallCapMat,
+          );
+          cap.position.set((x1 + x2) / 2, wallH + capH / 2, (z1 + z2) / 2);
+          cap.rotation.y = seg.rotation.y;
+          cap.castShadow = true;
+          cap.receiveShadow = true;
+          wallGroup.add(cap);
+          const n = Math.max(1, Math.round(len / pillarSpacing));
+          for (let i = 1; i < n; i++) {
+            const t = i / n;
+            const px = x1 + dx * t,
+              pz = z1 + dz * t;
+            const p = new THREE.Mesh(
+              new THREE.BoxGeometry(pillarSize, pillarH, pillarSize),
+              pillarMat,
+            );
+            p.position.set(px, pillarH / 2, pz);
+            p.castShadow = true;
+            p.receiveShadow = true;
+            wallGroup.add(p);
+            // chom hoa sen nho tren dinh tru, tham chieu anh mau (tru co dinh
+            // hinh nu sen thay vi dinh vuong tron)
+            const bud = new THREE.Mesh(
+              new THREE.ConeGeometry(pillarSize * 0.6, 0.16, 8),
+              wallCapMat,
+            );
+            bud.position.set(px, pillarH + 0.08, pz);
+            bud.castShadow = true;
+            wallGroup.add(bud);
+            const budTip = new THREE.Mesh(
+              new THREE.SphereGeometry(pillarSize * 0.22, 8, 6),
+              wallCapMat,
+            );
+            budTip.position.set(px, pillarH + 0.16, pz);
+            wallGroup.add(budTip);
+          }
+          // phu dieu hinh tron (dong tien / hoa van) giua mang tuong, tham chieu
+          // hoa van cham khac tren hang rao trong anh mau - chi them cho doan du dai
+          if (len > 1.6) {
+            const midX = (x1 + x2) / 2,
+              midZ = (z1 + z2) / 2;
+            const rotY = -Math.atan2(dz, dx);
+            const medOuter = new THREE.Mesh(
+              new THREE.TorusGeometry(wallH * 0.3, 0.018, 8, 20),
+              wallCapMat,
+            );
+            medOuter.position.set(midX, wallH * 0.55, midZ);
+            medOuter.rotation.y = rotY;
+            wallGroup.add(medOuter);
+            const medInner = new THREE.Mesh(
+              new THREE.CircleGeometry(wallH * 0.24, 16),
+              wallCapMat,
+            );
+            medInner.position.set(midX, wallH * 0.55, midZ);
+            medInner.rotation.y = rotY;
+            wallGroup.add(medInner);
+          }
+        }
+        function addCornerPillar(px, pz) {
+          const p = new THREE.Mesh(
+            new THREE.BoxGeometry(
+              pillarSize * 1.3,
+              pillarH + 0.1,
+              pillarSize * 1.3,
+            ),
+            pillarMat,
+          );
+          p.position.set(px, (pillarH + 0.1) / 2, pz);
+          p.castShadow = true;
+          p.receiveShadow = true;
+          wallGroup.add(p);
+          const cap = new THREE.Mesh(
+            new THREE.ConeGeometry(pillarSize * 0.85, 0.24, 8),
+            wallCapMat,
+          );
+          cap.position.set(px, pillarH + 0.1 + 0.12, pz);
+          cap.castShadow = true;
+          wallGroup.add(cap);
+          const capTip = new THREE.Mesh(
+            new THREE.SphereGeometry(pillarSize * 0.3, 8, 6),
+            wallCapMat,
+          );
+          capTip.position.set(px, pillarH + 0.1 + 0.24, pz);
+          wallGroup.add(capTip);
+        }
+
+        addCornerPillar(cx - hw, cz - hh);
+        addCornerPillar(cx + hw, cz - hh);
+        addCornerPillar(cx - hw, cz + hh);
+        addCornerPillar(cx + hw, cz + hh);
+
+        // canh trai / phai - kin, khong co cong
+        addWallSeg(cx - hw, cz - hh, cx - hw, cz + hh);
+        addWallSeg(cx + hw, cz - hh, cx + hw, cz + hh);
+        // canh tren / duoi - chua khoang ho o giua lam loi vao
+        addWallSeg(cx - hw, cz - hh, cx - gateGap / 2, cz - hh);
+        addWallSeg(cx + gateGap / 2, cz - hh, cx + hw, cz - hh);
+        addWallSeg(cx - hw, cz + hh, cx - gateGap / 2, cz + hh);
+        addWallSeg(cx + gateGap / 2, cz + hh, cx + hw, cz + hh);
+
+        scene.add(wallGroup);
+
+        // bon hoa doc theo mat ngoai tuong
+        const bedFlowerMat = new THREE.MeshStandardMaterial({
+          color: 0xc23b3b,
+          roughness: 0.6,
+        });
+        const bedSoilMat = new THREE.MeshStandardMaterial({
+          color: 0x2f5a37,
+          roughness: 0.85,
+        });
+        const bedBoxMat = new THREE.MeshStandardMaterial({
+          color: 0x8f8a78,
+          roughness: 0.85,
+        });
+        function addFlowerBed(px, pz, rotY) {
+          const g = new THREE.Group();
+          const box = new THREE.Mesh(
+            new THREE.BoxGeometry(0.62, 0.16, 0.28),
+            bedBoxMat,
+          );
+          box.position.y = 0.08;
+          box.castShadow = true;
+          box.receiveShadow = true;
+          g.add(box);
+          const soil = new THREE.Mesh(
+            new THREE.BoxGeometry(0.54, 0.03, 0.2),
+            bedSoilMat,
+          );
+          soil.position.y = 0.17;
+          g.add(soil);
+          for (let i = 0; i < 5; i++) {
+            const fx = -0.22 + i * 0.11;
+            const fl = new THREE.Mesh(
+              new THREE.SphereGeometry(0.06, 7, 6),
+              bedFlowerMat,
+            );
+            fl.position.set(fx, 0.23, (Math.random() - 0.5) * 0.06);
+            fl.castShadow = true;
+            g.add(fl);
+          }
+          g.position.set(px, 0, pz);
+          g.rotation.y = rotY || 0;
+          scene.add(g);
+        }
+        const bedOffset = 0.35,
+          bedSpacing = 2.2;
+        ["left", "right"].forEach((edge) => {
+          const x = edge === "left" ? cx - hw - bedOffset : cx + hw + bedOffset;
+          const n = Math.max(1, Math.round(rectH / bedSpacing));
+          for (let i = 0; i <= n; i++)
+            addFlowerBed(x, cz - hh + (i / n) * rectH, Math.PI / 2);
+        });
+        ["front", "back"].forEach((edge) => {
+          const z =
+            edge === "front" ? cz - hh - bedOffset : cz + hh + bedOffset;
+          const n = Math.max(1, Math.round(rectW / bedSpacing));
+          for (let i = 0; i <= n; i++) {
+            const x = cx - hw + (i / n) * rectW;
+            if (Math.abs(x - cx) < gateGap / 2 + 0.3) continue; // chua loi vao
+            addFlowerBed(x, z, 0);
+          }
+        });
+
+        // canh trai (phia Tay) dang trong trai - trong 1 hang cay da dang (moi cay
+        // mot loai/kich thuoc khac nhau, khong lap lai giong het nhau), va ghe da
+        // dat gan phia duong di ben ngoai (khong sat tuong), cach tuong mot khoang.
+        const treeOffset = 0.75;
+        const treeX = cx - hw - treeOffset;
+        const treeCount = Math.max(2, Math.round(rectH / 4));
+        for (let i = 0; i <= treeCount; i++) {
+          const t = i / treeCount;
+          const tz = cz - hh + t * rectH + (Math.random() - 0.5) * 0.7;
+          const tx = treeX + (Math.random() - 0.5) * 0.7;
+          // khong ep kind -> makeTree tu random giua normal/shrub/tallpine va doi mau
+          // la ngau nhien, nen moi cay tu nhien khac nhau, khong trong hang loat dong bo
+          makeTree(tx, tz, 0.65 + Math.random() * 1.0);
+        }
+
+        const benchOffset = 1.25; // cach tuong ra xa hon, nam gan sat phia duong di ben ngoai
+        const benchX = cx - hw - benchOffset;
+        const benchCount = Math.max(2, Math.round(rectH / 7));
+        for (let i = 0; i < benchCount; i++) {
+          const t = (i + 0.5) / benchCount;
+          const bz = cz - hh + t * rectH;
+          buildStoneBench(benchX, bz, Math.PI / 2); // quay mat vao huong tuong/khu mo
+        }
+      })();
+
+      /* ------------------------------------------------------------------
+       * Khoang trong canh Khu H (giua Khu H va Khu C, phia duoi Khu G) -
+       * dat 4 bo ban ghe da san vuon (tham chieu anh mau), giua la mot
+       * cay co thu to lam diem nhan.
+       * ------------------------------------------------------------------ */
+      (function buildHRestArea() {
+        // vung trong khong thuoc LAYOUT nao: giua duong x=445-475 (canh Khu H) va
+        // duong x=880-910 (bien Dong), giua duong y=1202-1228 (duoi Khu G) va
+        // duong bien Nam y=1524-1550.
+        const areaX0 = 475,
+          areaX1 = 880,
+          areaY0 = 1228,
+          areaY1 = 1524;
+        const cx = wx((areaX0 + areaX1) / 2),
+          cz = wz((areaY0 + areaY1) / 2);
+        const spanX = wx(areaX1 - areaX0),
+          spanZ = wz(areaY1 - areaY0);
+
+        // cay co thu to o giua, cao lon han han cay vien thuong
+        makeTree(cx, cz, 2.6, "normal");
+        const curbMatH = new THREE.MeshStandardMaterial({
+          color: 0x8f8a78,
+          map: stoneTex,
+          roughness: 0.85,
+        });
+        const treeCurb = new THREE.Mesh(
+          new THREE.RingGeometry(0.95, 1.18, 32),
+          curbMatH,
+        );
+        treeCurb.rotation.x = -Math.PI / 2;
+        treeCurb.position.set(cx, 0.02, cz);
+        treeCurb.receiveShadow = true;
+        scene.add(treeCurb);
+
+        // 4 bo ban + ghe don da, dat 4 goc quanh cay, xoay huong vao trong
+        const offX = Math.min(spanX * 0.28, 2.7),
+          offZ = Math.min(spanZ * 0.28, 1.9);
+        [
+          [-offX, -offZ],
+          [offX, -offZ],
+          [-offX, offZ],
+          [offX, offZ],
+        ].forEach(([dx, dz]) => {
+          buildStoneTableSet(
+            cx + dx,
+            cz + dz,
+            Math.atan2(-dz, -dx) + Math.PI / 2,
+          );
+        });
+      })();
+
+      // zone platforms + labels
+      const zoneCenters = {};
+      const labelLayer = new THREE.Group();
+      scene.add(labelLayer);
+
+      function makeLabel(text, cls) {
+        const div = document.createElement("div");
+        div.className = "label" + (cls ? " " + cls : "");
+        div.textContent = text;
+        return new THREE.CSS2DObject(div);
+      }
+
+      Object.keys(LAYOUT).forEach((key) => {
+        const layout = LAYOUT[key];
+        const color = ZONES[key].color;
+        // Theo yeu cau: bo HOAN TOAN lop lot/tham duoi tat ca cac khu mo (khong
+        // chi rieng Khu C nua) - mo nam truc tiep tren lop co that, khong con
+        // mieng "tham" nao xen giua nua. Giu mesh vo hinh (opacity 0) de van
+        // bam/zoom duoc vao khu.
+        const platMat = new THREE.MeshStandardMaterial({
+          color,
+          roughness: 0.9,
+          transparent: true,
+          opacity: 0,
+          depthWrite: false,
+        });
+        const isFamilyZone = key === "C";
+        groupBackdrops(layout).forEach((bd) => {
+          const geo = new THREE.BoxGeometry(bd.w * SC, PLATFORM_H, bd.h * SC);
+          const mesh = new THREE.Mesh(geo, platMat);
+          mesh.position.set(
+            wx(bd.x) + (bd.w * SC) / 2,
+            PLATFORM_H / 2,
+            wz(bd.y) + (bd.h * SC) / 2,
+          );
+          mesh.userData.zoneKey = key;
+          mesh.castShadow = !isFamilyZone;
+          mesh.receiveShadow = !isFamilyZone;
+          scene.add(mesh);
+        });
+        const ccx = wx(layout.x + layout.w / 2),
+          ccz = wz(layout.y + layout.h / 2);
+        zoneCenters[key] = {
+          x: ccx,
+          z: ccz,
+          w: layout.w * SC,
+          h: layout.h * SC,
+        };
+
+        const label = makeLabel(ZONES[key].name);
+        label.position.set(ccx, PLATFORM_H + 1.1, wz(layout.y) - 0.3);
+        label.element.onclick = () => flyToZone(key);
+        labelLayer.add(label);
+      });
+
+      const lakeLabel = makeLabel("Khu tam linh", "poi");
+      lakeLabel.position.set(lakeCenter.x, 1.0, lakeCenter.z);
+      labelLayer.add(lakeLabel);
+
+      // gates
+      /* ------------------------------------------------------------------
+       * Cong chinh / cong phu: dung model that (front_door_of_a_mansion3.glb -
+       * cong sat hoa van vang-den + tru da chop nhon), thay cho khoi hop don
+       * gian truoc day. Tuong thanh bao quanh TOAN BO ranh gioi (BOUNDARY):
+       * ghep lien tiep tu module wall_door.glb (tuong gach + tru tron + hang
+       * rao sat phia tren, co san cong nho), tu dong chua khoang ho dung ngay
+       * vi tri cong chinh/cong phu. Tai bang GLTFLoader (dung chung co che voi
+       * cay that o tren), clone cho tung vi tri sau khi tai xong.
+       * ------------------------------------------------------------------ */
+      function placeGateModel(model, gx, gy, rotY, scaleVal, label) {
+        const clone = model.clone(true);
+        const px = wx(gx),
+          pz = wz(gy);
+        clone.position.set(px, 0, pz);
+        clone.rotation.y = rotY;
+        clone.scale.setScalar(scaleVal);
+        scene.add(clone);
+        if (label) {
+          const lbl = makeLabel(label, "gate");
+          lbl.position.set(px, 3.4 * scaleVal, pz);
+          labelLayer.add(lbl);
+        }
+      }
+      function placeGateModels(model) {
+        // cong chinh: kich thuoc goc (mo hinh cong biet thu thuc te ~5.5m rong),
+        // quay mat huong ra phia truoc khu dat (Nam); cong phu dung cung kieu
+        // nhung nho hon de phan cap do quan trong so voi cong chinh.
+        placeGateModel(
+          model,
+          MAP_GATE.x,
+          MAP_GATE.y,
+          Math.PI,
+          0.55,
+          "Cong chinh",
+        );
+        placeGateModel(
+          model,
+          SECONDARY_GATE.x,
+          SECONDARY_GATE.y,
+          Math.PI,
+          0.42,
+          "Cong phu",
+        );
+      }
+
+      (function loadGateAndWallModels() {
+        if (typeof THREE.GLTFLoader === "undefined") return;
+        const loader = new THREE.GLTFLoader();
+        loader.load(
+          "assets/models/gates/front_door_of_a_mansion3.glb",
+          (gltf) => {
+            gltf.scene.traverse((n) => {
+              if (n.isMesh) {
+                n.castShadow = true;
+                n.receiveShadow = true;
+              }
+            });
+            placeGateModels(gltf.scene);
+          },
+          undefined,
+          (err) =>
+            console.warn("khong tai duoc model cong chinh/cong phu", err),
+        );
+        // Theo yeu cau: BO tuong thanh bao quanh, de trong nhu cu (chi vanh
+        // cay bao quanh nhu truoc). Khong con tai wall_door.glb nua de tranh
+        // ton bang thong/thoi gian load (file nay khong con dung toi).
+      })();
+
+      /* ------------------------------------------------------------------
+       * Camera + controls
+       * ------------------------------------------------------------------ */
+      const introOffset = new THREE.Vector3(-22, 26, 26);
+      camera.position.set(sceneCenter.x - 55, 50, sceneCenter.z + 60);
+      const controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.target.copy(sceneCenter);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.07;
+      controls.minDistance = 3;
+      controls.maxDistance = 75;
+      controls.maxPolarAngle = Math.PI * 0.49;
+      controls.enablePan = true;
+      controls.screenSpacePanning = false;
+      controls.panSpeed = 0.8;
+      controls.rotateSpeed = 0.75;
+      controls.zoomSpeed = 0.9;
+      controls.touches = {
+        ONE: THREE.TOUCH.ROTATE,
+        TWO: THREE.TOUCH.DOLLY_PAN,
+      };
+      controls.autoRotate = true;
+      controls.autoRotateSpeed = 0.35;
+      controls.update();
+
+      let idleTimer = null;
+      controls.addEventListener("start", () => {
+        controls.autoRotate = false;
+        document.getElementById("rotateBtn").classList.remove("active");
+        clearTimeout(idleTimer);
+      });
+      controls.addEventListener("end", () => {
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => {
+          controls.autoRotate = true;
+          document.getElementById("rotateBtn").classList.add("active");
+        }, 7000);
+      });
+      document.getElementById("rotateBtn").classList.add("active");
+
+      /* ------------------------------------------------------------------
+       * Dong bo huong (la ban) + zoom sang minimap 2D o trang React cha
+       * (qua postMessage, chi khi nhung trong iframe). Chi anh huong TRUC
+       * XOAY DOC (huong dong/tay/nam/bac) - khong dong bo goc nhin nghieng
+       * (polar angle), dung nhu yeu cau: minimap 2D chi xoay theo la ban.
+       *
+       * NORTH_OFFSET_DEG: do lech (do) giua goc "0" cua getAzimuthalAngle()
+       * trong scene 3D nay va huong Bac that cua ban do 2D. Neu sau khi tich
+       * hop thay minimap xoay lech so voi huong thuc te nhin thay trong 3D,
+       * chinh lai gia tri nay (vi du: quay canh o che do toan canh cho
+       * huong ve dung huong Bac, roi doc headingDeg in ra console va gan
+       * NORTH_OFFSET_DEG = -headingDeg do luc do).
+       * ------------------------------------------------------------------ */
+      const NORTH_OFFSET_DEG = 0;
+      const ORBIT_REF_DISTANCE = introOffset.length();
+      let __lastOrbitSync = 0;
+      function sendOrbitState(force) {
+        if (!window.parent || window.parent === window) return;
+        const now = performance.now();
+        if (!force && now - __lastOrbitSync < 80) return; // ~12fps la du muot cho minimap
+        __lastOrbitSync = now;
+        const headingDeg =
+          (THREE.MathUtils.radToDeg(controls.getAzimuthalAngle()) +
+            NORTH_OFFSET_DEG +
+            360) %
+          360;
+        const distance = camera.position.distanceTo(controls.target);
+        const zoomRatio = Math.min(
+          4,
+          Math.max(0.5, ORBIT_REF_DISTANCE / Math.max(1, distance)),
+        );
+        try {
+          window.parent.postMessage(
+            { type: "vpv3d:orbit", headingDeg, zoomRatio },
+            "*",
+          );
+        } catch (e) {}
+      }
+      controls.addEventListener("change", () => sendOrbitState(false));
+
+      function zoomBy(f) {
+        const dir = new THREE.Vector3().subVectors(
+          camera.position,
+          controls.target,
+        );
+        dir.multiplyScalar(f);
+        camera.position.copy(controls.target).add(dir);
+      }
+      function toggleAutoRotate() {
+        controls.autoRotate = !controls.autoRotate;
+        document
+          .getElementById("rotateBtn")
+          .classList.toggle("active", controls.autoRotate);
+        clearTimeout(idleTimer);
+      }
+
+      let flyAnim = null;
+      function flyTo(targetPos, camOffset, duration) {
+        const startCam = camera.position.clone();
+        const startTarget = controls.target.clone();
+        const endTarget = targetPos.clone();
+        const endCam = targetPos.clone().add(camOffset);
+        const t0 = performance.now();
+        flyAnim = function (now) {
+          const t = Math.min(1, (now - t0) / duration);
+          const e = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+          camera.position.lerpVectors(startCam, endCam, e);
+          controls.target.lerpVectors(startTarget, endTarget, e);
+          controls.update();
+          if (t >= 1) flyAnim = null;
+        };
+      }
+
+      function flyToZone(key) {
+        const c = zoneCenters[key];
+        const target = new THREE.Vector3(c.x, 0, c.z);
+        const span = Math.max(c.w, c.h);
+        const offset = new THREE.Vector3(-span * 0.55, span * 0.85, span * 0.9);
+        flyTo(target, offset, 900);
+        showInfo(key);
+        if (window.setCinematicFocus)
+          window.setCinematicFocus("inspect", offset.length() * 1.15);
+      }
+      function flyToOverview() {
+        flyTo(sceneCenter, introOffset, 900);
+        document.getElementById("info").style.display = "none";
+        if (window.setCinematicFocus)
+          window.setCinematicFocus("overview", introOffset.length() * 2.2);
+      }
+
+      function showInfo(key) {
+        const z = ZONES[key];
+        document.getElementById("infoTitle").textContent = z.name;
+        document.getElementById("infoBody").textContent =
+          z.blurb +
+          " Gia tham khao: " +
+          z.price +
+          ". So lo: " +
+          zoneCellCounts[key] +
+          ".";
+        document.getElementById("info").style.display = "block";
+      }
+
+      // legend list
+      const zoneListEl = document.getElementById("zoneList");
+      Object.keys(ZONES).forEach((key) => {
+        const z = ZONES[key];
+        const btn = document.createElement("button");
+        btn.className = "zbtn";
+        btn.innerHTML =
+          '<span class="sw" style="background:#' +
+          z.color.toString(16).padStart(6, "0") +
+          '"></span>' +
+          z.name +
+          '<span class="cnt">' +
+          zoneCellCounts[key] +
+          "</span>";
+        btn.onclick = () => flyToZone(key);
+        zoneListEl.appendChild(btn);
+      });
+
+      // raycast click on platforms + lake
+      const raycaster = new THREE.Raycaster();
+      const pointer = new THREE.Vector2();
+      renderer.domElement.addEventListener("click", (e) => {
+        pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
+        pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
+        raycaster.setFromCamera(pointer, camera);
+        const hits = raycaster.intersectObjects(
+          scene.children.filter((o) => o.userData && o.userData.zoneKey),
+        );
+        if (hits.length) {
+          const key = hits[0].object.userData.zoneKey;
+          showInfo(key);
+          return;
+        }
+        const lakeHit = raycaster.intersectObject(lakeMesh);
+        if (lakeHit.length) {
+          document.getElementById("infoTitle").textContent = "Khu tam linh";
+          document.getElementById("infoBody").textContent =
+            "Khong gian tinh lang giua khu dat, tao dieu kien phong thuy hai hoa cho toan bo cac khu mo xung quanh.";
+          document.getElementById("info").style.display = "block";
+        }
+      });
+
+      /* ------------------------------------------------------------------
+       * Ap dung PBR environment reflection cho toan bo scene
+       * (chay 1 lan sau khi da dung xong toan bo geometry/material o tren)
+       * ------------------------------------------------------------------ */
+      (function finalizePBR() {
+        scene.traverse((obj) => {
+          if (!obj.isMesh || !obj.material) return;
+          const mats = Array.isArray(obj.material)
+            ? obj.material
+            : [obj.material];
+          mats.forEach((m) => {
+            if (!m || !m.isMeshStandardMaterial) return;
+            // da / granite / be tong hoi phan xa moi truong nhe -> cam giac "uot", co chieu sau
+            const rough = m.roughness !== undefined ? m.roughness : 1;
+            m.envMapIntensity =
+              m.metalness > 0.3 ? 1.1 : rough < 0.7 ? 0.55 : 0.22;
+            if (m.map) m.map.anisotropy = MAX_ANISO;
+          });
+        });
+      })();
+
+      /* ------------------------------------------------------------------
+       * Postprocessing pipeline dang cinematic:
+       * Render -> SSAO (ambient occlusion / contact toi cac ke, chan vat) ->
+       * Bloom nhe -> Depth of Field (chi ro khu duoc chon, mo nen truoc/sau) ->
+       * Color grading + vignette + film grain rat nhe -> man hinh
+       * ------------------------------------------------------------------ */
+      const composer = new THREE.EffectComposer(renderer);
+      composer.addPass(new THREE.RenderPass(scene, camera));
+
+      // SSAO: chi bat neu thu vien load thanh cong (phong thu CDN loi mang)
+      let ssaoPass = null;
+      if (typeof THREE.SSAOPass !== "undefined") {
+        try {
+          ssaoPass = new THREE.SSAOPass(
+            scene,
+            camera,
+            window.innerWidth,
+            window.innerHeight,
+          );
+          ssaoPass.kernelRadius = 0.55;
+          ssaoPass.minDistance = 0.0008;
+          ssaoPass.maxDistance = 0.06;
+          ssaoPass.output = THREE.SSAOPass.OUTPUT.Default;
+          composer.addPass(ssaoPass);
+        } catch (e) {
+          console.warn("SSAO khong kha dung, bo qua:", e);
+        }
+      }
+
+      // giam strength (0.26->0.16->0.13) va nang threshold de anh sang/nuoc khong
+      // bi loe trang xoa - bloom chi de "tho" nhe cho highlight, khong tao cam giac fantasy
+      const bloomPass = new THREE.UnrealBloomPass(
+        new THREE.Vector2(window.innerWidth, window.innerHeight),
+        0.13,
+        0.34,
+        0.97,
+      );
+      composer.addPass(bloomPass);
+
+      // Depth of field: mo nen/tien canh nhe khi o che do tong quan/bay toi khu,
+      // tat han khi nguoi dung dang xem chi tiet/chon lo de khong che thong tin
+      let bokehPass = null;
+      if (typeof THREE.BokehPass !== "undefined") {
+        try {
+          bokehPass = new THREE.BokehPass(scene, camera, {
+            focus: 20,
+            aperture: 0.00018,
+            maxblur: 0.008,
+            width: window.innerWidth,
+            height: window.innerHeight,
+          });
+          bokehPass.enabled = false;
+          composer.addPass(bokehPass);
+        } catch (e) {
+          console.warn("DOF khong kha dung, bo qua:", e);
+        }
+      }
+      // dieu khien DOF theo che do camera: goi ham nay tu flyTo/overview
+      window.setCinematicFocus = function (mode, focusDist) {
+        if (!bokehPass) return;
+        if (mode === "overview") {
+          bokehPass.enabled = true;
+          bokehPass.uniforms["focus"].value = focusDist || 55;
+          bokehPass.uniforms["aperture"].value = 0.00012;
+        } else if (mode === "inspect") {
+          bokehPass.enabled = true;
+          bokehPass.uniforms["focus"].value = focusDist || 18;
+          bokehPass.uniforms["aperture"].value = 0.00022;
+        } else {
+          bokehPass.enabled = false;
+        }
+      };
+
+      // Color grading + vignette + film grain rat nhe (khong can thu vien ngoai,
+      // dam bao luon chay du CDN loi) - muc tieu: anh sang that truoc, cinematic sau
+      const gradeShader = {
+        uniforms: {
+          tDiffuse: { value: null },
+          uTime: { value: 0 },
+          uVignette: { value: 0.32 },
+          uGrain: { value: 0.018 },
+          uContrast: { value: 1.06 },
+          uSaturation: { value: 1.08 },
+          uWarmth: { value: 0.03 },
+        },
+        vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+        fragmentShader: `
+    uniform sampler2D tDiffuse; uniform float uTime, uVignette, uGrain, uContrast, uSaturation, uWarmth; varying vec2 vUv;
+    float rand(vec2 co){ return fract(sin(dot(co.xy, vec2(12.9898,78.233))) * 43758.5453); }
+    void main(){
+      vec4 c = texture2D(tDiffuse, vUv);
+      // contrast (filmic-ish, xoay quanh diem xam giua)
+      c.rgb = (c.rgb - 0.5) * uContrast + 0.5;
+      // saturation
+      float g = dot(c.rgb, vec3(0.299,0.587,0.114));
+      c.rgb = mix(vec3(g), c.rgb, uSaturation);
+      // warmth nhe (nang, chieu hoang hon)
+      c.rgb += vec3(uWarmth, uWarmth*0.35, -uWarmth*0.55);
+      // vignette
+      vec2 d = vUv - 0.5;
+      float vig = smoothstep(0.85, 0.25, dot(d,d)*2.0);
+      c.rgb *= mix(1.0-uVignette, 1.0, vig);
+      // film grain rat nhe, doi theo thoi gian de khong dinh vao man hinh
+      float n = (rand(vUv*vec2(1024.0,1024.0) + uTime) - 0.5) * uGrain;
+      c.rgb += n;
+      gl_FragColor = vec4(clamp(c.rgb,0.0,1.0), c.a);
+    }`,
+      };
+      const gradePass = new THREE.ShaderPass(gradeShader);
+      gradePass.renderToScreen = true;
+      composer.addPass(gradePass);
+
+      window.addEventListener("resize", () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        composer.setSize(window.innerWidth, window.innerHeight);
+      });
+
+      const clock = new THREE.Clock();
+      function animate(now) {
+        requestAnimationFrame(animate);
+        const t = clock.getElapsedTime();
+        if (flyAnim) flyAnim(now || performance.now());
+        controls.update();
+
+        waterUniforms.uTime.value = t;
+        if (canalWaterUniforms) canalWaterUniforms.uTime.value = t;
+
+        swayItems.forEach((s) => {
+          if (s.isClumpField) {
+            s.update(t);
+            return;
+          }
+          // gio hai tan so (chinh + gio giat nhe) de tao cam giac tu nhien hon
+          // thay vi mot sin thuan tuy deu deu nhu may lac; goc/than gan nhu dung yen,
+          // tan la (f2) rung manh hon f1, dung nguyen tac "cang cao/xa goc cang rung nhieu"
+          const w1 = Math.sin(t * 0.6 + s.phase) * s.amp;
+          const w2 = Math.sin(t * 1.53 + s.phase * 1.7) * s.amp * 0.35;
+          const w = w1 + w2;
+          s.f1.rotation.z = w * 0.8;
+          s.f2.rotation.z = -w * 1.15;
+          s.f1.rotation.x = w * 0.32;
+          s.f2.rotation.x = w * 0.22;
+        });
+        // Lac tan la cho cay 3D that (InstancedMesh) - gom toan bo tan la 1
+        // loai cay vao 1 draw call, chi can cap nhat lai ma tran instance moi
+        // frame (re hon nhieu so voi hang nghin Object3D/draw call rieng).
+        // Giam tan so cap nhat (~20fps) de do tai CPU ma van nhin muot.
+        if (!window.__lastLeafSway) window.__lastLeafSway = 0;
+        if (t - window.__lastLeafSway > 0.05) {
+          window.__lastLeafSway = t;
+          const dummy =
+            window.__leafDummy || (window.__leafDummy = new THREE.Object3D());
+          leafSwayBatches.forEach((batch) => {
+            batch.base.forEach((b) => {
+              const w =
+                Math.sin(t * 0.6 + b.phase) * b.amp +
+                Math.sin(t * 1.4 + b.phase * 1.6) * b.amp * 0.4;
+              dummy.position.set(b.x, 0, b.z);
+              dummy.rotation.set(w * 0.5, b.rotY, w * 0.4);
+              dummy.scale.setScalar(b.scale);
+              dummy.updateMatrix();
+              batch.mesh.setMatrixAt(b.i, dummy.matrix);
+            });
+            batch.mesh.instanceMatrix.needsUpdate = true;
+          });
+        }
+
+        if (window.__waterArcs)
+          window.__waterArcs.forEach((a) => {
+            a.mesh.material.opacity = 0.28 + 0.14 * Math.sin(t * 2.6 + a.phase);
+          });
+        if (window.__smallJets)
+          window.__smallJets.forEach((j) => {
+            const s = 0.9 + 0.15 * Math.sin(t * 3.1 + j.phase);
+            j.mesh.scale.y = s;
+            j.mesh.material.opacity = 0.26 + 0.16 * Math.sin(t * 3.1 + j.phase);
+          });
+        if (window.__centerJet) {
+          const s = 0.95 + 0.08 * Math.sin(t * 2.2);
+          window.__centerJet.mesh.scale.y = s;
+          window.__centerJet.mesh.material.opacity =
+            0.3 + 0.13 * Math.sin(t * 2.2);
+        }
+        if (window.__fountainVeils)
+          window.__fountainVeils.forEach((v) => {
+            v.mesh.material.opacity = 0.18 + 0.1 * Math.sin(t * 1.4 + v.phase);
+          });
+        if (window.__fountainFoam) {
+          window.__fountainFoam.material.opacity =
+            0.22 + 0.1 * Math.sin(t * 1.1);
+        }
+
+        gradePass.uniforms.uTime.value = t;
+        composer.render();
+        labelRenderer.render(scene, camera);
+      }
+
+      // intro cinematic reveal
+      flyTo(sceneCenter, introOffset, 2400);
+      finalizeContactShadows();
+      animate();
+      sendOrbitState(true);
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          document.getElementById("fade").classList.add("hide");
+          // bao cho trang React cha biet canh 3D da san sang (an loading overlay)
+          try {
+            if (window.parent && window.parent !== window) {
+              window.parent.postMessage({ type: "vpv3d:ready" }, "*");
+            }
+          } catch (e) {}
+        }),
+      );
+    </script>
+  </body>
+</html>

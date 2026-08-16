@@ -919,6 +919,37 @@
   opacity: 1;
 }
 
+/* nút "3D" — ngay dưới la bàn, cùng kích thước/bán kính (40x40, bo tròn) */
+.map-page .map-3d-btn {
+  position: absolute;
+  top: 108px;
+  right: 16px;
+  z-index: 20;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 0.5px solid var(--border-dim);
+  background: rgba(8, 13, 26, 0.85);
+  backdrop-filter: blur(8px);
+  color: var(--text-main);
+  font-family: "Be Vietnam Pro", sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    all 0.2s ease,
+    transform 0.15s ease;
+}
+.map-page .map-3d-btn:hover {
+  border-color: var(--border-soft);
+  color: var(--teal-glow);
+  transform: scale(1.06);
+}
+
 /* ---------- panel right ---------- */
 .map-page .panel-right {
   border: 0.5px solid var(--border-dim);

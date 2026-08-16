@@ -19,6 +19,7 @@ import RealtimeConnection from "@/components/realtime/RealtimeConnection";
 // Customer pages
 import HomePage from "@/pages/customer/home/HomePage";
 import MapPage from "@/pages/customer/map/MapPage";
+import Map3DPage from "@/pages/customer/map/Map3DPage";
 import LotDetailPage from "@/pages/customer/lot-detail/LotDetailPage";
 import BookingPage from "@/pages/customer/booking/BookingPage";
 import PaymentPage from "@/pages/customer/payment/PaymentPage";
@@ -89,6 +90,19 @@ const router = createBrowserRouter([
       // === Trang chủ — KHÔNG bọc CustomerLayout vì HomePage đã tự có nav + footer riêng ===
       { path: ROUTES.HOME, element: <HomePage /> },
 
+      // === Bản đồ 3D — KHÔNG bọc CustomerLayout (không Navbar/Footer) vì
+      // đây là trang xem toàn màn hình, có nút quay lại riêng. Vẫn yêu cầu
+      // đăng nhập + hồ sơ đầy đủ giống trang "Bản đồ" 2D. ===
+      {
+        element: <RequireAuth />,
+        children: [
+          {
+            element: <RequireCompleteProfile />,
+            children: [{ path: ROUTES.MAP_3D, element: <Map3DPage /> }],
+          },
+        ],
+      },
+
       // === Customer routes (dùng layout chung: Navbar + Footer) ===
       {
         element: <CustomerLayout />,
@@ -142,7 +156,10 @@ const router = createBrowserRouter([
               { path: "lich-hen", element: <AppointmentManagementPage /> },
               { path: "nhac-lich", element: <ReminderManagementPage /> },
               { path: "ai-agent", element: <AgentAdminPage /> },
-              { path: "ho-so-nguoi-da-khuat", element: <DeceasedProfilesAdminPage /> },
+              {
+                path: "ho-so-nguoi-da-khuat",
+                element: <DeceasedProfilesAdminPage />,
+              },
             ],
           },
         ],
