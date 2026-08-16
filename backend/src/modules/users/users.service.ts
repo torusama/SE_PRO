@@ -654,4 +654,21 @@ export class UsersService {
       throw new UnauthorizedException('Mã OTP không đúng.');
     }
   }
+
+
+  async ownedPlots(userId: number) {
+    return this.database.query(
+      `SELECT p.plot_id AS id, p.plot_code AS code,
+              z.zone_name AS "zoneName", z.zone_code AS "zoneCode",
+              p.area_sqm::float AS "areaSqm", p.status,
+              o.ownership_id AS "ownershipId",
+              o.ownership_start AS "ownershipStart"
+       FROM ownership_records o
+       JOIN plots p ON p.plot_id = o.plot_id AND p.is_deleted = FALSE
+       JOIN cemetery_zones z ON z.zone_id = p.zone_id
+       WHERE o.user_id = $1 AND o.is_current = TRUE AND p.status = 'sold'
+       ORDER BY p.plot_code`,
+      [userId],
+    );
+  }
 }

@@ -84,6 +84,11 @@ export class UsersController {
     return { success: true, data: await this.usersService.stats(user.id) };
   }
 
+  @Get('users/me/owned-plots')
+  async myOwnedPlots(@CurrentUser() user: AuthUser) {
+    return { success: true, data: await this.usersService.ownedPlots(user.id) };
+  }
+
   @Patch('users/me')
   async updateMe(@CurrentUser() user: AuthUser, @Body() dto: UpdateProfileDto) {
     return {
