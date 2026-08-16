@@ -3,14 +3,18 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Ban do 3D tuong tac - Cinematic Realism</title>
+    <title>Bản đồ 3D tương tác - Cinematic Realism</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap"
+    />
     <style>
       html,
       body {
         margin: 0;
         height: 100%;
         overflow: hidden;
-        font-family: Arial, Helvetica, sans-serif;
+        font-family: "Be Vietnam Pro", "Inter", system-ui, sans-serif;
         background: #0e1a1f;
       }
       #canvasWrap {
@@ -229,20 +233,20 @@
     <div id="legend">
       <div id="zoneList"></div>
       <button class="zbtn" onclick="flyToOverview()">
-        <span class="sw" style="background: #888"></span>Toan canh
+        <span class="sw" style="background: #888"></span>Toàn cảnh
       </button>
     </div>
     <div id="controls">
-      <button class="ctrlbtn" onclick="zoomBy(0.8)" title="Phong to">+</button>
-      <button class="ctrlbtn" onclick="zoomBy(1.25)" title="Thu nho">-</button>
-      <button class="ctrlbtn" onclick="flyToOverview()" title="Toan canh">
+      <button class="ctrlbtn" onclick="zoomBy(0.8)" title="Phóng to">+</button>
+      <button class="ctrlbtn" onclick="zoomBy(1.25)" title="Thu nhỏ">-</button>
+      <button class="ctrlbtn" onclick="flyToOverview()" title="Toàn cảnh">
         &#8635;
       </button>
       <button
         class="ctrlbtn"
         id="rotateBtn"
         onclick="toggleAutoRotate()"
-        title="Xoay tu dong"
+        title="Xoay tự động"
       >
         &#9654;
       </button>
@@ -295,56 +299,65 @@
       const SC = 0.02;
       const PLATFORM_H = 0.05;
 
+      // Đồng bộ 1:1 với dữ liệu thật của trang "mua bán mộ phần"
+      // (frontend/src/lib/cemeteryMapLayout.ts - CEMETERY_ZONES / ZONE_META):
+      // cùng tên khu, cùng giá tham khảo (basePrice) và cùng nội dung mô tả (blurb).
       const ZONES = {
         A: {
-          name: "Khu A - Cao cap",
+          name: "Khu A - Cao cấp",
           color: 0x00b89e,
-          price: "65 trieu / lo",
+          price: "65 triệu / lô",
           blurb:
-            "Khong gian trang trong, mat do thoang, phu hop gia dinh chon vi tri cao cap.",
+            "Khu A có không gian trang trọng, mật độ thoáng và phù hợp với gia đình muốn chọn vị trí cao cấp.",
         },
         B: {
-          name: "Khu B - Tieu chuan",
+          name: "Khu B - Tiêu chuẩn",
           color: 0xc9a84c,
-          price: "45 trieu / lo",
-          blurb: "Can bang giua chi phi va vi tri, de tiep can.",
+          price: "45 triệu / lô",
+          blurb:
+            "Khu B cân bằng giữa chi phí và vị trí, phù hợp nhu cầu chọn lô ổn định, dễ tiếp cận.",
         },
         D: {
-          name: "Khu D - Binh dan",
+          name: "Khu D - Bình dân",
           color: 0x4da6ff,
-          price: "32 trieu / lo",
-          blurb: "Muc gia de tiep can, loi di ro rang.",
+          price: "32 triệu / lô",
+          blurb:
+            "Khu D có mức giá dễ tiếp cận, phù hợp gia đình muốn ưu tiên chi phí nhưng vẫn đảm bảo lối đi rõ ràng.",
         },
         E: {
-          name: "Khu E - Cai tang",
+          name: "Khu E - Cải táng",
           color: 0x00b4d8,
-          price: "28 trieu / lo",
-          blurb: "Danh cho mo cai tang, ho tro dung nghi thuc.",
+          price: "28 triệu / lô",
+          blurb:
+            "Khu E dành cho mộ cải táng, quy trình di dời/an táng lại được hỗ trợ đúng theo nghi thức truyền thống.",
         },
         F: {
-          name: "Khu F - Mat do cao",
+          name: "Khu F - Mật độ cao",
           color: 0x52b788,
-          price: "24 trieu / lo",
-          blurb: "Mat do cao, dien tich nho gon, ngan sach vua phai.",
+          price: "24 triệu / lô",
+          blurb:
+            "Khu F mật độ cao, diện tích mỗi lô nhỏ gọn, mức giá tối ưu cho ngân sách vừa phải.",
         },
         G: {
-          name: "Khu G - Mo rong",
+          name: "Khu G - Mở rộng",
           color: 0x2d9d6f,
-          price: "36 trieu / lo",
-          blurb: "Khu mo rong moi, khong gian rong rai.",
+          price: "36 triệu / lô",
+          blurb:
+            "Khu G là khu mở rộng mới, không gian rộng rãi, còn nhiều lô đẹp để lựa chọn vị trí.",
         },
         H: {
-          name: "Khu H - Mo don",
+          name: "Khu H - Mộ đơn",
           color: 0xf4a340,
-          price: "30 trieu / lo",
-          blurb: "Mo don le, chi phi hop ly.",
+          price: "30 triệu / lô",
+          blurb:
+            "Khu H bố trí các mộ đơn lẻ, phù hợp nhu cầu an táng cá nhân với chi phí hợp lý.",
         },
         C: {
-          name: "Khu C - Lo gia toc",
+          name: "Khu C - Lô gia tộc",
           color: 0x7b6bcc,
-          price: "120 trieu / lo",
+          price: "120 triệu / lô",
           blurb:
-            "Lo gia toc, chia 4 cum C1-C4 rieng biet, khong gian quay quan.",
+            "Khu C dành cho lô gia tộc, chia thành nhiều cụm riêng biệt (C1-C4) để mỗi gia tộc có khu vực quây quần độc lập.",
         },
       };
 
@@ -4021,7 +4034,7 @@
         labelLayer.add(label);
       });
 
-      const lakeLabel = makeLabel("Khu tam linh", "poi");
+      const lakeLabel = makeLabel("Khu tâm linh", "poi");
       lakeLabel.position.set(lakeCenter.x, 1.0, lakeCenter.z);
       labelLayer.add(lakeLabel);
 
@@ -4059,7 +4072,7 @@
           MAP_GATE.y,
           Math.PI,
           0.55,
-          "Cong chinh",
+          "Cổng chính",
         );
         placeGateModel(
           model,
@@ -4067,7 +4080,7 @@
           SECONDARY_GATE.y,
           Math.PI,
           0.42,
-          "Cong phu",
+          "Cổng phụ",
         );
       }
 
@@ -4229,9 +4242,9 @@
         document.getElementById("infoTitle").textContent = z.name;
         document.getElementById("infoBody").textContent =
           z.blurb +
-          " Gia tham khao: " +
+          " Giá tham khảo: " +
           z.price +
-          ". So lo: " +
+          ". Số lô: " +
           zoneCellCounts[key] +
           ".";
         document.getElementById("info").style.display = "block";
@@ -4272,9 +4285,9 @@
         }
         const lakeHit = raycaster.intersectObject(lakeMesh);
         if (lakeHit.length) {
-          document.getElementById("infoTitle").textContent = "Khu tam linh";
+          document.getElementById("infoTitle").textContent = "Khu tâm linh";
           document.getElementById("infoBody").textContent =
-            "Khong gian tinh lang giua khu dat, tao dieu kien phong thuy hai hoa cho toan bo cac khu mo xung quanh.";
+            "Không gian tĩnh lặng giữa khu đất, tạo điều kiện phong thủy hài hòa cho toàn bộ các khu mộ xung quanh.";
           document.getElementById("info").style.display = "block";
         }
       });
