@@ -1,11 +1,13 @@
 import { Transform } from 'class-transformer';
 import {
-  IsBoolean,
+  IsEmail,
   IsIn,
+  IsBoolean,
   IsOptional,
   IsString,
   MaxLength,
   MinLength,
+  ValidateIf,
 } from 'class-validator';
 import { AdminListQueryDto } from '../../../common/dto/admin-list-query.dto';
 
@@ -22,8 +24,16 @@ export class AdminNotificationQueryDto extends AdminListQueryDto {
 }
 
 export class BroadcastNotificationDto {
-  @IsIn(['all_customers'])
-  audience!: 'all_customers';
+  @IsIn(['all_customers', 'single_customer'])
+  audience!: 'all_customers' | 'single_customer';
+
+  // Bắt buộc khi audience = 'single_customer': email của khách hàng cần
+  // gửi riêng. Được kiểm tra tồn tại trong bảng users trước khi tạo thông
+  // báo — nếu không có, service sẽ trả lỗi để admin biết và nhập lại.
+  @ValidateIf((dto) => dto.audience === 'single_customer')
+  @IsEmail()
+  @MaxLength(255)
+  recipientEmail?: string;
 
   @IsString()
   @MinLength(2)

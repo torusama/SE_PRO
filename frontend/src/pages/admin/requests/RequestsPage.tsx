@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import {
   composeContractDocument,
   createContractPdfBlob,
@@ -427,6 +428,7 @@ function RequestReviewInfo({ request }: { request: RequestItem }) {
 }
 
 export default function RequestsPage() {
+  const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedAppointmentId =
     Number(searchParams.get("appointment")) || undefined;
@@ -476,22 +478,21 @@ export default function RequestsPage() {
         appointmentResponse,
         contractResponse,
         cancellationResponse,
-      ] =
-        await Promise.all([
-          api.get<{ data: PageData<RequestItem> }>("/admin/reservations", {
-            params: { page: 1, pageSize: 100 },
-          }),
-          api.get<{ data: PageData<Appointment> }>("/admin/appointments", {
-            params: { page: 1, pageSize: 100 },
-          }),
-          api.get<{ data: PageData<Contract> }>("/admin/contracts", {
-            params: { page: 1, pageSize: 100 },
-          }),
-          api.get<{ data: PageData<CancellationItem> }>(
-            "/admin/reservation-cancellations",
-            { params: { page: 1, pageSize: 100 } },
-          ),
-        ]);
+      ] = await Promise.all([
+        api.get<{ data: PageData<RequestItem> }>("/admin/reservations", {
+          params: { page: 1, pageSize: 100 },
+        }),
+        api.get<{ data: PageData<Appointment> }>("/admin/appointments", {
+          params: { page: 1, pageSize: 100 },
+        }),
+        api.get<{ data: PageData<Contract> }>("/admin/contracts", {
+          params: { page: 1, pageSize: 100 },
+        }),
+        api.get<{ data: PageData<CancellationItem> }>(
+          "/admin/reservation-cancellations",
+          { params: { page: 1, pageSize: 100 } },
+        ),
+      ]);
       setRequests(requestResponse.data.data?.items ?? []);
       setAppointments(appointmentResponse.data.data?.items ?? []);
       setContracts(contractResponse.data.data?.items ?? []);
@@ -513,7 +514,8 @@ export default function RequestsPage() {
   const visibleCancellations = useMemo(
     () =>
       [...cancellations].sort((first, second) => {
-        if (first.status === "pending" && second.status !== "pending") return -1;
+        if (first.status === "pending" && second.status !== "pending")
+          return -1;
         if (first.status !== "pending" && second.status === "pending") return 1;
         return (
           new Date(second.createdAt).getTime() -
@@ -578,8 +580,9 @@ export default function RequestsPage() {
   }, [cancellations, requestedRequestId, requestedView, requests]);
   const loadDetail = useCallback(async (id: number) => {
     try {
-      const response =
-        await api.get<{ data: RequestItem }>(`/admin/reservations/${id}`);
+      const response = await api.get<{ data: RequestItem }>(
+        `/admin/reservations/${id}`,
+      );
       setDetail(response.data.data);
       setAdminNote(response.data.data.adminNote ?? "");
     } catch (caught) {
@@ -649,7 +652,7 @@ export default function RequestsPage() {
   );
   const cancellationPending = Boolean(
     current?.cancellation?.status === "pending" ||
-      pendingCancellationForCurrent,
+    pendingCancellationForCurrent,
   );
   const terminal =
     current?.status === "rejected" ||
@@ -694,7 +697,8 @@ export default function RequestsPage() {
     });
   }
   async function reviewCancellation(action: "approve" | "reject") {
-    if (!currentCancellation || currentCancellation.status !== "pending") return;
+    if (!currentCancellation || currentCancellation.status !== "pending")
+      return;
     resetFeedback();
     setBusy(`cancellation-${action}`);
     try {
@@ -927,9 +931,12 @@ export default function RequestsPage() {
   async function activate() {
     if (
       !contract ||
-      !window.confirm(
-        "Xác minh tài liệu và kích hoạt quyền sở hữu cho toàn bộ lô trong hợp đồng?",
-      )
+      !(await confirm({
+        title: "Kích hoạt quyền sở hữu",
+        message:
+          "Xác minh tài liệu và kích hoạt quyền sở hữu cho toàn bộ lô trong hợp đồng?",
+        confirmLabel: "Kích hoạt",
+      }))
     )
       return;
     resetFeedback();
@@ -975,6 +982,7 @@ export default function RequestsPage() {
 
   return (
     <div className="request-workflow-page">
+      {confirmDialog}
       <header>
         <div>
           <h1>Xử lý yêu cầu</h1>
@@ -1011,562 +1019,564 @@ export default function RequestsPage() {
       </nav>
       {view === "purchases" ? (
         <div className="request-workspace">
-        <aside className="request-list">
-          {loading ? (
-            <p className="empty">Đang tải...</p>
-          ) : visibleRequests.length === 0 ? (
-            <p className="empty">Chưa có yêu cầu.</p>
-          ) : (
-            visibleRequests.map((item) => (
-              <button
-                key={item.id}
-                className={item.id === selectedId ? "selected" : ""}
-                onClick={() => {
-                  setSelectedId(item.id);
-                  setDetail(undefined);
-                  setEvidenceError("");
-                  resetFeedback();
-                }}
-              >
-                <span>
-                  <strong>#{String(item.id).padStart(4, "0")}</strong>
-                  <em className={`status-${item.status}`}>
-                    {statusLabels[item.status]}
-                  </em>
-                </span>
-                <b>{item.customerName || "Khách hàng"}</b>
-                <small>
-                  {(item.plotCodes ?? []).join(", ") || "Chưa có mã lô"} ·{" "}
-                  {money.format(Number(item.totalPrice ?? 0))}
-                </small>
-              </button>
-            ))
-          )}
-        </aside>
-        <main className="request-detail">
-          {!current ? (
-            <p className="empty">
-              {selectedId
-                ? "Đang tải đầy đủ thông tin yêu cầu..."
-                : "Chọn một yêu cầu để xử lý."}
-            </p>
-          ) : (
-            <>
-              <Stepper
-                labels={labels}
-                completed={completed}
-                terminal={terminal}
-              />
-              <section className="request-heading">
-                <div>
-                  <span>Yêu cầu #{String(current.id).padStart(4, "0")}</span>
-                  <h2>{current.customerName}</h2>
-                  <p>
-                    {(
-                      current.plotCodes ??
-                      current.plots?.map((plot) => plot.code) ??
-                      []
-                    ).join(", ")}{" "}
-                    · {money.format(Number(current.totalPrice ?? 0))}
-                  </p>
-                </div>
-                <em className={`status-${current.status}`}>
-                  {statusLabels[current.status]}
-                </em>
-              </section>
-              {cancellationPending && (
-                <div className="workflow-alert cancellation-lock">
+          <aside className="request-list">
+            {loading ? (
+              <p className="empty">Đang tải...</p>
+            ) : visibleRequests.length === 0 ? (
+              <p className="empty">Chưa có yêu cầu.</p>
+            ) : (
+              visibleRequests.map((item) => (
+                <button
+                  key={item.id}
+                  className={item.id === selectedId ? "selected" : ""}
+                  onClick={() => {
+                    setSelectedId(item.id);
+                    setDetail(undefined);
+                    setEvidenceError("");
+                    resetFeedback();
+                  }}
+                >
+                  <span>
+                    <strong>#{String(item.id).padStart(4, "0")}</strong>
+                    <em className={`status-${item.status}`}>
+                      {statusLabels[item.status]}
+                    </em>
+                  </span>
+                  <b>{item.customerName || "Khách hàng"}</b>
+                  <small>
+                    {(item.plotCodes ?? []).join(", ") || "Chưa có mã lô"} ·{" "}
+                    {money.format(Number(item.totalPrice ?? 0))}
+                  </small>
+                </button>
+              ))
+            )}
+          </aside>
+          <main className="request-detail">
+            {!current ? (
+              <p className="empty">
+                {selectedId
+                  ? "Đang tải đầy đủ thông tin yêu cầu..."
+                  : "Chọn một yêu cầu để xử lý."}
+              </p>
+            ) : (
+              <>
+                <Stepper
+                  labels={labels}
+                  completed={completed}
+                  terminal={terminal}
+                />
+                <section className="request-heading">
                   <div>
-                    <strong>Quy trình mua đang tạm khóa</strong>
-                    <span>
-                      Khách hàng đã gửi yêu cầu hủy. Không thể tiếp tục lịch
-                      hẹn, hợp đồng, thanh toán hoặc kích hoạt sở hữu trước khi
-                      xử lý yêu cầu này.
-                    </span>
+                    <span>Yêu cầu #{String(current.id).padStart(4, "0")}</span>
+                    <h2>{current.customerName}</h2>
+                    <p>
+                      {(
+                        current.plotCodes ??
+                        current.plots?.map((plot) => plot.code) ??
+                        []
+                      ).join(", ")}{" "}
+                      · {money.format(Number(current.totalPrice ?? 0))}
+                    </p>
                   </div>
-                  {pendingCancellationForCurrent && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        changeView("cancellations");
-                        setSelectedCancellationId(
-                          pendingCancellationForCurrent.id,
-                        );
-                      }}
-                    >
-                      Xem yêu cầu hủy
-                    </button>
-                  )}
-                </div>
-              )}
-              {decisionDone && (
-                <CompletedStep title="Duyệt yêu cầu">
-                  <div className="decision-result">
-                    <span>
-                      <small>Kết quả xử lý</small>
-                      <strong>{statusLabels[current.status]}</strong>
-                    </span>
-                    <span>
-                      <small>Ngày xử lý</small>
-                      <strong>{dateTime(current.reviewedAt)}</strong>
-                    </span>
-                    <span>
-                      <small>Ghi chú xử lý</small>
-                      <strong>{current.adminNote || "Không có"}</strong>
-                    </span>
-                  </div>
-                  <RequestReviewInfo request={current} />
-                </CompletedStep>
-              )}
-              {!decisionDone && (
-                <section className="active-step decision-step">
-                  <div className="step-title">
-                    <span>1</span>
-                    <div>
-                      <h3>Duyệt yêu cầu</h3>
-                      <p>
-                        Kiểm tra đầy đủ thông tin khách hàng và từng lô trước
-                        khi quyết định.
-                      </p>
-                    </div>
-                  </div>
-                  <RequestReviewInfo request={current} />
-                  <label>
-                    Ghi chú xử lý
-                    <textarea
-                      value={adminNote}
-                      onChange={(event) => setAdminNote(event.target.value)}
-                      rows={3}
-                      placeholder="Nhập lý do hoặc ghi chú cho quyết định duyệt..."
-                    />
-                  </label>
-                  <div className="step-actions">
-                    <button
-                      className="danger-button"
-                      disabled={!!busy}
-                      onClick={() => void decide("reject")}
-                    >
-                      Từ chối
-                    </button>
-                    <button
-                      className="primary-button"
-                      disabled={!!busy}
-                      onClick={() => void decide("approve")}
-                    >
-                      {busy === "approve" ? "Đang duyệt..." : "Duyệt yêu cầu"}
-                    </button>
-                  </div>
+                  <em className={`status-${current.status}`}>
+                    {statusLabels[current.status]}
+                  </em>
                 </section>
-              )}
-              {!terminal && decisionDone && appointmentDone && (
-                <CompletedStep title="Lịch hẹn offline">
-                  {appointmentSummary}
-                </CompletedStep>
-              )}
-              {!terminal && decisionDone && !appointmentDone && (
-                <section className="active-step">
-                  <div className="step-title">
-                    <span>2</span>
+                {cancellationPending && (
+                  <div className="workflow-alert cancellation-lock">
                     <div>
-                      <h3>Lịch hẹn offline</h3>
+                      <strong>Quy trình mua đang tạm khóa</strong>
+                      <span>
+                        Khách hàng đã gửi yêu cầu hủy. Không thể tiếp tục lịch
+                        hẹn, hợp đồng, thanh toán hoặc kích hoạt sở hữu trước
+                        khi xử lý yêu cầu này.
+                      </span>
                     </div>
-                  </div>
-                  {appointment && appointment.customerStatus === "pending" ? (
-                    <>
-                      <div className="waiting-banner">
-                        Đang chờ khách hàng xác nhận lịch hẹn
-                      </div>
-                      {appointmentSummary}
-                    </>
-                  ) : (
-                    <>
-                      {appointment?.customerStatus === "declined" && (
-                        <div className="workflow-alert error">
-                          Khách hàng đã từ chối lịch trước. Hãy đề xuất lịch
-                          mới.
-                        </div>
-                      )}
-                      <div className="form-grid">
-                        <CalendarDateInput
-                          label="Từ ngày"
-                          value={appointmentForm.scheduledAt}
-                          onChange={(value) =>
-                            setAppointmentForm({
-                              ...appointmentForm,
-                              scheduledAt: value,
-                              scheduledEndAt:
-                                appointmentForm.scheduledEndAt &&
-                                appointmentForm.scheduledEndAt < value
-                                  ? ""
-                                  : appointmentForm.scheduledEndAt,
-                            })
-                          }
-                        />
-                        <CalendarDateInput
-                          label="Đến ngày"
-                          value={appointmentForm.scheduledEndAt}
-                          min={appointmentForm.scheduledAt || undefined}
-                          onChange={(value) =>
-                            setAppointmentForm({
-                              ...appointmentForm,
-                              scheduledEndAt: value,
-                            })
-                          }
-                        />
-                        <label>
-                          Nhân viên phụ trách
-                          <input
-                            value={appointmentForm.assignedStaffName}
-                            onChange={(event) =>
-                              setAppointmentForm({
-                                ...appointmentForm,
-                                assignedStaffName: event.target.value,
-                              })
-                            }
-                          />
-                        </label>
-                        <label>
-                          Địa điểm
-                          <input
-                            value={appointmentForm.location}
-                            onChange={(event) =>
-                              setAppointmentForm({
-                                ...appointmentForm,
-                                location: event.target.value,
-                              })
-                            }
-                          />
-                        </label>
-                        <label className="full">
-                          Ghi chú
-                          <textarea
-                            rows={3}
-                            value={appointmentForm.note}
-                            onChange={(event) =>
-                              setAppointmentForm({
-                                ...appointmentForm,
-                                note: event.target.value,
-                              })
-                            }
-                          />
-                        </label>
-                      </div>
-                      <div className="step-actions">
-                        <button
-                          className="primary-button"
-                          disabled={!!busy}
-                          onClick={() => void createAppointment()}
-                        >
-                          Gửi lịch hẹn
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </section>
-              )}
-              {appointmentDone && contract && (
-                <>
-                  {pdfDone && (
-                    <CompletedStep title="Tạo PDF hợp đồng">
-                      <div className="request-summary-grid">
-                        <span>
-                          <small>Mã hợp đồng</small>
-                          {contract.contractCode}
-                        </span>
-                        <span>
-                          <small>Đã tạo lúc</small>
-                          {dateTime(contract.generatedPdfAt)}
-                        </span>
-                      </div>
-                      <div className="step-actions contract-completed-actions">
-                        <button
-                          className="secondary-button"
-                          disabled={!!busy}
-                          onClick={() => void previewPdf()}
-                        >
-                          {busy === "pdf-preview"
-                            ? "Đang tạo bản xem trước..."
-                            : "Xem lại hợp đồng"}
-                        </button>
-                      </div>
-                    </CompletedStep>
-                  )}
-                  {!pdfDone && (
-                    <section className="active-step">
-                      <div className="step-title">
-                        <span>3</span>
-                        <div>
-                          <h3>Tạo PDF hợp đồng</h3>
-                          <p>
-                            Rà soát nội dung thừa kế nếu có, sau đó tải bản hợp
-                            đồng để ký offline.
-                          </p>
-                        </div>
-                      </div>
-                      <label>
-                        Thông tin/nguyện vọng thừa kế
-                        <textarea
-                          rows={5}
-                          value={inheritance}
-                          placeholder="Không bắt buộc"
-                          onChange={(event) =>
-                            setInheritance(event.target.value)
-                          }
-                        />
-                      </label>
-                      <div className="step-actions">
-                        <button
-                          className="secondary-button"
-                          disabled={!!busy}
-                          onClick={() => void previewPdf()}
-                        >
-                          {busy === "pdf-preview"
-                            ? "Đang tạo bản xem trước..."
-                            : "Xem trước hợp đồng"}
-                        </button>
-                        <button
-                          className="primary-button"
-                          disabled={!!busy}
-                          onClick={() => void generatePdf()}
-                        >
-                          {busy === "pdf"
-                            ? "Đang tạo PDF..."
-                            : "Tạo và tải PDF"}
-                        </button>
-                      </div>
-                    </section>
-                  )}
-                  {pdfDone && paymentDone && (
-                    <CompletedStep title="Xác nhận thanh toán">
-                      <div className="request-summary-grid">
-                        <span>
-                          <small>Đã nhận</small>
-                          {money.format(contract.paidAmount)}
-                        </span>
-                        <span>
-                          <small>Trạng thái</small>Đã thanh toán đủ
-                        </span>
-                      </div>
-                    </CompletedStep>
-                  )}
-                  {pdfDone && !paymentDone && (
-                    <section className="active-step">
-                      <div className="step-title">
-                        <span>4</span>
-                        <div>
-                          <h3>Xác nhận thanh toán</h3>
-                          <p>
-                            Đã nhận {money.format(contract.paidAmount)} · Còn
-                            lại {money.format(contract.remainingAmount)}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="form-grid">
-                        <label>
-                          Số tiền đã nhận (đ)
-                          <input
-                            type="number"
-                            min="1"
-                            max={contract.remainingAmount}
-                            value={payment.amount}
-                            onChange={(event) =>
-                              setPayment({
-                                ...payment,
-                                amount: event.target.value,
-                              })
-                            }
-                          />
-                        </label>
-                        <label>
-                          Phương thức
-                          <select
-                            value={payment.method}
-                            onChange={(event) =>
-                              setPayment({
-                                ...payment,
-                                method: event.target.value,
-                              })
-                            }
-                          >
-                            {paymentMethods.map(([value, label]) => (
-                              <option value={value} key={value}>
-                                {label}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className="full">
-                          Ghi chú
-                          <textarea
-                            rows={3}
-                            value={payment.note}
-                            onChange={(event) =>
-                              setPayment({
-                                ...payment,
-                                note: event.target.value,
-                              })
-                            }
-                          />
-                        </label>
-                      </div>
-                      <div className="step-actions">
-                        <button
-                          className="primary-button"
-                          disabled={!!busy}
-                          onClick={() => void recordPayment()}
-                        >
-                          Ghi nhận thanh toán
-                        </button>
-                      </div>
-                    </section>
-                  )}
-                  {paymentDone && ownershipDone && (
-                    <CompletedStep title="Hợp đồng ký & quyền sở hữu">
-                      <div className="request-summary-grid">
-                        <span>
-                          <small>Hợp đồng</small>
-                          {contract.contractCode}
-                        </span>
-                        <span>
-                          <small>Kết quả</small>Đã kích hoạt quyền sở hữu
-                        </span>
-                      </div>
-                    </CompletedStep>
-                  )}
-                  {paymentDone && !ownershipDone && (
-                    <section className="active-step">
-                      <div className="step-title">
-                        <span>5</span>
-                        <div>
-                          <h3>Hợp đồng ký & quyền sở hữu</h3>
-                          <p>
-                            Bước 1 tải bản đã ký lên hệ thống. Bước 2 kiểm tra
-                            tài liệu và xác nhận kích hoạt quyền sở hữu.
-                          </p>
-                        </div>
-                      </div>
-                      <label>
-                        Bản hợp đồng đã ký (chỉ PDF, DOC hoặc DOCX; tối đa 10
-                        tệp, 10 MB/tệp)
-                        <input
-                          type="file"
-                          multiple
-                          accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                          onChange={(event) => {
-                            const selectedFiles = Array.from(
-                              event.target.files ?? [],
-                            );
-                            const invalidFile = selectedFiles.find(
-                              (file) => !/\.(pdf|doc|docx)$/i.test(file.name),
-                            );
-                            if (invalidFile) {
-                              setFiles([]);
-                              setEvidenceError(
-                                `Tệp “${invalidFile.name}” không hợp lệ. Chỉ chấp nhận PDF, DOC hoặc DOCX.`,
-                              );
-                              event.currentTarget.value = "";
-                              return;
-                            }
-                            if (selectedFiles.length > 10) {
-                              setFiles([]);
-                              setEvidenceError(
-                                "Chỉ được tải lên tối đa 10 tệp.",
-                              );
-                              event.currentTarget.value = "";
-                              return;
-                            }
-                            const oversizedFile = selectedFiles.find(
-                              (file) => file.size > 10 * 1024 * 1024,
-                            );
-                            if (oversizedFile) {
-                              setFiles([]);
-                              setEvidenceError(
-                                `Tệp “${oversizedFile.name}” vượt quá giới hạn 10 MB.`,
-                              );
-                              event.currentTarget.value = "";
-                              return;
-                            }
-                            setEvidenceError("");
-                            setFiles(selectedFiles);
-                          }}
-                        />
-                      </label>
-                      <p className="file-hint">
-                        {files.length
-                          ? `Đã chọn ${files.length} tệp trên máy, chưa tải lên hệ thống.`
-                          : `${contract.signedEvidence?.length ?? 0} tệp đã lưu trên hệ thống`}
-                      </p>
-                      {evidenceError && (
-                        <p className="evidence-upload-error" role="alert">
-                          {evidenceError}
-                        </p>
-                      )}
-                      {!!contract.signedEvidence?.length && (
-                        <div className="signed-evidence-list">
-                          <strong>Tệp đã lưu — tải xuống để kiểm tra</strong>
-                          {contract.signedEvidence.map((evidence) => (
-                            <button
-                              type="button"
-                              className="signed-evidence-item"
-                              key={evidence.id}
-                              disabled={!!busy}
-                              onClick={() => void downloadEvidence(evidence)}
-                            >
-                              <span>{evidence.originalName}</span>
-                              <b>
-                                {busy === `evidence-${evidence.id}`
-                                  ? "Đang tải..."
-                                  : "Tải xuống"}
-                              </b>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                      <p
-                        id="ownership-verification-help"
-                        className={`ownership-verification-help${
-                          contract.signedEvidence?.length ? " ready" : ""
-                        }`}
+                    {pendingCancellationForCurrent && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          changeView("cancellations");
+                          setSelectedCancellationId(
+                            pendingCancellationForCurrent.id,
+                          );
+                        }}
                       >
-                        {contract.signedEvidence?.length
-                          ? "Đã có bản hợp đồng trên hệ thống. Sau khi kiểm tra nội dung, bạn có thể xác nhận và kích hoạt sở hữu."
-                          : files.length
-                            ? "Hãy nhấn “Tải lên hệ thống” trước. Nút xác nhận sẽ được mở sau khi tải thành công."
-                            : "Chọn và tải lên ít nhất một bản hợp đồng đã ký để mở bước xác nhận."}
-                      </p>
-                      <div className="step-actions">
-                        <button
-                          className="secondary-button"
-                          disabled={!!busy || !files.length}
-                          onClick={() => void uploadEvidence()}
-                        >
-                          {busy === "upload"
-                            ? "Đang tải lên..."
-                            : "Tải lên hệ thống"}
-                        </button>
-                        <button
-                          className="primary-button"
-                          disabled={!!busy || !contract.signedEvidence?.length}
-                          aria-describedby="ownership-verification-help"
-                          onClick={() => void activate()}
-                        >
-                          Xác nhận đã kiểm tra & kích hoạt sở hữu
-                        </button>
-                      </div>
-                    </section>
-                  )}
-                </>
-              )}
-              {current.status === "approved" &&
-                !contract &&
-                !cancellationPending && (
-                  <div className="workflow-alert error">
-                    Không tìm thấy hợp đồng được tạo tự động cho yêu cầu này.
+                        Xem yêu cầu hủy
+                      </button>
+                    )}
                   </div>
                 )}
-            </>
-          )}
-        </main>
+                {decisionDone && (
+                  <CompletedStep title="Duyệt yêu cầu">
+                    <div className="decision-result">
+                      <span>
+                        <small>Kết quả xử lý</small>
+                        <strong>{statusLabels[current.status]}</strong>
+                      </span>
+                      <span>
+                        <small>Ngày xử lý</small>
+                        <strong>{dateTime(current.reviewedAt)}</strong>
+                      </span>
+                      <span>
+                        <small>Ghi chú xử lý</small>
+                        <strong>{current.adminNote || "Không có"}</strong>
+                      </span>
+                    </div>
+                    <RequestReviewInfo request={current} />
+                  </CompletedStep>
+                )}
+                {!decisionDone && (
+                  <section className="active-step decision-step">
+                    <div className="step-title">
+                      <span>1</span>
+                      <div>
+                        <h3>Duyệt yêu cầu</h3>
+                        <p>
+                          Kiểm tra đầy đủ thông tin khách hàng và từng lô trước
+                          khi quyết định.
+                        </p>
+                      </div>
+                    </div>
+                    <RequestReviewInfo request={current} />
+                    <label>
+                      Ghi chú xử lý
+                      <textarea
+                        value={adminNote}
+                        onChange={(event) => setAdminNote(event.target.value)}
+                        rows={3}
+                        placeholder="Nhập lý do hoặc ghi chú cho quyết định duyệt..."
+                      />
+                    </label>
+                    <div className="step-actions">
+                      <button
+                        className="danger-button"
+                        disabled={!!busy}
+                        onClick={() => void decide("reject")}
+                      >
+                        Từ chối
+                      </button>
+                      <button
+                        className="primary-button"
+                        disabled={!!busy}
+                        onClick={() => void decide("approve")}
+                      >
+                        {busy === "approve" ? "Đang duyệt..." : "Duyệt yêu cầu"}
+                      </button>
+                    </div>
+                  </section>
+                )}
+                {!terminal && decisionDone && appointmentDone && (
+                  <CompletedStep title="Lịch hẹn offline">
+                    {appointmentSummary}
+                  </CompletedStep>
+                )}
+                {!terminal && decisionDone && !appointmentDone && (
+                  <section className="active-step">
+                    <div className="step-title">
+                      <span>2</span>
+                      <div>
+                        <h3>Lịch hẹn offline</h3>
+                      </div>
+                    </div>
+                    {appointment && appointment.customerStatus === "pending" ? (
+                      <>
+                        <div className="waiting-banner">
+                          Đang chờ khách hàng xác nhận lịch hẹn
+                        </div>
+                        {appointmentSummary}
+                      </>
+                    ) : (
+                      <>
+                        {appointment?.customerStatus === "declined" && (
+                          <div className="workflow-alert error">
+                            Khách hàng đã từ chối lịch trước. Hãy đề xuất lịch
+                            mới.
+                          </div>
+                        )}
+                        <div className="form-grid">
+                          <CalendarDateInput
+                            label="Từ ngày"
+                            value={appointmentForm.scheduledAt}
+                            onChange={(value) =>
+                              setAppointmentForm({
+                                ...appointmentForm,
+                                scheduledAt: value,
+                                scheduledEndAt:
+                                  appointmentForm.scheduledEndAt &&
+                                  appointmentForm.scheduledEndAt < value
+                                    ? ""
+                                    : appointmentForm.scheduledEndAt,
+                              })
+                            }
+                          />
+                          <CalendarDateInput
+                            label="Đến ngày"
+                            value={appointmentForm.scheduledEndAt}
+                            min={appointmentForm.scheduledAt || undefined}
+                            onChange={(value) =>
+                              setAppointmentForm({
+                                ...appointmentForm,
+                                scheduledEndAt: value,
+                              })
+                            }
+                          />
+                          <label>
+                            Nhân viên phụ trách
+                            <input
+                              value={appointmentForm.assignedStaffName}
+                              onChange={(event) =>
+                                setAppointmentForm({
+                                  ...appointmentForm,
+                                  assignedStaffName: event.target.value,
+                                })
+                              }
+                            />
+                          </label>
+                          <label>
+                            Địa điểm
+                            <input
+                              value={appointmentForm.location}
+                              onChange={(event) =>
+                                setAppointmentForm({
+                                  ...appointmentForm,
+                                  location: event.target.value,
+                                })
+                              }
+                            />
+                          </label>
+                          <label className="full">
+                            Ghi chú
+                            <textarea
+                              rows={3}
+                              value={appointmentForm.note}
+                              onChange={(event) =>
+                                setAppointmentForm({
+                                  ...appointmentForm,
+                                  note: event.target.value,
+                                })
+                              }
+                            />
+                          </label>
+                        </div>
+                        <div className="step-actions">
+                          <button
+                            className="primary-button"
+                            disabled={!!busy}
+                            onClick={() => void createAppointment()}
+                          >
+                            Gửi lịch hẹn
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </section>
+                )}
+                {appointmentDone && contract && (
+                  <>
+                    {pdfDone && (
+                      <CompletedStep title="Tạo PDF hợp đồng">
+                        <div className="request-summary-grid">
+                          <span>
+                            <small>Mã hợp đồng</small>
+                            {contract.contractCode}
+                          </span>
+                          <span>
+                            <small>Đã tạo lúc</small>
+                            {dateTime(contract.generatedPdfAt)}
+                          </span>
+                        </div>
+                        <div className="step-actions contract-completed-actions">
+                          <button
+                            className="secondary-button"
+                            disabled={!!busy}
+                            onClick={() => void previewPdf()}
+                          >
+                            {busy === "pdf-preview"
+                              ? "Đang tạo bản xem trước..."
+                              : "Xem lại hợp đồng"}
+                          </button>
+                        </div>
+                      </CompletedStep>
+                    )}
+                    {!pdfDone && (
+                      <section className="active-step">
+                        <div className="step-title">
+                          <span>3</span>
+                          <div>
+                            <h3>Tạo PDF hợp đồng</h3>
+                            <p>
+                              Rà soát nội dung thừa kế nếu có, sau đó tải bản
+                              hợp đồng để ký offline.
+                            </p>
+                          </div>
+                        </div>
+                        <label>
+                          Thông tin/nguyện vọng thừa kế
+                          <textarea
+                            rows={5}
+                            value={inheritance}
+                            placeholder="Không bắt buộc"
+                            onChange={(event) =>
+                              setInheritance(event.target.value)
+                            }
+                          />
+                        </label>
+                        <div className="step-actions">
+                          <button
+                            className="secondary-button"
+                            disabled={!!busy}
+                            onClick={() => void previewPdf()}
+                          >
+                            {busy === "pdf-preview"
+                              ? "Đang tạo bản xem trước..."
+                              : "Xem trước hợp đồng"}
+                          </button>
+                          <button
+                            className="primary-button"
+                            disabled={!!busy}
+                            onClick={() => void generatePdf()}
+                          >
+                            {busy === "pdf"
+                              ? "Đang tạo PDF..."
+                              : "Tạo và tải PDF"}
+                          </button>
+                        </div>
+                      </section>
+                    )}
+                    {pdfDone && paymentDone && (
+                      <CompletedStep title="Xác nhận thanh toán">
+                        <div className="request-summary-grid">
+                          <span>
+                            <small>Đã nhận</small>
+                            {money.format(contract.paidAmount)}
+                          </span>
+                          <span>
+                            <small>Trạng thái</small>Đã thanh toán đủ
+                          </span>
+                        </div>
+                      </CompletedStep>
+                    )}
+                    {pdfDone && !paymentDone && (
+                      <section className="active-step">
+                        <div className="step-title">
+                          <span>4</span>
+                          <div>
+                            <h3>Xác nhận thanh toán</h3>
+                            <p>
+                              Đã nhận {money.format(contract.paidAmount)} · Còn
+                              lại {money.format(contract.remainingAmount)}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="form-grid">
+                          <label>
+                            Số tiền đã nhận (đ)
+                            <input
+                              type="number"
+                              min="1"
+                              max={contract.remainingAmount}
+                              value={payment.amount}
+                              onChange={(event) =>
+                                setPayment({
+                                  ...payment,
+                                  amount: event.target.value,
+                                })
+                              }
+                            />
+                          </label>
+                          <label>
+                            Phương thức
+                            <select
+                              value={payment.method}
+                              onChange={(event) =>
+                                setPayment({
+                                  ...payment,
+                                  method: event.target.value,
+                                })
+                              }
+                            >
+                              {paymentMethods.map(([value, label]) => (
+                                <option value={value} key={value}>
+                                  {label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="full">
+                            Ghi chú
+                            <textarea
+                              rows={3}
+                              value={payment.note}
+                              onChange={(event) =>
+                                setPayment({
+                                  ...payment,
+                                  note: event.target.value,
+                                })
+                              }
+                            />
+                          </label>
+                        </div>
+                        <div className="step-actions">
+                          <button
+                            className="primary-button"
+                            disabled={!!busy}
+                            onClick={() => void recordPayment()}
+                          >
+                            Ghi nhận thanh toán
+                          </button>
+                        </div>
+                      </section>
+                    )}
+                    {paymentDone && ownershipDone && (
+                      <CompletedStep title="Hợp đồng ký & quyền sở hữu">
+                        <div className="request-summary-grid">
+                          <span>
+                            <small>Hợp đồng</small>
+                            {contract.contractCode}
+                          </span>
+                          <span>
+                            <small>Kết quả</small>Đã kích hoạt quyền sở hữu
+                          </span>
+                        </div>
+                      </CompletedStep>
+                    )}
+                    {paymentDone && !ownershipDone && (
+                      <section className="active-step">
+                        <div className="step-title">
+                          <span>5</span>
+                          <div>
+                            <h3>Hợp đồng ký & quyền sở hữu</h3>
+                            <p>
+                              Bước 1 tải bản đã ký lên hệ thống. Bước 2 kiểm tra
+                              tài liệu và xác nhận kích hoạt quyền sở hữu.
+                            </p>
+                          </div>
+                        </div>
+                        <label>
+                          Bản hợp đồng đã ký (chỉ PDF, DOC hoặc DOCX; tối đa 10
+                          tệp, 10 MB/tệp)
+                          <input
+                            type="file"
+                            multiple
+                            accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                            onChange={(event) => {
+                              const selectedFiles = Array.from(
+                                event.target.files ?? [],
+                              );
+                              const invalidFile = selectedFiles.find(
+                                (file) => !/\.(pdf|doc|docx)$/i.test(file.name),
+                              );
+                              if (invalidFile) {
+                                setFiles([]);
+                                setEvidenceError(
+                                  `Tệp “${invalidFile.name}” không hợp lệ. Chỉ chấp nhận PDF, DOC hoặc DOCX.`,
+                                );
+                                event.currentTarget.value = "";
+                                return;
+                              }
+                              if (selectedFiles.length > 10) {
+                                setFiles([]);
+                                setEvidenceError(
+                                  "Chỉ được tải lên tối đa 10 tệp.",
+                                );
+                                event.currentTarget.value = "";
+                                return;
+                              }
+                              const oversizedFile = selectedFiles.find(
+                                (file) => file.size > 10 * 1024 * 1024,
+                              );
+                              if (oversizedFile) {
+                                setFiles([]);
+                                setEvidenceError(
+                                  `Tệp “${oversizedFile.name}” vượt quá giới hạn 10 MB.`,
+                                );
+                                event.currentTarget.value = "";
+                                return;
+                              }
+                              setEvidenceError("");
+                              setFiles(selectedFiles);
+                            }}
+                          />
+                        </label>
+                        <p className="file-hint">
+                          {files.length
+                            ? `Đã chọn ${files.length} tệp trên máy, chưa tải lên hệ thống.`
+                            : `${contract.signedEvidence?.length ?? 0} tệp đã lưu trên hệ thống`}
+                        </p>
+                        {evidenceError && (
+                          <p className="evidence-upload-error" role="alert">
+                            {evidenceError}
+                          </p>
+                        )}
+                        {!!contract.signedEvidence?.length && (
+                          <div className="signed-evidence-list">
+                            <strong>Tệp đã lưu — tải xuống để kiểm tra</strong>
+                            {contract.signedEvidence.map((evidence) => (
+                              <button
+                                type="button"
+                                className="signed-evidence-item"
+                                key={evidence.id}
+                                disabled={!!busy}
+                                onClick={() => void downloadEvidence(evidence)}
+                              >
+                                <span>{evidence.originalName}</span>
+                                <b>
+                                  {busy === `evidence-${evidence.id}`
+                                    ? "Đang tải..."
+                                    : "Tải xuống"}
+                                </b>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        <p
+                          id="ownership-verification-help"
+                          className={`ownership-verification-help${
+                            contract.signedEvidence?.length ? " ready" : ""
+                          }`}
+                        >
+                          {contract.signedEvidence?.length
+                            ? "Đã có bản hợp đồng trên hệ thống. Sau khi kiểm tra nội dung, bạn có thể xác nhận và kích hoạt sở hữu."
+                            : files.length
+                              ? "Hãy nhấn “Tải lên hệ thống” trước. Nút xác nhận sẽ được mở sau khi tải thành công."
+                              : "Chọn và tải lên ít nhất một bản hợp đồng đã ký để mở bước xác nhận."}
+                        </p>
+                        <div className="step-actions">
+                          <button
+                            className="secondary-button"
+                            disabled={!!busy || !files.length}
+                            onClick={() => void uploadEvidence()}
+                          >
+                            {busy === "upload"
+                              ? "Đang tải lên..."
+                              : "Tải lên hệ thống"}
+                          </button>
+                          <button
+                            className="primary-button"
+                            disabled={
+                              !!busy || !contract.signedEvidence?.length
+                            }
+                            aria-describedby="ownership-verification-help"
+                            onClick={() => void activate()}
+                          >
+                            Xác nhận đã kiểm tra & kích hoạt sở hữu
+                          </button>
+                        </div>
+                      </section>
+                    )}
+                  </>
+                )}
+                {current.status === "approved" &&
+                  !contract &&
+                  !cancellationPending && (
+                    <div className="workflow-alert error">
+                      Không tìm thấy hợp đồng được tạo tự động cho yêu cầu này.
+                    </div>
+                  )}
+              </>
+            )}
+          </main>
         </div>
       ) : (
         <div className="request-workspace cancellation-workspace">
@@ -1595,8 +1605,8 @@ export default function RequestsPage() {
                   </span>
                   <b>{item.customerName || "Khách hàng"}</b>
                   <small>
-                    {(item.plotCodes ?? []).join(", ") || "Chưa có mã lô"} ·
-                    Yêu cầu #{String(item.requestId).padStart(4, "0")}
+                    {(item.plotCodes ?? []).join(", ") || "Chưa có mã lô"} · Yêu
+                    cầu #{String(item.requestId).padStart(4, "0")}
                   </small>
                 </button>
               ))
@@ -1614,7 +1624,8 @@ export default function RequestsPage() {
                 <section className="request-heading">
                   <div>
                     <span>
-                      Yêu cầu hủy #{String(currentCancellation.id).padStart(4, "0")}
+                      Yêu cầu hủy #
+                      {String(currentCancellation.id).padStart(4, "0")}
                     </span>
                     <h2>
                       {currentCancellation.customerName ||
@@ -1622,10 +1633,13 @@ export default function RequestsPage() {
                         "Khách hàng"}
                     </h2>
                     <p>
-                      {(currentCancellation.plotCodes ??
+                      {(
+                        currentCancellation.plotCodes ??
                         currentCancellationRequest?.plotCodes ??
-                        []).join(", ") || "Chưa có mã lô"}{" "}
-                      · Yêu cầu mua #{String(currentCancellation.requestId).padStart(4, "0")}
+                        []
+                      ).join(", ") || "Chưa có mã lô"}{" "}
+                      · Yêu cầu mua #
+                      {String(currentCancellation.requestId).padStart(4, "0")}
                     </p>
                   </div>
                   <em className={`status-${currentCancellation.status}`}>
@@ -1649,16 +1663,20 @@ export default function RequestsPage() {
                     </span>
                     <span>
                       <small>Ngày xử lý</small>
-                      <strong>{dateTime(currentCancellation.reviewedAt ?? undefined)}</strong>
+                      <strong>
+                        {dateTime(currentCancellation.reviewedAt ?? undefined)}
+                      </strong>
                     </span>
                     <span>
                       <small>Trạng thái yêu cầu mua</small>
                       <strong>
-                        {statusLabels[
-                          currentCancellation.purchaseRequestStatus ??
-                            currentCancellationRequest?.status ??
-                            "approved"
-                        ]}
+                        {
+                          statusLabels[
+                            currentCancellation.purchaseRequestStatus ??
+                              currentCancellationRequest?.status ??
+                              "approved"
+                          ]
+                        }
                       </strong>
                     </span>
                     <span>
@@ -1753,11 +1771,17 @@ export default function RequestsPage() {
                       </span>
                       <span>
                         <small>Ngày xử lý</small>
-                        <strong>{dateTime(currentCancellation.reviewedAt ?? undefined)}</strong>
+                        <strong>
+                          {dateTime(
+                            currentCancellation.reviewedAt ?? undefined,
+                          )}
+                        </strong>
                       </span>
                       <span>
                         <small>Ghi chú admin</small>
-                        <strong>{currentCancellation.adminNote || "Không có"}</strong>
+                        <strong>
+                          {currentCancellation.adminNote || "Không có"}
+                        </strong>
                       </span>
                     </div>
                   </section>

@@ -183,6 +183,11 @@ export class NotificationsService {
     if (dto.channel !== 'in_app') {
       throw new BadRequestException('Only in-app broadcast is supported');
     }
+
+    if (dto.audience === 'single_customer') {
+      return this.broadcastToSingleCustomer(dto, context);
+    }
+
     return this.database.transaction(async (client) => {
       const inserted = await client.query(
         `INSERT INTO notifications
@@ -206,6 +211,71 @@ export class NotificationsService {
         context,
       });
       return { recipientCount: inserted.rowCount, channel: dto.channel };
+    });
+  }
+
+  // Gửi thông báo cho đúng 1 khách hàng, xác định qua email. Kiểm tra khách
+  // hàng đó có tồn tại (còn hoạt động, chưa bị xoá) trong hệ thống trước —
+  // nếu không có, trả lỗi rõ ràng để admin biết và nhập lại email.
+  private async broadcastToSingleCustomer(
+    dto: BroadcastNotificationDto,
+    context: AdminRequestContext,
+  ) {
+    const email = dto.recipientEmail?.trim().toLowerCase();
+    if (!email) {
+      throw new BadRequestException(
+        'Vui lòng nhập email khách hàng cần gửi thông báo.',
+      );
+    }
+
+    return this.database.transaction(async (client) => {
+      const customer = await client.query(
+        `SELECT user_id, full_name, email FROM users
+         WHERE LOWER(email)=$1 AND LOWER(role)='customer'
+           AND is_active=TRUE AND is_deleted=FALSE
+         LIMIT 1`,
+        [email],
+      );
+
+      if (customer.rowCount === 0) {
+        throw new NotFoundException(
+          `Không tìm thấy khách hàng với email "${dto.recipientEmail}" trong hệ thống. Vui lòng kiểm tra lại email.`,
+        );
+      }
+
+      const recipient = customer.rows[0] as {
+        user_id: number;
+        full_name: string;
+        email: string;
+      };
+
+      const inserted = await client.query(
+        `INSERT INTO notifications
+           (user_id,type,title,message,related_entity_type)
+         VALUES ($1,$2,$3,$4,'admin_broadcast')
+         RETURNING notification_id`,
+        [recipient.user_id, dto.type, dto.title, dto.content],
+      );
+
+      await this.audit?.record(client, {
+        action: 'notification.broadcast',
+        entityType: 'admin_broadcast',
+        entityKey: `broadcast-single-${recipient.user_id}-${Date.now()}`,
+        after: {
+          audience: dto.audience,
+          channel: dto.channel,
+          recipientCount: inserted.rowCount,
+          recipientEmail: recipient.email,
+          title: dto.title,
+        },
+        context,
+      });
+
+      return {
+        recipientCount: inserted.rowCount,
+        channel: dto.channel,
+        recipientName: recipient.full_name,
+      };
     });
   }
 }

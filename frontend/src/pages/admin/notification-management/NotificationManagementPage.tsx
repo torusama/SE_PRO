@@ -330,8 +330,7 @@ export default function NotificationManagementPage() {
 
   // --- Feed thực (thông báo cá nhân của admin) ---
   const [items, setItems] = useState<FeedNotification[]>([]);
-  const [feedSection, setFeedSection] =
-    useState<FeedSectionValue>("all");
+  const [feedSection, setFeedSection] = useState<FeedSectionValue>("all");
   const [feedTab, setFeedTab] =
     useState<(typeof FEED_TABS)[number]["value"]>("all");
   const [feedLoading, setFeedLoading] = useState(true);
@@ -396,10 +395,7 @@ export default function NotificationManagementPage() {
 
   const sectionStats = useMemo(() => {
     const stats = Object.fromEntries(
-      FEED_SECTIONS.map((section) => [
-        section.value,
-        { total: 0, unread: 0 },
-      ]),
+      FEED_SECTIONS.map((section) => [section.value, { total: 0, unread: 0 }]),
     ) as Record<FeedSectionValue, { total: number; unread: number }>;
 
     for (const item of items) {
@@ -541,10 +537,15 @@ export default function NotificationManagementPage() {
   // --- Soạn / gửi thông báo hàng loạt (tính năng sẵn có, giữ nguyên) ---
   const [rows, setRows] = useState<BroadcastRow[]>([]);
   const [broadcastLoading, setBroadcastLoading] = useState(true);
+  const [audience, setAudience] = useState<"all_customers" | "single_customer">(
+    "all_customers",
+  );
+  const [recipientEmail, setRecipientEmail] = useState("");
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [sending, setSending] = useState(false);
   const [broadcastMessage, setBroadcastMessage] = useState("");
+  const [broadcastMessageIsError, setBroadcastMessageIsError] = useState(false);
 
   const loadBroadcastHistory = useCallback(async () => {
     setBroadcastLoading(true);
@@ -572,13 +573,24 @@ export default function NotificationManagementPage() {
 
   async function send() {
     if (!title.trim() || !content.trim()) {
+      setBroadcastMessageIsError(true);
       setBroadcastMessage("Vui lòng nhập đầy đủ tiêu đề và nội dung.");
       return;
+    }
+    const email = recipientEmail.trim();
+    if (audience === "single_customer") {
+      const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!email || !emailPattern.test(email)) {
+        setBroadcastMessageIsError(true);
+        setBroadcastMessage("Vui lòng nhập email khách hàng hợp lệ.");
+        return;
+      }
     }
     setSending(true);
     try {
       await api.post("/admin/notifications/broadcast", {
-        audience: "all_customers",
+        audience,
+        ...(audience === "single_customer" ? { recipientEmail: email } : {}),
         type: "announcement",
         title: title.trim(),
         content: content.trim(),
@@ -586,10 +598,31 @@ export default function NotificationManagementPage() {
       });
       setTitle("");
       setContent("");
-      setBroadcastMessage("Đã gửi thông báo trong ứng dụng.");
+      if (audience === "single_customer") setRecipientEmail("");
+      setBroadcastMessageIsError(false);
+      setBroadcastMessage(
+        audience === "single_customer"
+          ? "Đã gửi thông báo tới khách hàng."
+          : "Đã gửi thông báo trong ứng dụng.",
+      );
       await loadBroadcastHistory();
-    } catch {
-      setBroadcastMessage("Không thể gửi thông báo.");
+    } catch (error) {
+      const responseMessage =
+        typeof error === "object" &&
+        error !== null &&
+        "response" in error &&
+        typeof (error as { response?: { data?: { message?: unknown } } })
+          .response?.data?.message === "string"
+          ? (error as { response: { data: { message: string } } }).response.data
+              .message
+          : undefined;
+      setBroadcastMessageIsError(true);
+      setBroadcastMessage(
+        responseMessage ||
+          (audience === "single_customer"
+            ? "Không tìm thấy khách hàng này trong hệ thống. Vui lòng kiểm tra lại email."
+            : "Không thể gửi thông báo."),
+      );
     } finally {
       setSending(false);
     }
@@ -804,9 +837,7 @@ export default function NotificationManagementPage() {
                     </div>
                     <div>
                       <dt>Loại yêu cầu</dt>
-                      <dd>
-                        Mua lô
-                      </dd>
+                      <dd>Mua lô</dd>
                     </div>
                     <div>
                       <dt>Lô đất</dt>
@@ -963,8 +994,35 @@ export default function NotificationManagementPage() {
             <div className="admin-notification-form">
               <label>
                 <span>Gửi đến</span>
-                <input value="Tất cả khách hàng" disabled />
+                <select
+                  value={audience}
+                  onChange={(event) => {
+                    const next = event.target.value as
+                      | "all_customers"
+                      | "single_customer";
+                    setAudience(next);
+                    if (next === "all_customers") setRecipientEmail("");
+                    setBroadcastMessage("");
+                    setBroadcastMessageIsError(false);
+                  }}
+                >
+                  <option value="all_customers">Tất cả khách hàng</option>
+                  <option value="single_customer">
+                    Một khách hàng cụ thể (nhập email)
+                  </option>
+                </select>
               </label>
+              {audience === "single_customer" && (
+                <label>
+                  <span>Email khách hàng</span>
+                  <input
+                    type="email"
+                    placeholder="vidu@email.com"
+                    value={recipientEmail}
+                    onChange={(event) => setRecipientEmail(event.target.value)}
+                  />
+                </label>
+              )}
               <label>
                 <span>Tiêu đề</span>
                 <input
@@ -984,7 +1042,13 @@ export default function NotificationManagementPage() {
                 Kênh gửi: thông báo trong ứng dụng
               </p>
               {broadcastMessage && (
-                <div className="admin-notification-message">
+                <div
+                  className={`admin-notification-message${
+                    broadcastMessageIsError
+                      ? " admin-notification-message--error"
+                      : ""
+                  }`}
+                >
                   {broadcastMessage}
                 </div>
               )}

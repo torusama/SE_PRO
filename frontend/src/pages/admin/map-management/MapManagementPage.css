@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&display=swap");
+
 .admin-map-page {
   display: grid;
   gap: 16px;
@@ -17,7 +19,6 @@
 
 .admin-map-page-header h1 {
   margin: 0;
-  font-size: 25px;
 }
 .admin-map-page-header p {
   margin: 4px 0 0;
@@ -676,8 +677,9 @@
   text-align: center;
 }
 .admin-map-detail-empty strong {
-  font-family: Georgia, serif;
+  font-family: "Playfair Display", var(--font-display, serif);
   font-size: 22px;
+  font-weight: 500;
 }
 .admin-map-detail-empty p {
   color: var(--color-text-muted);
@@ -724,7 +726,7 @@
 }
 .admin-map-detail h2 {
   margin: 6px 0 3px;
-  font-family: Georgia, serif;
+  font-family: "Playfair Display", var(--font-display, serif);
   font-size: 25px;
   font-weight: 500;
 }

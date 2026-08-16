@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../../../lib/api";
 import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import LearningAnalyticsPanel, {
   type LearningAnalytics,
 } from "./LearningAnalyticsPanel";
@@ -237,6 +238,7 @@ const reviewReasonLabel = (value?: string) => {
 };
 
 export default function AgentAdminPage() {
+  const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const [tab, setTab] = useState<Tab>("overview");
   const [feedback, setFeedback] = useState<Feedback[]>([]);
   const [runs, setRuns] = useState<TrainingRun[]>([]);
@@ -261,60 +263,64 @@ export default function AgentAdminPage() {
   const [busy, setBusy] = useState<string>();
   const [error, setError] = useState<string>();
 
-  const loadData = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true);
-    setError(undefined);
-    const results = await Promise.allSettled([
-      api.get("/admin/ai-agent/feedback", { params: { status: "pending" } }),
-      api.get("/admin/ai-agent/training-runs"),
-      api.get("/admin/ai-agent/model-versions"),
-      api.get("/admin/ai-agent/learning-analytics", {
-        params: { days: analyticsDays },
-      }),
-      api.get("/admin/ai-agent/knowledge", {
-        params: { status: "quarantined" },
-      }),
-      api.get("/admin/ai-agent/knowledge", {
-        params: { status: "all" },
-      }),
-    ]);
+  const loadData = useCallback(
+    async (silent = false) => {
+      if (!silent) setLoading(true);
+      setError(undefined);
+      const results = await Promise.allSettled([
+        api.get("/admin/ai-agent/feedback", { params: { status: "pending" } }),
+        api.get("/admin/ai-agent/training-runs"),
+        api.get("/admin/ai-agent/model-versions"),
+        api.get("/admin/ai-agent/learning-analytics", {
+          params: { days: analyticsDays },
+        }),
+        api.get("/admin/ai-agent/knowledge", {
+          params: { status: "quarantined" },
+        }),
+        api.get("/admin/ai-agent/knowledge", {
+          params: { status: "all" },
+        }),
+      ]);
 
-    const labels = [
-      "phản hồi",
-      "lần huấn luyện",
-      "phiên bản mô hình",
-      "thống kê học tập",
-      "tri thức chờ duyệt",
-      "kho tri thức",
-    ];
-    const failed = results.flatMap((result, index) =>
-      result.status === "rejected" ? [labels[index]] : [],
-    );
-    const payload = <T,>(result: PromiseSettledResult<{ data: unknown }>) =>
-      result.status === "fulfilled"
-        ? (((result.value.data as { data?: T }).data ?? result.value.data) as T)
-        : undefined;
-
-    const feedbackData = payload<Feedback[]>(results[0]);
-    const runsData = payload<TrainingRun[]>(results[1]);
-    const modelsData = payload<ModelVersion[]>(results[2]);
-    const analyticsData = payload<LearningAnalytics>(results[3]);
-    const knowledgeData = payload<KnowledgeProposal[]>(results[4]);
-    const inventoryData = payload<KnowledgeProposal[]>(results[5]);
-    setFeedback(feedbackData ?? []);
-    setRuns(runsData ?? []);
-    setModels(modelsData ?? []);
-    setAnalytics(analyticsData);
-    setKnowledgeProposals(knowledgeData ?? []);
-    setKnowledgeInventory(inventoryData ?? []);
-
-    if (failed.length) {
-      setError(
-        `Không tải được: ${failed.join(", ")}. Các phần còn lại vẫn sử dụng bình thường.`,
+      const labels = [
+        "phản hồi",
+        "lần huấn luyện",
+        "phiên bản mô hình",
+        "thống kê học tập",
+        "tri thức chờ duyệt",
+        "kho tri thức",
+      ];
+      const failed = results.flatMap((result, index) =>
+        result.status === "rejected" ? [labels[index]] : [],
       );
-    }
-    if (!silent) setLoading(false);
-  }, [analyticsDays]);
+      const payload = <T,>(result: PromiseSettledResult<{ data: unknown }>) =>
+        result.status === "fulfilled"
+          ? (((result.value.data as { data?: T }).data ??
+              result.value.data) as T)
+          : undefined;
+
+      const feedbackData = payload<Feedback[]>(results[0]);
+      const runsData = payload<TrainingRun[]>(results[1]);
+      const modelsData = payload<ModelVersion[]>(results[2]);
+      const analyticsData = payload<LearningAnalytics>(results[3]);
+      const knowledgeData = payload<KnowledgeProposal[]>(results[4]);
+      const inventoryData = payload<KnowledgeProposal[]>(results[5]);
+      setFeedback(feedbackData ?? []);
+      setRuns(runsData ?? []);
+      setModels(modelsData ?? []);
+      setAnalytics(analyticsData);
+      setKnowledgeProposals(knowledgeData ?? []);
+      setKnowledgeInventory(inventoryData ?? []);
+
+      if (failed.length) {
+        setError(
+          `Không tải được: ${failed.join(", ")}. Các phần còn lại vẫn sử dụng bình thường.`,
+        );
+      }
+      if (!silent) setLoading(false);
+    },
+    [analyticsDays],
+  );
 
   useEffect(() => {
     queueMicrotask(() => void loadData());
@@ -336,7 +342,7 @@ export default function AgentAdminPage() {
     const message = applyCorrection
       ? "Duyệt và đưa nội dung sửa này vào kho tri thức?"
       : `${action === "approve" ? "Duyệt" : "Từ chối"} phản hồi này?`;
-    if (!window.confirm(message)) return;
+    if (!(await confirm({ message }))) return;
 
     setBusy(`feedback-${item.feedbackId}`);
     try {
@@ -377,7 +383,7 @@ export default function AgentAdminPage() {
       return;
     }
     const label = action === "approve" ? "Duyệt và kích hoạt" : "Từ chối";
-    if (!window.confirm(`${label} đề xuất tri thức này?`)) return;
+    if (!(await confirm({ message: `${label} đề xuất tri thức này?` }))) return;
 
     setBusy(`knowledge-${item.knowledgeEntryId}`);
     setError(undefined);
@@ -397,8 +403,8 @@ export default function AgentAdminPage() {
         typeof error === "object" &&
         error !== null &&
         "response" in error &&
-        typeof (error as { response?: { data?: { message?: unknown } } }).response
-          ?.data?.message === "string"
+        typeof (error as { response?: { data?: { message?: unknown } } })
+          .response?.data?.message === "string"
           ? (error as { response: { data: { message: string } } }).response.data
               .message
           : undefined;
@@ -413,9 +419,12 @@ export default function AgentAdminPage() {
 
   const trainPlotRanker = async () => {
     if (
-      !window.confirm(
-        "Tạo phiên bản thử nghiệm của bộ xếp hạng? Các tín hiệu lựa chọn đầy đủ (có phương án chọn và loại) sẽ được chuyển thành mẫu huấn luyện tại bước quản trị này. Mô hình hội thoại nền sẽ không thay đổi và bản xếp hạng mới vẫn phải được triển khai riêng sau khi đạt kiểm tra.",
-      )
+      !(await confirm({
+        title: "Tạo bản xếp hạng thử nghiệm",
+        message:
+          "Tạo phiên bản thử nghiệm của bộ xếp hạng? Các tín hiệu lựa chọn đầy đủ (có phương án chọn và loại) sẽ được chuyển thành mẫu huấn luyện tại bước quản trị này. Mô hình hội thoại nền sẽ không thay đổi và bản xếp hạng mới vẫn phải được triển khai riêng sau khi đạt kiểm tra.",
+        confirmLabel: "Tạo bản thử nghiệm",
+      }))
     )
       return;
     setBusy("plot-ranker-train");
@@ -425,8 +434,8 @@ export default function AgentAdminPage() {
       setTab("ranker");
     } catch (error: unknown) {
       const responseMessage =
-        typeof (error as { response?: { data?: { message?: unknown } } }).response
-          ?.data?.message === "string"
+        typeof (error as { response?: { data?: { message?: unknown } } })
+          .response?.data?.message === "string"
           ? (error as { response: { data: { message: string } } }).response.data
               .message
           : undefined;
@@ -444,9 +453,12 @@ export default function AgentAdminPage() {
     action: "deploy" | "rollback",
   ) => {
     if (
-      !window.confirm(
-        `${action === "deploy" ? "Triển khai" : "Khôi phục"} phiên bản ${model.versionName}?`,
-      )
+      !(await confirm({
+        title:
+          action === "deploy" ? "Triển khai phiên bản" : "Khôi phục phiên bản",
+        message: `${action === "deploy" ? "Triển khai" : "Khôi phục"} phiên bản ${model.versionName}?`,
+        confirmLabel: action === "deploy" ? "Triển khai" : "Khôi phục",
+      }))
     )
       return;
     setBusy(`model-${model.modelVersionId}`);
@@ -485,6 +497,7 @@ export default function AgentAdminPage() {
 
   return (
     <div className="agent-admin">
+      {confirmDialog}
       <header className="agent-admin__page-header">
         <div className="agent-admin__page-copy">
           <span className="agent-admin__page-kicker">Quản trị trợ lý AI</span>

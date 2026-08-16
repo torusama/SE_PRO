@@ -21,6 +21,11 @@ interface AlertModalProps {
   confirmLabel?: string;
   variant?: "info" | "warning" | "danger";
   onConfirm: () => void;
+  // Tuỳ chọn: khi có onCancel, modal hiển thị thêm nút huỷ bên cạnh nút xác
+  // nhận (dùng để thay cho window.confirm() mặc định của trình duyệt, vốn
+  // không đồng bộ giao diện với phần còn lại của web).
+  cancelLabel?: string;
+  onCancel?: () => void;
 }
 
 const VARIANT_STYLE: Record<
@@ -55,6 +60,8 @@ export default function AlertModal({
   confirmLabel = "Xác nhận",
   variant = "warning",
   onConfirm,
+  cancelLabel = "Huỷ",
+  onCancel,
 }: AlertModalProps) {
   if (!open) return null;
   const meta = VARIANT_STYLE[variant];
@@ -134,25 +141,53 @@ export default function AlertModal({
           {message}
         </div>
 
-        <button
-          type="button"
-          onClick={onConfirm}
+        <div
           style={{
-            width: "100%",
-            padding: "13px",
-            borderRadius: 8,
-            border: "none",
-            background: meta.buttonBg,
-            color: "#04101C",
-            fontWeight: 800,
-            fontSize: 15,
-            letterSpacing: "0.02em",
-            fontFamily: "'Inter', sans-serif",
-            cursor: "pointer",
+            display: "flex",
+            gap: 10,
           }}
         >
-          {confirmLabel}
-        </button>
+          {onCancel && (
+            <button
+              type="button"
+              onClick={onCancel}
+              style={{
+                flex: 1,
+                padding: "13px",
+                borderRadius: 8,
+                border: "1.5px solid rgba(255,255,255,0.16)",
+                background: "transparent",
+                color: "#C7D6E8",
+                fontWeight: 700,
+                fontSize: 15,
+                letterSpacing: "0.02em",
+                fontFamily: "'Inter', sans-serif",
+                cursor: "pointer",
+              }}
+            >
+              {cancelLabel}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onConfirm}
+            style={{
+              flex: 1,
+              padding: "13px",
+              borderRadius: 8,
+              border: "none",
+              background: meta.buttonBg,
+              color: "#04101C",
+              fontWeight: 800,
+              fontSize: 15,
+              letterSpacing: "0.02em",
+              fontFamily: "'Inter', sans-serif",
+              cursor: "pointer",
+            }}
+          >
+            {confirmLabel}
+          </button>
+        </div>
       </div>
     </div>
   );

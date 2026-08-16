@@ -528,7 +528,7 @@ function OrderDetail({
           />
         </div>
         <button onClick={onClose} aria-label="Đóng chi tiết">
-          Đóng
+          ×
         </button>
       </div>
 

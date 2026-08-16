@@ -423,6 +423,7 @@
 }
 
 .admin-notification-form input,
+.admin-notification-form select,
 .admin-notification-form textarea {
   width: 100%;
   border: 1px solid var(--admin-line);
@@ -436,6 +437,10 @@
   resize: vertical;
 }
 
+.admin-notification-form select {
+  cursor: pointer;
+}
+
 .admin-notification-form input:disabled {
   background: var(--admin-soft);
   color: var(--admin-muted);
@@ -447,6 +452,11 @@
   color: var(--admin-muted);
   font-size: 10px;
   line-height: 1.5;
+}
+
+.admin-notification-message--error {
+  color: var(--admin-danger);
+  font-weight: 650;
 }
 
 .admin-notification-message {
