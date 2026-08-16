@@ -279,8 +279,24 @@
        * <iframe> cua trang "Ban do 3D"): bao "back" de trang cha dieu huong
        * ve lai ban do 2D (va go bo iframe nay khoi DOM de dung han render
        * 3D, tranh ton tai nguyen khi khong xem nua).
+       *
+       * Luu y hieu nang: composer.render() moi frame khá nặng (Bloom +
+       * SSAO + Bokeh DOF), chiem gan het main thread. Neu chi postMessage
+       * ma khong dung vong lap render ngay, message co the bi "ket" trong
+       * hang doi rat lau (chi duoc xu ly khi tab bi an di, luc trinh
+       * duyet tu dong giam toc requestAnimationFrame cua tab nen) - gay
+       * cam giac phai doi tab roi quay lai moi thay back. Nen set co
+       * `isLeaving` truoc tien de animate() bo qua toan bo phan render
+       * nang ngay tu frame ke tiep, giai phong main thread cho postMessage
+       * + React unmount xu ly ngay lap tuc.
        * ------------------------------------------------------------------ */
+      let isLeaving = false;
       function goBackToMap2D() {
+        if (isLeaving) return;
+        isLeaving = true;
+        try {
+          if (controls) controls.enabled = false;
+        } catch (e) {}
         try {
           if (window.parent && window.parent !== window) {
             window.parent.postMessage({ type: "vpv3d:back" }, "*");
@@ -4436,6 +4452,11 @@
       const clock = new THREE.Clock();
       function animate(now) {
         requestAnimationFrame(animate);
+        // Da bam nut back: dung han moi tinh toan/render nang o day, chi
+        // giu vong lap "song" (rong) de khong chan requestAnimationFrame
+        // cua chinh no, nhuong toan bo main thread lai cho postMessage +
+        // React ben ngoai dieu huong/go iframe ngay lap tuc.
+        if (isLeaving) return;
         const t = clock.getElapsedTime();
         if (flyAnim) flyAnim(now || performance.now());
         controls.update();
