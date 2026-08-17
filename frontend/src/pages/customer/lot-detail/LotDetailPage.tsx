@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useSearchParams, useParams } from "react-router-dom";
-import { HelpCircle, Loader2, CheckCircle2, XCircle, Upload, X } from "lucide-react";
+import { HelpCircle, Loader2, CheckCircle2, XCircle, Check } from "lucide-react";
 import NavyStarfield from "@/components/decor/NavyStarfield";
 import GuidePopup, { type GuideStep } from "@/components/guide/GuidePopup";
 import { useAuthStore } from "@/store/authStore";
@@ -17,18 +17,14 @@ const TRANSFER_GUIDE_STEPS: GuideStep[] = [
   },
   {
     title: "Bước 2: Chọn lô và nhập thông tin bên nhận",
-    desc: "Chọn lô bạn muốn chuyển và điền đầy đủ họ tên, số CCCD/hộ chiếu và thông tin liên hệ của người sẽ nhận quyền sử dụng lô.",
+    desc: "Chọn lô bạn muốn chuyển và điền đầy đủ họ tên, số CCCD/hộ chiếu, số điện thoại và email bắt buộc của người sẽ nhận quyền sử dụng lô.",
   },
   {
-    title: "Bước 3: Nộp hồ sơ giấy tờ",
-    desc: "Tải lên các giấy tờ pháp lý cần thiết (CCCD, di chúc, giấy tờ chứng minh quan hệ,...) tuỳ theo loại giao dịch đã chọn.",
+    title: "Bước 3: Gửi yêu cầu & Xác nhận",
+    desc: "Gửi yêu cầu tới ban quản lý để được xem xét trong 5–7 ngày làm việc. Sau khi được duyệt, cả hai bên sẽ nhận thông báo để ký hợp đồng.",
   },
   {
-    title: "Bước 4: Xác nhận & ký số",
-    desc: "Sau khi hồ sơ được ban quản lý xem xét trong 5–7 ngày làm việc, cả hai bên sẽ nhận thông báo để ký số xác nhận.",
-  },
-  {
-    title: "Bước 5: Hoàn tất",
+    title: "Bước 4: Hoàn tất",
     desc: "Hợp đồng mới được cấp và quyền sử dụng lô chính thức chuyển sang bên nhận.",
   },
 ];
@@ -59,7 +55,6 @@ interface FormState {
   recipientDateOfBirth: string;
   recipientRelationship: string;
   transactionAmount: string;
-  paymentMethod: string;
   agreementNote: string;
 }
 
@@ -72,7 +67,6 @@ const emptyForm: FormState = {
   recipientDateOfBirth: "",
   recipientRelationship: "",
   transactionAmount: "",
-  paymentMethod: "bank_transfer",
   agreementNote: "",
 };
 
@@ -87,14 +81,12 @@ const LotDetailPage: React.FC = () => {
   const [selectedPlotIds, setSelectedPlotIds] = useState<number[]>([]);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
-  const [files, setFiles] = useState<File[]>([]);
   const [loadingPlots, setLoadingPlots] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [submitResult, setSubmitResult] = useState<
     { success: boolean; message: string; requestId?: number } | null
   >(null);
   const [errors, setErrors] = useState<Partial<FormState & { plots: string }>>({});
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     document.title = "Chuyển Nhượng / Thừa Kế — FR-05";
@@ -179,22 +171,17 @@ const LotDetailPage: React.FC = () => {
     setErrors((e) => ({ ...e, [field]: undefined }));
   };
 
-  const handleFilesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const chosen = Array.from(e.target.files ?? []);
-    setFiles((prev) => [...prev, ...chosen].slice(0, 10));
-    e.target.value = "";
-  };
-
-  const removeFile = (index: number) => {
-    setFiles((prev) => prev.filter((_, i) => i !== index));
-  };
-
   const validate = (): boolean => {
     const newErrors: Partial<FormState & { plots: string }> = {};
     if (selectedPlotIds.length === 0) newErrors.plots = "Vui lòng chọn ít nhất một lô";
-    if (!form.recipientFullName.trim()) newErrors.recipientFullName = "Bắt buộc";
-    if (!form.recipientIdCard.trim()) newErrors.recipientIdCard = "Bắt buộc";
-    if (!form.recipientPhone.trim()) newErrors.recipientPhone = "Bắt buộc";
+    if (!form.recipientFullName.trim()) newErrors.recipientFullName = "Bắt buộc nhập họ tên bên nhận";
+    if (!form.recipientIdCard.trim()) newErrors.recipientIdCard = "Bắt buộc nhập số CCCD/hộ chiếu";
+    if (!form.recipientPhone.trim()) newErrors.recipientPhone = "Bắt buộc nhập số điện thoại";
+    if (!form.recipientEmail.trim()) {
+      newErrors.recipientEmail = "Bắt buộc nhập email bên nhận";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.recipientEmail.trim())) {
+      newErrors.recipientEmail = "Địa chỉ email không hợp lệ";
+    }
     if (transferType === "chuyen" && form.transactionAmount) {
       const amt = Number(form.transactionAmount.replace(/[,.]/g, ""));
       if (isNaN(amt) || amt < 0) newErrors.transactionAmount = "Giá trị không hợp lệ";
@@ -224,7 +211,7 @@ const LotDetailPage: React.FC = () => {
         recipientFullName: form.recipientFullName.trim(),
         recipientIdCard: form.recipientIdCard.trim(),
         recipientPhone: form.recipientPhone.trim(),
-        recipientEmail: form.recipientEmail.trim() || undefined,
+        recipientEmail: form.recipientEmail.trim(),
         recipientAddress: form.recipientAddress.trim() || undefined,
         recipientDateOfBirth: form.recipientDateOfBirth || undefined,
         recipientRelationship: form.recipientRelationship || undefined,
@@ -232,14 +219,10 @@ const LotDetailPage: React.FC = () => {
           transferType === "chuyen" && form.transactionAmount
             ? Number(form.transactionAmount.replace(/[,.]/g, ""))
             : undefined,
-        paymentMethod:
-          transferType === "chuyen" ? form.paymentMethod : undefined,
         agreementNote: form.agreementNote.trim() || undefined,
       };
       formData.append("payload", JSON.stringify(payload));
-      for (const file of files) {
-        formData.append("documents", file);
-      }
+
       const res = await api.post<{
         success: boolean;
         message: string;
@@ -256,7 +239,6 @@ const LotDetailPage: React.FC = () => {
       setTransferType(null);
       setSelectedPlotIds([]);
       setForm(emptyForm);
-      setFiles([]);
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { message?: string } } })?.response?.data
@@ -294,16 +276,11 @@ const LotDetailPage: React.FC = () => {
             <div className="step-line" />
             <div className="step pending">
               <div className="step-circle">3</div>
-              <div className="step-label">Hồ sơ</div>
-            </div>
-            <div className="step-line" />
-            <div className="step pending">
-              <div className="step-circle">4</div>
               <div className="step-label">Xác nhận</div>
             </div>
             <div className="step-line" />
             <div className="step pending">
-              <div className="step-circle">5</div>
+              <div className="step-circle">4</div>
               <div className="step-label">Hoàn tất</div>
             </div>
           </div>
@@ -418,19 +395,27 @@ const LotDetailPage: React.FC = () => {
                   </div>
                 ) : (
                   <div className={`plot-select-grid ${errors.plots ? "error" : ""}`}>
-                    {ownedPlots.map((plot) => (
-                      <button
-                        key={plot.id}
-                        type="button"
-                        className={`plot-select-card ${selectedPlotIds.includes(plot.id) ? "selected" : ""}`}
-                        onClick={() => togglePlot(plot.id)}
-                      >
-                        <div className="psc-code">{plot.code}</div>
-                        <div className="psc-zone">{plot.zoneName}</div>
-                        {plot.areaSqm && <div className="psc-area">{plot.areaSqm} m²</div>}
-                        <div className="psc-check">✓</div>
-                      </button>
-                    ))}
+                    {ownedPlots.map((plot) => {
+                      const isSelected = selectedPlotIds.includes(plot.id);
+                      return (
+                        <button
+                          key={plot.id}
+                          type="button"
+                          className={`plot-select-card ${isSelected ? "selected" : ""}`}
+                          onClick={() => togglePlot(plot.id)}
+                          aria-pressed={isSelected}
+                        >
+                          <div className="psc-header">
+                            <div className="psc-code">{plot.code}</div>
+                            <div className={`psc-checkbox ${isSelected ? "checked" : ""}`}>
+                              {isSelected && <Check size={14} strokeWidth={2.5} />}
+                            </div>
+                          </div>
+                          <div className="psc-zone">{plot.zoneName}</div>
+                          {plot.areaSqm && <div className="psc-area">{plot.areaSqm} m²</div>}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
                 {errors.plots && <p className="field-error">{errors.plots}</p>}
@@ -550,14 +535,17 @@ const LotDetailPage: React.FC = () => {
                         <p className="field-error">{errors.recipientPhone}</p>
                       )}
                     </div>
-                    <div className="field">
-                      <label>Email</label>
+                    <div className={`field ${errors.recipientEmail ? "has-error" : ""}`}>
+                      <label>Email <span className="req">*</span></label>
                       <input
                         type="email"
-                        placeholder="Email để nhận thông báo"
+                        placeholder="Email để nhận thông báo và hợp đồng"
                         value={form.recipientEmail}
                         onChange={(e) => updateForm("recipientEmail", e.target.value)}
                       />
+                      {errors.recipientEmail && (
+                        <p className="field-error">{errors.recipientEmail}</p>
+                      )}
                     </div>
                   </div>
                   <div className="field">
@@ -577,7 +565,7 @@ const LotDetailPage: React.FC = () => {
                     <div className="section-label section-label-small">
                       Thông tin giao dịch
                     </div>
-                    <div className="field-row">
+                    <div className="field">
                       <div className={`field ${errors.transactionAmount ? "has-error" : ""}`}>
                         <label>Giá trị chuyển nhượng (₫)</label>
                         <input
@@ -589,17 +577,6 @@ const LotDetailPage: React.FC = () => {
                         {errors.transactionAmount && (
                           <p className="field-error">{errors.transactionAmount}</p>
                         )}
-                      </div>
-                      <div className="field">
-                        <label>Hình thức thanh toán</label>
-                        <select
-                          value={form.paymentMethod}
-                          onChange={(e) => updateForm("paymentMethod", e.target.value)}
-                        >
-                          <option value="bank_transfer">Chuyển khoản ngân hàng</option>
-                          <option value="cash">Tiền mặt tại quầy</option>
-                          <option value="ewallet">Ví điện tử</option>
-                        </select>
                       </div>
                     </div>
                     <div className="field">
@@ -615,81 +592,22 @@ const LotDetailPage: React.FC = () => {
                 )}
               </div>
 
-              {/* Hồ sơ giấy tờ */}
-              <div className="form-block">
-                <div className="section-label">
-                  <span className="snum">3</span>
-                  Hồ sơ giấy tờ đính kèm
-                </div>
-                <div className="doc-list">
-                  <div className="doc-item">
-                    <div className="doc-icon">📄</div>
-                    <div className="doc-name">CCCD bên chuyển nhượng (2 mặt)</div>
-                    <div className="doc-size">Bắt buộc</div>
-                  </div>
-                  <div className="doc-item">
-                    <div className="doc-icon">📄</div>
-                    <div className="doc-name">CCCD bên nhận (2 mặt)</div>
-                    <div className="doc-size">Bắt buộc</div>
-                  </div>
-                  {transferType === "thua" && (
-                    <div className="doc-item">
-                      <div className="doc-icon">📋</div>
-                      <div className="doc-name">Giấy tờ di chúc / thừa kế hợp pháp</div>
-                      <div className="doc-size">Bắt buộc</div>
-                    </div>
-                  )}
-                  <div className="doc-item">
-                    <div className="doc-icon">📋</div>
-                    <div className="doc-name">Giấy tờ chứng minh quan hệ (nếu có)</div>
-                    <div className="doc-size">Tùy chọn</div>
-                  </div>
-                </div>
-
-                {/* File upload */}
-                {files.length > 0 && (
-                  <div className="file-preview-list">
-                    {files.map((file, index) => (
-                      <div key={index} className="file-preview-item">
-                        <span className="fp-name">{file.name}</span>
-                        <span className="fp-size">
-                          {(file.size / 1024 / 1024).toFixed(1)} MB
-                        </span>
-                        <button
-                          type="button"
-                          className="fp-remove"
-                          onClick={() => removeFile(index)}
-                          aria-label="Xóa file"
-                        >
-                          <X size={14} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".pdf,.jpg,.jpeg,.png,.webp"
-                  multiple
-                  className="hidden-file-input"
-                  onChange={handleFilesChange}
-                  aria-label="Chọn file đính kèm"
-                />
+              {/* Nút gửi yêu cầu phía dưới cùng của form (Yêu cầu thứ 5) */}
+              <div className="form-bottom-actions">
                 <button
-                  type="button"
-                  className="upload-zone"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={files.length >= 10}
+                  type="submit"
+                  className="btn-main btn-submit-bottom"
+                  disabled={submitting || loadingPlots}
                 >
-                  <div className="upload-icon"><Upload size={22} /></div>
-                  <div className="upload-label">
-                    {files.length >= 10
-                      ? "Đã đạt tối đa 10 file"
-                      : "Nhấn để tải lên giấy tờ"}
-                  </div>
-                  <div className="upload-sub">PDF, JPG, PNG, WEBP — tối đa 10MB mỗi file</div>
+                  {submitting ? (
+                    <>
+                      <Loader2 size={18} className="spin" /> Đang gửi yêu cầu...
+                    </>
+                  ) : (
+                    <>
+                      Gửi yêu cầu {transferType ? transferLabel[transferType] : "chuyển nhượng"} →
+                    </>
+                  )}
                 </button>
               </div>
             </div>
@@ -725,6 +643,13 @@ const LotDetailPage: React.FC = () => {
                   </span>
                 </div>
 
+                <div className="summary-row">
+                  <span className="k">Email nhận</span>
+                  <span className="v">
+                    {form.recipientEmail.trim() || <span className="muted-text">Chưa điền</span>}
+                  </span>
+                </div>
+
                 {transferType === "chuyen" && (
                   <div className="summary-row">
                     <span className="k">Giá trị</span>
@@ -735,11 +660,6 @@ const LotDetailPage: React.FC = () => {
                     </span>
                   </div>
                 )}
-
-                <div className="summary-row">
-                  <span className="k">Hồ sơ đính kèm</span>
-                  <span className="v">{files.length} file</span>
-                </div>
 
                 <div className="legal-note">
                   ⚖️ Hồ sơ sẽ được ban quản lý xem xét trong vòng{" "}
@@ -757,14 +677,14 @@ const LotDetailPage: React.FC = () => {
                       <Loader2 size={16} className="spin" /> Đang gửi...
                     </>
                   ) : (
-                    "Nộp hồ sơ chuyển nhượng →"
+                    "Gửi yêu cầu →"
                   )}
                 </button>
 
                 <div className="process-steps">
                   <div className="process-heading">Quy trình xử lý</div>
                   {[
-                    { n: "1", t: "Nộp hồ sơ", s: "Điền thông tin & tải hồ sơ" },
+                    { n: "1", t: "Nộp yêu cầu", s: "Điền thông tin và gửi duyệt" },
                     { n: "2", t: "Xét duyệt", s: "Ban quản lý xem xét 5–7 ngày" },
                     { n: "3", t: "Ký hợp đồng", s: "Hai bên ký tại văn phòng" },
                     { n: "4", t: "Hoàn tất", s: "Hợp đồng mới được cấp" },

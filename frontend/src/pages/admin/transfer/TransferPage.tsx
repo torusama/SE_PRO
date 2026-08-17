@@ -1,45 +1,43 @@
-import { useEffect, useMemo, useState } from "react";
-import {
-  Search,
-  Filter,
-  CheckCircle2,
-  XCircle,
-  Clock,
-  Calendar,
-  FileText,
-  Upload,
-  UserCheck,
-  Download,
-  AlertCircle,
-  Eye,
-  X,
-  ShieldCheck,
-  RefreshCw,
-} from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
+import {
+  composeContractDocument,
+  createContractPdfBlob,
+  downloadContractPdf,
+} from "@/lib/contractPdf";
 import "./TransferPage.css";
 
-// ── Types for Customer Transfer Requests ────────────────────────────────────
+// ── Types ───────────────────────────────────────────────────────────────────
 
-type TransferWorkflowType = "sale" | "inheritance" | "gift";
-type TransferRequestStatus =
+export type TransferWorkflowType = "sale" | "inheritance" | "gift";
+export type TransferRequestStatus =
   | "pending"
   | "approved"
   | "rejected"
   | "cancelled"
   | "completed";
 
+export type TransferView = "sale" | "inheritance" | "gift" | "cancellations" | "direct";
+
+interface PageData<T> {
+  items: T[];
+  total?: number;
+}
+
 interface TransferRequestItem {
   id: number;
   transferType: TransferWorkflowType;
   status: TransferRequestStatus;
-  recipientName: string;
-  customerName: string;
-  customerEmail: string;
-  customerPhone: string;
-  plotCodes: string[];
-  plotCount: number;
+  recipientName?: string;
+  customerName?: string;
+  customerEmail?: string;
+  customerPhone?: string;
+  plotCodes?: string[];
+  plotCount?: number;
+  totalPrice?: number;
   createdAt: string;
   reviewedAt?: string | null;
 }
@@ -66,19 +64,20 @@ interface TransferRequestDetail {
   customerPhone: string;
   customerIdCard?: string | null;
   customerAddress?: string | null;
-  plots: Array<{
+  plots?: Array<{
     id: number;
     code: string;
-    zoneName: string;
+    zoneName?: string;
     areaSqm?: number | null;
-    status: string;
+    status?: string;
   }>;
-  documents: Array<{
+  plotCodes?: string[];
+  documents?: Array<{
     id: number;
     filename: string;
-    mimeType: string;
-    sizeBytes: number;
-    createdAt: string;
+    mimeType?: string;
+    sizeBytes?: number;
+    createdAt?: string;
   }>;
   appointment?: {
     id: number;
@@ -88,7 +87,7 @@ interface TransferRequestDetail {
     status: string;
     customerSelectedDate?: string | null;
     customerSelectedTime?: string | null;
-    customerStatus?: string | null;
+    customerStatus?: "pending" | "confirmed" | "declined" | null;
     note?: string | null;
   } | null;
   contract?: {
@@ -98,13 +97,28 @@ interface TransferRequestDetail {
     paymentStatus: string;
     totalAmount?: number | null;
     paidAmount?: number | null;
+    remainingAmount?: number | null;
+    contractDate?: string | null;
+    contractContent?: string | null;
+    contractBaseContent?: string | null;
+    inheritanceContent?: string | null;
     generatedPdfAt?: string | null;
+    plots?: Array<{
+      id: number;
+      code: string;
+      zoneName?: string;
+      areaSqm?: number;
+      agreedPrice: number;
+    }>;
+    signedEvidence?: Array<{
+      id: number;
+      filename: string;
+      originalName: string;
+      mimeType?: string;
+    }>;
   } | null;
 }
 
-// ── Types for Direct Admin Transfers (Tab 2) ────────────────────────────────
-
-type SearchMode = "customer" | "plot";
 interface PlotResult {
   plotId: number;
   plotCode: string;
@@ -134,1837 +148,1713 @@ interface RecentTransfer {
   plotCodes: string[];
 }
 
-const emptyRecipient = {
-  fullName: "",
-  email: "",
-  phone: "",
-  idCard: "",
-  address: "",
-  dateOfBirth: "",
+// ── Formatters & Helpers ────────────────────────────────────────────────────
+
+const money = new Intl.NumberFormat("vi-VN", {
+  style: "currency",
+  currency: "VND",
+  maximumFractionDigits: 0,
+});
+
+const dateTime = (value?: string | null) =>
+  value
+    ? new Intl.DateTimeFormat("vi-VN", {
+        dateStyle: "short",
+        timeStyle: "short",
+      }).format(new Date(value))
+    : "—";
+
+const dateOnly = (value?: string | null) =>
+  value
+    ? new Intl.DateTimeFormat("vi-VN", { dateStyle: "short" }).format(
+        new Date(value),
+      )
+    : "—";
+
+const statusLabels: Record<string, string> = {
+  pending: "Chờ duyệt",
+  approved: "Đã duyệt",
+  completed: "Hoàn tất",
+  rejected: "Đã từ chối",
+  cancelled: "Đã hủy",
+  scheduled: "Đã gửi lịch",
+  confirmed: "Khách đã xác nhận",
+  declined: "Khách từ chối",
+  paid: "Đã thanh toán",
 };
 
-function apiMessage(error: unknown, fallback: string) {
-  const message = (error as { response?: { data?: { message?: string } } })
-    ?.response?.data?.message;
-  return typeof message === "string" ? message : fallback;
+const typeLabels: Record<TransferWorkflowType, string> = {
+  sale: "Chuyển nhượng",
+  inheritance: "Thừa kế",
+  gift: "Tặng / Cho tặng",
+};
+
+const paymentMethods = [
+  ["bank_transfer", "Chuyển khoản ngân hàng"],
+  ["cash", "Tiền mặt"],
+  ["card", "Thẻ"],
+  ["other", "Khác"],
+] as const;
+
+const DATE_VALUE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const MAX_APPOINTMENT_DATE = "9999-12-31";
+const TODAY_IN_VIETNAM = new Date(Date.now() + 7 * 60 * 60 * 1000)
+  .toISOString()
+  .slice(0, 10);
+
+function getError(error: unknown) {
+  if (
+    typeof error === "object" &&
+    error &&
+    "code" in error &&
+    (error as { code?: string }).code === "ERR_NETWORK"
+  ) {
+    return "Không thể kết nối máy chủ backend. Vui lòng kiểm tra dịch vụ rồi thử lại.";
+  }
+  if (typeof error === "object" && error && "response" in error) {
+    const message = (error as { response?: { data?: { message?: string } } })
+      .response?.data?.message;
+    if (message) return message;
+  }
+  return "Không thể hoàn tất thao tác. Vui lòng thử lại.";
 }
 
+// ── Sub-components ──────────────────────────────────────────────────────────
+
+function Stepper({
+  labels,
+  completed,
+  terminal,
+}: {
+  labels: string[];
+  completed: number;
+  terminal?: boolean;
+}) {
+  return (
+    <ol className={`request-stepper${terminal ? " is-terminal" : ""}`}>
+      {labels.map((label, index) => {
+        const state =
+          index < completed
+            ? "done"
+            : index === completed && !terminal
+              ? "current"
+              : "future";
+        return (
+          <li key={label} className={`is-${state}`}>
+            <span>{index < completed ? "✓" : index + 1}</span>
+            <strong>{label}</strong>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+function CompletedStep({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <details className="request-step-completed">
+      <summary>
+        <span>✓</span>
+        {title}
+      </summary>
+      <div>{children}</div>
+    </details>
+  );
+}
+
+function CalendarDateInput({
+  label,
+  value,
+  min,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  min?: string;
+  onChange: (value: string) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const minimumDate = min && min > TODAY_IN_VIETNAM ? min : TODAY_IN_VIETNAM;
+  function openCalendar() {
+    const input = inputRef.current;
+    if (!input) return;
+    input.focus();
+    if (typeof input.showPicker === "function") input.showPicker();
+    else input.click();
+  }
+  return (
+    <label>
+      {label}
+      <div className="date-input-control">
+        <input
+          ref={inputRef}
+          type="date"
+          min={minimumDate}
+          max={MAX_APPOINTMENT_DATE}
+          inputMode="numeric"
+          value={value}
+          onChange={(event) => {
+            const nextValue = event.target.value;
+            if (
+              nextValue === "" ||
+              (DATE_VALUE_PATTERN.test(nextValue) &&
+                nextValue <= MAX_APPOINTMENT_DATE)
+            ) {
+              onChange(nextValue);
+            }
+          }}
+        />
+        <button
+          type="button"
+          className="date-picker-button"
+          aria-label={`Mở lịch chọn ${label.toLocaleLowerCase("vi")}`}
+          onClick={openCalendar}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M7 2v3M17 2v3M3.5 9h17M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" />
+          </svg>
+        </button>
+      </div>
+    </label>
+  );
+}
+
+function TransferReviewInfo({
+  request,
+  onDownloadDoc,
+}: {
+  request: TransferRequestDetail;
+  onDownloadDoc: (docId: number, filename: string) => void;
+}) {
+  return (
+    <div className="request-review-info">
+      {/* Party A */}
+      <section className="review-section">
+        <h4>Bên chuyển nhượng / Chủ sở hữu hiện tại (Bên A)</h4>
+        <div className="review-info-grid">
+          <span>
+            <small>Họ và tên</small>
+            {request.customerName || "—"}
+          </span>
+          <span>
+            <small>Số điện thoại</small>
+            {request.customerPhone || "—"}
+          </span>
+          <span>
+            <small>Email</small>
+            {request.customerEmail || "—"}
+          </span>
+          <span>
+            <small>CCCD/CMND</small>
+            {request.customerIdCard || "—"}
+          </span>
+          <span className="wide">
+            <small>Địa chỉ</small>
+            {request.customerAddress || "—"}
+          </span>
+        </div>
+      </section>
+
+      {/* Party B */}
+      <section className="review-section">
+        <h4>Bên nhận quyền / Thừa kế / Tặng cho (Bên B)</h4>
+        <div className="review-info-grid">
+          <span>
+            <small>Họ và tên người nhận</small>
+            {request.recipientName || "—"}
+          </span>
+          <span>
+            <small>Số điện thoại</small>
+            {request.recipientPhone || "—"}
+          </span>
+          <span>
+            <small>Email</small>
+            {request.recipientEmail || "—"}
+          </span>
+          <span>
+            <small>CCCD/CMND</small>
+            {request.recipientIdCard || "—"}
+          </span>
+          <span>
+            <small>Ngày sinh</small>
+            {dateOnly(request.recipientDateOfBirth)}
+          </span>
+          <span>
+            <small>Quan hệ với chủ sở hữu</small>
+            {request.recipientRelationship || "—"}
+          </span>
+          <span className="wide">
+            <small>Địa chỉ liên hệ</small>
+            {request.recipientAddress || "—"}
+          </span>
+        </div>
+      </section>
+
+      {/* Plots */}
+      <section className="review-section">
+        <div className="review-section-heading">
+          <h4>Thông tin các lô đất nhượng quyền</h4>
+          <b>
+            {request.plots?.length ?? 0} lô
+            {request.transferType === "sale" && request.transactionAmount != null
+              ? ` · ${money.format(Number(request.transactionAmount))}`
+              : ` · ${typeLabels[request.transferType]}`}
+          </b>
+        </div>
+        <div className="review-plot-list">
+          {(request.plots ?? []).map((plot) => (
+            <article key={plot.id}>
+              <div className="plot-code">
+                <small>Mã lô</small>
+                <strong>{plot.code}</strong>
+              </div>
+              <span>
+                <small>Khu vực</small>
+                {plot.zoneName || "—"}
+              </span>
+              <span>
+                <small>Diện tích</small>
+                {plot.areaSqm != null ? `${plot.areaSqm} m²` : "—"}
+              </span>
+              <span>
+                <small>Trạng thái</small>
+                {plot.status || "Đã bán"}
+              </span>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      {/* Customer Documents */}
+      {Boolean(request.documents?.length) && (
+        <section className="review-section">
+          <h4>Tài liệu khách hàng đính kèm ({request.documents?.length} tệp)</h4>
+          <div className="customer-doc-list">
+            {(request.documents ?? []).map((doc) => (
+              <div key={doc.id} className="customer-doc-item">
+                <div>
+                  <span>📄</span>
+                  <span>{doc.filename}</span>
+                </div>
+                <button
+                  type="button"
+                  className="secondary-button compact"
+                  onClick={() => onDownloadDoc(doc.id, doc.filename)}
+                >
+                  Tải xuống xem
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Notes & Agreement */}
+      <section className="review-section request-notes">
+        <div>
+          <small>Ngày gửi yêu cầu</small>
+          <strong>{dateTime(request.createdAt)}</strong>
+        </div>
+        <div>
+          <small>Thỏa thuận / Ghi chú của khách hàng</small>
+          <strong>{request.agreementNote || "Không có"}</strong>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+// ── Main Component ──────────────────────────────────────────────────────────
+
 export default function TransferPage() {
-  const [activeTab, setActiveTab] = useState<"requests" | "direct">("requests");
+  const { confirm, dialog: confirmDialog } = useConfirmDialog();
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  // ── Tab 1 State: Customer Transfer Requests ───────────────────────────────
-  const [requestList, setRequestList] = useState<TransferRequestItem[]>([]);
-  const [loadingRequests, setLoadingRequests] = useState(false);
-  const [requestSearch, setRequestSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [typeFilter, setTypeFilter] = useState<string>("all");
-  const [totalCount, setTotalCount] = useState(0);
-  const [currentPage, setCurrentPage] = useState(1);
+  const requestedViewParam = searchParams.get("view") as TransferView | null;
+  const requestedId = Number(searchParams.get("request")) || undefined;
 
-  // Detail Modal / Drawer
-  const [selectedReqId, setSelectedReqId] = useState<number | null>(null);
-  const [detail, setDetail] = useState<TransferRequestDetail | null>(null);
-  const [loadingDetail, setLoadingDetail] = useState(false);
+  const validViews: TransferView[] = ["sale", "inheritance", "gift", "cancellations", "direct"];
+  const initialView: TransferView = validViews.includes(requestedViewParam as TransferView)
+    ? (requestedViewParam as TransferView)
+    : "sale";
 
-  // Action Modals State
-  const [actionModal, setActionModal] = useState<
-    "approve" | "reject" | "appointment" | "payment" | "evidence" | null
-  >(null);
-  const [adminNoteInput, setAdminNoteInput] = useState("");
-  const [apptRangeStart, setApptRangeStart] = useState("");
-  const [apptRangeEnd, setApptRangeEnd] = useState("");
-  const [apptLocation, setApptLocation] = useState("Văn phòng Ban Quản lý Công viên Nghĩa trang");
-  const [apptNote, setApptNote] = useState("");
-  const [paymentAmount, setPaymentAmount] = useState<number | "">("");
-  const [paymentMethod, setPaymentMethod] = useState("bank_transfer");
-  const [paymentRefCode, setPaymentRefCode] = useState("");
-  const [paymentNote, setPaymentNote] = useState("");
-  const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
-  const [actionLoading, setActionLoading] = useState(false);
-  const [actionError, setActionError] = useState("");
-  const [actionSuccess, setActionSuccess] = useState("");
+  const [view, setView] = useState<TransferView>(initialView);
+  const [requests, setRequests] = useState<TransferRequestItem[]>([]);
+  const [selectedId, setSelectedId] = useState<number>();
+  const [detail, setDetail] = useState<TransferRequestDetail>();
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
 
-  // ── Tab 2 State: Direct Transfers ─────────────────────────────────────────
-  const [mode, setMode] = useState<SearchMode>("customer");
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<PlotResult[]>([]);
-  const [selected, setSelected] = useState<PlotResult[]>([]);
-  const [step, setStep] = useState<1 | 2>(1);
-  const [searching, setSearching] = useState(false);
-  const [submittingDirect, setSubmittingDirect] = useState(false);
-  const [directError, setDirectError] = useState("");
-  const [directSuccess, setDirectSuccess] = useState("");
-  const [searchMessage, setSearchMessage] = useState("");
-  const [recipient, setRecipient] = useState(emptyRecipient);
   const [adminNote, setAdminNote] = useState("");
-  const [documents, setDocuments] = useState<File[]>([]);
-  const [recent, setRecent] = useState<RecentTransfer[]>([]);
+  const [appointmentForm, setAppointmentForm] = useState({
+    rangeStart: "",
+    rangeEnd: "",
+    assignedStaffName: "",
+    location: "Văn phòng Ban Quản lý Công viên Nghĩa trang",
+    note: "",
+  });
+  const [inheritance, setInheritance] = useState("");
+  const [contractPreviewUrl, setContractPreviewUrl] = useState("");
+  const [payment, setPayment] = useState({
+    amount: "",
+    method: "bank_transfer",
+    note: "",
+  });
+  const [files, setFiles] = useState<File[]>([]);
+  const [evidenceError, setEvidenceError] = useState("");
 
-  // ── Data Fetching ─────────────────────────────────────────────────────────
+  // Direct transfer state (Tab 5)
+  const [directQuery, setDirectQuery] = useState("");
+  const [directMode, setDirectMode] = useState<"customer" | "plot">("customer");
+  const [directResults, setDirectResults] = useState<PlotResult[]>([]);
+  const [recentTransfers, setRecentTransfers] = useState<RecentTransfer[]>([]);
 
-  const loadRequests = async () => {
-    setLoadingRequests(true);
+  // ── Data Loading ──────────────────────────────────────────────────────────
+
+  const loadRequests = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    setError("");
     try {
-      const params: Record<string, string | number> = {
-        page: currentPage,
-        pageSize: 15,
-      };
-      if (requestSearch.trim()) params.search = requestSearch.trim();
-      if (statusFilter !== "all") params.status = statusFilter;
-      if (typeFilter !== "all") params.transferType = typeFilter;
-
-      const res = await api.get<{
-        success: boolean;
-        data: { items: TransferRequestItem[]; total: number };
-      }>("/admin/transfer-requests", { params });
-      setRequestList(res.data.data?.items ?? []);
-      setTotalCount(res.data.data?.total ?? 0);
-    } catch {
-      // silently handle
-    } finally {
-      setLoadingRequests(false);
-    }
-  };
-
-  const loadDetail = async (id: number) => {
-    setLoadingDetail(true);
-    try {
-      const res = await api.get<{ success: boolean; data: TransferRequestDetail }>(
-        `/admin/transfer-requests/${id}`
-      );
-      setDetail(res.data.data ?? null);
-    } catch (err) {
-      setActionError(apiMessage(err, "Không thể tải chi tiết yêu cầu"));
-    } finally {
-      setLoadingDetail(false);
-    }
-  };
-
-  const loadRecent = async () => {
-    try {
-      const response = await api.get("/admin/transfers", {
-        params: { page: 1, pageSize: 30 },
+      const response = await api.get<{
+        data: PageData<TransferRequestItem>;
+      }>("/admin/transfer-requests", {
+        // AdminListQueryDto giới hạn pageSize tối đa là 100.
+        params: { page: 1, pageSize: 100 },
       });
-      setRecent(response.data.data?.items ?? []);
-    } catch {
-      // history is secondary
+      setRequests(response.data.data?.items ?? []);
+    } catch (caught) {
+      setError(getError(caught));
+    } finally {
+      if (!silent) setLoading(false);
     }
-  };
+  }, []);
 
-  useEffect(() => {
-    document.title = "Quản lý Chuyển nhượng — Admin";
+  const loadRecent = useCallback(async () => {
+    try {
+      const response = await api.get<{
+        data: PageData<RecentTransfer>;
+      }>("/admin/transfers", {
+        params: { page: 1, pageSize: 50 },
+      });
+      setRecentTransfers(response.data.data?.items ?? []);
+    } catch {
+      // silent
+    }
   }, []);
 
   useEffect(() => {
-    if (activeTab === "requests") {
+    queueMicrotask(() => {
       void loadRequests();
-    } else {
       void loadRecent();
+    });
+  }, [loadRecent, loadRequests]);
+
+  // Tab Item Filtering
+  const salesRequests = useMemo(
+    () => requests.filter((item) => item.transferType === "sale" && item.status !== "cancelled"),
+    [requests],
+  );
+  const inheritanceRequests = useMemo(
+    () => requests.filter((item) => item.transferType === "inheritance" && item.status !== "cancelled"),
+    [requests],
+  );
+  const giftRequests = useMemo(
+    () => requests.filter((item) => item.transferType === "gift" && item.status !== "cancelled"),
+    [requests],
+  );
+  const cancelledRequests = useMemo(
+    () => requests.filter((item) => item.status === "cancelled"),
+    [requests],
+  );
+
+  const currentList = useMemo(() => {
+    switch (view) {
+      case "sale":
+        return salesRequests;
+      case "inheritance":
+        return inheritanceRequests;
+      case "gift":
+        return giftRequests;
+      case "cancellations":
+        return cancelledRequests;
+      default:
+        return [];
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, currentPage, statusFilter, typeFilter]);
+  }, [cancelledRequests, giftRequests, inheritanceRequests, salesRequests, view]);
+
+  // Ensure an item is selected when switching tabs or loading
+  useEffect(() => {
+    if (view === "direct") return;
+    if (!currentList.some((item) => item.id === selectedId)) {
+      queueMicrotask(() => setSelectedId(currentList[0]?.id));
+    }
+  }, [currentList, selectedId, view]);
+
+  // URL Query parameter jump
+  useEffect(() => {
+    if (!requestedId) return;
+    const target = requests.find((item) => item.id === requestedId);
+    if (!target) return;
+
+    if (target.status === "cancelled") {
+      queueMicrotask(() => {
+        setView("cancellations");
+        setSelectedId(target.id);
+      });
+    } else {
+      queueMicrotask(() => {
+        setView(target.transferType);
+        setSelectedId(target.id);
+      });
+    }
+  }, [requestedId, requests]);
+
+  // Load Detailed Request Data
+  const loadDetail = useCallback(async (id: number) => {
+    try {
+      const response = await api.get<{ data: TransferRequestDetail }>(
+        `/admin/transfer-requests/${id}`,
+      );
+      const reqData = response.data.data;
+
+      // If contract exists, fetch full contract info (with signedEvidence and full balance)
+      if (reqData.contract?.contractId) {
+        try {
+          const contractRes = await api.get<{
+            data: NonNullable<TransferRequestDetail["contract"]>;
+          }>(`/admin/contracts/${reqData.contract.contractId}`);
+          reqData.contract = {
+            ...reqData.contract,
+            ...contractRes.data.data,
+          };
+        } catch {
+          // keep existing contract summary
+        }
+      }
+
+      setDetail(reqData);
+      setAdminNote(reqData.adminNote ?? "");
+    } catch (caught) {
+      setError(getError(caught));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (view !== "direct" && selectedId) {
+      queueMicrotask(() => void loadDetail(selectedId));
+    }
+  }, [loadDetail, selectedId, view]);
 
   useRealtimeRefresh(
     ["transfers", "contracts", "ownership", "plots", "notifications"],
     async () => {
-      if (activeTab === "requests") {
-        await loadRequests();
-        if (selectedReqId) await loadDetail(selectedReqId);
-      } else {
-        await loadRecent();
-        if (query.trim().length >= 2 && results.length > 0) await search();
-      }
-    }
+      await loadRequests(true);
+      if (view !== "direct" && selectedId) await loadDetail(selectedId);
+      if (view === "direct") await loadRecent();
+    },
   );
 
-  // ── Tab 1 Actions ─────────────────────────────────────────────────────────
+  const current = detail?.id === selectedId ? detail : undefined;
+  const appointment = current?.appointment;
+  const contract = current?.contract;
 
-  const handleOpenDetail = (id: number) => {
-    setSelectedReqId(id);
-    setActionError("");
-    setActionSuccess("");
-    void loadDetail(id);
-  };
+  useEffect(() => {
+    queueMicrotask(() => setInheritance(contract?.inheritanceContent ?? ""));
+  }, [contract?.contractId, contract?.inheritanceContent]);
 
-  const handleCloseDetail = () => {
-    setSelectedReqId(null);
-    setDetail(null);
-    setActionModal(null);
-    setActionError("");
-    setActionSuccess("");
-  };
+  useEffect(() => {
+    if (!contractPreviewUrl) return;
 
-  // 1. Approve
-  const handleApprove = async () => {
-    if (!detail) return;
-    setActionLoading(true);
-    setActionError("");
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setContractPreviewUrl("");
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+      URL.revokeObjectURL(contractPreviewUrl);
+    };
+  }, [contractPreviewUrl]);
+
+  // Stepper calculations
+  const isSale = current?.transferType === "sale";
+  const isFreeOrZero =
+    !isSale ||
+    Number(current?.transactionAmount ?? 0) === 0 ||
+    Number(contract?.totalAmount ?? 0) === 0;
+
+  const decisionDone = Boolean(
+    current && ["approved", "rejected", "cancelled", "completed"].includes(current.status),
+  );
+  const appointmentDone = appointment?.customerStatus === "confirmed";
+  const pdfDone = Boolean(contract?.generatedPdfAt);
+  const paymentDone = isFreeOrZero || contract?.paymentStatus === "paid";
+  const ownershipDone =
+    contract?.status === "active" ||
+    contract?.status === "transferred" ||
+    contract?.status === "completed" ||
+    current?.status === "completed";
+
+  const terminal =
+    current?.status === "rejected" || current?.status === "cancelled";
+
+  const completed = terminal
+    ? 1
+    : [
+        decisionDone,
+        appointmentDone,
+        pdfDone,
+        paymentDone,
+        ownershipDone,
+      ].filter(Boolean).length;
+
+  const labels = [
+    "Duyệt yêu cầu",
+    "Lịch hẹn",
+    "Tạo PDF",
+    "Thanh toán",
+    "Ký & sở hữu",
+  ];
+
+  function resetFeedback() {
+    setError("");
+    setMessage("");
+  }
+
+  function changeView(nextView: TransferView) {
+    setView(nextView);
+    setDetail(undefined);
+    setContractPreviewUrl("");
+    resetFeedback();
+    setSearchParams((currentParams) => {
+      const nextParams = new URLSearchParams(currentParams);
+      nextParams.delete("request");
+      nextParams.set("view", nextView);
+      return nextParams;
+    });
+  }
+
+  // ── Action Handlers ───────────────────────────────────────────────────────
+
+  async function decide(action: "approve" | "reject") {
+    if (!current) return;
+    resetFeedback();
+    setBusy(action);
     try {
-      await api.post(`/admin/transfer-requests/${detail.id}/approve`, {
-        adminNote: adminNoteInput.trim() || undefined,
+      await api.post(`/admin/transfer-requests/${current.id}/${action}`, {
+        adminNote: adminNote.trim() || undefined,
       });
-      setActionSuccess("Đã duyệt yêu cầu chuyển nhượng thành công!");
-      setActionModal(null);
-      setAdminNoteInput("");
-      await loadDetail(detail.id);
-      await loadRequests();
-    } catch (err) {
-      setActionError(apiMessage(err, "Không thể duyệt yêu cầu"));
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  // 2. Reject
-  const handleReject = async () => {
-    if (!detail) return;
-    if (!adminNoteInput.trim()) {
-      setActionError("Vui lòng nhập lý do từ chối");
-      return;
-    }
-    setActionLoading(true);
-    setActionError("");
-    try {
-      await api.post(`/admin/transfer-requests/${detail.id}/reject`, {
-        adminNote: adminNoteInput.trim(),
-      });
-      setActionSuccess("Đã từ chối yêu cầu chuyển nhượng");
-      setActionModal(null);
-      setAdminNoteInput("");
-      await loadDetail(detail.id);
-      await loadRequests();
-    } catch (err) {
-      setActionError(apiMessage(err, "Không thể từ chối yêu cầu"));
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  // 3. Create Appointment
-  const handleCreateAppointment = async () => {
-    if (!detail) return;
-    if (!apptRangeStart || !apptRangeEnd) {
-      setActionError("Vui lòng chọn khoảng thời gian hẹn");
-      return;
-    }
-    setActionLoading(true);
-    setActionError("");
-    try {
-      await api.post(`/admin/transfer-requests/${detail.id}/appointment`, {
-        rangeStart: apptRangeStart,
-        rangeEnd: apptRangeEnd,
-        location: apptLocation.trim(),
-        note: apptNote.trim() || undefined,
-      });
-      setActionSuccess("Đã tạo lịch hẹn ký hợp đồng thành công!");
-      setActionModal(null);
-      await loadDetail(detail.id);
-      await loadRequests();
-    } catch (err) {
-      setActionError(apiMessage(err, "Không thể tạo lịch hẹn"));
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  // 4. Mark PDF Generated
-  const handleGeneratePdf = async () => {
-    if (!detail?.contract?.contractId) {
-      setActionError("Không tìm thấy thông tin hợp đồng");
-      return;
-    }
-    setActionLoading(true);
-    setActionError("");
-    try {
-      await api.post(`/admin/contracts/${detail.contract.contractId}/generated-pdf`);
-      setActionSuccess("Đã ghi nhận tạo PDF hợp đồng thành công!");
-      await loadDetail(detail.id);
-      await loadRequests();
-    } catch (err) {
-      setActionError(apiMessage(err, "Không thể ghi nhận PDF hợp đồng"));
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  // 5. Record Payment (only for sale)
-  const handleRecordPayment = async () => {
-    if (!detail?.contract?.contractId) return;
-    if (!paymentAmount || Number(paymentAmount) <= 0) {
-      setActionError("Vui lòng nhập số tiền thanh toán hợp lệ");
-      return;
-    }
-    setActionLoading(true);
-    setActionError("");
-    try {
-      await api.post(`/admin/contracts/${detail.contract.contractId}/payments`, {
-        amount: Number(paymentAmount),
-        paymentMethod,
-        referenceCode: paymentRefCode.trim() || undefined,
-        note: paymentNote.trim() || undefined,
-      });
-      setActionSuccess("Đã ghi nhận thanh toán thành công!");
-      setActionModal(null);
-      setPaymentAmount("");
-      setPaymentRefCode("");
-      setPaymentNote("");
-      await loadDetail(detail.id);
-      await loadRequests();
-    } catch (err) {
-      setActionError(apiMessage(err, "Không thể ghi nhận thanh toán"));
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  // 6. Upload Signed Evidence
-  const handleUploadEvidence = async () => {
-    if (!detail?.contract?.contractId) return;
-    if (!evidenceFiles.length) {
-      setActionError("Vui lòng chọn ít nhất một file hợp đồng đã ký");
-      return;
-    }
-    setActionLoading(true);
-    setActionError("");
-    try {
-      const form = new FormData();
-      evidenceFiles.forEach((file) => form.append("evidence", file));
-      await api.post(
-        `/admin/contracts/${detail.contract.contractId}/signed-evidence`,
-        form,
-        { headers: { "Content-Type": "multipart/form-data" } }
+      setMessage(
+        action === "approve"
+          ? "Đã duyệt yêu cầu nhượng quyền. Bây giờ có thể gửi khoảng ngày lịch hẹn cho khách hàng."
+          : "Đã từ chối yêu cầu nhượng quyền.",
       );
-      setActionSuccess("Đã upload tài liệu hợp đồng ký thành công!");
-      setActionModal(null);
-      setEvidenceFiles([]);
-      await loadDetail(detail.id);
-      await loadRequests();
-    } catch (err) {
-      setActionError(apiMessage(err, "Không thể upload hợp đồng đã ký"));
+      await loadRequests(true);
+      await loadDetail(current.id);
+    } catch (caught) {
+      setError(getError(caught));
     } finally {
-      setActionLoading(false);
+      setBusy("");
     }
-  };
+  }
 
-  // 7. Activate Ownership
-  const handleActivateOwnership = async () => {
-    if (!detail) return;
+  async function createAppointment() {
+    if (!current) return;
     if (
-      !window.confirm(
-        `Xác nhận kích hoạt chuyển quyền sở hữu ${detail.plots.length} lô sang bên nhận? Thao tác này sẽ đóng quyền sở hữu cũ và cấp quyền chính thức cho bên mới.`
-      )
+      !appointmentForm.rangeStart ||
+      !appointmentForm.rangeEnd ||
+      !appointmentForm.location.trim()
     ) {
+      setError("Vui lòng chọn đủ ngày bắt đầu, ngày kết thúc và địa điểm.");
       return;
     }
-    setActionLoading(true);
-    setActionError("");
-    try {
-      await api.post(`/admin/transfer-requests/${detail.id}/activate`);
-      setActionSuccess("Đã kích hoạt quyền sở hữu mới thành công!");
-      await loadDetail(detail.id);
-      await loadRequests();
-    } catch (err) {
-      setActionError(apiMessage(err, "Không thể kích hoạt quyền sở hữu"));
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  // ── Tab 2 Actions (Direct Transfer) ───────────────────────────────────────
-
-  function changeMode(next: SearchMode) {
-    setMode(next);
-    setQuery("");
-    setResults([]);
-    setSelected([]);
-    setDirectError("");
-    setSearchMessage("");
-  }
-
-  async function search() {
-    if (query.trim().length < 2) {
-      setDirectError("Vui lòng nhập ít nhất 2 ký tự để tìm kiếm.");
+    if (
+      !DATE_VALUE_PATTERN.test(appointmentForm.rangeStart) ||
+      !DATE_VALUE_PATTERN.test(appointmentForm.rangeEnd)
+    ) {
+      setError("Năm của lịch hẹn phải gồm đúng 4 chữ số.");
       return;
     }
-    setSearching(true);
-    setDirectError("");
-    setSearchMessage("");
+    if (
+      appointmentForm.rangeStart < TODAY_IN_VIETNAM ||
+      appointmentForm.rangeEnd < TODAY_IN_VIETNAM
+    ) {
+      setError("Lịch hẹn chỉ được chọn từ ngày hiện tại trở về sau.");
+      return;
+    }
+    if (appointmentForm.rangeEnd < appointmentForm.rangeStart) {
+      setError("Ngày kết thúc không được trước ngày bắt đầu.");
+      return;
+    }
+    resetFeedback();
+    setBusy("appointment");
     try {
-      const response = await api.get("/admin/transfers/search", {
-        params: { mode, q: query.trim() },
+      await api.post(`/admin/transfer-requests/${current.id}/appointment`, {
+        rangeStart: `${appointmentForm.rangeStart}T00:00:00+07:00`,
+        rangeEnd: `${appointmentForm.rangeEnd}T23:59:59+07:00`,
+        location: appointmentForm.location.trim(),
+        note: appointmentForm.note.trim() || undefined,
       });
-      const resData = response.data.data;
-      if (Array.isArray(resData)) {
-        setResults(resData);
-        setSearchMessage("");
-      } else {
-        setResults(resData.items ?? []);
-        setSearchMessage(resData.message ?? "");
-      }
-      setSelected([]);
-    } catch (requestError) {
-      setDirectError(apiMessage(requestError, "Không thể tìm dữ liệu phần mộ."));
+      setMessage(
+        "Đã gửi khoảng ngày lịch hẹn. Quy trình sẽ tiếp tục sau khi khách hàng xác nhận.",
+      );
+      setAppointmentForm((value) => ({
+        ...value,
+        rangeStart: "",
+        rangeEnd: "",
+        note: "",
+      }));
+      await loadRequests(true);
+      await loadDetail(current.id);
+    } catch (caught) {
+      setError(getError(caught));
     } finally {
-      setSearching(false);
+      setBusy("");
     }
   }
 
-  function togglePlot(plot: PlotResult) {
-    const selectedIds = new Set(selected.map((item) => item.plotId));
-    if (selectedIds.has(plot.plotId)) {
-      setSelected((current) =>
-        current.filter((item) => item.plotId !== plot.plotId)
-      );
-      return;
-    }
-    if (selected.length && selected[0].holderId !== plot.holderId) {
-      setDirectError("Chỉ có thể chuyển nhiều lô khi chúng cùng một người đứng tên.");
-      return;
-    }
-    setDirectError("");
-    setSelected((current) => [...current, plot]);
-  }
-
-  function addFiles(fileList: FileList | null) {
-    if (!fileList) return;
-    const accepted = Array.from(fileList).filter((file) =>
-      ["application/pdf", "image/jpeg", "image/png", "image/webp"].includes(
-        file.type
-      )
-    );
-    setDocuments((current) => [...current, ...accepted].slice(0, 10));
-    if (accepted.length !== fileList.length)
-      setDirectError("Một số file bị bỏ qua vì không phải PDF/JPG/PNG/WEBP.");
-  }
-
-  async function submitDirect() {
-    const required = [
-      recipient.fullName,
-      recipient.email,
-      recipient.phone,
-      recipient.idCard,
-      recipient.address,
-    ];
-    if (required.some((value) => !value.trim())) {
-      setDirectError("Vui lòng nhập đầy đủ thông tin bắt buộc của người nhận.");
-      return;
-    }
-    if (!documents.length) {
-      setDirectError("Vui lòng tải lên ít nhất một văn bản hợp đồng liên quan.");
-      return;
-    }
-    setSubmittingDirect(true);
-    setDirectError("");
+  async function previewPdf() {
+    if (!contract) return;
+    resetFeedback();
+    setBusy("pdf-preview");
     try {
-      const form = new FormData();
-      form.append(
-        "payload",
-        JSON.stringify({
-          plotIds: selected.map((item) => item.plotId),
-          recipient,
-          adminNote,
-        })
+      const content = composeContractDocument(
+        contract.contractBaseContent ?? contract.contractContent ?? "",
+        inheritance,
+        contract.plots ?? [],
       );
-      documents.forEach((file) => form.append("documents", file));
-      const response = await api.post("/admin/transfers", form, {
+      const blob = await createContractPdfBlob({
+        contractCode: contract.contractCode,
+        contractContent: content,
+        contractDate: contract.contractDate,
+      });
+      setContractPreviewUrl(URL.createObjectURL(blob));
+    } catch (caught) {
+      setError(getError(caught));
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function generatePdf() {
+    if (!contract) return;
+    resetFeedback();
+    setBusy("pdf");
+    try {
+      let snapshot = contract;
+      if (inheritance.trim() !== (contract.inheritanceContent ?? "")) {
+        const response = await api.patch(
+          `/admin/contracts/${contract.contractId}/inheritance`,
+          { content: inheritance.trim() },
+        );
+        snapshot = { ...contract, ...response.data.data };
+      }
+      const content = composeContractDocument(
+        snapshot.contractBaseContent ?? snapshot.contractContent ?? "",
+        inheritance,
+        snapshot.plots ?? [],
+      );
+      await downloadContractPdf({
+        contractCode: snapshot.contractCode,
+        contractContent: content,
+        contractDate: snapshot.contractDate,
+      });
+      await api.post(`/admin/contracts/${contract.contractId}/generated-pdf`);
+      setMessage("Đã tải PDF và ghi nhận hoàn tất bước tạo hợp đồng chuyển nhượng.");
+      await loadRequests(true);
+      if (selectedId) await loadDetail(selectedId);
+    } catch (caught) {
+      setError(getError(caught));
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function recordPayment() {
+    if (!contract || Number(payment.amount) <= 0) {
+      setError("Số tiền đã nhận phải lớn hơn 0.");
+      return;
+    }
+    resetFeedback();
+    setBusy("payment");
+    try {
+      await api.post(`/admin/contracts/${contract.contractId}/payments`, {
+        amount: Number(payment.amount),
+        paymentMethod: payment.method,
+        note: payment.note.trim() || undefined,
+      });
+      setPayment((value) => ({ ...value, amount: "", note: "" }));
+      setMessage("Đã ghi nhận khoản thanh toán thành công.");
+      await loadRequests(true);
+      if (selectedId) await loadDetail(selectedId);
+    } catch (caught) {
+      setError(getError(caught));
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function uploadEvidence() {
+    if (!contract || !files.length) {
+      setEvidenceError("Vui lòng chọn ít nhất một bản hợp đồng đã ký.");
+      return;
+    }
+    resetFeedback();
+    setEvidenceError("");
+    setBusy("upload");
+    try {
+      const data = new FormData();
+      files.forEach((file) => data.append("evidence", file));
+      await api.post(`/admin/contracts/${contract.contractId}/signed-evidence`, data, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      const data = response.data.data;
-      setDirectSuccess(
-        `Chuyển nhượng thành công ${data.plotCount} lô. Mã giao dịch: ${data.batchCode}`
+      setFiles([]);
+      setMessage(
+        "Đã lưu bản hợp đồng ký offline. Hãy kiểm tra tệp rồi xác nhận để kích hoạt quyền sở hữu.",
       );
-      setStep(1);
-      setQuery("");
-      setResults([]);
-      setSelected([]);
-      setSearchMessage("");
-      setRecipient(emptyRecipient);
-      setAdminNote("");
-      setDocuments([]);
-      await loadRecent();
-    } catch (requestError) {
-      setDirectError(apiMessage(requestError, "Không thể hoàn tất chuyển nhượng."));
+      await loadRequests(true);
+      if (selectedId) await loadDetail(selectedId);
+    } catch (caught) {
+      setEvidenceError(getError(caught));
     } finally {
-      setSubmittingDirect(false);
+      setBusy("");
     }
   }
 
-  // ── Labels & Helpers ──────────────────────────────────────────────────────
+  async function downloadEvidence(evidence: { id: number; filename: string; originalName: string; mimeType?: string }) {
+    if (!contract) return;
+    resetFeedback();
+    setBusy(`evidence-${evidence.id}`);
+    try {
+      const response = await api.get(
+        `/admin/contracts/${contract.contractId}/signed-evidence/${encodeURIComponent(evidence.filename)}`,
+        { responseType: "blob" },
+      );
+      const url = URL.createObjectURL(
+        new Blob([response.data], {
+          type: evidence.mimeType || response.data.type,
+        }),
+      );
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = evidence.originalName || "hop-dong-da-ky";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (caught) {
+      setError(getError(caught));
+    } finally {
+      setBusy("");
+    }
+  }
 
-  const typeLabels: Record<TransferWorkflowType, { label: string; class: string }> = {
-    sale: { label: "Chuyển nhượng", class: "badge-sale" },
-    inheritance: { label: "Thừa kế", class: "badge-inheritance" },
-    gift: { label: "Tặng / Cho tặng", class: "badge-gift" },
-  };
+  async function downloadCustomerDoc(docId: number, filename: string) {
+    try {
+      const response = await api.get(
+        `/admin/transfer-requests/documents/${docId}`,
+        { responseType: "blob" },
+      );
+      const url = URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename || "tai-lieu-dinh-kem";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (caught) {
+      setError(getError(caught));
+    }
+  }
 
-  const statusLabels: Record<
-    TransferRequestStatus,
-    { label: string; class: string }
-  > = {
-    pending: { label: "Chờ duyệt", class: "status-pending" },
-    approved: { label: "Đã duyệt / Đang xử lý", class: "status-approved" },
-    completed: { label: "Hoàn tất", class: "status-completed" },
-    rejected: { label: "Từ chối", class: "status-rejected" },
-    cancelled: { label: "Đã hủy", class: "status-cancelled" },
-  };
+  async function activate() {
+    if (
+      !current ||
+      !(await confirm({
+        title: "Kích hoạt quyền sở hữu",
+        message: `Xác minh tài liệu và chuyển giao quyền sở hữu ${current.plots?.length ?? 1} lô đất sang cho Bên nhận (${current.recipientName})? Thao tác này sẽ đóng quyền sở hữu cũ và tạo quyền sở hữu chính thức mới.`,
+        confirmLabel: "Kích hoạt quyền sở hữu",
+      }))
+    )
+      return;
 
-  const selectedHolder = selected[0];
-  const selectedIds = useMemo(
-    () => new Set(selected.map((item) => item.plotId)),
-    [selected]
-  );
+    resetFeedback();
+    setBusy("activate");
+    try {
+      await api.post(`/admin/transfer-requests/${current.id}/activate`);
+      setMessage("Đã kích hoạt hợp đồng và chuyển giao quyền sở hữu thành công!");
+      await loadRequests(true);
+      if (selectedId) await loadDetail(selectedId);
+    } catch (caught) {
+      setError(getError(caught));
+    } finally {
+      setBusy("");
+    }
+  }
+
+  // Appointment summary helper
+  const appointmentSummary = appointment ? (
+    <div className="request-summary-grid">
+      <span>
+        <small>Khoảng ngày hẹn</small>
+        {dateOnly(appointment.rangeStart)} – {dateOnly(appointment.rangeEnd)}
+      </span>
+      <span>
+        <small>Địa điểm</small>
+        {appointment.location}
+      </span>
+      <span>
+        <small>Phản hồi từ khách hàng</small>
+        {statusLabels[appointment.customerStatus ?? "pending"] || appointment.customerStatus}
+      </span>
+      {appointment.customerSelectedDate && (
+        <span>
+          <small>Ngày khách hàng chọn</small>
+          {dateOnly(appointment.customerSelectedDate)}{" "}
+          {appointment.customerSelectedTime ? `lúc ${appointment.customerSelectedTime}` : ""}
+        </span>
+      )}
+      {appointment.note && (
+        <span className="full-span">
+          <small>Ghi chú lịch hẹn</small>
+          {appointment.note}
+        </span>
+      )}
+    </div>
+  ) : null;
 
   return (
-    <main className="transfer-page">
-      {/* ── Page Header ────────────────────────────────────────────────── */}
-      <header className="transfer-header">
-        <div>
-          <p className="transfer-eyebrow">QUẢN LÝ GIAO DỊCH & QUYỀN SỞ HỮU</p>
-          <h1>Quản lý Chuyển nhượng & Thừa kế</h1>
-          <p>
-            Xử lý yêu cầu chuyển nhượng của khách hàng theo quy trình hoặc thực hiện
-            chuyển nhượng trực tiếp.
-          </p>
-        </div>
+    <div className="request-workflow-page">
+      {confirmDialog}
 
-        {/* Tab Navigation */}
-        <div className="tab-navigation">
-          <button
-            className={`tab-button ${activeTab === "requests" ? "active" : ""}`}
-            onClick={() => setActiveTab("requests")}
-          >
-            <Clock size={16} />
-            Yêu cầu từ khách hàng
-          </button>
-          <button
-            className={`tab-button ${activeTab === "direct" ? "active" : ""}`}
-            onClick={() => setActiveTab("direct")}
-          >
-            <ShieldCheck size={16} />
-            Chuyển nhượng trực tiếp & Lịch sử
-          </button>
+      <header>
+        <div>
+          <h1>Tiếp nhận & Xử lý Yêu cầu Nhượng quyền</h1>
+          <p>
+            Quy trình tuần tự từ duyệt hồ sơ, lịch hẹn, hợp đồng chuyển nhượng/thừa kế/tặng cho, thanh toán và chuyển giao quyền sở hữu.
+          </p>
         </div>
       </header>
 
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* TAB 1: Customer Transfer Requests Workflow                          */}
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      {activeTab === "requests" && (
-        <div className="transfer-requests-tab">
-          {/* Filters Bar */}
-          <section className="transfer-card filter-card">
-            <div className="filter-row">
-              <div className="search-input">
-                <Search size={16} />
-                <input
-                  value={requestSearch}
-                  onChange={(e) => setRequestSearch(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && void loadRequests()}
-                  placeholder="Tìm theo tên khách, bên nhận, mã lô..."
-                />
-              </div>
+      {error && <div className="workflow-alert error">{error}</div>}
+      {message && <div className="workflow-alert success">{message}</div>}
 
-              <div className="filter-group">
-                <Filter size={15} />
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                >
-                  <option value="all">Tất cả trạng thái</option>
-                  <option value="pending">Chờ duyệt</option>
-                  <option value="approved">Đã duyệt / Đang xử lý</option>
-                  <option value="completed">Đã hoàn tất</option>
-                  <option value="rejected">Bị từ chối</option>
-                  <option value="cancelled">Đã hủy</option>
-                </select>
+      {/* 4 Main View Tabs */}
+      <nav className="request-view-tabs" aria-label="Phân loại yêu cầu nhượng quyền">
+        <button
+          type="button"
+          className={view === "sale" ? "active" : ""}
+          onClick={() => changeView("sale")}
+        >
+          Chuyển nhượng
+          <b>{salesRequests.length}</b>
+        </button>
 
-                <select
-                  value={typeFilter}
-                  onChange={(e) => setTypeFilter(e.target.value)}
-                >
-                  <option value="all">Tất cả loại giao dịch</option>
-                  <option value="sale">Chuyển nhượng (Mua bán)</option>
-                  <option value="inheritance">Thừa kế</option>
-                  <option value="gift">Tặng / Cho tặng</option>
-                </select>
+        <button
+          type="button"
+          className={view === "inheritance" ? "active" : ""}
+          onClick={() => changeView("inheritance")}
+        >
+          Thừa kế
+          <b>{inheritanceRequests.length}</b>
+        </button>
 
-                <button
-                  className="primary-button compact"
-                  onClick={() => void loadRequests()}
-                  disabled={loadingRequests}
-                >
-                  <RefreshCw size={14} className={loadingRequests ? "spin" : ""} />
-                  Làm mới
-                </button>
-              </div>
-            </div>
-          </section>
+        <button
+          type="button"
+          className={view === "gift" ? "active" : ""}
+          onClick={() => changeView("gift")}
+        >
+          Tặng / Cho tặng
+          <b>{giftRequests.length}</b>
+        </button>
 
-          {/* Requests Table */}
-          <section className="transfer-card table-card">
-            <div className="section-title">
-              <div>
-                <h2>Danh sách yêu cầu chuyển nhượng</h2>
-                <p>{totalCount} yêu cầu được tìm thấy</p>
-              </div>
-            </div>
+        <button
+          type="button"
+          className={view === "cancellations" ? "active" : ""}
+          onClick={() => changeView("cancellations")}
+        >
+          Yêu cầu hủy
+          <b>{cancelledRequests.length}</b>
+        </button>
 
-            {loadingRequests ? (
-              <div className="empty-state">
-                <RefreshCw size={24} className="spin" />
-                <span>Đang tải danh sách yêu cầu...</span>
-              </div>
-            ) : requestList.length === 0 ? (
-              <div className="empty-state">
-                <span>Không có yêu cầu chuyển nhượng nào phù hợp.</span>
-              </div>
+        <button
+          type="button"
+          className={`direct-tab ${view === "direct" ? "active" : ""}`}
+          onClick={() => changeView("direct")}
+        >
+          Chuyển trực tiếp & Lịch sử
+        </button>
+      </nav>
+
+      {/* Main Workflow (Tabs 1-4) */}
+      {view !== "direct" ? (
+        <div className="request-workspace">
+          {/* Left Column: Request List */}
+          <aside className="request-list">
+            {loading ? (
+              <p className="empty">Đang tải danh sách yêu cầu...</p>
+            ) : currentList.length === 0 ? (
+              <p className="empty">Không có yêu cầu nào trong mục này.</p>
             ) : (
-              <div className="plot-table-wrap">
-                <table className="plot-table">
-                  <thead>
-                    <tr>
-                      <th>MÃ YC</th>
-                      <th>LOẠI GIAO DỊCH</th>
-                      <th>BÊN CHUYỂN (A)</th>
-                      <th>BÊN NHẬN (B)</th>
-                      <th>LÔ ĐẤT</th>
-                      <th>NGÀY GỬI</th>
-                      <th>TRẠNG THÁI</th>
-                      <th>THAO TÁC</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {requestList.map((req) => {
-                      const typeInfo = typeLabels[req.transferType] ?? {
-                        label: req.transferType,
-                        class: "badge-sale",
-                      };
-                      const statusInfo = statusLabels[req.status] ?? {
-                        label: req.status,
-                        class: "status-pending",
-                      };
-                      return (
-                        <tr key={req.id} onClick={() => handleOpenDetail(req.id)}>
-                          <td>
-                            <b>#{req.id}</b>
-                          </td>
-                          <td>
-                            <span className={`type-badge ${typeInfo.class}`}>
-                              {typeInfo.label}
-                            </span>
-                          </td>
-                          <td>
-                            <b>{req.customerName}</b>
-                            <small>{req.customerPhone || req.customerEmail}</small>
-                          </td>
-                          <td>
-                            <b>{req.recipientName}</b>
-                          </td>
-                          <td>
-                            <div className="plot-code-tags">
-                              {req.plotCodes.map((code) => (
-                                <span key={code} className="plot-code-pill">
-                                  {code}
-                                </span>
-                              ))}
-                            </div>
-                          </td>
-                          <td>
-                            <small>
-                              {new Date(req.createdAt).toLocaleDateString("vi-VN")}
-                            </small>
-                          </td>
-                          <td>
-                            <span className={`status-pill ${statusInfo.class}`}>
-                              {statusInfo.label}
-                            </span>
-                          </td>
-                          <td>
-                            <button
-                              className="action-btn-link"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleOpenDetail(req.id);
-                              }}
-                            >
-                              <Eye size={15} />
-                              Chi tiết
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            {totalCount > 15 && (
-              <div className="pagination-bar" style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 14 }}>
+              currentList.map((item) => (
                 <button
-                  className="secondary-button compact"
-                  disabled={currentPage <= 1 || loadingRequests}
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  key={item.id}
+                  className={item.id === selectedId ? "selected" : ""}
+                  onClick={() => {
+                    setSelectedId(item.id);
+                    setDetail(undefined);
+                    setEvidenceError("");
+                    resetFeedback();
+                  }}
                 >
-                  Trang trước
-                </button>
-                <span style={{ display: "flex", alignItems: "center", fontSize: 13, color: "var(--admin-muted)" }}>
-                  Trang {currentPage} / {Math.ceil(totalCount / 15)}
-                </span>
-                <button
-                  className="secondary-button compact"
-                  disabled={currentPage >= Math.ceil(totalCount / 15) || loadingRequests}
-                  onClick={() => setCurrentPage((p) => p + 1)}
-                >
-                  Trang sau
-                </button>
-              </div>
-            )}
-          </section>
+                  <span>
+                    <strong>#{String(item.id).padStart(4, "0")}</strong>
+                    <em className={`status-${item.status}`}>
+                      {statusLabels[item.status] || item.status}
+                    </em>
+                  </span>
 
-          {/* ── Detail Drawer / Modal ────────────────────────────────────── */}
-          {selectedReqId && (
-            <div className="drawer-overlay" onClick={handleCloseDetail}>
-              <div className="drawer-panel" onClick={(e) => e.stopPropagation()}>
-                <div className="drawer-header">
+                  <div className="transfer-parties">
+                    <div className="party-row">
+                      <span className="party-tag">A</span>
+                      <b>{item.customerName || "Bên chuyển"}</b>
+                    </div>
+                    <div className="party-row">
+                      <span className="party-tag tag-b">B</span>
+                      <b>{item.recipientName || "Bên nhận"}</b>
+                    </div>
+                  </div>
+
+                  <small>
+                    {(item.plotCodes ?? []).join(", ") || "Chưa có mã lô"} ·{" "}
+                    {item.transferType === "sale" && item.totalPrice != null
+                      ? money.format(Number(item.totalPrice))
+                      : typeLabels[item.transferType] || "Nhượng quyền"}
+                  </small>
+                </button>
+              ))
+            )}
+          </aside>
+
+          {/* Right Column: Request Detail & Sequential Workflow */}
+          <main className="request-detail">
+            {!current ? (
+              <p className="empty">
+                {selectedId
+                  ? "Đang tải đầy đủ thông tin yêu cầu..."
+                  : "Chọn một yêu cầu để xử lý."}
+              </p>
+            ) : view === "cancellations" ? (
+              /* Cancellation View */
+              <>
+                <section className="request-heading">
                   <div>
-                    <span className="drawer-tag">YÊU CẦU #{selectedReqId}</span>
-                    <h2>Xử lý chuyển nhượng quyền sử dụng</h2>
+                    <span className="badge-header">
+                      Yêu cầu #{String(current.id).padStart(4, "0")} · Đã hủy
+                    </span>
+                    <h2>{current.customerName} ➔ {current.recipientName}</h2>
+                    <p>
+                      {(current.plots?.map((p) => p.code) ?? current.plotCodes ?? []).join(", ")} · {typeLabels[current.transferType]}
+                    </p>
                   </div>
-                  <button className="drawer-close" onClick={handleCloseDetail}>
-                    <X size={20} />
-                  </button>
-                </div>
+                  <em className="status-cancelled">Đã hủy</em>
+                </section>
 
-                {actionError && (
-                  <div className="transfer-alert error">
-                    <AlertCircle size={16} />
-                    {actionError}
-                    <button onClick={() => setActionError("")}>Ẩn</button>
-                  </div>
-                )}
-                {actionSuccess && (
-                  <div className="transfer-alert success">
-                    <CheckCircle2 size={16} />
-                    {actionSuccess}
-                    <button onClick={() => setActionSuccess("")}>Ẩn</button>
-                  </div>
-                )}
+                <TransferReviewInfo
+                  request={current}
+                  onDownloadDoc={downloadCustomerDoc}
+                />
 
-                {loadingDetail || !detail ? (
-                  <div className="empty-state">
-                    <RefreshCw size={24} className="spin" />
-                    <span>Đang tải thông tin chi tiết...</span>
+                <section className="request-step-completed">
+                  <summary>
+                    <span>!</span>
+                    Trạng thái yêu cầu
+                  </summary>
+                  <div>
+                    <div className="decision-result">
+                      <span>
+                        <small>Kết quả</small>
+                        <strong>Đã hủy</strong>
+                      </span>
+                      <span>
+                        <small>Ngày xử lý / hủy</small>
+                        <strong>{dateTime(current.reviewedAt ?? current.createdAt)}</strong>
+                      </span>
+                      <span>
+                        <small>Ghi chú</small>
+                        <strong>{current.adminNote || "Khách hàng đã hủy yêu cầu nhượng quyền."}</strong>
+                      </span>
+                    </div>
                   </div>
+                </section>
+              </>
+            ) : (
+              /* Active Workflow (sale, inheritance, gift) */
+              <>
+                <Stepper
+                  labels={labels}
+                  completed={completed}
+                  terminal={terminal}
+                />
+
+                <section className="request-heading">
+                  <div>
+                    <span className="badge-header">
+                      Yêu cầu #{String(current.id).padStart(4, "0")} · {typeLabels[current.transferType]}
+                    </span>
+                    <h2>
+                      {current.customerName} ➔ {current.recipientName}
+                    </h2>
+                    <p>
+                      {(current.plots?.map((p) => p.code) ?? current.plotCodes ?? []).join(", ")}{" "}
+                      ·{" "}
+                      {current.transferType === "sale" && current.transactionAmount != null
+                        ? money.format(Number(current.transactionAmount))
+                        : typeLabels[current.transferType]}
+                    </p>
+                  </div>
+                  <em className={`status-${current.status}`}>
+                    {statusLabels[current.status] || current.status}
+                  </em>
+                </section>
+
+                {/* STEP 1: DUYỆT YÊU CẦU */}
+                {decisionDone ? (
+                  <CompletedStep title="Duyệt yêu cầu">
+                    <div className="decision-result">
+                      <span>
+                        <small>Kết quả xử lý</small>
+                        <strong>{statusLabels[current.status] || current.status}</strong>
+                      </span>
+                      <span>
+                        <small>Ngày xử lý</small>
+                        <strong>{dateTime(current.reviewedAt)}</strong>
+                      </span>
+                      <span>
+                        <small>Ghi chú xử lý</small>
+                        <strong>{current.adminNote || "Không có"}</strong>
+                      </span>
+                    </div>
+                    <TransferReviewInfo
+                      request={current}
+                      onDownloadDoc={downloadCustomerDoc}
+                    />
+                  </CompletedStep>
                 ) : (
-                  <div className="drawer-content">
-                    {/* Stepper Progress */}
-                    <div className="workflow-stepper">
-                      <div
-                        className={`step-node ${
-                          detail.status !== "pending" && detail.status !== "rejected"
-                            ? "done"
-                            : detail.status === "pending"
-                            ? "active"
-                            : "error"
-                        }`}
-                      >
-                        <div className="circle">
-                          {detail.status === "rejected" ? "✕" : "1"}
-                        </div>
-                        <span>Duyệt yêu cầu</span>
-                      </div>
-                      <div className="step-bar" />
-                      <div
-                        className={`step-node ${
-                          detail.appointment?.customerStatus === "confirmed"
-                            ? "done"
-                            : detail.appointment
-                            ? "active"
-                            : ""
-                        }`}
-                      >
-                        <div className="circle">2</div>
-                        <span>Lịch hẹn ký</span>
-                      </div>
-                      <div className="step-bar" />
-                      <div
-                        className={`step-node ${
-                          detail.contract?.generatedPdfAt ? "done" : ""
-                        }`}
-                      >
-                        <div className="circle">3</div>
-                        <span>Tạo PDF HĐ</span>
-                      </div>
-                      <div className="step-bar" />
-                      <div
-                        className={`step-node ${
-                          detail.transferType !== "sale" ||
-                          detail.contract?.paymentStatus === "paid"
-                            ? "done"
-                            : ""
-                        }`}
-                      >
-                        <div className="circle">4</div>
-                        <span>Thanh toán</span>
-                      </div>
-                      <div className="step-bar" />
-                      <div
-                        className={`step-node ${
-                          detail.status === "completed" ? "done" : ""
-                        }`}
-                      >
-                        <div className="circle">5</div>
-                        <span>Kích hoạt</span>
+                  <section className="active-step decision-step">
+                    <div className="step-title">
+                      <span>1</span>
+                      <div>
+                        <h3>Duyệt yêu cầu</h3>
+                        <p>
+                          Kiểm tra thông tin Bên chuyển (A), Bên nhận (B), thông tin các lô đất và tài liệu chứng minh trước khi quyết định.
+                        </p>
                       </div>
                     </div>
 
-                    {/* Parties Info Grid */}
-                    <div className="information-grid">
-                      {/* Party A */}
-                      <section className="transfer-card information-card locked-card">
-                        <div className="section-title">
-                          <div>
-                            <p className="transfer-eyebrow">BÊN CHUYỂN NHƯỢNG (BÊN A)</p>
-                            <h3>Chủ sở hữu hiện tại</h3>
-                          </div>
-                        </div>
-                        <div className="field-grid">
-                          <LockedField label="Họ và tên" value={detail.customerName} />
-                          <LockedField label="CCCD/CMND" value={detail.customerIdCard ?? "—"} />
-                          <LockedField label="Email" value={detail.customerEmail} />
-                          <LockedField label="Số điện thoại" value={detail.customerPhone} />
-                          <LockedField
-                            label="Địa chỉ"
-                            value={detail.customerAddress ?? "—"}
-                            wide
-                          />
-                        </div>
-                      </section>
+                    <TransferReviewInfo
+                      request={current}
+                      onDownloadDoc={downloadCustomerDoc}
+                    />
 
-                      {/* Party B */}
-                      <section className="transfer-card information-card recipient-card">
-                        <div className="section-title">
-                          <div>
-                            <p className="transfer-eyebrow">BÊN NHẬN (BÊN B)</p>
-                            <h3>Người nhận quyền sử dụng</h3>
-                          </div>
+                    <label>
+                      Ghi chú xử lý của Ban quản lý
+                      <textarea
+                        value={adminNote}
+                        onChange={(event) => setAdminNote(event.target.value)}
+                        rows={3}
+                        placeholder="Nhập lý do hoặc ghi chú cho quyết định duyệt..."
+                      />
+                    </label>
+
+                    <div className="step-actions">
+                      <button
+                        className="danger-button"
+                        disabled={Boolean(busy)}
+                        onClick={() => void decide("reject")}
+                      >
+                        Từ chối
+                      </button>
+                      <button
+                        className="primary-button"
+                        disabled={Boolean(busy)}
+                        onClick={() => void decide("approve")}
+                      >
+                        {busy === "approve" ? "Đang duyệt..." : "Duyệt yêu cầu"}
+                      </button>
+                    </div>
+                  </section>
+                )}
+
+                {/* STEP 2: LỊCH HẸN OFFLINE */}
+                {!terminal && decisionDone && appointmentDone && (
+                  <CompletedStep title="Lịch hẹn offline">
+                    {appointmentSummary}
+                  </CompletedStep>
+                )}
+
+                {!terminal && decisionDone && !appointmentDone && (
+                  <section className="active-step">
+                    <div className="step-title">
+                      <span>2</span>
+                      <div>
+                        <h3>Lịch hẹn offline</h3>
+                        <p>Đề xuất khoảng ngày hẹn ký hợp đồng chuyển nhượng trực tiếp.</p>
+                      </div>
+                    </div>
+
+                    {appointment && appointment.customerStatus === "pending" ? (
+                      <>
+                        <div className="waiting-banner">
+                          Đang chờ khách hàng xác nhận lịch hẹn
                         </div>
-                        <div className="field-grid">
-                          <LockedField label="Họ và tên" value={detail.recipientName} />
-                          <LockedField label="CCCD/CMND" value={detail.recipientIdCard} />
-                          <LockedField label="Email" value={detail.recipientEmail ?? "—"} />
-                          <LockedField label="Số điện thoại" value={detail.recipientPhone} />
-                          <LockedField
-                            label="Ngày sinh"
-                            value={
-                              detail.recipientDateOfBirth
-                                ? new Date(detail.recipientDateOfBirth).toLocaleDateString(
-                                    "vi-VN"
-                                  )
-                                : "—"
+                        {appointmentSummary}
+                      </>
+                    ) : (
+                      <>
+                        {appointment?.customerStatus === "declined" && (
+                          <div className="workflow-alert error">
+                            Khách hàng đã từ chối lịch trước. Hãy đề xuất khoảng thời gian mới.
+                          </div>
+                        )}
+                        <div className="form-grid">
+                          <CalendarDateInput
+                            label="Từ ngày"
+                            value={appointmentForm.rangeStart}
+                            onChange={(value) =>
+                              setAppointmentForm({
+                                ...appointmentForm,
+                                rangeStart: value,
+                                rangeEnd:
+                                  appointmentForm.rangeEnd &&
+                                  appointmentForm.rangeEnd < value
+                                    ? ""
+                                    : appointmentForm.rangeEnd,
+                              })
                             }
                           />
-                          <LockedField
-                            label="Quan hệ với bên A"
-                            value={detail.recipientRelationship ?? "—"}
+                          <CalendarDateInput
+                            label="Đến ngày"
+                            value={appointmentForm.rangeEnd}
+                            min={appointmentForm.rangeStart || undefined}
+                            onChange={(value) =>
+                              setAppointmentForm({
+                                ...appointmentForm,
+                                rangeEnd: value,
+                              })
+                            }
                           />
-                          <LockedField
-                            label="Địa chỉ"
-                            value={detail.recipientAddress ?? "—"}
-                            wide
-                          />
-                        </div>
-                      </section>
-                    </div>
-
-                    {/* Plots & Financial Info */}
-                    <div className="information-grid" style={{ marginTop: 14 }}>
-                      {/* Plots */}
-                      <section className="transfer-card">
-                        <div className="section-title">
-                          <div>
-                            <p className="transfer-eyebrow">DANH SÁCH LÔ ĐẤT</p>
-                            <h3>{detail.plots.length} lô liên quan</h3>
-                          </div>
-                        </div>
-                        <div className="selected-plots">
-                          {detail.plots.map((p) => (
-                            <div key={p.id}>
-                              <b>{p.code}</b>
-                              <span>
-                                {p.zoneName} · {p.areaSqm ?? 0} m²
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </section>
-
-                      {/* Transaction info */}
-                      <section className="transfer-card">
-                        <div className="section-title">
-                          <div>
-                            <p className="transfer-eyebrow">THÔNG TIN GIAO DỊCH</p>
-                            <h3>
-                              {typeLabels[detail.transferType]?.label ?? detail.transferType}
-                            </h3>
-                          </div>
-                        </div>
-                        <div className="field-grid">
-                          {detail.transferType === "sale" ? (
-                            <>
-                              <LockedField
-                                label="Giá trị giao dịch"
-                                value={`${(detail.transactionAmount ?? 0).toLocaleString(
-                                  "vi-VN"
-                                )} đ`}
-                              />
-                              <LockedField
-                                label="Hình thức thanh toán"
-                                value={
-                                  detail.paymentMethod === "bank_transfer"
-                                    ? "Chuyển khoản ngân hàng"
-                                    : detail.paymentMethod === "cash"
-                                    ? "Tiền mặt"
-                                    : detail.paymentMethod ?? "—"
-                                }
-                              />
-                            </>
-                          ) : (
-                            <div className="wide-notice">
-                              <ShieldCheck size={18} />
-                              <span>
-                                Loại giao dịch <b>{typeLabels[detail.transferType]?.label}</b>: Miễn
-                                phí giao dịch & không yêu cầu thanh toán hợp đồng.
-                              </span>
-                            </div>
-                          )}
-                          {detail.agreementNote && (
-                            <LockedField
-                              label="Ghi chú thỏa thuận"
-                              value={detail.agreementNote}
-                              wide
+                          <label className="full">
+                            Địa điểm hẹn
+                            <input
+                              value={appointmentForm.location}
+                              onChange={(event) =>
+                                setAppointmentForm({
+                                  ...appointmentForm,
+                                  location: event.target.value,
+                                })
+                              }
                             />
-                          )}
+                          </label>
+                          <label className="full">
+                            Ghi chú gửi khách hàng
+                            <textarea
+                              rows={3}
+                              value={appointmentForm.note}
+                              placeholder="Ví dụ: Vui lòng mang theo bản gốc CCCD/CMND khi đến ký hợp đồng..."
+                              onChange={(event) =>
+                                setAppointmentForm({
+                                  ...appointmentForm,
+                                  note: event.target.value,
+                                })
+                              }
+                            />
+                          </label>
                         </div>
-                      </section>
-                    </div>
-
-                    {/* Uploaded Supporting Documents from Customer */}
-                    <section className="transfer-card" style={{ marginTop: 14 }}>
-                      <div className="section-title">
-                        <div>
-                          <p className="transfer-eyebrow">HỒ SƠ PHÁP LÝ ĐÍNH KÈM</p>
-                          <h3>Tài liệu khách hàng đã nộp ({detail.documents.length})</h3>
-                        </div>
-                      </div>
-                      {detail.documents.length === 0 ? (
-                        <small className="muted-text">Không có tài liệu đính kèm.</small>
-                      ) : (
-                        <div className="file-list">
-                          {detail.documents.map((doc) => (
-                            <div key={doc.id}>
-                              <FileText size={18} />
-                              <span>
-                                <b>{doc.filename}</b>
-                                <small>
-                                  {(doc.sizeBytes / 1024 / 1024).toFixed(2)} MB ·{" "}
-                                  {new Date(doc.createdAt).toLocaleDateString("vi-VN")}
-                                </small>
-                              </span>
-                              <a
-                                href={`${api.defaults.baseURL}/admin/transfer-requests/documents/${doc.id}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="download-icon-btn"
-                                title="Tải xuống tài liệu"
-                              >
-                                <Download size={15} />
-                              </a>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </section>
-
-                    {/* Appointment and Contract Status Cards */}
-                    {detail.status !== "pending" && detail.status !== "rejected" && (
-                      <div className="information-grid" style={{ marginTop: 14 }}>
-                        {/* Appointment Info */}
-                        <section className="transfer-card">
-                          <div className="section-title">
-                            <div>
-                              <p className="transfer-eyebrow">LỊCH HẸN KÝ HỢP ĐỒNG</p>
-                              <h3>Thông tin cuộc hẹn</h3>
-                            </div>
-                          </div>
-                          {detail.appointment ? (
-                            <div className="field-grid">
-                              <LockedField
-                                label="Khoảng thời gian hẹn"
-                                value={`${new Date(
-                                  detail.appointment.rangeStart
-                                ).toLocaleDateString("vi-VN")} — ${new Date(
-                                  detail.appointment.rangeEnd
-                                ).toLocaleDateString("vi-VN")}`}
-                              />
-                              <LockedField
-                                label="Trạng thái khách"
-                                value={
-                                  detail.appointment.customerStatus === "confirmed"
-                                    ? "✓ Khách đã xác nhận"
-                                    : "Chờ khách xác nhận"
-                                }
-                              />
-                              <LockedField
-                                label="Địa điểm"
-                                value={detail.appointment.location}
-                                wide
-                              />
-                            </div>
-                          ) : (
-                            <div className="empty-sub-state">
-                              <span>Chưa đặt lịch hẹn ký hợp đồng</span>
-                              <button
-                                className="primary-button compact"
-                                onClick={() => setActionModal("appointment")}
-                              >
-                                <Calendar size={14} />
-                                Đặt lịch hẹn
-                              </button>
-                            </div>
-                          )}
-                        </section>
-
-                        {/* Contract Info */}
-                        <section className="transfer-card">
-                          <div className="section-title">
-                            <div>
-                              <p className="transfer-eyebrow">HỢP ĐỒNG CHUYỂN NHƯỢNG</p>
-                              <h3>{detail.contract?.contractCode ?? "Chưa tạo"}</h3>
-                            </div>
-                          </div>
-                          {detail.contract ? (
-                            <div className="field-grid">
-                              <LockedField
-                                label="Trạng thái HĐ"
-                                value={detail.contract.status}
-                              />
-                              <LockedField
-                                label="Thanh toán"
-                                value={
-                                  detail.transferType !== "sale"
-                                    ? "Miễn phí"
-                                    : detail.contract.paymentStatus === "paid"
-                                    ? "Đã thanh toán đủ"
-                                    : "Chưa thanh toán"
-                                }
-                              />
-                              <LockedField
-                                label="File PDF"
-                                value={
-                                  detail.contract.generatedPdfAt
-                                    ? `Đã tạo lúc ${new Date(
-                                        detail.contract.generatedPdfAt
-                                      ).toLocaleDateString("vi-VN")}`
-                                    : "Chưa tạo PDF"
-                                }
-                                wide
-                              />
-                            </div>
-                          ) : (
-                            <small className="muted-text">Chưa có hợp đồng</small>
-                          )}
-                        </section>
-                      </div>
-                    )}
-
-                    {/* Workflow Action Bar */}
-                    <div className="drawer-actions">
-                      {detail.status === "pending" && (
-                        <>
+                        <div className="step-actions">
                           <button
-                            className="secondary-button danger-btn"
-                            disabled={actionLoading}
-                            onClick={() => {
-                              setAdminNoteInput("");
-                              setActionModal("reject");
-                            }}
+                            className="primary-button"
+                            disabled={Boolean(busy)}
+                            onClick={() => void createAppointment()}
                           >
-                            <XCircle size={16} />
-                            Từ chối
+                            {busy === "appointment" ? "Đang gửi..." : "Gửi lịch hẹn"}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </section>
+                )}
+
+                {/* STEP 3: TẠO PDF HỢP ĐỒNG */}
+                {appointmentDone && contract && (
+                  <>
+                    {pdfDone ? (
+                      <CompletedStep title="Tạo PDF hợp đồng">
+                        <div className="request-summary-grid">
+                          <span>
+                            <small>Mã hợp đồng</small>
+                            {contract.contractCode}
+                          </span>
+                          <span>
+                            <small>Đã tạo lúc</small>
+                            {dateTime(contract.generatedPdfAt)}
+                          </span>
+                        </div>
+                        <div className="step-actions" style={{ marginTop: "12px" }}>
+                          <button
+                            className="secondary-button"
+                            disabled={Boolean(busy)}
+                            onClick={() => void previewPdf()}
+                          >
+                            {busy === "pdf-preview"
+                              ? "Đang tạo bản xem trước..."
+                              : "Xem lại hợp đồng"}
+                          </button>
+                        </div>
+                      </CompletedStep>
+                    ) : (
+                      <section className="active-step">
+                        <div className="step-title">
+                          <span>3</span>
+                          <div>
+                            <h3>Tạo PDF hợp đồng</h3>
+                            <p>
+                              Rà soát nội dung hợp đồng chuyển nhượng/thừa kế/cho tặng và tải bản hợp đồng để ký offline.
+                            </p>
+                          </div>
+                        </div>
+
+                        <label>
+                          Điều khoản thỏa thuận bổ sung / Thừa kế / Cho tặng
+                          <textarea
+                            rows={4}
+                            value={inheritance}
+                            placeholder="Nhập điều khoản bổ sung nếu có (không bắt buộc)..."
+                            onChange={(event) => setInheritance(event.target.value)}
+                          />
+                        </label>
+
+                        <div className="step-actions">
+                          <button
+                            className="secondary-button"
+                            disabled={Boolean(busy)}
+                            onClick={() => void previewPdf()}
+                          >
+                            {busy === "pdf-preview"
+                              ? "Đang tạo bản xem trước..."
+                              : "Xem trước hợp đồng"}
                           </button>
                           <button
                             className="primary-button"
-                            disabled={actionLoading}
-                            onClick={() => {
-                              setAdminNoteInput("");
-                              setActionModal("approve");
-                            }}
+                            disabled={Boolean(busy)}
+                            onClick={() => void generatePdf()}
                           >
-                            <CheckCircle2 size={16} />
-                            Duyệt yêu cầu
+                            {busy === "pdf" ? "Đang tạo PDF..." : "Tạo và tải PDF"}
                           </button>
-                        </>
-                      )}
-
-                      {detail.status === "approved" && (
-                        <>
-                          <button
-                            className="secondary-button"
-                            disabled={actionLoading}
-                            onClick={() => setActionModal("appointment")}
-                          >
-                            <Calendar size={16} />
-                            Đặt lịch hẹn
-                          </button>
-
-                          <button
-                            className="secondary-button"
-                            disabled={actionLoading}
-                            onClick={handleGeneratePdf}
-                          >
-                            <FileText size={16} />
-                            Tạo PDF Hợp đồng
-                          </button>
-
-                          {detail.transferType === "sale" &&
-                            detail.contract?.paymentStatus !== "paid" && (
-                              <button
-                                className="secondary-button"
-                                disabled={actionLoading}
-                                onClick={() => {
-                                  setPaymentAmount(detail.transactionAmount ?? "");
-                                  setActionModal("payment");
-                                }}
-                              >
-                                Ghi nhận thanh toán
-                              </button>
-                            )}
-
-                          <button
-                            className="secondary-button"
-                            disabled={actionLoading}
-                            onClick={() => setActionModal("evidence")}
-                          >
-                            <Upload size={16} />
-                            Upload HĐ đã ký
-                          </button>
-
-                          <button
-                            className="primary-button success-btn"
-                            disabled={actionLoading}
-                            onClick={handleActivateOwnership}
-                          >
-                            <UserCheck size={16} />
-                            Kích hoạt quyền sở hữu
-                          </button>
-                        </>
-                      )}
-
-                      {detail.status === "completed" && (
-                        <div className="completed-badge">
-                          <CheckCircle2 size={18} />
-                          <span>Quy trình chuyển nhượng đã hoàn tất thành công.</span>
                         </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ── Sub-Modals for Actions ───────────────────────────────────── */}
-          {actionModal && (
-            <div className="modal-overlay" onClick={() => setActionModal(null)}>
-              <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-                {/* Approve Modal */}
-                {actionModal === "approve" && (
-                  <>
-                    <h3>Duyệt yêu cầu chuyển nhượng</h3>
-                    <p>
-                      Hệ thống sẽ tạo hợp đồng nháp và chuyển yêu cầu sang trạng thái đã
-                      duyệt.
-                    </p>
-                    <label>
-                      Ghi chú của admin (tùy chọn)
-                      <textarea
-                        rows={3}
-                        value={adminNoteInput}
-                        onChange={(e) => setAdminNoteInput(e.target.value)}
-                        placeholder="Nhập ghi chú cho khách hàng..."
-                      />
-                    </label>
-                    <div className="modal-buttons">
-                      <button
-                        className="secondary-button"
-                        onClick={() => setActionModal(null)}
-                      >
-                        Hủy
-                      </button>
-                      <button
-                        className="primary-button"
-                        disabled={actionLoading}
-                        onClick={handleApprove}
-                      >
-                        {actionLoading ? "Đang xử lý..." : "Xác nhận duyệt"}
-                      </button>
-                    </div>
-                  </>
-                )}
-
-                {/* Reject Modal */}
-                {actionModal === "reject" && (
-                  <>
-                    <h3>Từ chối yêu cầu chuyển nhượng</h3>
-                    <p>Vui lòng nhập lý do từ chối để thông báo cho khách hàng.</p>
-                    <label>
-                      Lý do từ chối *
-                      <textarea
-                        rows={3}
-                        value={adminNoteInput}
-                        onChange={(e) => setAdminNoteInput(e.target.value)}
-                        placeholder="Nhập lý do từ chối cụ thể..."
-                      />
-                    </label>
-                    <div className="modal-buttons">
-                      <button
-                        className="secondary-button"
-                        onClick={() => setActionModal(null)}
-                      >
-                        Hủy
-                      </button>
-                      <button
-                        className="primary-button danger-btn"
-                        disabled={actionLoading}
-                        onClick={handleReject}
-                      >
-                        {actionLoading ? "Đang xử lý..." : "Xác nhận từ chối"}
-                      </button>
-                    </div>
-                  </>
-                )}
-
-                {/* Appointment Modal */}
-                {actionModal === "appointment" && (
-                  <>
-                    <h3>Đặt lịch hẹn ký hợp đồng</h3>
-                    <div className="field-grid" style={{ marginTop: 12 }}>
-                      <label>
-                        Từ ngày *
-                        <input
-                          type="date"
-                          value={apptRangeStart}
-                          onChange={(e) => setApptRangeStart(e.target.value)}
-                        />
-                      </label>
-                      <label>
-                        Đến ngày *
-                        <input
-                          type="date"
-                          value={apptRangeEnd}
-                          onChange={(e) => setApptRangeEnd(e.target.value)}
-                        />
-                      </label>
-                      <label className="wide">
-                        Địa điểm *
-                        <input
-                          type="text"
-                          value={apptLocation}
-                          onChange={(e) => setApptLocation(e.target.value)}
-                        />
-                      </label>
-                      <label className="wide">
-                        Ghi chú
-                        <textarea
-                          rows={2}
-                          value={apptNote}
-                          onChange={(e) => setApptNote(e.target.value)}
-                          placeholder="Ghi chú thêm về lịch hẹn..."
-                        />
-                      </label>
-                    </div>
-                    <div className="modal-buttons">
-                      <button
-                        className="secondary-button"
-                        onClick={() => setActionModal(null)}
-                      >
-                        Hủy
-                      </button>
-                      <button
-                        className="primary-button"
-                        disabled={actionLoading}
-                        onClick={handleCreateAppointment}
-                      >
-                        {actionLoading ? "Đang xử lý..." : "Lưu lịch hẹn"}
-                      </button>
-                    </div>
-                  </>
-                )}
-
-                {/* Payment Modal */}
-                {actionModal === "payment" && (
-                  <>
-                    <h3>Ghi nhận thanh toán hợp đồng</h3>
-                    <div className="field-grid" style={{ marginTop: 12 }}>
-                      <label>
-                        Số tiền thanh toán (VNĐ) *
-                        <input
-                          type="number"
-                          value={paymentAmount}
-                          onChange={(e) =>
-                            setPaymentAmount(
-                              e.target.value ? Number(e.target.value) : ""
-                            )
-                          }
-                        />
-                      </label>
-                      <label>
-                        Phương thức *
-                        <select
-                          value={paymentMethod}
-                          onChange={(e) => setPaymentMethod(e.target.value)}
-                        >
-                          <option value="bank_transfer">Chuyển khoản</option>
-                          <option value="cash">Tiền mặt</option>
-                          <option value="pos">Thẻ / POS</option>
-                        </select>
-                      </label>
-                      <label className="wide">
-                        Mã tham chiếu / Số hóa đơn
-                        <input
-                          type="text"
-                          value={paymentRefCode}
-                          onChange={(e) => setPaymentRefCode(e.target.value)}
-                          placeholder="VD: FT2608168899"
-                        />
-                      </label>
-                      <label className="wide">
-                        Ghi chú
-                        <textarea
-                          rows={2}
-                          value={paymentNote}
-                          onChange={(e) => setPaymentNote(e.target.value)}
-                          placeholder="Ghi chú thanh toán..."
-                        />
-                      </label>
-                    </div>
-                    <div className="modal-buttons">
-                      <button
-                        className="secondary-button"
-                        onClick={() => setActionModal(null)}
-                      >
-                        Hủy
-                      </button>
-                      <button
-                        className="primary-button"
-                        disabled={actionLoading}
-                        onClick={handleRecordPayment}
-                      >
-                        {actionLoading ? "Đang ghi nhận..." : "Xác nhận thanh toán"}
-                      </button>
-                    </div>
-                  </>
-                )}
-
-                {/* Evidence Modal */}
-                {actionModal === "evidence" && (
-                  <>
-                    <h3>Upload hợp đồng đã ký</h3>
-                    <p>Tải lên bản quét hợp đồng đã có chữ ký của hai bên.</p>
-                    <label className="drop-zone" style={{ marginTop: 12 }}>
-                      <Upload size={24} />
-                      <strong>Chọn file hợp đồng</strong>
-                      <span>Hỗ trợ PDF, DOC, DOCX</span>
-                      <input
-                        type="file"
-                        multiple
-                        accept=".pdf,.doc,.docx"
-                        onChange={(e) => {
-                          if (e.target.files) {
-                            setEvidenceFiles(Array.from(e.target.files));
-                          }
-                        }}
-                      />
-                    </label>
-                    {evidenceFiles.length > 0 && (
-                      <div className="file-list">
-                        {evidenceFiles.map((f, i) => (
-                          <div key={i}>
-                            <FileText size={16} />
-                            <span>
-                              <b>{f.name}</b>
-                              <small>{(f.size / 1024 / 1024).toFixed(2)} MB</small>
-                            </span>
-                          </div>
-                        ))}
-                      </div>
+                      </section>
                     )}
-                    <div className="modal-buttons">
-                      <button
-                        className="secondary-button"
-                        onClick={() => setActionModal(null)}
-                      >
-                        Hủy
-                      </button>
-                      <button
-                        className="primary-button"
-                        disabled={actionLoading || !evidenceFiles.length}
-                        onClick={handleUploadEvidence}
-                      >
-                        {actionLoading ? "Đang tải lên..." : "Tải lên tài liệu"}
-                      </button>
-                    </div>
+
+                    {/* STEP 4: XÁC NHẬN THANH TOÁN */}
+                    {pdfDone && isFreeOrZero && (
+                      <CompletedStep title="Xác nhận thanh toán">
+                        <div className="request-summary-grid">
+                          <span>
+                            <small>Hình thức</small>
+                            {typeLabels[current.transferType]}
+                          </span>
+                          <span>
+                            <small>Trạng thái</small>
+                            Miễn phí giao dịch / Đã hoàn tất thanh toán
+                          </span>
+                        </div>
+                      </CompletedStep>
+                    )}
+
+                    {pdfDone && !isFreeOrZero && paymentDone && (
+                      <CompletedStep title="Xác nhận thanh toán">
+                        <div className="request-summary-grid">
+                          <span>
+                            <small>Đã nhận</small>
+                            {money.format(contract.paidAmount ?? 0)}
+                          </span>
+                          <span>
+                            <small>Trạng thái</small>
+                            Đã thanh toán đủ
+                          </span>
+                        </div>
+                      </CompletedStep>
+                    )}
+
+                    {pdfDone && !isFreeOrZero && !paymentDone && (
+                      <section className="active-step">
+                        <div className="step-title">
+                          <span>4</span>
+                          <div>
+                            <h3>Xác nhận thanh toán</h3>
+                            <p>
+                              Đã nhận {money.format(contract.paidAmount ?? 0)} · Còn lại{" "}
+                              {money.format(
+                                Number(contract.totalAmount ?? 0) -
+                                  Number(contract.paidAmount ?? 0),
+                              )}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="form-grid">
+                          <label>
+                            Số tiền đã nhận (đ)
+                            <input
+                              type="number"
+                              min="1"
+                              max={
+                                Number(contract.totalAmount ?? 0) -
+                                Number(contract.paidAmount ?? 0)
+                              }
+                              value={payment.amount}
+                              onChange={(event) =>
+                                setPayment({
+                                  ...payment,
+                                  amount: event.target.value,
+                                })
+                              }
+                            />
+                          </label>
+                          <label>
+                            Phương thức thanh toán
+                            <select
+                              value={payment.method}
+                              onChange={(event) =>
+                                setPayment({
+                                  ...payment,
+                                  method: event.target.value,
+                                })
+                              }
+                            >
+                              {paymentMethods.map(([val, label]) => (
+                                <option key={val} value={val}>
+                                  {label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="full">
+                            Ghi chú thanh toán
+                            <textarea
+                              rows={3}
+                              value={payment.note}
+                              placeholder="Mã tham chiếu ngân hàng, số phiếu thu..."
+                              onChange={(event) =>
+                                setPayment({
+                                  ...payment,
+                                  note: event.target.value,
+                                })
+                              }
+                            />
+                          </label>
+                        </div>
+
+                        <div className="step-actions">
+                          <button
+                            className="primary-button"
+                            disabled={Boolean(busy)}
+                            onClick={() => void recordPayment()}
+                          >
+                            {busy === "payment" ? "Đang ghi nhận..." : "Ghi nhận thanh toán"}
+                          </button>
+                        </div>
+                      </section>
+                    )}
+
+                    {/* STEP 5: HỢP ĐỒNG KÝ & QUYỀN SỞ HỮU */}
+                    {paymentDone && ownershipDone && (
+                      <CompletedStep title="Hợp đồng ký & quyền sở hữu">
+                        <div className="request-summary-grid">
+                          <span>
+                            <small>Hợp đồng chuyển nhượng</small>
+                            {contract.contractCode}
+                          </span>
+                          <span>
+                            <small>Kết quả</small>
+                            Đã kích hoạt và chuyển giao quyền sở hữu cho Bên nhận ({current.recipientName})
+                          </span>
+                        </div>
+                      </CompletedStep>
+                    )}
+
+                    {paymentDone && !ownershipDone && (
+                      <section className="active-step">
+                        <div className="step-title">
+                          <span>5</span>
+                          <div>
+                            <h3>Hợp đồng ký & quyền sở hữu</h3>
+                            <p>
+                              Bước 1 tải bản đã ký lên hệ thống. Bước 2 kiểm tra tài liệu và xác nhận kích hoạt chuyển quyền sở hữu.
+                            </p>
+                          </div>
+                        </div>
+
+                        <label>
+                          Bản hợp đồng đã ký (PDF, DOC, DOCX, JPG, PNG, WEBP; tối đa 10 tệp, 10 MB/tệp)
+                          <input
+                            type="file"
+                            multiple
+                            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*"
+                            onChange={(event) => {
+                              const selectedFiles = Array.from(event.target.files ?? []);
+                              const invalidFile = selectedFiles.find(
+                                (f) => !/\.(pdf|doc|docx|jpg|jpeg|png|webp)$/i.test(f.name),
+                              );
+                              if (invalidFile) {
+                                setFiles([]);
+                                setEvidenceError(`Tệp “${invalidFile.name}” không hợp lệ.`);
+                                event.currentTarget.value = "";
+                                return;
+                              }
+                              if (selectedFiles.length > 10) {
+                                setFiles([]);
+                                setEvidenceError("Chỉ được tải lên tối đa 10 tệp.");
+                                event.currentTarget.value = "";
+                                return;
+                              }
+                              const oversized = selectedFiles.find((f) => f.size > 10 * 1024 * 1024);
+                              if (oversized) {
+                                setFiles([]);
+                                setEvidenceError(`Tệp “${oversized.name}” vượt quá giới hạn 10 MB.`);
+                                event.currentTarget.value = "";
+                                return;
+                              }
+                              setEvidenceError("");
+                              setFiles(selectedFiles);
+                            }}
+                          />
+                        </label>
+
+                        <p className="file-hint" style={{ fontSize: "13px", color: "var(--color-text-secondary)" }}>
+                          {files.length
+                            ? `Đã chọn ${files.length} tệp trên máy, chưa tải lên hệ thống.`
+                            : `${contract.signedEvidence?.length ?? 0} tệp đã lưu trên hệ thống.`}
+                        </p>
+
+                        {evidenceError && (
+                          <p className="workflow-alert error" role="alert">
+                            {evidenceError}
+                          </p>
+                        )}
+
+                        {Boolean(contract.signedEvidence?.length) && (
+                          <div className="signed-evidence-list">
+                            <strong>Tệp đã lưu — tải xuống để kiểm tra:</strong>
+                            {contract.signedEvidence?.map((ev) => (
+                              <button
+                                type="button"
+                                className="signed-evidence-item"
+                                key={ev.id}
+                                disabled={Boolean(busy)}
+                                onClick={() => void downloadEvidence(ev)}
+                              >
+                                <span>📄 {ev.originalName}</span>
+                                <b>{busy === `evidence-${ev.id}` ? "Đang tải..." : "Tải xuống"}</b>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="step-actions" style={{ marginTop: "10px" }}>
+                          <button
+                            className="secondary-button"
+                            disabled={Boolean(busy) || !files.length}
+                            onClick={() => void uploadEvidence()}
+                          >
+                            {busy === "upload" ? "Đang tải lên..." : "Tải lên hệ thống"}
+                          </button>
+
+                          <button
+                            className="primary-button"
+                            disabled={Boolean(busy) || !contract.signedEvidence?.length}
+                            onClick={() => void activate()}
+                          >
+                            {busy === "activate"
+                              ? "Đang kích hoạt..."
+                              : "Xác nhận đã kiểm tra & kích hoạt sở hữu"}
+                          </button>
+                        </div>
+                      </section>
+                    )}
                   </>
                 )}
-              </div>
-            </div>
-          )}
+              </>
+            )}
+          </main>
         </div>
-      )}
-
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* TAB 2: Direct Admin Transfer & History (Preserved)                  */}
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      {activeTab === "direct" && (
-        <div className="direct-transfer-tab">
-          {directError && (
-            <div className="transfer-alert error" role="alert">
-              {directError}
-              <button onClick={() => setDirectError("")}>Ẩn</button>
-            </div>
-          )}
-          {directSuccess && (
-            <div className="transfer-alert success" role="status">
-              {directSuccess}
-              <button onClick={() => setDirectSuccess("")}>Ẩn</button>
-            </div>
-          )}
-
-          {step === 1 ? (
-            <>
-              <section className="transfer-card search-card">
-                <div
-                  className="mode-switch"
-                  role="tablist"
-                  aria-label="Chế độ tìm kiếm"
-                >
-                  <button
-                    role="tab"
-                    aria-selected={mode === "customer"}
-                    className={mode === "customer" ? "active" : ""}
-                    onClick={() => changeMode("customer")}
-                  >
-                    Tìm theo khách hàng
-                  </button>
-                  <button
-                    role="tab"
-                    aria-selected={mode === "plot"}
-                    className={mode === "plot" ? "active" : ""}
-                    onClick={() => changeMode("plot")}
-                  >
-                    Tìm theo lô đất
-                  </button>
-                </div>
-                <div className="search-row">
-                  <div className="search-input">
-                    <input
-                      value={query}
-                      onChange={(event) => setQuery(event.target.value)}
-                      onKeyDown={(event) =>
-                        event.key === "Enter" && void search()
-                      }
-                      placeholder={
-                        mode === "customer"
-                          ? "Tên, email, số điện thoại hoặc CCCD khách hàng"
-                          : "Nhập mã hoặc ID lô đất"
-                      }
-                    />
-                  </div>
-                  <button
-                    className="primary-button"
-                    disabled={searching}
-                    onClick={() => void search()}
-                  >
-                    {searching ? "Đang tìm…" : "Tìm kiếm"}
-                  </button>
-                </div>
-              </section>
-
-              <section className="transfer-card results-card">
-                <div className="section-title">
-                  <div>
-                    <h2>Kết quả tìm kiếm</h2>
-                    <p>
-                      {results.length
-                        ? `${results.length} lô đất được tìm thấy`
-                        : searchMessage || "Nhập thông tin để bắt đầu tìm kiếm"}
-                    </p>
-                  </div>
-                  {selected.length > 0 && (
-                    <strong>{selected.length} lô đã chọn</strong>
-                  )}
-                </div>
-                {searchMessage && results.length === 0 && (
-                  <div
-                    className="transfer-alert info"
-                    role="status"
-                    style={{ marginBottom: 14 }}
-                  >
-                    {searchMessage}
-                    <button onClick={() => setSearchMessage("")}>Ẩn</button>
-                  </div>
-                )}
-                {results.length === 0 ? (
-                  <div className="empty-state">
-                    <span>{searchMessage || "Chưa có dữ liệu hiển thị"}</span>
-                  </div>
-                ) : (
-                  <div className="plot-table-wrap">
-                    <table className="plot-table">
-                      <thead>
-                        <tr>
-                          <th />
-                          <th>LÔ ĐẤT</th>
-                          <th>NGƯỜI ĐỨNG TÊN</th>
-                          <th>LIÊN HỆ</th>
-                          <th>HỢP ĐỒNG</th>
-                          <th>TRẠNG THÁI</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {results.map((plot) => {
-                          const checked = selectedIds.has(plot.plotId);
-                          const disabled =
-                            selected.length > 0 &&
-                            selected[0].holderId !== plot.holderId;
-                          return (
-                            <tr
-                              key={plot.plotId}
-                              className={
-                                checked
-                                  ? "selected"
-                                  : disabled
-                                  ? "disabled"
-                                  : ""
-                              }
-                              onClick={() => !disabled && togglePlot(plot)}
-                            >
-                              <td>
-                                <input
-                                  type="checkbox"
-                                  checked={checked}
-                                  disabled={disabled}
-                                  onChange={() => togglePlot(plot)}
-                                  onClick={(event) => event.stopPropagation()}
-                                />
-                              </td>
-                              <td>
-                                <b className="plot-code">{plot.plotCode}</b>
-                                <small>
-                                  {plot.zoneName} · {plot.areaSqm ?? 0} m²
-                                </small>
-                              </td>
-                              <td>
-                                <b>{plot.holderName}</b>
-                                <small>
-                                  {plot.holderIdCard || "Chưa có CCCD"}
-                                </small>
-                              </td>
-                              <td>
-                                <span>{plot.holderPhone || "—"}</span>
-                                <small>{plot.holderEmail}</small>
-                              </td>
-                              <td>
-                                <span>{plot.contractCode}</span>
-                              </td>
-                              <td>
-                                <span className="status-pill">
-                                  {plot.plotStatus}
-                                </span>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </section>
-
-              <div className="transfer-actions">
-                <span>
-                  {selected.length
-                    ? `Đã chọn ${selected.length} lô của ${selectedHolder.holderName}`
-                    : "Chưa chọn lô đất"}
-                </span>
-                <button
-                  className="primary-button"
-                  disabled={!selected.length}
-                  onClick={() => {
-                    setDirectError("");
-                    setStep(2);
+      ) : (
+        /* Tab 5: Direct Admin Transfer & Batch History */
+        <div className="direct-transfer-container">
+          <section className="review-section">
+            <h4>Chuyển nhượng trực tiếp qua Ban Quản trị</h4>
+            <div style={{ padding: "16px", display: "grid", gap: "14px" }}>
+              <p style={{ margin: 0, color: "var(--color-text-secondary)" }}>
+                Tìm kiếm lô đất theo khách hàng hiện tại hoặc mã lô để thực hiện chuyển quyền sở hữu trực tiếp.
+              </p>
+              <div className="direct-search-box">
+                <select
+                  value={directMode}
+                  onChange={(e) => {
+                    setDirectMode(e.target.value as "customer" | "plot");
+                    setDirectResults([]);
                   }}
+                  style={{ width: "200px" }}
                 >
-                  Tiếp tục
-                </button>
+                  <option value="customer">Tìm theo khách hàng</option>
+                  <option value="plot">Tìm theo mã lô</option>
+                </select>
+                <input
+                  value={directQuery}
+                  onChange={(e) => setDirectQuery(e.target.value)}
+                  placeholder="Nhập tên, số điện thoại, CCCD hoặc mã lô..."
+                  onKeyDown={async (e) => {
+                    if (e.key === "Enter" && directQuery.trim().length >= 2) {
+                      try {
+                        const res = await api.get<{ data: PlotResult[] | { items: PlotResult[] } }>(
+                          "/admin/transfers/search",
+                          { params: { mode: directMode, q: directQuery.trim() } },
+                        );
+                        const data = res.data.data;
+                        setDirectResults(Array.isArray(data) ? data : data.items ?? []);
+                      } catch {
+                        // handled
+                      }
+                    }
+                  }}
+                />
               </div>
-            </>
-          ) : (
-            <>
-              <button className="back-button" onClick={() => setStep(1)}>
-                Quay lại chọn lô
-              </button>
-              <div className="information-grid">
-                <section className="transfer-card information-card locked-card">
-                  <div className="section-title">
-                    <div>
-                      <p className="transfer-eyebrow">THÔNG TIN KHÔNG THỂ THAY ĐỔI</p>
-                      <h2>Người đứng tên hiện tại</h2>
-                    </div>
-                    <span className="locked-label">Đã khóa</span>
-                  </div>
-                  <div className="field-grid">
-                    <LockedField
-                      label="Họ và tên"
-                      value={selectedHolder.holderName}
-                    />
-                    <LockedField
-                      label="CCCD/CMND"
-                      value={selectedHolder.holderIdCard}
-                    />
-                    <LockedField
-                      label="Email"
-                      value={selectedHolder.holderEmail}
-                    />
-                    <LockedField
-                      label="Số điện thoại"
-                      value={selectedHolder.holderPhone}
-                    />
-                    <LockedField
-                      label="Địa chỉ"
-                      value={selectedHolder.holderAddress}
-                      wide
-                    />
-                  </div>
-                  <div className="selected-plots">
-                    <label>
-                      Lô đất chuyển nhượng ({selected.length})
-                    </label>
-                    {selected.map((plot) => (
-                      <div key={plot.plotId}>
-                        <b>{plot.plotCode}</b>
+
+              {Boolean(directResults.length) && (
+                <div className="review-plot-list">
+                  {directResults.map((plot) => (
+                    <article key={plot.plotId}>
+                      <div className="plot-code">
+                        <small>Mã lô</small>
+                        <strong>{plot.plotCode}</strong>
+                      </div>
+                      <span>
+                        <small>Khu vực</small>
+                        {plot.zoneName}
+                      </span>
+                      <span>
+                        <small>Chủ hiện tại</small>
+                        {plot.holderName} ({plot.holderPhone})
+                      </span>
+                      <span>
+                        <small>Hợp đồng</small>
+                        {plot.contractCode}
+                      </span>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section className="review-section">
+            <h4>Lịch sử chuyển nhượng gần đây</h4>
+            <div style={{ padding: "16px" }}>
+              {recentTransfers.length === 0 ? (
+                <p className="empty">Chưa có lịch sử giao dịch chuyển nhượng.</p>
+              ) : (
+                <div className="customer-doc-list">
+                  {recentTransfers.map((item) => (
+                    <div key={item.id} className="customer-doc-item">
+                      <div>
+                        <span>🔄</span>
+                        <strong>{item.batchCode}</strong>
                         <span>
-                          {plot.zoneName} · HĐ {plot.contractCode}
+                          {item.previousHolderName} ➔ {item.recipientName} ({item.plotCodes.join(", ")})
                         </span>
                       </div>
-                    ))}
-                  </div>
-                </section>
-
-                <section className="transfer-card information-card recipient-card">
-                  <div className="section-title">
-                    <div>
-                      <p className="transfer-eyebrow">THÔNG TIN CẦN NHẬP</p>
-                      <h2>Người nhận chuyển nhượng</h2>
+                      <small>{dateTime(item.createdAt)}</small>
                     </div>
-                  </div>
-                  <div className="field-grid">
-                    <InputField
-                      label="Họ và tên *"
-                      value={recipient.fullName}
-                      onChange={(value) =>
-                        setRecipient({ ...recipient, fullName: value })
-                      }
-                    />
-                    <InputField
-                      label="CCCD/CMND *"
-                      value={recipient.idCard}
-                      onChange={(value) =>
-                        setRecipient({ ...recipient, idCard: value })
-                      }
-                    />
-                    <InputField
-                      label="Email *"
-                      type="email"
-                      value={recipient.email}
-                      onChange={(value) =>
-                        setRecipient({ ...recipient, email: value })
-                      }
-                    />
-                    <InputField
-                      label="Số điện thoại *"
-                      value={recipient.phone}
-                      onChange={(value) =>
-                        setRecipient({ ...recipient, phone: value })
-                      }
-                    />
-                    <InputField
-                      label="Ngày sinh"
-                      type="date"
-                      value={recipient.dateOfBirth}
-                      onChange={(value) =>
-                        setRecipient({ ...recipient, dateOfBirth: value })
-                      }
-                    />
-                    <InputField
-                      label="Địa chỉ *"
-                      value={recipient.address}
-                      onChange={(value) =>
-                        setRecipient({ ...recipient, address: value })
-                      }
-                      wide
-                    />
-                  </div>
-                </section>
-              </div>
-
-              <section className="transfer-card documents-card">
-                <div className="section-title">
-                  <div>
-                    <h2>Văn bản hợp đồng liên quan</h2>
-                    <p>
-                      Tối đa 10 file, mỗi file không quá 10 MB. Hỗ trợ PDF, JPG, PNG,
-                      WEBP.
-                    </p>
-                  </div>
+                  ))}
                 </div>
-                <label className="drop-zone">
-                  <strong>Chọn file từ máy tính</strong>
-                  <span>Ảnh hoặc tài liệu PDF</span>
-                  <input
-                    type="file"
-                    multiple
-                    accept=".pdf,.jpg,.jpeg,.png,.webp"
-                    onChange={(event) => addFiles(event.target.files)}
-                  />
-                </label>
-                {documents.length > 0 && (
-                  <div className="file-list">
-                    {documents.map((file, index) => (
-                      <div key={`${file.name}-${index}`}>
-                        <span>
-                          <b>{file.name}</b>
-                          <small>
-                            {(file.size / 1024 / 1024).toFixed(2)} MB
-                          </small>
-                        </span>
-                        <button
-                          onClick={() =>
-                            setDocuments((current) =>
-                              current.filter(
-                                (_, itemIndex) => itemIndex !== index
-                              )
-                            )
-                          }
-                        >
-                          Xóa
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <label className="admin-note">
-                  Ghi chú của admin
-                  <textarea
-                    rows={3}
-                    value={adminNote}
-                    onChange={(event) => setAdminNote(event.target.value)}
-                    placeholder="Nhập ghi chú cho giao dịch chuyển nhượng…"
-                  />
-                </label>
-              </section>
-
-              <div className="transfer-actions final">
-                <span>
-                  Thao tác sẽ chuyển {selected.length} lô sang người đứng tên mới.
-                </span>
-                <button
-                  className="secondary-button"
-                  onClick={() => setStep(1)}
-                >
-                  Hủy
-                </button>
-                <button
-                  className="primary-button"
-                  disabled={submittingDirect}
-                  onClick={() => void submitDirect()}
-                >
-                  {submittingDirect ? "Đang xử lý…" : "Xác nhận chuyển nhượng"}
-                </button>
-              </div>
-            </>
-          )}
-
-          {step === 1 && recent.length > 0 && (
-            <section className="transfer-card recent-card">
-              <div className="section-title">
-                <div>
-                  <h2>Chuyển nhượng gần đây</h2>
-                  <p>Lịch sử các giao dịch đã hoàn tất</p>
-                </div>
-              </div>
-              <div className="recent-list">
-                {recent.map((item) => (
-                  <div key={item.id}>
-                    <b className="plot-code">{item.batchCode}</b>
-                    <span>
-                      {item.previousHolderName} đến {item.recipientName}
-                    </span>
-                    <span>{item.plotCodes.join(", ")}</span>
-                    <small>
-                      {new Date(item.createdAt).toLocaleString("vi-VN")}
-                    </small>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
+              )}
+            </div>
+          </section>
         </div>
       )}
-    </main>
-  );
-}
 
-function LockedField({
-  label,
-  value,
-  wide = false,
-}: {
-  label: string;
-  value?: string;
-  wide?: boolean;
-}) {
-  return (
-    <label className={wide ? "wide" : ""}>
-      {label}
-      <input value={value || "Chưa cập nhật"} disabled />
-    </label>
-  );
-}
-
-function InputField({
-  label,
-  value,
-  onChange,
-  type = "text",
-  wide = false,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  type?: string;
-  wide?: boolean;
-}) {
-  return (
-    <label className={wide ? "wide" : ""}>
-      {label}
-      <input
-        type={type}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    </label>
+      {/* Contract PDF Preview Modal */}
+      {contractPreviewUrl && (
+        <div
+          className="contract-preview-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setContractPreviewUrl("");
+            }
+          }}
+        >
+          <section
+            className="contract-preview-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="contract-preview-title"
+          >
+            <header>
+              <div>
+                <span>Bản PDF được tạo tự động</span>
+                <h2 id="contract-preview-title">
+                  Xem trước hợp đồng chuyển nhượng {contract?.contractCode ?? ""}
+                </h2>
+              </div>
+              <button
+                type="button"
+                className="contract-preview-close"
+                aria-label="Đóng bản xem trước"
+                onClick={() => setContractPreviewUrl("")}
+              >
+                ×
+              </button>
+            </header>
+            <p>
+              Đây là nội dung hợp đồng chuyển nhượng/thừa kế/tặng cho. Đóng bản xem trước để tiếp tục chỉnh sửa hoặc tải PDF chính thức.
+            </p>
+            <iframe
+              src={contractPreviewUrl}
+              title={`Bản xem trước hợp đồng ${contract?.contractCode ?? ""}`}
+            />
+            <footer>
+              <a
+                className="secondary-button"
+                href={contractPreviewUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Mở trong tab mới
+              </a>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => setContractPreviewUrl("")}
+              >
+                Đóng
+              </button>
+            </footer>
+          </section>
+        </div>
+      )}
+    </div>
   );
 }

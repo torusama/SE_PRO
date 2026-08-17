@@ -23,6 +23,9 @@ async function bootstrap() {
   fs.mkdirSync(join(process.cwd(), 'uploads', 'transfers'), {
     recursive: true,
   });
+  fs.mkdirSync(join(process.cwd(), 'uploads', 'transfer-request-docs'), {
+    recursive: true,
+  });
   fs.mkdirSync(join(process.cwd(), 'uploads', 'service-completions'), {
     recursive: true,
   });

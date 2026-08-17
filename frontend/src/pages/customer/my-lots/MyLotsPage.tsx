@@ -51,6 +51,46 @@ interface CancelReservationResult {
   resolution: "immediate" | "admin_review";
 }
 
+interface TransferRequestAppointment {
+  id: number;
+  rangeStart: string;
+  rangeEnd: string;
+  location: string;
+  status: string;
+  customerSelectedDate?: string | null;
+  customerSelectedTime?: string | null;
+  customerSelectedAt?: string | null;
+  customerStatus: "pending" | "confirmed" | "declined";
+  note?: string | null;
+}
+
+interface TransferRequestItem {
+  id: number;
+  transferType: "sale" | "inheritance" | "gift" | string;
+  status: "pending" | "approved" | "rejected" | "cancelled" | "completed" | string;
+  recipientName: string;
+  recipientIdCard?: string;
+  recipientPhone?: string;
+  recipientEmail?: string;
+  recipientAddress?: string;
+  recipientRelationship?: string;
+  transactionAmount?: number;
+  paymentMethod?: string;
+  agreementNote?: string;
+  adminNote?: string | null;
+  createdAt: string;
+  reviewedAt?: string | null;
+  plotCodes?: string[];
+  plots?: Array<{ id: number; code: string; zoneName?: string | null }>;
+  appointment?: TransferRequestAppointment | null;
+}
+
+const TRANSFER_TYPE_MAP: Record<string, string> = {
+  sale: "Chuyển nhượng (Mua bán)",
+  inheritance: "Thừa kế",
+  gift: "Tặng cho",
+};
+
 interface Appointment {
   id: number;
   reservationRequestId: number;
@@ -246,7 +286,9 @@ export default function MyLotsPage() {
   const [searchParams] = useSearchParams();
   const targetAppointmentId = Number(searchParams.get("appointment")) || null;
   const targetRequestId = Number(searchParams.get("request")) || null;
+  const targetTransferId = Number(searchParams.get("transfer")) || null;
   const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [transferRequests, setTransferRequests] = useState<TransferRequestItem[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [serviceOrders, setServiceOrders] = useState<ServiceOrder[]>([]);
@@ -259,6 +301,13 @@ export default function MyLotsPage() {
   const [selectedAppointmentTimes, setSelectedAppointmentTimes] = useState<
     Record<number, string>
   >({});
+  const [respondingTransferId, setRespondingTransferId] = useState<
+    number | null
+  >(null);
+  const [selectedTransferAppointmentTimes, setSelectedTransferAppointmentTimes] = useState<
+    Record<number, string>
+  >({});
+  const [cancellingTransferId, setCancellingTransferId] = useState<number | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [successMessage, setSuccessMessage] = useState("");
   const [cancelTarget, setCancelTarget] = useState<Reservation | null>(null);
@@ -277,9 +326,13 @@ export default function MyLotsPage() {
   }, [appointments]);
 
   const overview = useMemo(() => {
-    const pendingRequests = reservations.filter((item) =>
-      ["pending", "submitted"].includes(item.status),
-    ).length;
+    const pendingRequests =
+      reservations.filter((item) =>
+        ["pending", "submitted"].includes(item.status),
+      ).length +
+      transferRequests.filter((item) =>
+        ["pending", "submitted"].includes(item.status),
+      ).length;
 
     const ownedPlots = contracts
       .filter((item) => ["active", "completed", "signed"].includes(item.status))
@@ -311,7 +364,7 @@ export default function MyLotsPage() {
       outstandingBalance,
       activeServices,
     };
-  }, [contracts, reservations, serviceOrders]);
+  }, [contracts, reservations, serviceOrders, transferRequests]);
 
   const nextAppointment = useMemo(() => {
     const now = lastUpdated?.getTime() ?? 0;
@@ -382,9 +435,10 @@ export default function MyLotsPage() {
     setError("");
 
     try {
-      const [reservationRes, appointmentRes, contractRes, serviceRes] =
+      const [reservationRes, transferRes, appointmentRes, contractRes, serviceRes] =
         await Promise.all([
           api.get<ApiResponse<Reservation[]>>("/my/reservations"),
+          api.get<ApiResponse<TransferRequestItem[]>>("/my/transfer-requests"),
           api.get<ApiResponse<Appointment[]>>("/my/appointments"),
           api.get<ApiResponse<Contract[]>>("/my/contracts"),
           api.get<ApiResponse<ServiceOrder[]>>("/my/service-orders"),
@@ -406,7 +460,23 @@ export default function MyLotsPage() {
           }
         }),
       );
+
+      const rawTransfers = transferRes.data.data ?? [];
+      const hydratedTransfers = await Promise.all(
+        rawTransfers.map(async (item) => {
+          try {
+            const detailRes = await api.get<ApiResponse<TransferRequestItem>>(
+              `/my/transfer-requests/${item.id}`,
+            );
+            return { ...item, ...detailRes.data.data };
+          } catch {
+            return item;
+          }
+        }),
+      );
+
       setReservations(hydratedReservations);
+      setTransferRequests(hydratedTransfers);
       setAppointments(appointmentRes.data.data ?? []);
       setContracts(contractRes.data.data ?? []);
       setServiceOrders(serviceRes.data.data ?? []);
@@ -438,8 +508,6 @@ export default function MyLotsPage() {
     if (!error) return;
     const retryInterval = window.setInterval(() => void loadData(true), 10_000);
     return () => window.clearInterval(retryInterval);
-    // loadData intentionally reads the latest page state on every retry.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [error]);
 
   useEffect(() => {
@@ -465,6 +533,16 @@ export default function MyLotsPage() {
   }, [loading, reservations.length, targetRequestId]);
 
   useEffect(() => {
+    if (loading || !targetTransferId) return;
+    const scrollId = window.setTimeout(() => {
+      const target = document.getElementById(`transfer-${targetTransferId}`);
+      target?.scrollIntoView({ behavior: "smooth", block: "center" });
+      target?.focus({ preventScroll: true });
+    }, 80);
+    return () => window.clearTimeout(scrollId);
+  }, [loading, targetTransferId, transferRequests.length]);
+
+  useEffect(() => {
     if (!cancelTarget) return;
     const previousOverflow = document.body.style.overflow;
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -481,6 +559,47 @@ export default function MyLotsPage() {
       window.removeEventListener("keydown", closeOnEscape);
     };
   }, [cancelTarget, cancellingId]);
+
+  async function respondTransferAppointment(transfer: TransferRequestItem) {
+    const appointment = transfer.appointment;
+    if (!appointment) return;
+    const selectedAt = selectedTransferAppointmentTimes[transfer.id];
+    setRespondingTransferId(transfer.id);
+    setError("");
+    try {
+      await api.post(`/my/transfer-requests/${transfer.id}/confirm-appointment`, {
+        selectedAt: selectedAt ? new Date(selectedAt).toISOString() : undefined,
+      });
+      setSuccessMessage(
+        "Bạn đã xác nhận lịch hẹn ký hợp đồng chuyển nhượng thành công.",
+      );
+      await loadData(true);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setRespondingTransferId(null);
+    }
+  }
+
+  async function handleCancelTransferRequest(transferId: number) {
+    if (
+      !window.confirm(
+        "Bạn có chắc chắn muốn hủy yêu cầu chuyển nhượng này không?",
+      )
+    )
+      return;
+    setCancellingTransferId(transferId);
+    setError("");
+    try {
+      await api.delete(`/my/transfer-requests/${transferId}`);
+      setSuccessMessage("Đã hủy yêu cầu chuyển nhượng thành công.");
+      await loadData(true);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setCancellingTransferId(null);
+    }
+  }
 
   useEffect(() => {
     const nodes = document.querySelectorAll<HTMLElement>("[data-lots-reveal]");
@@ -716,17 +835,17 @@ export default function MyLotsPage() {
         <section id="requests" className="lots-section" data-lots-reveal>
           <SectionHeader
             eyebrow="Yêu cầu của tôi"
-            title="Yêu cầu mua lô"
+            title="Yêu cầu mua & chuyển nhượng"
             description="Theo dõi hồ sơ từ lúc gửi yêu cầu đến khi có lịch hẹn ký hợp đồng."
-            count={reservations.length}
+            count={reservations.length + transferRequests.length}
           />
 
           {loading ? (
             <LoadingList />
-          ) : reservations.length === 0 ? (
+          ) : reservations.length === 0 && transferRequests.length === 0 ? (
             <EmptyState
               title="Chưa có yêu cầu nào"
-              description="Yêu cầu mua lô mới sẽ được hiển thị tại đây."
+              description="Yêu cầu mua lô hoặc chuyển nhượng mới sẽ được hiển thị tại đây."
             />
           ) : (
             <div className="lots-request-list">
@@ -766,7 +885,7 @@ export default function MyLotsPage() {
 
                 return (
                   <article
-                    key={request.id}
+                    key={`purchase-${request.id}`}
                     id={
                       targetRequestId === request.id
                         ? `request-${request.id}`
@@ -828,8 +947,8 @@ export default function MyLotsPage() {
                               disabled={cancellingId === request.id}
                             >
                               {cancellationMode === "admin_review"
-                                ? "Gửi yêu cầu hủy"
-                                : "Hủy yêu cầu"}
+                                ? "Gửi yêu cầu hủy mua lô"
+                                : "Hủy yêu cầu mua lô"}
                             </button>
                           </div>
                         ) : null}
@@ -838,34 +957,32 @@ export default function MyLotsPage() {
 
                     {cancellation ? (
                       <div
-                        className={`lots-cancellation-state is-${cancellation.status}`}
+                        className={`lots-cancellation-summary is-${cancellation.status}`}
                       >
-                        <div>
-                          <span>Yêu cầu hủy</span>
-                          <strong>
-                            {cancellation.status === "pending"
-                              ? "Đang chờ admin xem xét"
-                              : cancellation.status === "approved"
-                                ? "Đã được chấp thuận"
-                                : "Không được chấp thuận"}
-                          </strong>
+                        <div className="lots-cancellation-summary-header">
+                          <div className="lots-cancellation-summary-title">
+                            <strong>Trạng thái yêu cầu hủy:</strong>
+                            <StatusPill status={cancellation.status} />
+                          </div>
+                          <small>
+                            Gửi lúc {formatDate(cancellation.requestedAt)}
+                          </small>
                         </div>
-                        <p>
-                          <b>Lý do:</b> {cancellation.reason}
+                        <p className="lots-cancellation-summary-reason">
+                          <span>Lý do:</span> {cancellation.reason}
                         </p>
                         {cancellation.adminNote ? (
-                          <p>
-                            <b>Phản hồi của admin:</b> {cancellation.adminNote}
+                          <p className="lots-cancellation-summary-admin">
+                            <span>Phản hồi từ admin:</span>{" "}
+                            {cancellation.adminNote}
                           </p>
                         ) : null}
-                        <small>
-                          {cancellation.requestedAt
-                            ? `Gửi lúc ${formatDate(cancellation.requestedAt)}`
-                            : "Đang đồng bộ thời gian gửi"}
-                          {cancellation.reviewedAt
-                            ? ` · Xử lý lúc ${formatDate(cancellation.reviewedAt)}`
-                            : ""}
-                        </small>
+                        {cancellation.status === "pending" ? (
+                          <small className="lots-cancellation-summary-help">
+                            Admin đang xem xét yêu cầu hủy. Các bước lịch hẹn và
+                            hợp đồng tạm thời được khóa lại.
+                          </small>
+                        ) : null}
                       </div>
                     ) : null}
 
@@ -1018,6 +1135,263 @@ export default function MyLotsPage() {
                           <p>
                             Nhân viên sẽ cập nhật ngày ký hợp đồng cho yêu cầu
                             này.
+                          </p>
+                        </div>
+                      </div>
+                    ) : null}
+                  </article>
+                );
+              })}
+
+              {transferRequests.map((transfer, index) => {
+                const plotText =
+                  (transfer.plotCodes ?? []).join(", ") ||
+                  (transfer.plots ?? []).map((p) => p.code).join(", ") ||
+                  "-";
+                const appointment = transfer.appointment;
+                const transferTypeLabel =
+                  TRANSFER_TYPE_MAP[transfer.transferType] ??
+                  "Chuyển nhượng quyền sở hữu";
+                const canCancel = transfer.status === "pending";
+
+                const rangeStart = appointment?.rangeStart
+                  ? toVietnamDateTimeInput(appointment.rangeStart)
+                  : "";
+                const rangeEnd = appointment?.rangeEnd
+                  ? toVietnamDateTimeInput(appointment.rangeEnd)
+                  : "";
+                const nextMinute = new Date();
+                nextMinute.setSeconds(0, 0);
+                nextMinute.setMinutes(nextMinute.getMinutes() + 1);
+                const currentMin = toVietnamDateTimeInput(
+                  nextMinute.toISOString(),
+                );
+                const minTime =
+                  rangeStart > currentMin ? rangeStart : currentMin;
+
+                return (
+                  <article
+                    key={`transfer-${transfer.id}`}
+                    id={`transfer-${transfer.id}`}
+                    className={`lots-request-card${targetTransferId === transfer.id ? " is-target-request" : ""}`}
+                    tabIndex={targetTransferId === transfer.id ? -1 : undefined}
+                    data-lots-reveal
+                    style={
+                      {
+                        "--reveal-delay": `${Math.min(reservations.length + index, 6) * 55}ms`,
+                      } as CSSVariables
+                    }
+                  >
+                    <div className="lots-request-main">
+                      <div className="lots-record-code">
+                        <span>Chuyển nhượng</span>
+                        <strong>#{String(transfer.id).padStart(4, "0")}</strong>
+                      </div>
+
+                      <div className="lots-request-content">
+                        <div className="lots-card-heading">
+                          <div>
+                            <h3>{transferTypeLabel}</h3>
+                            <p>
+                              Lô: {plotText} • Người nhận:{" "}
+                              <strong>{transfer.recipientName}</strong>
+                              {transfer.recipientPhone
+                                ? ` (${transfer.recipientPhone})`
+                                : ""}
+                            </p>
+                          </div>
+                          <StatusPill status={transfer.status} />
+                        </div>
+
+                        <div className="lots-info-grid lots-info-grid-three">
+                          <Info
+                            label="Ngày gửi"
+                            value={formatDate(transfer.createdAt)}
+                          />
+                          <Info
+                            label="Ngày xử lý"
+                            value={formatDate(transfer.reviewedAt)}
+                          />
+                          <Info
+                            label="Giá trị giao dịch"
+                            value={
+                              transfer.transactionAmount
+                                ? money.format(Number(transfer.transactionAmount))
+                                : "Không ghi nhận"
+                            }
+                            emphasize={Boolean(transfer.transactionAmount)}
+                          />
+                        </div>
+
+                        {transfer.agreementNote ? (
+                          <p
+                            style={{
+                              marginTop: 10,
+                              fontSize: "0.85rem",
+                              color: "var(--lots-text-muted, #7c93a0)",
+                            }}
+                          >
+                            <span>Thỏa thuận:</span> {transfer.agreementNote}
+                          </p>
+                        ) : null}
+
+                        {transfer.adminNote ? (
+                          <p
+                            style={{
+                              marginTop: 6,
+                              fontSize: "0.85rem",
+                              color: "var(--lots-text-main, #333)",
+                            }}
+                          >
+                            <span>Ghi chú từ admin:</span> {transfer.adminNote}
+                          </p>
+                        ) : null}
+
+                        {canCancel ? (
+                          <div className="lots-request-actions">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void handleCancelTransferRequest(transfer.id)
+                              }
+                              disabled={cancellingTransferId === transfer.id}
+                            >
+                              {cancellingTransferId === transfer.id
+                                ? "Đang hủy..."
+                                : "Hủy yêu cầu chuyển nhượng"}
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    {appointment ? (
+                      <div className="lots-next-step lots-appointment-card">
+                        <section className="lots-appointment-summary">
+                          <div className="lots-appointment-kicker">
+                            <CalendarDays
+                              size={16}
+                              strokeWidth={1.8}
+                              aria-hidden="true"
+                            />
+                            <span>Lịch hẹn chuyển nhượng</span>
+                          </div>
+                          <strong className="lots-appointment-range">
+                            {formatAppointmentDate(appointment.rangeStart)} –{" "}
+                            {formatAppointmentDate(appointment.rangeEnd)}
+                          </strong>
+                          <div className="lots-appointment-detail">
+                            <MapPin
+                              size={15}
+                              strokeWidth={1.8}
+                              aria-hidden="true"
+                            />
+                            <span>{appointment.location}</span>
+                          </div>
+                          <div
+                            className={`lots-appointment-state is-${appointment.customerStatus}`}
+                          >
+                            {appointment.customerStatus === "pending"
+                              ? "Đang chờ bạn chọn lịch"
+                              : appointment.customerStatus === "confirmed"
+                                ? "Lịch đã được bạn xác nhận"
+                                : "Bạn đã từ chối lịch hẹn"}
+                          </div>
+                        </section>
+
+                        <section className="lots-appointment-booking">
+                          <div className="lots-appointment-booking-head">
+                            <div>
+                              <span>Thời gian gặp mặt</span>
+                              <strong>
+                                {appointment.customerStatus === "pending"
+                                  ? "Chọn ngày và giờ phù hợp"
+                                  : "Thông tin lịch của bạn"}
+                              </strong>
+                            </div>
+                            <Clock3
+                              size={18}
+                              strokeWidth={1.8}
+                              aria-hidden="true"
+                            />
+                          </div>
+
+                          {appointment.customerSelectedAt ||
+                          appointment.customerSelectedDate ? (
+                            <p className="lots-selected-time">
+                              Thời gian đã chọn:{" "}
+                              {formatDate(
+                                appointment.customerSelectedAt ||
+                                  appointment.customerSelectedDate,
+                              )}
+                              {appointment.customerSelectedTime
+                                ? ` (${appointment.customerSelectedTime})`
+                                : ""}
+                            </p>
+                          ) : null}
+
+                          {appointment.customerStatus === "pending" ? (
+                            <>
+                              <label className="lots-appointment-picker">
+                                <span>Ngày và giờ</span>
+                                <input
+                                  type="datetime-local"
+                                  step="60"
+                                  min={minTime}
+                                  max={rangeEnd}
+                                  value={
+                                    selectedTransferAppointmentTimes[
+                                      transfer.id
+                                    ] ?? ""
+                                  }
+                                  onChange={(event) =>
+                                    setSelectedTransferAppointmentTimes(
+                                      (current) => ({
+                                        ...current,
+                                        [transfer.id]: event.target.value,
+                                      }),
+                                    )
+                                  }
+                                />
+                                <small>
+                                  Có thể chọn trong khoảng{" "}
+                                  {formatAppointmentDate(appointment.rangeStart)}{" "}
+                                  –{" "}
+                                  {formatAppointmentDate(appointment.rangeEnd)}.
+                                </small>
+                              </label>
+                              <div className="lots-appointment-actions">
+                                <button
+                                  type="button"
+                                  className="confirm"
+                                  onClick={() =>
+                                    void respondTransferAppointment(transfer)
+                                  }
+                                  disabled={
+                                    respondingTransferId === transfer.id ||
+                                    !selectedTransferAppointmentTimes[
+                                      transfer.id
+                                    ]
+                                  }
+                                >
+                                  {respondingTransferId === transfer.id
+                                    ? "Đang lưu..."
+                                    : "Xác nhận lịch hẹn"}
+                                </button>
+                              </div>
+                            </>
+                          ) : null}
+                        </section>
+                      </div>
+                    ) : transfer.status === "approved" ? (
+                      <div className="lots-next-step lots-next-step-muted">
+                        <div className="lots-step-marker" aria-hidden="true" />
+                        <div className="lots-step-copy">
+                          <span>Bước tiếp theo</span>
+                          <strong>Đang chờ tạo lịch hẹn chuyển nhượng</strong>
+                          <p>
+                            Nhân viên sẽ cập nhật khoảng ngày ký hợp đồng
+                            chuyển nhượng cho yêu cầu này.
                           </p>
                         </div>
                       </div>

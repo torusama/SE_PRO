@@ -169,11 +169,12 @@ export class TransfersController {
   async confirmTransferAppointment(
     @CurrentUser() user: { id: number },
     @Param('id', ParseIntPipe) id: number,
+    @Body('selectedAt') selectedAt?: string,
   ) {
     return {
       success: true,
       message: 'Đã xác nhận lịch hẹn',
-      data: await this.service.confirmTransferAppointment(user.id, id),
+      data: await this.service.confirmTransferAppointment(user.id, id, selectedAt),
     };
   }
 

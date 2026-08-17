@@ -39,6 +39,8 @@ const TYPE_LABELS: Record<string, string> = {
   transfer_submitted: "Yêu cầu chuyển nhượng",
   transfer_approved: "Chuyển nhượng đã duyệt",
   transfer_rejected: "Chuyển nhượng bị từ chối",
+  transfer_appointment_scheduled: "Lịch hẹn ký hợp đồng chuyển nhượng",
+  transfer_appointment_confirmed: "Khách đã xác nhận lịch chuyển nhượng",
   memorial_reminder: "Nhắc lịch tưởng niệm",
   system_update: "Cập nhật hệ thống",
   announcement: "Thông báo chung",
@@ -140,7 +142,13 @@ export function notificationTargetRoute(
       return `${ROUTES.SERVICES}?tab=track${item.relatedEntityId ? `&order=${item.relatedEntityId}` : ""}`;
     case "reminder":
       return ROUTES.REMINDERS;
+    case "transfer_request":
+    case "transfer":
+      return `${ROUTES.MY_LOTS}?transfer=${item.relatedEntityId ?? ""}#requests`;
     default:
+      if (item.type.startsWith("transfer_")) {
+        return `${ROUTES.MY_LOTS}?transfer=${item.relatedEntityId ?? ""}#requests`;
+      }
       return null;
   }
 }

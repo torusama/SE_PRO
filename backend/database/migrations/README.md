@@ -97,5 +97,8 @@ Thứ tự hiện tại:
 31. `035_cancel_legacy_plot_hold_requests.sql`
 32. `036_purchase_request_cancellations.sql`
 33. `037_seed_spiritual_consultation_kb.sql`
+34. `038_backfill_reminder_notify_email.sql`
+35. `039_transfer_request_workflow.sql`
+36. `040_backfill_transfer_contracts_content.sql`
 
 `015` phải chạy trước `016`; thứ tự tên file của runner bảo đảm dependency này.

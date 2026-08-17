@@ -157,6 +157,18 @@ const TYPE_META: Record<
     tagClass: "tag-urgent",
     group: "request",
   },
+  transfer_appointment_scheduled: {
+    icon: "📅",
+    iconClass: "type-info",
+    tagClass: "tag-service",
+    group: "request",
+  },
+  transfer_appointment_confirmed: {
+    icon: "📅",
+    iconClass: "type-service",
+    tagClass: "tag-done",
+    group: "request",
+  },
   memorial_reminder: {
     icon: "🕯️",
     iconClass: "type-reminder",
@@ -192,6 +204,7 @@ function metaFor(type: string) {
 const ENTITY_TYPE_LABELS: Record<string, string> = {
   reservation_request: "Yêu cầu mua lô",
   offline_appointment: "Lịch hẹn tại nghĩa trang",
+  transfer_request: "Yêu cầu chuyển nhượng",
   service_order: "Đơn dịch vụ",
   contract: "Hợp đồng",
   reminder: "Nhắc lịch tưởng niệm",
@@ -520,22 +533,29 @@ export default function NotificationPage() {
                               {entityLabelFor(item)}
                             </span>
                           </div>
-                          {item.relatedEntityType === "offline_appointment" &&
+                          {((item.relatedEntityType === "offline_appointment" &&
                             [
                               "appointment_created",
                               "appointment_updated",
-                            ].includes(item.type) && (
-                              <button
-                                type="button"
-                                className="notif-action"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  handleClick(item);
-                                }}
-                              >
-                                Xem &amp; xác nhận lịch hẹn
-                              </button>
-                            )}
+                            ].includes(item.type)) ||
+                            (item.relatedEntityType === "transfer_request" &&
+                              [
+                                "transfer_appointment_scheduled",
+                                "appointment_created",
+                                "appointment_updated",
+                              ].includes(item.type)) ||
+                            item.type === "transfer_appointment_scheduled") && (
+                            <button
+                              type="button"
+                              className="notif-action"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleClick(item);
+                              }}
+                            >
+                              Xem &amp; xác nhận lịch hẹn
+                            </button>
+                          )}
                         </div>
                         <div className="notif-meta">
                           <div className="notif-time">

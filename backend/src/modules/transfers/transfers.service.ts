@@ -19,6 +19,7 @@ import { paginate } from '../../common/interfaces/paginated-response.interface';
 import type { AdminRequestContext } from '../../common/decorators/admin-request-context.decorator';
 import { RealtimeService } from '../realtime/realtime.service';
 import type { RealtimeTopic } from '../realtime/realtime.types';
+import { composeContractContent } from '../contracts/contract-content';
 
 interface RecipientInput {
   fullName: string;
@@ -155,39 +156,100 @@ export class TransfersService {
     );
   }
 
-  async ownership(query: AdminOwnershipQueryDto) {
+  async getDetail(id: string) {
+    const batch = await this.database.queryOne<any>(
+      `SELECT b.batch_id AS id, b.batch_code AS "batchCode", b.plot_count AS "plotCount",
+              b.admin_note AS "adminNote", b.created_at AS "createdAt",
+              old.user_id AS "previousHolderId", old.full_name AS "previousHolderName",
+              old.email AS "previousHolderEmail", old.phone_number AS "previousHolderPhone",
+              old.id_card_number AS "previousHolderIdCard", old.address AS "previousHolderAddress",
+              recipient.user_id AS "recipientId", recipient.full_name AS "recipientName",
+              recipient.email AS "recipientEmail", recipient.phone_number AS "recipientPhone",
+              recipient.id_card_number AS "recipientIdCard", recipient.address AS "recipientAddress",
+              b.recipient_snapshot AS "recipientSnapshot",
+              admin.full_name AS "createdByName"
+       FROM admin_transfer_batches b
+       JOIN users old ON old.user_id = b.previous_holder_user_id
+       JOIN users recipient ON recipient.user_id = b.recipient_user_id
+       JOIN users admin ON admin.user_id = b.created_by
+       WHERE b.batch_id = $1`,
+      [id],
+    );
+    if (!batch) throw new NotFoundException('Không tìm thấy phiên chuyển nhượng');
+
+    const [items, documents] = await Promise.all([
+      this.database.query(
+        `SELECT item.item_id AS "itemId", p.plot_id AS "plotId", p.plot_code AS "plotCode",
+                z.zone_name AS "zoneName", p.area_sqm::float AS "areaSqm",
+                old_c.contract_code AS "previousContractCode",
+                new_c.contract_code AS "newContractCode"
+         FROM admin_transfer_items item
+         JOIN plots p ON p.plot_id = item.plot_id
+         JOIN cemetery_zones z ON z.zone_id = p.zone_id
+         JOIN contracts old_c ON old_c.contract_id = item.previous_contract_id
+         JOIN contracts new_c ON new_c.contract_id = item.new_contract_id
+         WHERE item.batch_id = $1 ORDER BY p.plot_code`,
+        [id],
+      ),
+      this.database.query(
+        `SELECT document_id AS id, original_filename AS filename, mime_type AS "mimeType",
+                size_bytes AS "sizeBytes", created_at AS "createdAt"
+         FROM admin_transfer_documents WHERE batch_id = $1 ORDER BY created_at`,
+        [id],
+      ),
+    ]);
+
+    return { ...batch, items, documents };
+  }
+
+  async ownership(query: AdminOwnershipQueryDto = new AdminOwnershipQueryDto()) {
     const values: unknown[] = [];
-    const conditions: string[] = [];
-    const add = (value: unknown) => {
-      values.push(value);
+    const conditions: string[] = [
+      'p.is_deleted = FALSE',
+      'u.is_deleted = FALSE',
+    ];
+    const add = (val: unknown) => {
+      values.push(val);
       return `$${values.length}`;
     };
+    if (query.currentOnly !== false) {
+      conditions.push('o.is_current=TRUE');
+    }
+    if (query.holderId) {
+      conditions.push(`u.user_id = ${add(query.holderId)}`);
+    }
+    if (query.plotId) {
+      conditions.push(`p.plot_id = ${add(query.plotId)}`);
+    }
     if (query.search) {
       const p = add(`%${query.search}%`);
       conditions.push(
-        `(p.plot_code ILIKE ${p} OR u.full_name ILIKE ${p} OR u.email ILIKE ${p})`,
+        `(u.full_name ILIKE ${p} OR u.email ILIKE ${p} OR p.plot_code ILIKE ${p})`,
       );
     }
-    if (query.plotId) conditions.push(`o.plot_id=${add(query.plotId)}`);
-    if (query.holderId) conditions.push(`o.user_id=${add(query.holderId)}`);
-    if (query.currentOnly) conditions.push('o.is_current=TRUE');
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const count = await this.database.queryOne<{ total: string }>(
       `SELECT COUNT(*)::text AS total FROM ownership_records o
-       JOIN users u ON u.user_id=o.user_id JOIN plots p ON p.plot_id=o.plot_id ${where}`,
+       JOIN plots p ON p.plot_id=o.plot_id
+       JOIN contracts c ON c.contract_id=o.contract_id
+       JOIN users u ON u.user_id=o.user_id ${where}`,
       values,
     );
-    values.push(query.pageSize, query.offset);
+    const limit = add(query.pageSize);
+    const offset = add(query.offset);
     const items = await this.database.query(
-      `SELECT o.ownership_id AS id, o.plot_id AS "plotId", p.plot_code AS "plotCode",
-              o.user_id AS "holderId", u.full_name AS "holderName",
-              o.contract_id AS "contractId", o.ownership_start AS "startedAt",
-              o.ownership_end AS "endedAt", o.is_current AS "isCurrent",
-              o.transfer_note AS note
-       FROM ownership_records o JOIN users u ON u.user_id=o.user_id
-       JOIN plots p ON p.plot_id=o.plot_id ${where}
-       ORDER BY o.ownership_start DESC
-       LIMIT $${values.length - 1} OFFSET $${values.length}`,
+      `SELECT o.ownership_id AS id, o.user_id AS "userId", o.plot_id AS "plotId",
+              o.contract_id AS "contractId", o.ownership_start AS "ownershipStart",
+              o.ownership_end AS "ownershipEnd", o.is_current AS "isCurrent",
+              o.transfer_note AS "transferNote", p.plot_code AS "plotCode",
+              p.status AS "plotStatus", u.full_name AS "holderName",
+              u.email AS "holderEmail", u.phone_number AS "holderPhone"
+       FROM ownership_records o
+       JOIN plots p ON p.plot_id=o.plot_id
+       JOIN contracts c ON c.contract_id=o.contract_id
+       JOIN users u ON u.user_id=o.user_id
+       ${where} ORDER BY o.ownership_start DESC, o.ownership_id DESC
+       LIMIT ${limit} OFFSET ${offset}`,
       values,
     );
     return paginate(
@@ -198,82 +260,89 @@ export class TransfersService {
     );
   }
 
-  async transferDetail(id: string) {
-    const batch = await this.database.queryOne(
-      `SELECT b.batch_id AS id, b.batch_code AS "batchCode",
-              b.plot_count AS "plotCount", b.admin_note AS "adminNote",
-              b.created_at AS "createdAt",
-              old.full_name AS "previousHolderName",
-              recipient.full_name AS "recipientName",
-              admin.full_name AS "createdByName"
-       FROM admin_transfer_batches b
-       JOIN users old ON old.user_id=b.previous_holder_user_id
-       JOIN users recipient ON recipient.user_id=b.recipient_user_id
-       JOIN users admin ON admin.user_id=b.created_by
-       WHERE b.batch_id=$1`,
-      [id],
+  async getAvailablePlots(customerQuery?: AdminOwnershipQueryDto) {
+    const values: unknown[] = [];
+    const conditions: string[] = [
+      'o.is_current = TRUE',
+      'p.is_deleted = FALSE',
+      "p.status = 'sold'",
+      "c.status = 'active'",
+      'u.is_deleted = FALSE',
+    ];
+    if (customerQuery?.holderId) {
+      values.push(customerQuery.holderId);
+      conditions.push(`u.user_id = $${values.length}`);
+    }
+    if (customerQuery?.search) {
+      values.push(`%${customerQuery.search}%`);
+      const p = `$${values.length}`;
+      conditions.push(
+        `(u.full_name ILIKE ${p} OR u.email ILIKE ${p} OR u.phone_number ILIKE ${p} OR p.plot_code ILIKE ${p})`,
+      );
+    }
+    const where = `WHERE ${conditions.join(' AND ')}`;
+    return this.database.query(
+      `SELECT p.plot_id AS "plotId", p.plot_code AS "plotCode", p.status AS "plotStatus",
+              p.area_sqm::float AS "areaSqm", z.zone_name AS "zoneName",
+              c.contract_id AS "contractId", c.contract_code AS "contractCode",
+              o.ownership_id AS "ownershipId", u.user_id AS "holderId",
+              u.full_name AS "holderName", u.email AS "holderEmail",
+              u.phone_number AS "holderPhone", u.id_card_number AS "holderIdCard",
+              u.address AS "holderAddress"
+       FROM ownership_records o
+       JOIN plots p ON p.plot_id = o.plot_id
+       JOIN cemetery_zones z ON z.zone_id = p.zone_id
+       JOIN contracts c ON c.contract_id = o.contract_id
+       JOIN users u ON u.user_id = o.user_id
+       ${where}
+       ORDER BY u.full_name, p.plot_code LIMIT 200`,
+      values,
     );
-    if (!batch) throw new NotFoundException('Không tìm thấy đợt chuyển quyền');
-    const [items, documents] = await Promise.all([
-      this.database.query(
-        `SELECT i.item_id AS id, i.plot_id AS "plotId", p.plot_code AS "plotCode",
-                i.previous_contract_id AS "previousContractId",
-                i.new_contract_id AS "newContractId"
-         FROM admin_transfer_items i JOIN plots p ON p.plot_id=i.plot_id
-         WHERE i.batch_id=$1 ORDER BY p.plot_code`,
-        [id],
-      ),
-      this.database.query(
-        `SELECT document_id AS id, original_filename AS "filename",
-                mime_type AS "mimeType", size_bytes AS "sizeBytes"
-         FROM admin_transfer_documents WHERE batch_id=$1 ORDER BY created_at`,
-        [id],
-      ),
-    ]);
-    return { ...batch, items, documents };
   }
 
-  async transfer(
+  async executeBatch(
     adminId: number,
-    raw: unknown,
+    rawInput: unknown,
     files: Express.Multer.File[],
     context?: AdminRequestContext,
   ) {
-    const input = this.validateInput(raw);
-    if (!files.length)
+    const input = this.validateInput(rawInput);
+    if (!files.length) {
       throw new BadRequestException('Cần ít nhất một văn bản ảnh hoặc PDF');
+    }
     try {
       return await this.database.transaction(async (client) => {
         const ownerships = await client.query<any>(
-          `SELECT o.ownership_id, o.plot_id, o.contract_id, o.user_id,
-                  u.full_name, u.email, u.phone_number, u.id_card_number, u.address,
-                  p.plot_code
+          `SELECT o.ownership_id, o.plot_id, o.user_id, o.contract_id,
+                  p.plot_code, z.zone_name, p.area_sqm::float AS area_sqm,
+                  u.full_name, u.email, u.phone_number, u.id_card_number, u.address
            FROM ownership_records o
-           JOIN users u ON u.user_id = o.user_id
-           JOIN plots p ON p.plot_id = o.plot_id
-           JOIN contracts c ON c.contract_id = o.contract_id
+           JOIN plots p ON p.plot_id = o.plot_id AND p.is_deleted = FALSE
+           JOIN cemetery_zones z ON z.zone_id = p.zone_id
+           JOIN contracts c ON c.contract_id = o.contract_id AND c.status = 'active'
+           JOIN users u ON u.user_id = o.user_id AND u.is_deleted = FALSE
            WHERE o.plot_id = ANY($1::int[]) AND o.is_current = TRUE
-             AND c.status = 'active' AND c.is_deleted = FALSE
-           ORDER BY o.plot_id FOR UPDATE OF o, p, c`,
+           FOR UPDATE OF o, p, c`,
           [input.plotIds],
         );
         if (ownerships.rows.length !== input.plotIds.length) {
-          throw new ConflictException(
-            'Một hoặc nhiều phần mộ không còn thuộc người đứng tên hiện tại',
+          throw new BadRequestException(
+            'Một hoặc nhiều phần mộ không hợp lệ hoặc không có quyền sở hữu hiện hành',
           );
         }
-        const holderIds = new Set(
-          ownerships.rows.map((row) => Number(row.user_id)),
+        const previousHolderId = ownerships.rows[0].user_id;
+        const differentHolder = ownerships.rows.some(
+          (row: any) => row.user_id !== previousHolderId,
         );
-        if (holderIds.size !== 1)
+        if (differentHolder) {
           throw new BadRequestException(
-            'Các phần mộ được chọn phải cùng một người đứng tên',
+            'Tất cả các phần mộ được chọn phải thuộc cùng một chủ sở hữu',
           );
-        const previousHolderId = Number(ownerships.rows[0].user_id);
+        }
         const recipient = await this.resolveRecipient(client, input.recipient);
         if (recipient.userId === previousHolderId) {
           throw new BadRequestException(
-            'Người nhận phải khác người đứng tên hiện tại',
+            'Người nhận không được trùng với người chuyển nhượng',
           );
         }
 
@@ -309,21 +378,46 @@ export class TransfersService {
           const old = ownerships.rows[index];
           await client.query(
             `UPDATE ownership_records SET is_current=FALSE, ownership_end=CURRENT_DATE,
-               transfer_note=COALESCE(transfer_note || E'\n','') || $2
+                transfer_note=COALESCE(transfer_note || E'\n','') || $2
              WHERE ownership_id=$1`,
             [old.ownership_id, `Transferred by ${batchCode}`],
           );
           await client.query(
             `UPDATE contracts SET status='transferred', updated_at=NOW(),
-               notes=COALESCE(notes || E'\n','') || $2 WHERE contract_id=$1`,
+                notes=COALESCE(notes || E'\n','') || $2 WHERE contract_id=$1`,
             [old.contract_id, `Replaced by transfer ${batchCode}`],
           );
           const contractCode = `HD-CN-${year}-${seq.rows[0].value}-${String(index + 1).padStart(2, '0')}`;
+          const baseContent = this.renderTransferContractBase(
+            contractCode,
+            {
+              full_name: old.full_name,
+              id_card_number: old.id_card_number,
+              phone_number: old.phone_number,
+              address: old.address,
+            },
+            {
+              full_name: input.recipient.fullName,
+              id_card_number: input.recipient.idCard,
+              phone_number: input.recipient.phone,
+              address: input.recipient.address,
+            },
+            [
+              {
+                plot_code: old.plot_code,
+                zone_name: old.zone_name,
+                area_sqm: old.area_sqm,
+              },
+            ],
+            0,
+          );
+          const contractContent = composeContractContent(baseContent);
           const newContract = await client.query<{ contract_id: number }>(
             `INSERT INTO contracts
                (contract_code,user_id,plot_id,contract_date,effective_date,total_amount,paid_amount,
-                payment_status,status,created_by,notes,group_contract_code,ownership_source)
-             VALUES ($1,$2,$3,CURRENT_DATE,CURRENT_DATE,0,0,'paid','active',$4,$5,$6,'transfer')
+                payment_status,status,created_by,notes,group_contract_code,ownership_source,
+                contract_base_content,contract_content,inheritance_content)
+             VALUES ($1,$2,$3,CURRENT_DATE,CURRENT_DATE,0,0,'paid','active',$4,$5,$6,'transfer',$7,$8,NULL)
              RETURNING contract_id`,
             [
               contractCode,
@@ -332,6 +426,8 @@ export class TransfersService {
               adminId,
               `Created from admin transfer ${batchCode}`,
               groupCode,
+              baseContent,
+              contractContent,
             ],
           );
           const newOwnership = await client.query<{ ownership_id: number }>(
@@ -416,6 +512,40 @@ export class TransfersService {
     }
   }
 
+  async transferDetail(id: string) {
+    return this.getDetail(id);
+  }
+
+  async transfer(
+    adminId: number,
+    rawInput: unknown,
+    files: Express.Multer.File[],
+    context?: AdminRequestContext,
+  ) {
+    return this.executeBatch(adminId, rawInput, files, context);
+  }
+
+  async getTransferRequestDocument(userId: number, documentId: number, isAdmin = false) {
+    const doc = await this.database.queryOne<{
+      storedFilename: string;
+      originalFilename: string;
+      mimeType: string;
+      userId: number;
+    }>(
+      `SELECT d.stored_filename AS "storedFilename", d.original_filename AS "originalFilename",
+              d.mime_type AS "mimeType", rr.user_id AS "userId"
+       FROM transfer_request_documents d
+       JOIN reservation_requests rr ON rr.request_id = d.request_id
+       WHERE d.document_id = $1`,
+      [documentId],
+    );
+    if (!doc) throw new NotFoundException('Không tìm thấy tài liệu');
+    if (!isAdmin && doc.userId !== userId) {
+      throw new NotFoundException('Không tìm thấy tài liệu');
+    }
+    return doc;
+  }
+
   async getDocument(id: string) {
     const row = await this.database.queryOne<{
       storedFilename: string;
@@ -489,6 +619,85 @@ export class TransfersService {
     return { userId: Number(created.rows[0].user_id), created: true };
   }
 
+  /**
+   * Tạo nội dung cơ sở cho hợp đồng chuyển nhượng / thừa kế / tặng cho.
+   * Bên A = Chủ sở hữu cũ (bên chuyển nhượng) lấy từ hệ thống.
+   * Bên B = Người nhận quyền sử dụng lấy từ yêu cầu chuyển nhượng.
+   */
+  private renderTransferContractBase(
+    code: string,
+    seller: {
+      full_name: string;
+      id_card_number: string | null;
+      phone_number: string | null;
+      address: string | null;
+    },
+    buyer: {
+      full_name: string;
+      id_card_number: string | null;
+      phone_number: string | null;
+      address: string | null;
+    },
+    plots: Array<{
+      plot_code: string;
+      zone_name?: string | null;
+      area_sqm?: number | null;
+    }>,
+    totalAmount: number,
+  ) {
+    const plotDetails = plots
+      .map(
+        (plot, index) =>
+          `${index + 1}. Lô ${plot.plot_code}${plot.zone_name ? `, ${plot.zone_name}` : ''}, diện tích ${plot.area_sqm ?? '...'} m².`,
+      )
+      .join('\n');
+    const plotPrices = plots
+      .map(
+        (plot, index) =>
+          `${index + 1}. Lô ${plot.plot_code}: ${Number(totalAmount / (plots.length || 1)).toLocaleString('vi-VN')} đồng.`,
+      )
+      .join('\n');
+    const total = totalAmount.toLocaleString('vi-VN');
+    return `CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM
+Độc lập - Tự do - Hạnh phúc
+
+HỢP ĐỒNG CUNG CẤP QUYỀN SỬ DỤNG VỊ TRÍ PHẦN MỘ VÀ DỊCH VỤ NGHĨA TRANG
+Số: ${code}
+
+Căn cứ Bộ luật Dân sự số 91/2015/QH13 và pháp luật Việt Nam có liên quan;
+Căn cứ nhu cầu của Bên B và khả năng cung cấp dịch vụ của Bên A;
+
+BÊN A - BÊN CHUYỂN NHƯỢNG
+Họ tên: ${seller.full_name}
+CCCD/CMND: ${seller.id_card_number || '................................'}
+Địa chỉ: ${seller.address || '................................'}
+Điện thoại: ${seller.phone_number || '................................'}
+
+BÊN B - BÊN NHẬN
+Họ tên: ${buyer.full_name}
+CCCD/CMND: ${buyer.id_card_number || '................................'}
+Địa chỉ: ${buyer.address || '................................'}
+Điện thoại: ${buyer.phone_number || '................................'}
+
+ĐIỀU 1. ĐỐI TƯỢNG HỢP ĐỒNG
+Bên A cung cấp cho Bên B quyền sử dụng các vị trí phần mộ sau:
+${plotDetails}
+Các vị trí trên được sử dụng theo quy hoạch và quy chế quản lý nghĩa trang. Hợp đồng này không mặc nhiên là hợp đồng chuyển nhượng quyền sử dụng đất.
+
+ĐIỀU 2. GIÁ TRỊ VÀ THANH TOÁN
+${plotPrices}
+Tổng giá trị hợp đồng: ${total} đồng. Thời hạn, phương thức và chứng từ thanh toán thực hiện theo thỏa thuận/phiếu thu hợp lệ của hai bên.
+
+ĐIỀU 3. QUYỀN VÀ NGHĨA VỤ CỦA BÊN A
+Bàn giao đúng vị trí, cung cấp thông tin quy chế; quản lý, bảo vệ hạ tầng chung; tôn trọng quyền hợp pháp của Bên B; thông báo các khoản phí và thay đổi có liên quan theo hợp đồng và pháp luật.
+
+ĐIỀU 4. QUYỀN VÀ NGHĨA VỤ CỦA BÊN B
+Thanh toán đầy đủ; sử dụng đúng mục đích mai táng, đúng quy hoạch, nội quy, vệ sinh và môi trường; không tự ý chuyển giao, thay đổi hiện trạng hoặc sử dụng vị trí vào mục đích khác khi chưa được chấp thuận hợp lệ.
+
+ĐIỀU 5. THỜI HẠN, CHẤM DỨT VÀ GIẢI QUYẾT TRANH CHẤP
+Thời hạn và thời điểm có hiệu lực được ghi tại phần ký kết. Hai bên ưu tiên thương lượng; nếu không thành, tranh chấp được giải quyết tại cơ quan có thẩm quyền theo pháp luật Việt Nam.`;
+  }
+
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // Customer-initiated transfer request workflow
   // Uses reservation_requests (request_type='transfer'), request_plots,
@@ -524,19 +733,20 @@ export class TransfersService {
         );
       }
 
-      // 2. Check no active transfer/purchase request exists for these plots
+      // 2. Check no active transfer request exists for these plots
       const existingActive = await client.query<{ plot_id: number }>(
         `SELECT rp.plot_id
          FROM request_plots rp
          JOIN reservation_requests rr ON rr.request_id = rp.request_id
          WHERE rp.plot_id = ANY($1::int[])
-           AND rr.status NOT IN ('rejected', 'cancelled', 'completed')
+           AND rr.request_type = 'transfer'
+           AND rr.status IN ('pending', 'approved')
          LIMIT 1`,
         [dto.plotIds],
       );
       if (existingActive.rows.length) {
         throw new ConflictException(
-          'Một hoặc nhiều lô đã có yêu cầu đang xử lý',
+          'Một hoặc nhiều lô đã có yêu cầu chuyển nhượng đang xử lý',
         );
       }
 
@@ -687,12 +897,12 @@ export class TransfersService {
     );
     // Reuses offline_appointments (same table as purchase flow)
     const appointment = await this.database.queryOne<any>(
-      `SELECT appointment_id AS id, date_range_start AS "rangeStart",
-              date_range_end AS "rangeEnd", location, status,
-              customer_selected_date AS "customerSelectedDate",
-              customer_selected_time AS "customerSelectedTime",
+      `SELECT appointment_id AS id, scheduled_at AS "rangeStart",
+              scheduled_end_at AS "rangeEnd", location, status,
+              customer_selected_at::date AS "customerSelectedDate",
+              customer_selected_at::time AS "customerSelectedTime",
               customer_status AS "customerStatus",
-              admin_note AS note
+              note
        FROM offline_appointments
        WHERE request_id = $1 AND is_deleted = FALSE
        ORDER BY created_at DESC LIMIT 1`,
@@ -702,7 +912,12 @@ export class TransfersService {
     const contract = await this.database.queryOne<any>(
       `SELECT contract_id AS "contractId", contract_code AS "contractCode",
               status, payment_status AS "paymentStatus",
-              generated_pdf_at AS "generatedPdfAt"
+              total_amount::float AS "totalAmount", paid_amount::float AS "paidAmount",
+              generated_pdf_at AS "generatedPdfAt",
+              contract_base_content AS "contractBaseContent",
+              contract_content AS "contractContent",
+              inheritance_content AS "inheritanceContent",
+              contract_date AS "contractDate"
        FROM contracts WHERE request_id = $1 AND is_deleted = FALSE
        ORDER BY created_at DESC LIMIT 1`,
       [requestId],
@@ -837,12 +1052,12 @@ export class TransfersService {
         [requestId],
       ),
       this.database.queryOne<any>(
-        `SELECT appointment_id AS id, date_range_start AS "rangeStart",
-                date_range_end AS "rangeEnd", location, status,
-                customer_selected_date AS "customerSelectedDate",
-                customer_selected_time AS "customerSelectedTime",
+        `SELECT appointment_id AS id, scheduled_at AS "rangeStart",
+                scheduled_end_at AS "rangeEnd", location, status,
+                customer_selected_at::date AS "customerSelectedDate",
+                customer_selected_at::time AS "customerSelectedTime",
                 customer_status AS "customerStatus",
-                admin_note AS note
+                note
          FROM offline_appointments
          WHERE request_id = $1 AND is_deleted = FALSE
          ORDER BY created_at DESC LIMIT 1`,
@@ -852,7 +1067,11 @@ export class TransfersService {
         `SELECT contract_id AS "contractId", contract_code AS "contractCode",
                 status, payment_status AS "paymentStatus",
                 total_amount::float AS "totalAmount", paid_amount::float AS "paidAmount",
-                generated_pdf_at AS "generatedPdfAt"
+                generated_pdf_at AS "generatedPdfAt",
+                contract_base_content AS "contractBaseContent",
+                contract_content AS "contractContent",
+                inheritance_content AS "inheritanceContent",
+                contract_date AS "contractDate"
          FROM contracts WHERE request_id = $1 AND is_deleted = FALSE
          ORDER BY created_at DESC LIMIT 1`,
         [requestId],
@@ -885,16 +1104,51 @@ export class TransfersService {
         throw new BadRequestException('Yêu cầu này không ở trạng thái chờ duyệt');
       }
 
-      // Get plots from request_plots
-      const plots = await client.query<{ plot_id: number; plot_code: string }>(
-        `SELECT p.plot_id, p.plot_code
+      // 1. Get seller (Bên A - Chủ sở hữu cũ lấy từ hệ thống theo transferReq.user_id)
+      const sellerResult = await client.query<{
+        full_name: string;
+        id_card_number: string | null;
+        phone_number: string | null;
+        address: string | null;
+      }>(
+        `SELECT full_name, id_card_number, phone_number, address
+         FROM users WHERE user_id = $1`,
+        [transferReq.user_id],
+      );
+      const seller = sellerResult.rows[0] ?? {
+        full_name: '',
+        id_card_number: null,
+        phone_number: null,
+        address: null,
+      };
+
+      // 2. Buyer (Bên B - Bên nhận lấy từ yêu cầu chuyển nhượng transferReq)
+      const buyer = {
+        full_name: transferReq.recipient_full_name,
+        id_card_number: transferReq.recipient_id_card ?? null,
+        phone_number: transferReq.recipient_phone ?? null,
+        address: transferReq.recipient_address ?? null,
+      };
+
+      // 3. Get plots from request_plots with zone and area
+      const plots = await client.query<{
+        plot_id: number;
+        plot_code: string;
+        zone_name?: string | null;
+        area_sqm?: number | null;
+      }>(
+        `SELECT p.plot_id, p.plot_code, z.zone_name, p.area_sqm::float AS area_sqm
          FROM request_plots rp
          JOIN plots p ON p.plot_id = rp.plot_id
+         LEFT JOIN cemetery_zones z ON z.zone_id = p.zone_id
          WHERE rp.request_id = $1 ORDER BY p.plot_code`,
         [requestId],
       );
+      if (plots.rows.length === 0) {
+        throw new BadRequestException('Yêu cầu chưa có lô chuyển nhượng');
+      }
 
-      // Resolve or create recipient user account
+      // 4. Resolve or create recipient user account
       const recipient = await this.resolveRecipient(client, {
         fullName: transferReq.recipient_full_name,
         email: transferReq.recipient_email ?? `transfer_${requestId}@placeholder.local`,
@@ -904,12 +1158,23 @@ export class TransfersService {
         dateOfBirth: transferReq.recipient_date_of_birth,
       });
 
-      // Create transfer contract (draft) — reuses the contracts table
+      // 5. Create transfer contract (draft) — reuses the contracts table
       const isSale = transferReq.transfer_type === 'sale';
       const totalAmount = isSale ? Number(transferReq.transaction_amount ?? 0) : 0;
       const year = new Date().getUTCFullYear();
       const contractCode = `HD-CN-${year}-${String(requestId).padStart(6, '0')}`;
       const groupCode = plots.rows.length > 1 ? `GRP-CN-${requestId}` : null;
+      const ownershipSource =
+        transferReq.transfer_type === 'inheritance' ? 'inheritance' : 'transfer';
+
+      const baseContent = this.renderTransferContractBase(
+        contractCode,
+        seller,
+        buyer,
+        plots.rows,
+        totalAmount,
+      );
+      const contractContent = composeContractContent(baseContent);
 
       const contractInsert = await client.query<{ contract_id: number }>(
         `INSERT INTO contracts
@@ -917,20 +1182,24 @@ export class TransfersService {
             contract_date, effective_date,
             total_amount, paid_amount,
             payment_status, status,
-            created_by, notes, group_contract_code, ownership_source)
-         VALUES ($1,$2,$3,$4,CURRENT_DATE,CURRENT_DATE,$5,0,
-                 CASE WHEN $5 = 0 THEN 'paid' ELSE 'unpaid' END,
-                 'draft',$6,$7,$8,'transfer')
+            created_by, notes, group_contract_code, ownership_source,
+            contract_base_content, contract_content, inheritance_content)
+         VALUES ($1,$2,$3,$4,CURRENT_DATE,CURRENT_DATE,$5::numeric,0,
+                 CASE WHEN $5::numeric = 0::numeric THEN 'paid' ELSE 'unpaid' END,
+                 'draft',$6,$7,$8,$9,$10,$11,NULL)
          RETURNING contract_id`,
         [
           contractCode,
           recipient.userId,
           plots.rows[0].plot_id,
-          requestId,  // link contract back to this reservation_request
+          requestId,
           totalAmount,
           adminId,
           `Created from transfer request #${requestId}`,
           groupCode,
+          ownershipSource,
+          baseContent,
+          contractContent,
         ],
       );
       const contractId = contractInsert.rows[0].contract_id;
@@ -1003,9 +1272,7 @@ export class TransfersService {
                  $2, 'transfer_request', $3)`,
         [
           req.rows[0].user_id,
-          adminNote
-            ? `Yêu cầu chuyển nhượng bị từ chối. Lý do: ${adminNote}`
-            : 'Yêu cầu chuyển nhượng của bạn đã bị từ chối.',
+          adminNote ? `Lý do: ${adminNote}` : 'Yêu cầu chuyển nhượng của bạn đã bị từ chối.',
           requestId,
         ],
       );
@@ -1015,7 +1282,7 @@ export class TransfersService {
     return result;
   }
 
-  /** Admin tạo lịch hẹn ký hợp đồng — reuses offline_appointments */
+  /** Admin tạo khoảng ngày lịch hẹn ký hợp đồng — reuses offline_appointments */
   async createTransferAppointment(
     adminId: number,
     requestId: number,
@@ -1040,8 +1307,8 @@ export class TransfersService {
       );
       const appt = await client.query<{ appointment_id: number }>(
         `INSERT INTO offline_appointments
-           (request_id, date_range_start, date_range_end, location, admin_note, created_by)
-         VALUES ($1,$2,$3,$4,$5,$6)
+           (request_id, user_id, scheduled_at, scheduled_end_at, location, note, created_by, status)
+         VALUES ($1, (SELECT user_id FROM reservation_requests WHERE request_id = $1), $2, $3, $4, $5, $6, 'scheduled')
          RETURNING appointment_id`,
         [requestId, dto.rangeStart, dto.rangeEnd, dto.location, dto.note ?? null, adminId],
       );
@@ -1059,7 +1326,11 @@ export class TransfersService {
   }
 
   /** Customer xác nhận lịch hẹn — reuses offline_appointments */
-  async confirmTransferAppointment(userId: number, requestId: number) {
+  async confirmTransferAppointment(
+    userId: number,
+    requestId: number,
+    selectedAt?: string,
+  ) {
     const result = await this.database.transaction(async (client) => {
       const req = await client.query<{ user_id: number; status: string }>(
         `SELECT user_id, status FROM reservation_requests
@@ -1070,164 +1341,167 @@ export class TransfersService {
         throw new NotFoundException('Không tìm thấy yêu cầu');
       await client.query(
         `UPDATE offline_appointments
-         SET customer_status = 'confirmed', customer_selected_date = CURRENT_DATE,
+         SET customer_status = 'confirmed',
+             customer_responded_at = NOW(),
+             customer_selected_at = COALESCE($2::timestamptz, NOW()),
              updated_at = NOW()
          WHERE request_id = $1 AND is_deleted = FALSE AND status = 'scheduled'`,
+        [requestId, selectedAt ?? null],
+      );
+      await client.query(
+        `INSERT INTO notifications (user_id, type, title, message, related_entity_type, related_entity_id)
+         SELECT user_id, 'transfer_appointment_confirmed', 'Khách hàng đã xác nhận lịch hẹn chuyển nhượng',
+                'Khách hàng đã xác nhận lịch hẹn ký hợp đồng chuyển nhượng.',
+                'transfer_request', $1
+         FROM users
+         WHERE LOWER(role) = 'admin' AND is_active = TRUE AND is_deleted = FALSE`,
         [requestId],
       );
       return { id: requestId, appointmentConfirmed: true };
     });
-    this.publishRealtime(['transfers']);
+    this.publishRealtime(['transfers', 'notifications']);
     return result;
   }
 
-  // NOTE: PDF generation, payment recording, and signed evidence upload are
-  // handled by the existing ContractsController endpoints:
-  //   POST /admin/contracts/:id/generated-pdf
-  //   POST /admin/contracts/:id/payments
-  //   POST /admin/contracts/:id/signed-evidence
-  // The admin frontend uses the contractId returned from approveTransferRequest.
-
-  /** Admin kích hoạt quyền sở hữu — bước cuối: đóng ownership cũ + activate contract mới */
+  /** Admin kích hoạt quyền sở hữu sau khi ký hợp đồng và thanh toán đủ */
   async activateTransferOwnership(
     adminId: number,
     requestId: number,
     context?: AdminRequestContext,
   ) {
     const result = await this.database.transaction(async (client) => {
-      // Find the contract linked to this transfer request
-      const req = await client.query<any>(
-        `SELECT rr.request_id, rr.user_id, rr.status, rr.transfer_type,
-                c.contract_id, c.user_id AS recipient_user_id,
-                c.status AS contract_status, c.payment_status
-         FROM reservation_requests rr
-         JOIN contracts c ON c.request_id = rr.request_id AND c.is_deleted = FALSE
-         WHERE rr.request_id = $1 AND rr.request_type = 'transfer' FOR UPDATE`,
+      // 1. Get contract and transfer details
+      const contract = await client.query<any>(
+        `SELECT c.contract_id, c.contract_code, c.user_id AS recipient_user_id,
+                c.status, c.payment_status, c.total_amount, c.paid_amount,
+                rr.user_id AS seller_user_id, rr.transfer_type,
+                EXISTS (
+                  SELECT 1 FROM contract_signed_evidence evidence
+                  WHERE evidence.contract_id = c.contract_id
+                ) AS has_signed_evidence
+         FROM contracts c
+         JOIN reservation_requests rr ON rr.request_id = c.request_id
+         WHERE c.request_id = $1 AND c.is_deleted = FALSE FOR UPDATE OF c`,
         [requestId],
       );
-      const transferReq = req.rows[0];
-      if (!transferReq) throw new NotFoundException('Không tìm thấy yêu cầu');
-      if (transferReq.status === 'completed') {
-        throw new BadRequestException('Yêu cầu chuyển nhượng này đã được hoàn tất');
+      if (!contract.rows[0]) {
+        throw new NotFoundException('Không tìm thấy hợp đồng cho yêu cầu này');
       }
-      if (transferReq.contract_status !== 'draft') {
+      const c = contract.rows[0];
+      if (c.status !== 'draft') {
         throw new BadRequestException('Hợp đồng không ở trạng thái nháp');
       }
 
-      // Verify signed evidence exists
-      const evidence = await client.query(
-        `SELECT evidence_id FROM contract_signed_evidence WHERE contract_id = $1 LIMIT 1`,
-        [transferReq.contract_id],
-      );
-      if (!evidence.rows.length) {
-        throw new BadRequestException('Chưa có tài liệu hợp đồng đã ký');
+      // Check signed evidence uploaded
+      if (!c.has_signed_evidence) {
+        throw new BadRequestException(
+          'Cần tải lên tài liệu minh chứng hợp đồng đã ký trước khi kích hoạt quyền sở hữu',
+        );
       }
 
-      // For sale: verify payment is complete
-      if (transferReq.transfer_type === 'sale' && transferReq.payment_status !== 'paid') {
-        throw new BadRequestException('Hợp đồng cần được thanh toán đầy đủ trước khi kích hoạt');
+      // For sale transfer: check payment is complete
+      if (c.transfer_type === 'sale' && Number(c.total_amount) > 0) {
+        if (c.payment_status !== 'paid' && Number(c.paid_amount) < Number(c.total_amount)) {
+          throw new BadRequestException(
+            'Chưa hoàn tất thanh toán hợp đồng chuyển nhượng',
+          );
+        }
       }
 
-      // Get plots from contract_plots
+      // 2. Get plots
       const plots = await client.query<{ plot_id: number; plot_code: string }>(
-        `SELECT p.plot_id, p.plot_code
-         FROM contract_plots cp JOIN plots p ON p.plot_id = cp.plot_id
+        `SELECT cp.plot_id, p.plot_code
+         FROM contract_plots cp
+         JOIN plots p ON p.plot_id = cp.plot_id
          WHERE cp.contract_id = $1`,
-        [transferReq.contract_id],
+        [c.contract_id],
       );
 
-      // Close old ownership records and mark old contracts as transferred
+      // 3. Close old ownership records for these plots
       for (const plot of plots.rows) {
         await client.query(
           `UPDATE ownership_records
            SET is_current = FALSE, ownership_end = CURRENT_DATE,
-               transfer_note = COALESCE(transfer_note || E'\\n', '') || $2
+               transfer_note = COALESCE(transfer_note || E'\n', '') || $2
            WHERE plot_id = $1 AND is_current = TRUE`,
-          [plot.plot_id, `Transferred via request #${requestId}`],
+          [plot.plot_id, `Transferred via request #${requestId} / contract ${c.contract_code}`],
         );
+        // Also close the old contract for this plot
         await client.query(
           `UPDATE contracts SET status = 'transferred', updated_at = NOW()
-           WHERE plot_id = $1 AND status = 'active' AND is_deleted = FALSE`,
-          [plot.plot_id],
+           WHERE plot_id = $1 AND status = 'active' AND contract_id <> $2`,
+          [plot.plot_id, c.contract_id],
         );
       }
 
-      // Activate new contract → trigger fn_auto_create_ownership fires
+      // 4. Activate new contract
+      // Trigger fn_auto_create_ownership will create ownership_records for the recipient!
       await client.query(
-        `UPDATE contracts SET status = 'active', updated_at = NOW()
-         WHERE contract_id = $1 AND status = 'draft'`,
-        [transferReq.contract_id],
+        `UPDATE contracts
+         SET status = 'active', effective_date = CURRENT_DATE, updated_at = NOW()
+         WHERE contract_id = $1`,
+        [c.contract_id],
       );
 
-      // Mark transfer request completed
+      // 5. Complete reservation_request
       await client.query(
-        `UPDATE reservation_requests SET status = 'completed', updated_at = NOW()
+        `UPDATE reservation_requests
+         SET status = 'completed', updated_at = NOW()
          WHERE request_id = $1`,
         [requestId],
       );
 
-      // Audit log
+      // 6. Complete appointment if any
+      await client.query(
+        `UPDATE offline_appointments
+         SET status = 'completed', updated_at = NOW()
+         WHERE request_id = $1 AND is_deleted = FALSE`,
+        [requestId],
+      );
+
+      // 7. Audit log
       await client.query(
         `INSERT INTO audit_logs
-           (user_id, action, entity_type, entity_key, old_value, new_value, ip_address, user_agent)
-         VALUES ($1, 'transfer_request.activate_ownership', 'transfer_request', $2, $3::jsonb, $4::jsonb, $5, $6)`,
+           (user_id, action, entity_type, entity_id, entity_key, old_value, new_value, ip_address, user_agent)
+         VALUES ($1, 'transfer_request_ownership_activated', 'transfer_request', NULL, $2,
+                 $3::jsonb, $4::jsonb, $5, $6)`,
         [
           adminId,
           String(requestId),
-          JSON.stringify({ transferStatus: transferReq.status }),
-          JSON.stringify({ transferStatus: 'completed', contractId: transferReq.contract_id }),
+          JSON.stringify({ sellerUserId: c.seller_user_id, status: 'approved' }),
+          JSON.stringify({ recipientUserId: c.recipient_user_id, status: 'completed', contractId: c.contract_id }),
           context?.ipAddress ?? null,
           context?.userAgent ?? null,
         ],
       );
 
-      // Notify customer
+      // 8. Notify both parties
       await client.query(
         `INSERT INTO notifications (user_id, type, title, message, related_entity_type, related_entity_id)
-         VALUES ($1, 'transfer_completed', 'Chuyển nhượng lô hoàn tất',
-                 'Quyền sở hữu lô đã được chuyển sang bên nhận thành công.',
-                 'transfer_request', $2)`,
-        [transferReq.user_id, requestId],
+         VALUES
+           ($1, 'ownership_activated', 'Quyền sở hữu đã được chuyển giao',
+            'Quy trình chuyển nhượng lô đất đã hoàn tất. Quyền sở hữu đã được chuyển sang người nhận.',
+            'transfer_request', $3),
+           ($2, 'ownership_activated', 'Quyền sở hữu đã được kích hoạt',
+            'Bạn đã chính thức trở thành chủ sở hữu mới của lô đất.',
+            'contract', $4)`,
+        [c.seller_user_id, c.recipient_user_id, requestId, c.contract_id],
       );
 
       return {
         id: requestId,
         status: 'completed',
-        contractId: transferReq.contract_id,
-        plotCount: plots.rows.length,
-        plotCodes: plots.rows.map((p: any) => p.plot_code),
+        contractId: c.contract_id,
+        contractCode: c.contract_code,
+        plotsTransferred: plots.rows.map((p) => p.plot_code),
       };
     });
-    this.publishRealtime(['transfers', 'contracts', 'ownership', 'plots', 'notifications', 'dashboard']);
+
+    this.publishRealtime(['transfers', 'contracts', 'ownership', 'plots', 'notifications']);
     return result;
   }
 
-  /** Admin/Customer download tài liệu đính kèm yêu cầu */
-  async getTransferRequestDocument(userId: number, documentId: number, isAdmin = false) {
-    const doc = await this.database.queryOne<{
-      storedFilename: string;
-      originalFilename: string;
-      requestUserId: number;
-    }>(
-      `SELECT d.stored_filename AS "storedFilename", d.original_filename AS "originalFilename",
-              rr.user_id AS "requestUserId"
-       FROM transfer_request_documents d
-       JOIN reservation_requests rr ON rr.request_id = d.request_id
-       WHERE d.document_id = $1`,
-      [documentId],
-    );
-    if (!doc) throw new NotFoundException('Không tìm thấy tài liệu');
-    if (!isAdmin && doc.requestUserId !== userId) {
-      throw new NotFoundException('Không tìm thấy tài liệu');
-    }
-    return doc;
-  }
-
   private publishRealtime(topics: RealtimeTopic[]) {
-    try {
-      this.realtime?.publish(topics, ['authenticated']);
-    } catch (err) {
-      this.logger.warn(`Realtime publish failed: ${(err as Error).message}`);
-    }
+    this.realtime?.publish(topics, ['admin', 'authenticated']);
   }
 }

@@ -6,7 +6,6 @@ import { api } from "@/lib/api";
 import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
 import {
   formatNotificationTime,
-  isRequestCancellationType,
   notificationTargetRoute,
   notificationTypeLabel,
   type NotificationItem,
@@ -199,17 +198,14 @@ export default function NotificationMenu({
   function selectNotification(item: NotificationItem) {
     if (!item.isRead) void toggleRead(item);
     const route = notificationTargetRoute(item, audience);
-    if (audience === "admin") {
+    if (route) {
       setToast(null);
       setOpen(false);
-      navigate(route ?? ROUTES.ADMIN_NOTIFY);
-    } else if (
-      (item.relatedEntityType === "offline_appointment" ||
-        isRequestCancellationType(item.type)) &&
-      route
-    ) {
-      setOpen(false);
       navigate(route);
+    } else if (audience === "admin") {
+      setToast(null);
+      setOpen(false);
+      navigate(ROUTES.ADMIN_NOTIFY);
     }
   }
 
