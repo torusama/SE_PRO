@@ -49,6 +49,19 @@ export default function Map3DPage() {
   const [zoomRatio, setZoomRatio] = useState(1);
 
   const handleBack = useCallback(() => {
+    // FIX GOC: nut back nay (ve boi React, z-index cao hon, nam CHONG LEN
+    // dung nut back ben trong iframe) moi la nut nguoi dung thuc su bam -
+    // truoc day chi goi navigate() thang, khien iframe WebGL (rat nang, dang
+    // render lien tuc) van con "dinh" tren man hinh mot khung hinh cuoi du
+    // URL/route da doi xong that su, chi duoc trinh duyet ve lai khi tab bi
+    // an/hien lai. Gan src = "about:blank" TRUOC de ep trinh duyet huy ngay
+    // document/WebGL context cua iframe (dong bo) roi moi navigate, dam bao
+    // khong con dinh hinh cu nua - khong con phu thuoc doi tab.
+    try {
+      if (iframeRef.current) iframeRef.current.src = "about:blank";
+    } catch {
+      // bo qua - navigate() ben duoi van chay binh thuong
+    }
     navigate(ROUTES.MAP);
   }, [navigate]);
 
@@ -67,6 +80,20 @@ export default function Map3DPage() {
         setHeading(data.headingDeg);
         setZoomRatio(data.zoomRatio);
       } else if (data.type === "vpv3d:back") {
+        // FIX GOC cua bug "bam back xong URL da doi nhung man hinh van con
+        // ket hinh 3D cu, phai doi tab roi quay lai moi thay": trinh duyet
+        // doi khi khong invalidate ngay lop hinh anh WebGL da composite cua
+        // iframe khi no bi go khoi DOM (React se go o handleBack() ben
+        // duoi, nhung buoc go DOM + repaint co the khong xay ra kip trong
+        // 1 frame neu may dang ban render). Gan src = "about:blank" TRUOC
+        // buoc ep trinh duyet huy ngay lap tuc document/WebGL context cua
+        // iframe (dong bo, ngay trong lenh nay) - trinh duyet se composite
+        // lai NGAY, khong con phu thuoc vao viec doi tab nua.
+        try {
+          if (iframeRef.current) iframeRef.current.src = "about:blank";
+        } catch {
+          // bo qua - handleBack() ben duoi van dieu huong binh thuong
+        }
         handleBack();
       }
     }
