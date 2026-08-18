@@ -228,11 +228,35 @@ export function extractDeterministicRequirements(
     : /(?:^|[\s,;])(?:nam|male)(?=$|[\s,;.])/.test(rawGenderText)
       ? 'male'
       : undefined;
-  const birthTimeMatch = isAppointmentContext
+  const explicitBirthTimeMatch = isAppointmentContext
     ? null
     : message.match(
-        /\b(?:giờ sinh|gio sinh|lúc|luc)\s+(?:khoảng|khoang|tầm|tam)?\s*(\d{1,2})(?::(\d{2})|h(\d{2})?)?\s*(?:h|giờ|gio)?\b/i,
+        /\b(?:giờ sinh|gio sinh|sinh\s+(?:vào|vao)?\s*lúc|sinh\s+(?:vào|vao)?\s*luc|lúc|luc)\s*(?:là|la|thì|thi)?\s*(?:khoảng|khoang|tầm|tam)?\s*(\d{1,2})(?::(\d{2})|[hgj](\d{2})?)?\s*(?:h|giờ|gio)?\b/i,
       );
+  const embeddedClockMatch = isAppointmentContext
+    ? null
+    : message.match(
+        /(?:^|[\s,;])(?:nam|nu|nữ|male|female)?\s*(?:khoảng|khoang|tầm|tam|lúc|luc)?\s*(\d{1,2})(?::(\d{2})|[hgj](\d{1,2})?|\s+(?:h|giờ|gio))\s*(?:p|phút|phut)?(?=$|[\s,;.])/i,
+      );
+  const matchedBirthHour = explicitBirthTimeMatch
+    ? Number(explicitBirthTimeMatch[1])
+    : embeddedClockMatch
+      ? Number(embeddedClockMatch[1])
+      : undefined;
+  const matchedBirthMinute = explicitBirthTimeMatch
+    ? Number(explicitBirthTimeMatch[2] ?? explicitBirthTimeMatch[3] ?? 0)
+    : embeddedClockMatch
+      ? Number(embeddedClockMatch[2] ?? embeddedClockMatch[3] ?? 0)
+      : undefined;
+  const resolvedBirthTime =
+    matchedBirthHour !== undefined &&
+    matchedBirthHour >= 0 &&
+    matchedBirthHour <= 23 &&
+    matchedBirthMinute !== undefined &&
+    matchedBirthMinute >= 0 &&
+    matchedBirthMinute <= 59
+      ? `${String(matchedBirthHour).padStart(2, '0')}:${String(matchedBirthMinute).padStart(2, '0')}`
+      : undefined;
   const appointmentTimeRangeMatch = isAppointmentContext
     ? message.match(
         /\b(?:từ|tu)\s*(\d{1,2})(?::(\d{2})|h(\d{2})?)\s*(?:h|giờ|gio)?\s*(?:đến|den|–|—|-)\s*(\d{1,2})(?::(\d{2})|h(\d{2})?)\s*(?:h|giờ|gio)?\b/i,
@@ -288,9 +312,7 @@ export function extractDeterministicRequirements(
       : undefined,
     preferredDirection,
     birthDate,
-    birthTime: birthTimeMatch
-      ? `${birthTimeMatch[1].padStart(2, '0')}:${birthTimeMatch[2] ?? birthTimeMatch[3] ?? '00'}`
-      : undefined,
+    birthTime: resolvedBirthTime ?? (isAppointmentContext ? undefined : extractStandaloneClockTime(message)),
     appointmentDate: isAppointmentContext ? operationalDate : undefined,
     appointmentStartTime: appointmentTimeRangeMatch
       ? `${appointmentTimeRangeMatch[1].padStart(2, '0')}:${appointmentTimeRangeMatch[2] ?? appointmentTimeRangeMatch[3] ?? '00'}`
@@ -356,7 +378,7 @@ function normalizeFallbackIntent(message: string) {
 function extractStandaloneClockTime(message: string): string | undefined {
   const folded = normalizeFallbackIntent(message);
   const match = folded.match(
-    /^(?:khoang|tam)?\s*(\d{1,2})(?::(\d{1,2})|h(\d{1,2})?)\s*(?:p|phut)?$/,
+    /^(?:khoang|tam|luc|vao luc)?\s*(\d{1,2})(?::(\d{1,2})|[hgj](\d{1,2})?)\s*(?:p|phut)?$/,
   );
   if (!match) return undefined;
   const hour = Number(match[1]);
@@ -723,7 +745,6 @@ export class AiAgentOrchestratorService {
         sensitiveDisclosureRequest ||
         resetPersonalMemoryRequest ||
         (socialTurn && !bareAcknowledgement && !ambiguousDomainTurn) ||
-        lowInformationTurn ||
         clearlyOutOfScope),
     );
     const conversation = await this.ensureConversation(sessionId, userId);
@@ -864,6 +885,9 @@ export class AiAgentOrchestratorService {
       history,
       directIntent,
     );
+    if (baziContextActive && directIntent === 'general_question') {
+      directIntent = 'bazi_suggestion';
+    }
     const profileRequirements =
       baziContextActive && !directZodiacPlotConsultation
         ? this.requirementsFromCustomerProfile(
@@ -1082,7 +1106,7 @@ export class AiAgentOrchestratorService {
       });
     }
 
-    if (lowInformationTurn && !contextReferenceTurn) {
+    if (lowInformationTurn && !contextReferenceTurn && !baziContextActive) {
       await saveUserMessage();
       return this.finish({
         conversation,
@@ -2479,7 +2503,13 @@ Today: ${new Date().toISOString().slice(0, 10)}`,
 
     // A clear or contextually continued request to see plots must never collapse
     // into memory recitation, a generic chat response, or a repeated questionnaire.
-    if (shouldContinuePlotDiscovery && next.action === 'none') {
+    // However, if the LLM provided a direct response (e.g. for general questions, price bargaining, FAQs),
+    // respect the LLM's decision and do not force inventory search.
+    if (
+      shouldContinuePlotDiscovery &&
+      next.action === 'none' &&
+      !next.directResponse?.trim()
+    ) {
       next = {
         ...next,
         intent: 'recommend_plots',
@@ -2495,7 +2525,7 @@ Today: ${new Date().toISOString().slice(0, 10)}`,
     // Browsing does not require a budget. If a saved/known budget exists, use it
     // automatically and rank against it; otherwise show available options first
     // and refine afterwards instead of blocking the customer with questions.
-    if (effectiveIntent === 'recommend_plots') {
+    if (next.intent === 'recommend_plots' && next.action !== 'none') {
       if (next.action === 'rank_plot_options' && !next.requirements.budgetMax) {
         next = {
           ...next,
@@ -3164,13 +3194,25 @@ Bạn muốn mình đi sâu vào yêu cầu lô, đơn dịch vụ hay lịch ch
       directZodiacPlotConsultation ||
       input.requirements.consultationGoal === 'bazi_then_plots',
     );
-    if (baziThenPlotsActive) {
+    // When the LLM is unavailable, detect ongoing Bát Tự conversations from
+    // history so we can continue the intake flow instead of returning a
+    // generic "mình chưa bắt đúng ý" message. This lets the deterministic
+    // buildBaziIntakeTurn pick up context (birth date, gender, birth time)
+    // even when the semantic router is down.
+    const baziFromHistory = !baziThenPlotsActive && this.isBaziConversationTurn(
+      input.message,
+      input.history ?? [],
+      input.intent,
+    );
+    if (baziThenPlotsActive || baziFromHistory) {
       input.requirements = {
         ...input.requirements,
         ...(directZodiacPlotConsultation
           ? { zodiacSign: directZodiacPlotConsultation }
           : {}),
-        consultationGoal: 'bazi_then_plots',
+        ...(baziThenPlotsActive
+          ? { consultationGoal: 'bazi_then_plots' as const }
+          : {}),
       };
       const intake = this.buildBaziIntakeTurn({
         message: input.message,
@@ -4402,8 +4444,21 @@ ${JSON.stringify(options)}
     proposals: MemoryProposal[] | undefined,
     sourceMessage: string,
   ) {
+    const folded = this.foldForMemory(sourceMessage);
+    const asksForAnotherPerson =
+      /\b(?:cho|cua|xem cho|xem giup|xem dum|chon cho)\s+(?:me|ba|bo|cha|ong|ba|vo|chong|con|anh|chi|em|nguoi than|nguoi mat|nguoi qua co|gia chu khac|nguoi khac|ban|bac|co|chu|di)\b/.test(
+        folded,
+      );
+
     const filtered = (proposals ?? []).filter((proposal) => {
       if (proposal.memoryType !== 'user_preference') return true;
+      if (
+        proposal.memoryKey === 'birth_date' ||
+        proposal.memoryKey === 'birth_time' ||
+        proposal.memoryKey === 'birth_gender'
+      ) {
+        if (asksForAnotherPerson) return false;
+      }
       if (proposal.memoryKey === 'consultation_topic_preference') {
         return this.hasDurableConsultationPreferenceCue(sourceMessage);
       }
@@ -4493,10 +4548,28 @@ ${JSON.stringify(options)}
       const dateLead = profileDateUsed
         ? `Mình đã lấy ngày sinh ${this.formatVietnameseDate(requirements.birthDate)} từ hồ sơ tài khoản nên bạn không cần nhập lại.`
         : `Mình đã có ngày sinh ${this.formatVietnameseDate(requirements.birthDate)}.`;
+      const timePart = requirements.birthTime
+        ? ` và giờ sinh ${requirements.birthTime}`
+        : '';
+      const askPrompt = requirements.birthTime
+        ? 'Bạn cho mình biết thêm giới tính (nam hoặc nữ) để mình phân tích Bát Tự và tìm hướng hợp nhé.'
+        : 'Bạn cho mình giới tính và giờ sinh nếu biết, chẳng hạn “nam, khoảng 8 giờ sáng”. Nếu không biết giờ sinh, bạn chỉ cần nói giới tính và ghi “không biết giờ sinh”.';
       return {
-        assistantMessage: `${dateLead} Bạn cho mình giới tính và giờ sinh nếu biết, chẳng hạn “nam, khoảng 8 giờ sáng”. Nếu không biết giờ sinh, bạn chỉ cần nói giới tính và ghi “không biết giờ sinh”.`,
+        assistantMessage: `${dateLead}${timePart ? ` Mình đã ghi nhận giờ sinh ${requirements.birthTime}.` : ''} ${askPrompt}`,
         requirements,
-        quickReplies: [],
+        quickReplies: [
+          {
+            id: 'bazi-gender-male',
+            label: 'Nam',
+            message: 'Giới tính nam',
+            emphasis: 'strong',
+          },
+          {
+            id: 'bazi-gender-female',
+            label: 'Nữ',
+            message: 'Giới tính nữ',
+          },
+        ],
       };
     }
 
@@ -4728,6 +4801,19 @@ ${JSON.stringify(options)}
       )
     ) {
       add('service_interest');
+    }
+    if (extractBirthDate(folded)) {
+      add('birth_date');
+    }
+    if (
+      /\b(?:gio sinh|sinh luc|luc \d|vao luc \d|\d{1,2}h|\d{1,2}:\d{2})\b/.test(
+        folded,
+      )
+    ) {
+      add('birth_time');
+    }
+    if (/\b(?:nam|nu|female|male)\b/.test(folded)) {
+      add('birth_gender');
     }
     return keys;
   }
@@ -5287,6 +5373,7 @@ ${JSON.stringify(options)}
     if (/^(?:asdf|qwer|qwerty|zxcv|lolol|hahaha|kkkk|hehehe)+$/.test(compact)) {
       return true;
     }
+    if (/^\d{1,2}[a-z]\d{0,2}$/.test(compact)) return false;
     const words = folded.split(' ').filter(Boolean);
     return (
       words.length <= 3 &&
@@ -6646,11 +6733,11 @@ Hệ thống không còn lựa chọn giữ chỗ riêng. Việc gửi yêu cầ
     if (directIntent !== 'general_question') return false;
 
     const folded = this.foldForMemory(message);
-    const recent = history
-      .slice(-6)
-      .map((item) => this.foldForMemory(item.content ?? ''));
-    const hasRecentBaziTopic = recent.some((item) =>
-      /\b(?:bat tu|bazi)\b/.test(item),
+    const hasRecentBaziTopic = history.slice(-6).some((item) =>
+      item.intent === 'bazi_suggestion' ||
+      /\b(?:bat tu|bazi|phong thuy|tam linh|huong mo|am trach|gio sinh|ngay sinh|menh quai|bat trach|tuoi\s+[a-z]+)\b/.test(
+        this.foldForMemory(item.content ?? ''),
+      ),
     );
     if (!hasRecentBaziTopic) return false;
 
@@ -6658,13 +6745,16 @@ Hệ thống không còn lựa chọn giữ chỗ riêng. Việc gửi yêu cầ
       .reverse()
       .find((item) => item.role === 'assistant');
     const awaitingBaziInput =
-      /\b(?:ngay sinh|gio sinh|gioi tinh|khong co gio sinh)\b/.test(
+      /\b(?:cho minh|can them|xin them|bo sung|them)\b.{0,40}\b(?:ngay sinh|gio sinh|gioi tinh)\b/.test(
+        this.foldForMemory(latestAssistant?.content ?? ''),
+      ) ||
+      /\b(?:ngay thang nam sinh|chua co ngay sinh|cho minh them gio sinh|phan tich khong co gio sinh)\b/.test(
         this.foldForMemory(latestAssistant?.content ?? ''),
       );
     const suppliesBaziInput = Boolean(
       extractBirthDate(message) ||
       extractStandaloneClockTime(message) ||
-      /\b(?:gio sinh|luc|nam|nu|male|female)\b/.test(folded) ||
+      /\b(?:gio sinh|ngay sinh|sinh luc|nam \d{1,2}h|nu \d{1,2}h|\d{1,2}h\d{2}|\d{1,2}:\d{2})\b/.test(folded) ||
       /\b(?:khong biet|khong ro|bo qua|khong co)\b.{0,30}\bgio\b/.test(folded),
     );
     return awaitingBaziInput && suppliesBaziInput;
@@ -6723,10 +6813,9 @@ Hệ thống không còn lựa chọn giữ chỗ riêng. Việc gửi yêu cầ
       directRequirements.birthDate ?? historyRequirements.birthDate;
     const profileMatchesSubject =
       !explicitBirthDate || explicitBirthDate === profile.dateOfBirth;
-    if (!profileMatchesSubject) return {};
 
     return {
-      birthDate: profile.dateOfBirth ?? undefined,
+      birthDate: profileMatchesSubject ? (profile.dateOfBirth ?? undefined) : undefined,
       gender: profile.gender ?? undefined,
     };
   }
@@ -6815,6 +6904,28 @@ Hệ thống không còn lựa chọn giữ chỗ riêng. Việc gửi yêu cầ
         ) {
           requirements.preferNearEntrance = true;
         }
+        continue;
+      }
+      if (key === 'birth_date') {
+        const date = extractBirthDate(content);
+        if (date) requirements.birthDate = date;
+        continue;
+      }
+      if (key === 'birth_time') {
+        const timeMatch =
+          content.match(/\b(\d{1,2}):(\d{2})\b/) ??
+          content.match(/\b(\d{1,2})h(\d{2})?\b/i);
+        if (timeMatch) {
+          const hour = timeMatch[1].padStart(2, '0');
+          const minute = (timeMatch[2] ?? '00').padStart(2, '0');
+          requirements.birthTime = `${hour}:${minute}`;
+        }
+        continue;
+      }
+      if (key === 'birth_gender') {
+        if (/\b(?:nam|male)\b/i.test(folded)) requirements.gender = 'male';
+        if (/\b(?:nu|female)\b/i.test(folded)) requirements.gender = 'female';
+        continue;
       }
     }
 
@@ -6951,6 +7062,13 @@ Hệ thống không còn lựa chọn giữ chỗ riêng. Việc gửi yêu cầ
       )
     ) {
       return 'plot_request';
+    }
+    if (
+      /\b(?:mac qua|dat qua|giam gia|tra gia|bot gia|deal gia|ha gia|chiet khau|bot khong|bot duoc khong|giam bot|thuong luong|ban khong|ban k)\b/.test(
+        folded,
+      )
+    ) {
+      return 'general_question';
     }
     if (
       /(tâm linh|phong thủy|phong thuỷ|bát tự|hướng mộ|hướng đất|yếu tố.*hướng)/i.test(

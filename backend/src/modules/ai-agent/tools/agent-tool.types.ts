@@ -20,6 +20,9 @@ export const USER_MEMORY_KEYS = [
   'response_detail_preference',
   'service_interest',
   'consultation_topic_preference',
+  'birth_date',
+  'birth_time',
+  'birth_gender',
 ] as const;
 
 export type UserMemoryKey = (typeof USER_MEMORY_KEYS)[number];
