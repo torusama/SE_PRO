@@ -1,0 +1,23 @@
+# Findings
+
+- The preceding learning analytics implementation is complete and tested.
+- The redesign request has three explicit requirements: no icons, navigation entry directly above OTP Dashboard, and a server-wide AI learning journal rather than per-user conversation history.
+- Existing local changes are extensive and must be preserved.
+- The source brief explicitly requires truthful terminology: the foundation LLM is frozen; learning means persistent memory, verified knowledge, retrieval, recommendation signals, and optional PlotRanker analysis.
+- `Sidebar.tsx` currently places the entire AI Agent section first, before Overview, so it must be reordered.
+- `AgentAdminPage.tsx` currently labels the conversation browser as “Nhật ký Agent” and eagerly loads conversation summaries/details, which conflicts with the requested meaning of an AI-wide learning journal.
+- The existing analytics payload already provides privacy-safe `recentUpdates` from versioned knowledge/memory changes and is the correct foundation for the new journal.
+- `LearningAnalyticsPanel.tsx` already avoids showing private memory content, but the page is visually dense: six top-level tabs, duplicate summary cards, multiple chart grids, and a separate conversation-inspection workflow.
+- There is no “OTP Dashboard” admin route or sidebar item. The user’s wording is best interpreted as: the AI Agent entry is currently above Dashboard and should be moved downward. The safest concrete implementation is to place the AI Agent section last in the sidebar.
+- The current test suite only covers analytics rendering and the 7/30/90-day reload; there is no sidebar-order test.
+- The page currently fetches conversations even when the analytics tab is active. Removing the conversation journal should also eliminate its request and its user-specific types/state.
+- Frontend supports `test`, `lint`, and `build`; focused Vitest tests can cover both journal semantics and sidebar ordering.
+- The normal admin visual language is light (`#f5f3ee` canvas, white cards, teal accent, restrained borders). The current AI page’s dark neon surface is inconsistent with the rest of the portal and is the likely source of the “xấu” feedback.
+- `LearningAnalyticsService` already aggregates all relevant server-wide sources, but `recentUpdates` only queries `ai_knowledge_versions`. A truthful journal should additionally surface privacy-safe metadata from `ai_learning_signals` and `ai_recommendation_runs`.
+- The source tables contain enough safe metadata for a unified journal without exposing messages: event type, memory key/knowledge type, validation lifecycle, signal readiness, model version, ranker enabled state, and fallback reason.
+- No migration is needed for the journal redesign because all event sources already persist timestamps and audit metadata.
+- Final information architecture: four text-only tabs—Overview, AI Journal, Knowledge Review, PlotRanker. The conversation-inspection tab and its API request are removed from this page.
+- The AI Journal will merge versioned memory/knowledge changes, recommendation signals, and ranking executions into privacy-safe typed events ordered by server timestamp.
+- Visual direction: match the light admin portal, use typography, borders, spacing, status text, and color bands only; no icon components, pictograms, emoji, star glyphs, or decorative icon substitutes.
+- The unified journal query executed successfully against the migrated local PostgreSQL database. The current database contains no events in the selected 30-day window, so the empty journal state is expected locally.
+- Both development servers remained healthy after hot reload: backend listens on port 5000 and frontend on 5173.

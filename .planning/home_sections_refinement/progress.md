@@ -1,0 +1,12 @@
+# Progress
+
+- Started Home lower-section refinement.
+- Researched lower-section composition and accessible motion: use a single narrative sequence of paired text/product previews and small purpose-driven reveal transitions, not parallax or continuously animated decor.
+- Inspected Home, Map, and Agent implementations. Identified the exact legacy previews and spacing rules to replace while leaving the first hero typography/content intact.
+- Replaced the visible lower-page previews with code-native Map/Agent panels, tightened lower-section spacing/card treatment, and removed the hero's pagoda/house silhouette. Lint and production build pass.
+- Visual capture confirmed the hero remains intact and the house is gone. A full-height capture was not useful because the hero intentionally uses `100vh`, so lower-section review will use anchor-scoped captures instead.
+- Final verification: Home source lint passes, frontend production build passes with 450 modules, reduced-motion CSS forces all reveal content visible/static, and `git diff --check` is clean.
+- Follow-up: Replaced the decorative lower-section heading font with a clear Vietnamese UI font, gave the feature heading a stable centered two-part layout, and softened feature cards and lower-page CTAs with rounded, low-contrast controls.
+- Follow-up completed: rebuilt the Agent preview as a staged three-message conversation with typing/cursor motion, removed direct navigation from the Agent and Map illustrations, and added explicit map/AI CTAs. Restored a concise Home service introduction using real service groups, tightened copy spacing, and staggered reveals through the service/AI content. Prettier, Home lint, production build, and `git diff --check` pass.
+- Errors recorded: one inspection command used a redundant `frontend/` path after changing into `frontend`; rerunning it with `src/` resolved the issue. The first hidden Chrome launch form was blocked by shell policy; direct headless Chrome invocation captured successfully. A final server check initially used PowerShell's reserved `$HOME` name by mistake; it was immediately rerun with `$serverStatus` and returned HTTP 200.
+- New follow-up started from the user's screenshot. Confirmed the heading spacing is caused by an unscoped `.section-title` rule from the Admin transfer page, not by the Home copy itself. One combined `rg` command initially had a PowerShell quote terminator error; it was rerun with single-quoted patterns successfully.

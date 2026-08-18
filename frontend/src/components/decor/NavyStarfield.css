@@ -1,0 +1,91 @@
+/* src/components/decor/NavyStarfield.css
+   Nền đen + gradient xanh navy mờ + sao nhấp nháy — đồng bộ bảng màu với
+   trang Trang chủ (đen tuyền #05071A, accent teal #0AFFD4). */
+
+.navy-starfield {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  background:
+    radial-gradient(
+      ellipse 900px 600px at 15% -5%,
+      rgba(20, 58, 110, 0.32),
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse 800px 700px at 90% 105%,
+      rgba(12, 40, 82, 0.34),
+      transparent 60%
+    ),
+    linear-gradient(165deg, #05070f 0%, #0a1628 48%, #0d1f3a 100%);
+}
+
+.navy-starfield--stars-only {
+  background: none;
+}
+
+.navy-starfield__glow {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(120px);
+  opacity: 0.16;
+  animation: navy-starfield-pulse 9s ease-in-out infinite;
+}
+.navy-starfield__glow--a {
+  width: 520px;
+  height: 520px;
+  top: -140px;
+  left: -100px;
+  background: radial-gradient(
+    circle,
+    rgba(10, 255, 212, 0.16),
+    transparent 70%
+  );
+}
+.navy-starfield__glow--b {
+  width: 560px;
+  height: 560px;
+  right: -140px;
+  bottom: -160px;
+  background: radial-gradient(circle, rgba(30, 80, 160, 0.28), transparent 70%);
+  animation-delay: -4.5s;
+}
+@keyframes navy-starfield-pulse {
+  0%,
+  100% {
+    opacity: 0.12;
+  }
+  50% {
+    opacity: 0.22;
+  }
+}
+
+.navy-starfield__stars {
+  position: absolute;
+  inset: 0;
+}
+.navy-starfield__star {
+  position: absolute;
+  border-radius: 50%;
+  animation: navy-starfield-twinkle var(--d, 3s) ease-in-out infinite
+    var(--delay, 0s);
+}
+@keyframes navy-starfield-twinkle {
+  0%,
+  100% {
+    opacity: 0.12;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .navy-starfield__glow,
+  .navy-starfield__star {
+    animation: none;
+    opacity: 0.3;
+  }
+}

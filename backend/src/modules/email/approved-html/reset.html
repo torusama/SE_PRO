@@ -1,0 +1,90 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="x-apple-disable-message-reformatting"><title>Reset</title><style>
+
+*{box-sizing:border-box}
+body{margin:0;background:#eef0ea;font-family:Arial,Helvetica,sans-serif}
+.wrap{min-height:100vh;display:flex;justify-content:center;align-items:flex-start;padding:24px}
+.mail{position:relative;width:600px;height:849px;background-size:600px 849px;background-position:center top;background-repeat:no-repeat;border-radius:16px;overflow:hidden;box-shadow:0 10px 34px rgba(30,45,38,.16);font-family:Arial,Helvetica,sans-serif}
+
+/* ---------- top brand header ---------- */
+.brandbar{position:absolute;top:0;left:0;width:100%;text-align:center;padding-top:27px}
+.brandbar .brand{display:inline-block;font-size:24px;line-height:1.15;letter-spacing:3.2px;font-weight:700;text-transform:uppercase;font-family:Georgia,'Times New Roman',serif}
+.brandbar .rule{display:block;width:72px;height:1px;margin:13px auto 0;opacity:.52}
+
+/* ---------- bottom footer bar ---------- */
+.footerbar{position:absolute;left:0;bottom:0;width:100%;height:192px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;text-align:center;padding:0 36px 25px}
+.footerbar .fline{font-size:12px;line-height:1.75;max-width:440px;margin:0;font-family:Arial,Helvetica,sans-serif}
+.footerbar .frule{width:46px;height:1px;margin:12px auto 11px;opacity:.38}
+.footerbar .fbrand{font-size:12px;line-height:1.4;font-weight:700;letter-spacing:1px;font-family:Georgia,'Times New Roman',serif}
+.footerbar .fslogan{font-size:11px;line-height:1.55;margin-top:5px;letter-spacing:.15px;font-family:Arial,Helvetica,sans-serif}
+
+/* dark theme */
+.theme-dark .brandbar .brand{color:#fff3d8;text-shadow:0 1px 4px rgba(15,30,22,.4)}
+.theme-dark .brandbar .rule{background:#f3dfa8}
+.theme-dark .footerbar{background:linear-gradient(to bottom,rgba(13,30,21,0) 0%,rgba(11,26,18,.56) 42%,rgba(9,22,16,.76) 100%)}
+.theme-dark .footerbar .fline{color:#f3ead8;opacity:.96}
+.theme-dark .footerbar .frule{background:#f0e6d0}
+.theme-dark .footerbar .fbrand{color:#fff0ce}
+.theme-dark .footerbar .fslogan{color:#eadfc9;opacity:.92}
+
+/* light theme */
+.theme-light .brandbar .brand{color:#24574b;text-shadow:0 1px 2px rgba(255,255,255,.72)}
+.theme-light .brandbar .rule{background:#2c5c50}
+.theme-light .footerbar{background:linear-gradient(to bottom,rgba(20,45,40,0) 0%,rgba(17,40,36,.50) 42%,rgba(14,34,30,.72) 100%)}
+.theme-light .footerbar .fline{color:#faf5e9;opacity:.98}
+.theme-light .footerbar .frule{background:#f4f0e4}
+.theme-light .footerbar .fbrand{color:#fff5dc}
+.theme-light .footerbar .fslogan{color:#eee7d6;opacity:.94}
+
+/* ---------- hero: OTP / reset ---------- */
+.hero{position:absolute;left:46px;width:382px;color:#fbf3e2;font-family:Arial,Helvetica,sans-serif}
+.hero .kicker{font-size:12px;line-height:1.4;letter-spacing:3px;font-weight:700;text-transform:uppercase;color:#e3caa0;font-family:Arial,Helvetica,sans-serif}
+.hero .title{font-size:30px;line-height:1.25;font-weight:700;margin:12px 0 0;color:#fffaf0;text-shadow:0 1px 3px rgba(15,30,22,.3);font-family:Georgia,'Times New Roman',serif}
+.hero .lead{font-size:15px;line-height:1.85;margin:23px 0 0;color:#f4ecdc;font-family:Arial,Helvetica,sans-serif}
+.hero .code{font-family:Consolas,'Courier New',monospace;font-size:42px;line-height:1;font-weight:800;letter-spacing:9px;white-space:nowrap;color:#ffe2a6;margin:30px 0 28px;text-shadow:0 1px 3px rgba(15,30,22,.25)}
+.hero .meta{font-size:13.5px;line-height:1.9;margin:0;color:#efe6d3;font-family:Arial,Helvetica,sans-serif}
+.hero .meta strong,.hero .lead strong{color:#ffe6b0}
+.hero .resetlink{font-size:12px;line-height:1.85;margin:19px 0 0;color:#e1d5bd;font-family:Arial,Helvetica,sans-serif}
+.hero .btn{display:inline-block;text-decoration:none;font-weight:700;font-size:14px;line-height:1.2;padding:14px 29px;border-radius:24px;margin-top:27px;background:#f4e2bb;color:#1f4136;box-shadow:0 4px 14px rgba(20,40,30,.22);font-family:Arial,Helvetica,sans-serif}
+
+/* ---------- card: reminder / order ---------- */
+.card{position:absolute;left:60px;width:480px;background:rgba(255,255,255,.72);border-radius:18px;padding:32px 36px 34px;box-shadow:0 12px 30px rgba(35,60,52,.12);backdrop-filter:blur(1.5px);font-family:Arial,Helvetica,sans-serif}
+.card .kicker{font-size:12px;line-height:1.4;letter-spacing:3px;font-weight:700;text-transform:uppercase;color:#5c8377;font-family:Arial,Helvetica,sans-serif}
+.card .title{font-size:21px;line-height:1.45;font-weight:700;margin:12px 0 0;color:#1f4b41;font-family:Georgia,'Times New Roman',serif}
+.card .lead{font-size:15px;line-height:1.85;margin:18px 0 0;color:#294f46;font-family:Arial,Helvetica,sans-serif}
+.card .lead strong{color:#173a32}
+.card .rows{margin-top:22px}
+.card .row{display:flex;justify-content:space-between;align-items:flex-start;gap:28px;padding:13px 0;font-size:13.5px;line-height:1.6;border-bottom:1px solid rgba(60,110,95,.18);color:#46665d;font-family:Arial,Helvetica,sans-serif}
+.card .row:last-child{border-bottom:0}
+.card .row span{flex:1 1 auto}
+.card .row strong{flex:0 0 auto;font-weight:700;text-align:right;color:#1c453b;font-family:Arial,Helvetica,sans-serif}
+.card .meta{font-size:13.5px;line-height:1.85;margin:22px 0 0;color:#4a6b61;font-family:Arial,Helvetica,sans-serif}
+.card .btn{display:inline-block;text-decoration:none;font-weight:700;font-size:14px;line-height:1.2;padding:14px 27px;border-radius:24px;margin-top:25px;background:#3f8071;color:#fff;box-shadow:0 6px 16px rgba(30,60,52,.22);font-family:Arial,Helvetica,sans-serif}
+
+
+/* ---------- V10 reset spacing / centering ---------- */
+.reset-page .hero{left:86px;width:360px}
+.reset-page .hero .kicker{line-height:1.55}
+.reset-page .hero .title{margin-top:16px;line-height:1.30}
+.reset-page .hero .lead{margin-top:28px;line-height:2.0}
+.reset-page .hero .btn{margin-top:30px}
+.reset-page .hero .meta{margin-top:30px;line-height:2.0}
+.reset-page .hero .resetlink{margin-top:24px;line-height:2.0;max-width:240px;padding-right:0}
+
+</style></head><body><div class="wrap"><div class="mail theme-dark reset-page" style="background-image:url('{{BACKGROUND_CID}}')">
+<div class="brandbar"><span class="brand">Vĩnh Phúc Viên</span><span class="rule"></span></div>
+<div class="hero" style="top:190px;">
+  <div class="kicker">Bảo mật tài khoản</div>
+  <p class="title">Đặt lại mật khẩu</p>
+  <p class="lead">Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn.</p>
+  <a class="btn" href="{{RESET_LINK}}">Đặt lại mật khẩu</a>
+  <p class="meta">Liên kết có hiệu lực trong <strong>30 phút</strong>.</p>
+  <p class="resetlink">Nếu nút không mở được, hãy sao chép<br>liên kết đặt lại mật khẩu<br>từ email này vào trình duyệt.</p>
+</div>
+<div class="footerbar">
+  <div class="fline">Nếu bạn không thực hiện yêu cầu này, có thể bỏ qua email.</div>
+  <div class="frule"></div>
+  <div class="fbrand">@ Vĩnh Phúc Viên</div>
+  <div class="fslogan">Gìn giữ an yên, trọn vẹn tưởng nhớ.</div>
+</div>
+
+<img src="cid:{{BACKGROUND_CID_RAW}}" width="1" height="1" alt="" style="display:none!important;width:1px!important;height:1px!important;max-height:0!important;opacity:0!important" /></div></div></body></html>

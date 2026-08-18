@@ -1,0 +1,24 @@
+# Progress
+
+- 2026-07-29: Started a separate persistent plan for the learning analytics dashboard.
+- 2026-07-29: Confirmed context-mode runtime tools are unavailable and selected bounded PowerShell inspection as fallback.
+- 2026-07-29: Audited the guarded admin controller/module and the existing Admin AI Agent page/CSS.
+- 2026-07-29: Chose a dependency-free dashboard with current-state KPIs plus a bounded 7–90 day activity window.
+- 2026-07-29: Mapped version snapshot fields, database query types, and frontend test conventions.
+- 2026-07-29: Added the guarded `/admin/ai-agent/learning-analytics` endpoint and registered a dedicated read-only analytics service.
+- 2026-07-29: Implemented clamped reporting windows, current-state KPIs, period events, distributions, timeline, fallback rate, and privacy-safe recent updates.
+- 2026-07-29: Added backend analytics unit coverage for aggregate mapping, day clamping, privacy-safe queries, fallback rate, and empty states.
+- 2026-07-29: Backend analytics test passed 2/2; targeted ESLint and backend build passed.
+- 2026-07-29: All analytics SQL passed live PostgreSQL execution in a disposable schema, which was removed after validation.
+- 2026-07-29: Added a dedicated Learning Analytics panel and made it the default Admin AI Agent tab.
+- 2026-07-29: Added KPI cards, 7/30/90-day selector, accessible daily chart, four distributions, fallback metrics, privacy-safe recent updates, and responsive CSS.
+- 2026-07-29: Added Admin dashboard rendering/API-window tests and extended the admin authorization E2E matrix to cover the analytics route.
+- 2026-07-29: Frontend analytics tests passed 2/2; targeted ESLint and production build passed.
+- 2026-07-29: Full regression passed: backend 40/40 suites and 214/214 tests, E2E 145/145, frontend 11/11 files and 40/40 tests.
+- 2026-07-29: Confirmed the connected local dev database has not yet applied AI migrations 015/016, explaining the expected missing-column log in the guard-only E2E request.
+- 2026-07-29: Verified the target as local database `vinhhang` and applied migrations 015 → 016; analytics tables increased from 0 to 2.
+- 2026-07-29: Called the analytics service against the migrated local database successfully: 30-day response, 30 timeline points, one seeded verified global item.
+- 2026-07-29: Updated the architecture README with the real dashboard component, endpoint, reporting window, privacy policy, and foundation-model disclaimer.
+- 2026-07-29: Re-ran E2E after applying migrations: 145/145 passed with zero missing-table/column errors.
+- 2026-07-29: Final `git diff --check` passed.
+- 2026-07-29: Completed final manifest review; the dashboard is documented, guarded, tested, built, and connected to the migrated local database.

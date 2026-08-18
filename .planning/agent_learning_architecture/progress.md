@@ -1,0 +1,40 @@
+# Progress
+
+- 2026-07-29: Read the full implementation brief.
+- 2026-07-29: Loaded planning-with-files and context-mode instructions.
+- 2026-07-29: Located the repository and detected existing uncommitted AI learning changes.
+- 2026-07-29: Recovered the previous feedback-audit plan and created a separate implementation plan.
+- 2026-07-29: Captured the dirty-worktree baseline and identified the primary backend/frontend/ML project roots.
+- 2026-07-29: Inventoried Agent-related source/tests and recorded the actual backend, frontend, and ML validation commands.
+- 2026-07-29: Located the existing proposal/retrieval integration and narrowed the next audit to exact controller, planner, registry, learning, schema, ranker, and UI code paths.
+- 2026-07-29: Verified trusted controller/orchestrator identity propagation and identified missing proposal-result reporting plus early-return gaps.
+- 2026-07-29: Audited planner schema/parser and identified naming, memory-key, validation, and combined-action test gaps.
+- 2026-07-29: Confirmed persistent knowledge is not supplied to planner/composer and found unsafe prompt plus tool-schema trust gaps.
+- 2026-07-29: Audited learning/knowledge services and migrations; found classification, transaction, version/audit, hash, conflict-target, and learning-signal schema defects.
+- 2026-07-29: Verified PlotRanker is optional/manual today and identified missing readiness filtering, configuration mapping, and ranking telemetry.
+- 2026-07-29: Chose a dedicated recommendation-run trace as the safe link between actual ranking context and future recommendation signals.
+- 2026-07-29: Preserved the useful pre-existing edits, reviewed current unit-test coverage, and confirmed customer feedback UI can be removed without deleting admin moderation APIs.
+- 2026-07-29: Confirmed customer feedback controls are already gone at runtime; only dead types/styles need cleanup.
+- 2026-07-29: Audited the ML service and found automatic synthetic activation plus incomplete-feature zero filling; planned a manual, complete-data-only PlotRanker experiment.
+- 2026-07-29: Completed the baseline architecture map and finalized core schema/service design decisions.
+- 2026-07-29: Rebuilt migration 016 with scoped/versioned knowledge, owner constraints, recommendation-run traces, analytics-safe learning signals, readiness flags, and legacy signal upgrade handling.
+- 2026-07-29: Replaced autonomous learning with trusted-context classification, explicit/safe preference checks, transactional duplicate/replacement handling, version/audit writes, global quarantine/activation rules, and recommendation-signal routing.
+- 2026-07-29: Hardened knowledge retrieval with owner/effective/status filters, deterministic per-scope limits, prompt-data escaping, and upgraded approved corrections to verified versioned global records.
+- 2026-07-29: Unified planner, tool definition, registry, and service contracts on `memoryProposals`, `memoryType`, stable memory keys, and `propose_knowledge_update`; removed LLM-controlled trusted fields.
+- 2026-07-29: Wired active isolated memory/verified knowledge into both planner and composer, moved proposal persistence ahead of booking/clarification returns, and added deterministic success/failure notes without blocking the primary action.
+- 2026-07-29: Backend `npm run build` passed after the core schema/service/planner/orchestrator changes.
+- 2026-07-29: Added false-by-default PlotRanker configuration, deterministic/ML/final execution traces, complete-response fallback reasons, and real recommendation-run linkage.
+- 2026-07-29: Removed ML startup auto-training/activation and missing-feature zero filling; manual candidates now require complete approved samples.
+- 2026-07-29: Backend build passed again and Python `compileall` passed after PlotRanker changes.
+- 2026-07-29: Replaced unsafe learning prompt language, clarified the admin UI and architecture docs, removed dead customer feedback styles/types, and documented exact AI migration order.
+- 2026-07-29: Added focused backend tests for owner isolation, duplicates, replacement/version/audit, anonymous policy, trusted/quarantined global knowledge, signals, retrieval filtering/isolation, combined action, role propagation, memory failure isolation, and PlotRanker fallback.
+- 2026-07-29: Focused AI Jest suites passed 49/49 before the final sensitive-profile case was added; full backend regression passed 211/211.
+- 2026-07-29: ML tests passed 4/4 in the repository virtual environment; frontend tests passed 38/38.
+- 2026-07-29: Backend and frontend production builds passed; all changed AI backend/frontend files lint clean.
+- 2026-07-29: Full-repository lint was run and remains blocked by unrelated pre-existing errors outside the AI feature scope.
+- 2026-07-29: Fixed the stale admin authorization route and re-ran E2E successfully: 142/142.
+- 2026-07-29: Executed migrations 015 and 016 in a disposable isolated PostgreSQL schema, then repeated both migrations; schema validation and idempotency passed and the temporary schemas were removed.
+- 2026-07-29: Added explicit sensitive-profile rejection coverage and completed final backend regression: 39/39 suites, 212/212 tests.
+- 2026-07-29: Final `git diff --check`, backend build, and changed-file ESLint passed.
+- 2026-07-29: Recorded honest full-repo lint baselines: backend 39 errors/48 warnings; frontend 29 errors/3 warnings, all outside the changed AI feature files.
+- 2026-07-29: Completed final diff review, stale-term scan, migration guard revalidation, and handoff documentation.

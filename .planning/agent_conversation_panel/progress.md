@@ -1,0 +1,27 @@
+# Progress
+
+- Started frontend-only AI Agent layout correction.
+- Next: inspect the existing page component, CSS, and tests before editing.
+- Located the Agent page and confirmed the required interaction already exists structurally but is currently limited to the mobile CSS path.
+- Next: inspect the overlay/mobile rules and tests, then promote the behavior to desktop with minimal markup/test changes.
+- Confirmed the existing component already supplies open, explicit-close, and outside-click actions; only desktop styles and focused interaction coverage are missing.
+- Next: identify later CSS overrides, then patch the desktop base layout and test the panel toggling behavior.
+- Identified later Agent CSS rules and confirmed they do not block a base-level overlay conversion.
+- Next: patch the shell/sidebar/control styles, add Escape dismissal and interaction test coverage, then verify the visual layout.
+- Confirmed the existing React effect pattern and exact insertion point for the Escape listener.
+- Next: patch semantic state attributes, escape behavior, desktop overlay CSS, and the focused interaction test.
+- Promoted the conversation sidebar to an overlay panel at desktop, added Escape dismissal and ARIA state, and added focused test coverage.
+- Focused Agent page test passes (6/6). The temporary unauthenticated screenshot reaches Login as expected under the route guard.
+- Next: run scoped lint/build/diff checks, remove generated screenshot artifacts, and complete the plan.
+- Scoped lint and production build pass after the overlay conversion.
+- Next: remove the exact temporary browser-artifact directory, run final diff/status checks, and complete the plan.
+- Removed the generated screenshot/profile artifacts after an exact-path dry run. These disposable artifacts are not recoverable; no application source was removed.
+- Next: final diff/status check and plan completion.
+- Final diff/status check is clean. No generated review artifacts remain, and the dev server is still live at `http://127.0.0.1:5173/`.
+- All plan phases are complete.
+- Added the full-height workspace safeguard needed by the overlay layout.
+- Re-ran the focused Agent test (6/6) and production build successfully.
+- Next: final diff/status check and plan completion.
+- Replaced the text-based conversation opener with the existing MessageCircle vector icon and used a plain X vector icon for the panel close control; no emoji is used.
+- Re-ran the focused Agent test (6/6) and scoped lint successfully.
+- Matched the conversation button frame to the robot avatar: 40px on desktop/tablet and 36px on compact mobile.
