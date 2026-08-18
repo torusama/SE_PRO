@@ -1,0 +1,207 @@
+.guide-popup-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(1, 5, 8, 0.78);
+  backdrop-filter: blur(6px);
+  font-family: "Be Vietnam Pro", sans-serif;
+}
+
+.guide-popup {
+  --gp-night: #05071a;
+  --gp-teal: #0affd4;
+  --gp-gold: #d4a847;
+  --gp-white: #e8f4f0;
+  --gp-muted: rgba(232, 244, 240, 0.65);
+  position: relative;
+  width: min(950px, 94vw);
+  max-height: 90vh;
+  overflow-y: auto;
+  background:
+    radial-gradient(
+      circle at 12% -10%,
+      rgba(58, 130, 255, 0.18),
+      transparent 55%
+    ),
+    radial-gradient(
+      circle at 100% 110%,
+      rgba(40, 90, 210, 0.14),
+      transparent 50%
+    ),
+    linear-gradient(165deg, #060b19 0%, #081226 45%, #050a1a 100%);
+  border: 1px solid rgba(80, 150, 255, 0.25);
+  border-radius: 15px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+  padding: 28px;
+  color: var(--gp-white);
+}
+
+.guide-popup__close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(232, 244, 240, 0.2);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--gp-muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    border-color 160ms ease;
+}
+.guide-popup__close:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--gp-white);
+  border-color: rgba(232, 244, 240, 0.4);
+}
+
+.guide-popup__eyebrow {
+  color: var(--gp-gold);
+  font-size: 12px;
+  letter-spacing: 3px;
+}
+
+.guide-popup__title {
+  margin: 6px 0 26px;
+  font-family: "Playfair Display", serif;
+  font-size: 26px;
+  color: #ffffff;
+}
+
+.guide-popup__timeline {
+  display: flex;
+  justify-content: space-between;
+  position: relative;
+  margin-bottom: 26px;
+}
+.guide-popup__timeline::before {
+  content: "";
+  position: absolute;
+  left: 55px;
+  right: 55px;
+  top: 20px;
+  height: 2px;
+  background: #223355;
+}
+
+.guide-popup__step {
+  width: 23%;
+  text-align: center;
+  cursor: pointer;
+  position: relative;
+  z-index: 2;
+}
+.guide-popup__step h3 {
+  font-size: 13px;
+  margin: 8px 0 0;
+  color: var(--gp-muted);
+  font-weight: 500;
+}
+.guide-popup__step.is-active h3,
+.guide-popup__step.is-done h3 {
+  color: var(--gp-white);
+}
+
+.guide-popup__circle {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  margin: auto;
+  background: #112;
+  border: 2px solid #445577;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gp-muted);
+  font-weight: 600;
+  transition: all 160ms ease;
+}
+.guide-popup__step.is-active .guide-popup__circle,
+.guide-popup__step.is-done .guide-popup__circle {
+  background: var(--gp-teal);
+  color: #001a16;
+  border-color: var(--gp-teal);
+  box-shadow: 0 0 20px rgba(10, 255, 212, 0.55);
+}
+
+.guide-popup__content {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  padding: 20px;
+  min-height: 150px;
+}
+.guide-popup__content h2 {
+  margin-top: 0;
+  color: var(--gp-teal);
+  font-size: 18px;
+}
+.guide-popup__content p {
+  color: var(--gp-muted);
+  line-height: 1.8;
+  margin-bottom: 0;
+}
+
+.guide-popup__actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 20px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.guide-popup__skip {
+  font-size: 13px;
+  color: var(--gp-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.guide-popup__buttons {
+  display: flex;
+  gap: 10px;
+}
+.guide-popup__buttons button {
+  padding: 11px 22px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.guide-popup__back {
+  background: #2b3555;
+  color: #fff;
+}
+.guide-popup__next {
+  background: linear-gradient(90deg, var(--gp-teal), #00b99c);
+  color: #001a16;
+  font-weight: 700;
+}
+.guide-popup__back:hover {
+  background: #37437a;
+}
+.guide-popup__next:hover {
+  filter: brightness(1.08);
+}
+
+@media (max-width: 640px) {
+  .guide-popup {
+    padding: 18px;
+  }
+  .guide-popup__step h3 {
+    display: none;
+  }
+}

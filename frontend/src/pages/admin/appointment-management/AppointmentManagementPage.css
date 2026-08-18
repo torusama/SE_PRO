@@ -1,0 +1,137 @@
+.appointment-admin {
+  padding: 30px;
+  color: var(--admin-text);
+}
+.appointment-admin > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 25px;
+}
+.appointment-admin header p {
+  margin: 0;
+  color: var(--admin-accent-2);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+}
+.appointment-admin h1 {
+  margin: 5px 0;
+}
+.pending-count {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 18px;
+  border-radius: 10px;
+  background: var(--admin-accent-soft);
+  color: var(--admin-accent-2);
+}
+.pending-count b {
+  font-size: 24px;
+}
+.pending-count span {
+  font-size: 12px;
+}
+.admin-appointment-list {
+  display: grid;
+  gap: 11px;
+}
+.admin-appointment-list article {
+  display: grid;
+  grid-template-columns: 145px 1fr auto;
+  align-items: center;
+  gap: 20px;
+  padding: 18px;
+  border: 1px solid var(--admin-line);
+  border-radius: 12px;
+  background: var(--admin-paper);
+  box-shadow: 0 4px 16px -10px var(--admin-glow);
+}
+.appointment-date {
+  padding-right: 18px;
+  border-right: 1px solid var(--admin-line);
+}
+.appointment-date b,
+.appointment-date span {
+  display: block;
+}
+.appointment-date span {
+  margin-top: 6px;
+  color: var(--admin-accent-2);
+}
+.appointment-info h3 {
+  margin: 0 0 6px;
+}
+.appointment-info p,
+.appointment-info small {
+  margin: 0;
+  color: var(--admin-muted);
+}
+.appointment-info small {
+  display: block;
+  margin-top: 7px;
+}
+.appointment-admin-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.appointment-admin-actions button {
+  padding: 8px 11px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.approve,
+.complete {
+  border: 0;
+  color: var(--admin-paper);
+  background: var(--admin-accent-2);
+}
+.reject {
+  border: 1px solid #e5c3c3;
+  color: var(--admin-danger);
+  background: var(--admin-paper);
+}
+.admin-status {
+  padding: 6px 9px;
+  border-radius: 15px;
+  font-size: 11px;
+  background: #f4ecd2;
+  color: #806615;
+}
+.admin-status.confirmed {
+  background: #d9f2ea;
+  color: #08715b;
+}
+.admin-status.cancelled {
+  background: #f5dddd;
+  color: #963f3f;
+}
+.admin-status.completed {
+  background: #dfeaf2;
+  color: #315d7b;
+}
+.admin-empty,
+.admin-appointment-error {
+  padding: 35px;
+  text-align: center;
+  border-radius: 12px;
+  background: var(--admin-paper);
+}
+.admin-appointment-error {
+  color: var(--admin-danger);
+}
+@media (max-width: 850px) {
+  .admin-appointment-list article {
+    grid-template-columns: 1fr;
+  }
+  .appointment-date {
+    border-right: 0;
+    border-bottom: 1px solid var(--admin-line);
+    padding-bottom: 12px;
+  }
+  .appointment-admin-actions {
+    flex-wrap: wrap;
+  }
+}

@@ -1,0 +1,1664 @@
+/* ============================================================
+   MapPage.css — 2D Cemetery Map
+   Design tokens match the existing Vĩnh Hằng website theme.
+   ============================================================ */
+
+@import url("https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap");
+
+/* ---------- scope reset ---------- */
+.map-page,
+.map-page * {
+  box-sizing: border-box;
+}
+
+/* ---------- page shell ---------- */
+.map-page {
+  --ink-void: #04060e;
+  --ink-deep: #080d1a;
+  --teal-glow: #00e5c4;
+  --teal-soft: #00b89e;
+  --gold: #0affd4;
+  --gold-bright: #7dffe8;
+  --amber: #f5a623;
+  --red: #e84a4a;
+  --purple: #7b6bcc;
+  --text-main: #d4e8e0;
+  --text-muted: #7a9a90;
+  --border-dim: rgba(0, 229, 196, 0.12);
+  --border-soft: rgba(0, 229, 196, 0.25);
+  --border-gold: rgba(10, 255, 212, 0.25);
+
+  position: relative;
+  background:
+    radial-gradient(
+      ellipse 900px 600px at 12% -8%,
+      rgba(20, 58, 110, 0.22),
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse 800px 700px at 92% 108%,
+      rgba(12, 40, 82, 0.24),
+      transparent 60%
+    ),
+    var(--ink-void);
+  color: var(--text-main);
+  font-family: "Be Vietnam Pro", sans-serif;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ---------- animated background ---------- */
+.map-page .bg-canvas {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.map-page .glow-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(100px);
+  animation: map-pulse-orb 8s ease-in-out infinite;
+}
+.map-page .glow-orb-gold {
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, rgba(30, 80, 160, 0.16), transparent 70%);
+  top: -100px;
+  right: -80px;
+}
+.map-page .glow-orb-teal {
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(
+    circle,
+    rgba(10, 255, 212, 0.07),
+    transparent 70%
+  );
+  bottom: 0;
+  left: -80px;
+  animation-delay: -5s;
+}
+@keyframes map-pulse-orb {
+  0%,
+  100% {
+    opacity: 0.1;
+  }
+  50% {
+    opacity: 0.18;
+  }
+}
+
+.map-page .mountain-layer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 50vh;
+  opacity: 0.1;
+}
+.map-page .stars {
+  position: absolute;
+  inset: 0;
+}
+.map-page .star {
+  position: absolute;
+  background: #fff;
+  border-radius: 50%;
+  animation: map-twinkle var(--d, 3s) ease-in-out infinite var(--delay, 0s);
+}
+@keyframes map-twinkle {
+  0%,
+  100% {
+    opacity: 0.1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+/* ---------- breadcrumb ---------- */
+.map-page .breadcrumb {
+  position: relative;
+  z-index: 10;
+  flex-shrink: 0;
+  padding: 16px 48px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.map-page .breadcrumb a {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+.map-page .breadcrumb a:hover {
+  color: var(--teal-glow);
+}
+.map-page .breadcrumb .sep {
+  opacity: 0.4;
+}
+.map-page .breadcrumb .current {
+  color: var(--teal-soft);
+}
+.map-page .map-help-btn {
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid rgba(10, 255, 212, 0.3);
+  background: transparent;
+  color: var(--teal-glow);
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    border-color 160ms ease;
+}
+.map-page .map-help-btn:hover {
+  background: rgba(10, 255, 212, 0.1);
+  color: var(--text-main, #d4e8e0);
+  border-color: var(--teal-glow);
+}
+
+/* ---------- 3-column layout ---------- */
+.map-page .app-body {
+  position: relative;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: 280px minmax(480px, 1fr) 320px;
+  gap: 14px;
+  flex: 1;
+  min-height: 0;
+  padding: 0 20px 16px;
+  overflow: hidden;
+}
+
+/* ---------- sidebar left ---------- */
+.map-page .sidebar-left {
+  border: 0.5px solid var(--border-dim);
+  border-radius: 18px;
+  background: rgba(9, 14, 28, 0.5);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.22);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 229, 196, 0.35) transparent;
+}
+
+.map-page .sidebar-left::-webkit-scrollbar,
+.map-page .panel-right::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.map-page .sidebar-left::-webkit-scrollbar-track,
+.map-page .panel-right::-webkit-scrollbar-track {
+  background: transparent;
+  margin-block: 12px;
+}
+
+.map-page .sidebar-left::-webkit-scrollbar-thumb,
+.map-page .panel-right::-webkit-scrollbar-thumb {
+  background: rgba(0, 229, 196, 0.4);
+  border-radius: 999px;
+  border: 1.5px solid transparent;
+  background-clip: padding-box;
+}
+
+.map-page .sidebar-left::-webkit-scrollbar-thumb:hover,
+.map-page .panel-right::-webkit-scrollbar-thumb:hover {
+  background: var(--teal-soft);
+  background-clip: padding-box;
+}
+
+.map-page .sidebar-left::-webkit-scrollbar-button,
+.map-page .panel-right::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.map-page .sidebar-section {
+  padding: 16px 16px 0;
+}
+.map-page .sidebar-section.compact-section {
+  padding-top: 6px;
+}
+
+.map-page .sidebar-title {
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--teal-soft);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.map-page .sidebar-title::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border-dim);
+  opacity: 0.7;
+}
+
+/* search */
+.map-page .search-box {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(4, 6, 14, 0.7);
+  border: 1px solid var(--border-dim);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
+}
+.map-page .search-box:focus-within {
+  border-color: var(--teal-soft);
+  box-shadow: 0 0 0 3px rgba(0, 229, 196, 0.1);
+  background: rgba(4, 6, 14, 0.9);
+}
+.map-page .search-icon {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.map-page .search-box input {
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--text-main);
+  font-size: 12px;
+  font-family: "Be Vietnam Pro", sans-serif;
+  width: 100%;
+  min-width: 0;
+}
+.map-page .search-box input::placeholder {
+  color: var(--text-muted);
+}
+
+/* filter chips (3-column grid matching admin layout) */
+.map-page .filter-chips {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 16px;
+}
+.map-page .chip {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 4px;
+  border-radius: 6px;
+  border: 1px solid var(--border-dim);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  font-family: "Be Vietnam Pro", sans-serif;
+}
+.map-page .chip:hover {
+  border-color: var(--border-soft);
+  color: var(--text-main);
+  background: rgba(0, 229, 196, 0.04);
+}
+.map-page .chip.on {
+  border-color: var(--teal-soft);
+  color: var(--teal-glow);
+  background: rgba(0, 229, 196, 0.12);
+  font-weight: 600;
+}
+
+/* zone list (matching admin zone item structure) */
+.map-page .zone-list {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+.map-page .zone-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: 1px solid transparent;
+  background: transparent;
+  text-align: left;
+  font-family: "Be Vietnam Pro", sans-serif;
+}
+.map-page .zone-item:hover {
+  background: rgba(0, 229, 196, 0.04);
+  border-color: var(--border-dim);
+}
+.map-page .zone-item.active-zone {
+  background: rgba(0, 229, 196, 0.1);
+  border-color: var(--teal-soft);
+}
+.map-page .zone-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 6px currentColor;
+}
+.map-page .zone-dot-all {
+  background: linear-gradient(135deg, var(--teal-soft), var(--gold));
+  box-shadow: 0 0 6px var(--teal-soft);
+}
+.map-page .zone-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-main);
+  flex: 1;
+}
+.map-page .zone-count {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* legend (matching admin grid 2-col layout) */
+.map-page .status-legend {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+  margin-bottom: 16px;
+}
+.map-page .status-legend span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.map-page .status-legend i {
+  width: 10px;
+  height: 10px;
+  border: 1px solid;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.map-page .status-legend i.no-data {
+  border-color: rgba(170, 179, 189, 0.5);
+  border-style: dashed;
+  background: rgba(116, 124, 137, 0.08);
+}
+
+.map-page .sidebar-empty {
+  margin: 0 16px 16px;
+  padding: 10px 12px;
+  border: 1px solid rgba(245, 166, 35, 0.3);
+  border-radius: 6px;
+  background: rgba(245, 166, 35, 0.06);
+  color: #ffdca0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* stats grid (matching admin stats layout) */
+.map-page .stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  padding: 0 16px 18px;
+}
+.map-page .stat-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background: rgba(4, 6, 14, 0.5);
+  border: 1px solid var(--border-dim);
+  border-radius: 10px;
+  padding: 10px 6px;
+  box-sizing: border-box;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+.map-page .stat-card:hover {
+  border-color: var(--teal-soft);
+  background: rgba(0, 229, 196, 0.04);
+  transform: translateY(-1px);
+}
+.map-page .stat-card.active {
+  border-color: var(--teal-glow);
+  background: rgba(0, 229, 196, 0.08);
+  box-shadow: 0 0 0 2px rgba(0, 229, 196, 0.2);
+}
+.map-page .stat-num {
+  display: block;
+  font-family:
+    "Be Vietnam Pro",
+    -apple-system,
+    sans-serif;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--teal-glow);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  margin-bottom: 3px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.map-page .stat-num.teal {
+  color: var(--teal-glow);
+}
+.map-page .stat-num.green {
+  color: #00e5c4;
+}
+.map-page .stat-num.amber {
+  color: #f5a623;
+}
+.map-page .stat-num.yellow {
+  color: #0affd4;
+}
+.map-page .stat-num.red {
+  color: #e84a4a;
+}
+.map-page .stat-num.gray {
+  color: #8892a0;
+}
+.map-page .stat-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  line-height: 1.35;
+  text-transform: none;
+  text-align: center;
+}
+
+/* ---------- map area ---------- */
+.map-page .map-area {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: rgba(4, 6, 14, 0.4);
+  border: 0.5px solid var(--border-dim);
+  border-radius: 18px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* toolbar — floats OVER the map instead of taking its own row, so the
+   map viewport underneath gets the full height of the map area. */
+.map-page .map-toolbar {
+  position: absolute;
+  top: 14px;
+  left: 16px;
+  z-index: 20;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  pointer-events: none;
+}
+.map-page .map-toolbar > * {
+  pointer-events: auto;
+}
+
+/* map viewport — the bounded map-viewing area. Overlay controls (compass,
+   zoom, rotate) anchor to THIS element so they stay fixed in place while
+   the scrollable/zoomable map underneath pans and zooms independently. */
+.map-page .map-viewport {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+}
+
+/* map canvas wrapper — holds the SVG only, scrolls/pans independently */
+.map-page .map-canvas-wrap {
+  position: relative;
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  min-height: 0;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+.map-page .map-canvas-wrap:active {
+  cursor: grabbing;
+}
+
+.map-page .map-stage {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  will-change: transform;
+}
+
+/* mode switch */
+.map-page .mode-switch {
+  display: flex;
+  gap: 0;
+}
+
+.map-page .mode-btn {
+  padding: 7px 16px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-family: "Be Vietnam Pro", sans-serif;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  position: relative;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.75);
+}
+.map-page .mode-btn:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: 20%;
+  height: 60%;
+  width: 0.5px;
+  background: var(--border-dim);
+}
+.map-page .mode-btn:hover {
+  color: var(--text-main);
+}
+.map-page .mode-btn.active {
+  color: var(--teal-glow);
+}
+.map-page .mode-btn.active::before {
+  content: "";
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--teal-glow);
+}
+
+.map-page .map-btn {
+  padding: 7px 13px;
+  border-radius: 8px;
+  border: 0.5px solid var(--border-dim);
+  background: rgba(8, 13, 26, 0.8);
+  backdrop-filter: blur(8px);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-family: "Be Vietnam Pro", sans-serif;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.map-page .map-btn:hover {
+  border-color: var(--border-soft);
+  color: var(--text-main);
+}
+.map-page .map-btn.active {
+  border-color: var(--teal-soft);
+  color: var(--teal-glow);
+  background: rgba(0, 229, 196, 0.06);
+}
+
+/* rotate (xoay bản đồ 360°) */
+.map-page .map-rotate {
+  position: absolute;
+  bottom: 24px;
+  right: 60px;
+  z-index: 20;
+  display: flex;
+  gap: 4px;
+}
+
+/* zoom */
+.map-page .map-zoom {
+  position: absolute;
+  bottom: 24px;
+  right: 16px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.map-page .zoom-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 0.5px solid var(--border-dim);
+  background: rgba(8, 13, 26, 0.85);
+  backdrop-filter: blur(8px);
+  color: var(--text-main);
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+.map-page .zoom-btn:hover {
+  border-color: var(--border-soft);
+  color: var(--teal-glow);
+}
+.map-page .heading-btn {
+  width: auto;
+  min-width: 44px;
+  padding: 0 8px;
+  font-size: 10.5px;
+  font-family: "Be Vietnam Pro", sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+
+/* minimap */
+.map-page .map-minimap {
+  position: absolute;
+  bottom: 24px;
+  left: 16px;
+  z-index: 20;
+  width: 120px;
+  height: 80px;
+  border: 0.5px solid var(--border-soft);
+  border-radius: 8px;
+  background: rgba(8, 13, 26, 0.85);
+  backdrop-filter: blur(8px);
+  overflow: hidden;
+}
+
+/* scale */
+.map-page .map-scale {
+  position: absolute;
+  bottom: 80px;
+  left: 16px;
+  z-index: 20;
+  font-size: 10px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.map-page .scale-bar {
+  width: 60px;
+  height: 2px;
+  background: var(--text-muted);
+  border-radius: 1px;
+}
+
+/* empty state */
+.map-page .map-empty {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 25;
+  padding: 14px 18px;
+  border-radius: 8px;
+  border: 0.5px solid rgba(245, 166, 35, 0.35);
+  background: rgba(8, 13, 26, 0.9);
+  color: #ffdca0;
+  font-size: 13px;
+  text-align: center;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.35);
+}
+
+/* SVG map */
+.map-page #cemetery-map {
+  width: 100%;
+  height: 100%;
+  min-width: 1500px;
+  min-height: 1120px;
+  cursor: default;
+  transition: transform 0.2s ease;
+}
+
+.map-page .plot-cell {
+  cursor: pointer;
+}
+.map-page #cemetery-map {
+  user-select: none;
+  touch-action: none;
+}
+.map-page .lot-rect {
+  transition:
+    filter 0.15s,
+    stroke-width 0.15s;
+  vector-effect: non-scaling-stroke;
+}
+.map-page .plot-cell:hover .lot-rect {
+  filter: brightness(1.35);
+}
+.map-page .plot-cell.mine .lot-rect {
+  filter: drop-shadow(0 0 7px rgba(0, 229, 196, 0.7));
+}
+.map-page .plot-cell.selected .lot-rect {
+  filter: brightness(1.25) drop-shadow(0 0 5px rgba(125, 255, 232, 0.55));
+}
+.map-page .plot-cell.cluster-selected .lot-rect {
+  filter: brightness(1.3) drop-shadow(0 0 6px rgba(0, 229, 196, 0.55));
+}
+.map-page .plot-cell.placeholder {
+  cursor: default;
+}
+.map-page .plot-cell.placeholder .lot-rect {
+  fill: rgba(116, 124, 137, 0.08);
+  stroke: rgba(122, 154, 144, 0.32);
+  stroke-dasharray: 3 3;
+}
+.map-page .plot-cell.placeholder:hover .lot-rect {
+  filter: none;
+}
+.map-page .plot-cell.placeholder .plot-code {
+  fill: rgba(122, 154, 144, 0.42);
+}
+.map-page .plot-code {
+  font-size: 6.2px;
+  font-family: "Be Vietnam Pro", sans-serif;
+  font-weight: 600;
+  pointer-events: none;
+  letter-spacing: 0;
+}
+.map-page .plot-mine-mark {
+  fill: var(--teal-glow);
+  font-size: 9px;
+  font-weight: 700;
+  pointer-events: none;
+  filter: drop-shadow(0 0 3px rgba(0, 229, 196, 0.9));
+}
+
+/* ranh giới tổng thể khu đất (đa giác thực tế, không phải hình chữ nhật) */
+.map-page .map-land {
+  fill: rgba(220, 38, 38, 0.02);
+  stroke: none;
+}
+.map-page .map-boundary-line {
+  fill: none;
+  stroke: rgba(220, 38, 38, 0.55);
+  stroke-width: 1.4;
+  stroke-dasharray: 8 5;
+  vector-effect: non-scaling-stroke;
+}
+.map-page .map-gate-marker {
+  fill: rgba(125, 255, 232, 0.55);
+}
+.map-page .map-gate-secondary {
+  fill: rgba(123, 107, 204, 0.55);
+}
+.map-page .map-connector-road {
+  fill: rgba(0, 229, 196, 0.1);
+  stroke-dasharray: 3 3;
+}
+.map-page .zone-badge {
+  fill: rgba(4, 6, 14, 0.82);
+  stroke-width: 1;
+}
+.map-page .zone-badge-text {
+  font-size: 9px;
+  font-family: "Be Vietnam Pro", sans-serif;
+  font-weight: 700;
+  pointer-events: none;
+}
+.map-page .map-road-diagonal {
+  fill: rgba(0, 229, 196, 0.06);
+  stroke: rgba(0, 229, 196, 0.18);
+  stroke-width: 0.5;
+}
+.map-page .spirit-park-rect {
+  fill: rgba(82, 183, 136, 0.08);
+  stroke: rgba(82, 183, 136, 0.35);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+}
+.map-page .spirit-park-circle {
+  fill: rgba(82, 183, 136, 0.14);
+  stroke: rgba(82, 183, 136, 0.55);
+  stroke-width: 1.2;
+}
+.map-page .spirit-park-label {
+  fill: rgba(178, 226, 202, 0.85);
+  font-size: 9px;
+  font-family: "Be Vietnam Pro", sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  pointer-events: none;
+}
+
+/* road / labels */
+.map-page .map-road {
+  fill: rgba(0, 229, 196, 0.06);
+  stroke: none;
+}
+.map-page .map-road-label,
+.map-page .gate-label {
+  fill: rgba(0, 229, 196, 0.36);
+  font-size: 8px;
+  font-family: "Be Vietnam Pro", sans-serif;
+  letter-spacing: 0;
+}
+.map-page .gate-label-secondary {
+  fill: rgba(190, 175, 240, 0.85);
+}
+.map-page .zone-label {
+  font-family:
+    "Be Vietnam Pro",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: lining-nums;
+  fill: rgba(255, 255, 255, 0.72);
+  letter-spacing: 0.05em;
+}
+.map-page .row-label {
+  fill: rgba(125, 255, 232, 0.46);
+  font-size: 8px;
+  font-family: "Be Vietnam Pro", sans-serif;
+}
+.map-page .service-label {
+  fill: rgba(0, 229, 196, 0.15);
+  font-size: 10px;
+  font-family: "Be Vietnam Pro", sans-serif;
+  letter-spacing: 0.1em;
+}
+.map-page .service-sub-label {
+  fill: rgba(0, 229, 196, 0.22);
+  font-size: 8px;
+  font-family: "Be Vietnam Pro", sans-serif;
+}
+.map-page .route-line {
+  fill: none;
+  stroke: rgba(125, 255, 232, 0.72);
+  stroke-width: 3;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  stroke-dasharray: 8 6;
+  filter: drop-shadow(0 0 4px rgba(125, 255, 232, 0.45));
+  pointer-events: none;
+}
+.map-page .compass {
+  position: absolute;
+  top: 60px;
+  right: 16px;
+  z-index: 20;
+  width: 40px;
+  height: 40px;
+  opacity: 0.65;
+  transition:
+    transform 0.2s ease,
+    opacity 0.2s ease;
+}
+.map-page .compass:hover {
+  opacity: 1;
+}
+
+/* nút "3D" — ngay dưới la bàn, cùng kích thước/bán kính (40x40, bo tròn) */
+.map-page .map-3d-btn {
+  position: absolute;
+  top: 108px;
+  right: 16px;
+  z-index: 20;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 0.5px solid var(--border-dim);
+  background: rgba(8, 13, 26, 0.85);
+  backdrop-filter: blur(8px);
+  color: var(--text-main);
+  font-family: "Be Vietnam Pro", sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    all 0.2s ease,
+    transform 0.15s ease;
+}
+.map-page .map-3d-btn:hover {
+  border-color: var(--border-soft);
+  color: var(--teal-glow);
+  transform: scale(1.06);
+}
+
+/* ---------- panel right ---------- */
+.map-page .panel-right {
+  border: 0.5px solid var(--border-dim);
+  border-radius: 18px;
+  background: rgba(9, 14, 28, 0.5);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.22);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 229, 196, 0.35) transparent;
+  display: flex;
+  flex-direction: column;
+}
+
+/* detail empty */
+.map-page .detail-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: 40px 24px;
+  text-align: center;
+  color: var(--text-muted);
+}
+.map-page .detail-empty-title {
+  font-family: "Playfair Display", serif;
+  font-size: 24px;
+  color: #e8f4f0;
+  margin-bottom: 8px;
+}
+.map-page .detail-empty p {
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+/* detail panel */
+.map-page .detail-panel {
+  padding: 24px;
+  display: none;
+  flex-direction: column;
+  gap: 0;
+}
+.map-page .detail-panel.visible {
+  display: flex;
+}
+
+.map-page .detail-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.map-page .detail-close-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 0.5px solid var(--border-dim);
+  color: var(--text-muted);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  line-height: 1;
+}
+
+.map-page .detail-close-btn:hover {
+  background: rgba(232, 74, 74, 0.2);
+  color: #ff5c5c;
+  border-color: rgba(232, 74, 74, 0.5);
+  transform: scale(1.08);
+}
+
+.map-page .detail-tag {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--gold);
+  text-transform: uppercase;
+  margin-bottom: 0;
+  opacity: 0.8;
+}
+.map-page .detail-lot-id {
+  font-family: "Playfair Display", serif;
+  font-size: 28px;
+  color: #e8f4f0;
+  margin-bottom: 4px;
+}
+.map-page .detail-zone {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 18px;
+  line-height: 1.5;
+}
+
+/* status badge */
+.map-page .status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  margin-bottom: 18px;
+}
+.map-page .status-badge-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+.map-page .status-badge.available {
+  background: rgba(0, 229, 196, 0.08);
+  border: 0.5px solid var(--teal-soft);
+  color: var(--teal-glow);
+}
+.map-page .status-badge.pending {
+  background: rgba(245, 166, 35, 0.1);
+  border: 0.5px solid var(--amber);
+  color: #ffdca0;
+}
+.map-page .status-badge.reserved {
+  background: rgba(10, 255, 212, 0.1);
+  border: 0.5px solid var(--gold);
+  color: var(--gold-bright);
+}
+.map-page .status-badge.sold {
+  background: rgba(232, 74, 74, 0.1);
+  border: 0.5px solid var(--red);
+  color: #ffb3b3;
+}
+.map-page .status-badge.locked {
+  background: rgba(154, 164, 180, 0.1);
+  border: 0.5px solid rgba(154, 164, 180, 0.6);
+  color: #d5d9df;
+}
+
+/* detail rows */
+.map-page .detail-divider {
+  height: 0.5px;
+  background: var(--border-dim);
+  margin: 16px 0;
+}
+.map-page .detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 8px 0;
+}
+.map-page .detail-row-label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.map-page .detail-row-val {
+  font-size: 13px;
+  color: var(--text-main);
+  text-align: right;
+  max-width: 170px;
+  line-height: 1.5;
+}
+.map-page .detail-row-val.highlight {
+  color: var(--teal-glow);
+}
+
+/* info boxes */
+.map-page .description-box,
+.map-page .direction-box,
+.map-page .selection-message {
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin: 16px 0 0;
+  line-height: 1.65;
+  font-size: 12px;
+}
+.map-page .description-box {
+  background: rgba(0, 229, 196, 0.04);
+  border: 0.5px solid var(--border-dim);
+  color: var(--text-main);
+}
+.map-page .direction-box {
+  background: rgba(10, 255, 212, 0.05);
+  border: 0.5px solid var(--border-gold);
+  color: #7dffe8;
+}
+.map-page .my-plot-box {
+  background: rgba(0, 229, 196, 0.07);
+  border: 0.5px solid rgba(0, 229, 196, 0.35);
+  border-radius: 8px;
+  padding: 13px 15px;
+  margin-bottom: 18px;
+  color: #bdfdf2;
+}
+.map-page .my-plot-title {
+  color: var(--teal-glow);
+  font-weight: 700;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+.map-page .my-plot-note {
+  color: var(--text-main);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.map-page .description-box p,
+.map-page .direction-box p {
+  margin: 0;
+}
+.map-page .description-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.map-page .description-list li {
+  position: relative;
+  padding-left: 13px;
+  line-height: 1.55;
+}
+.map-page .description-list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.72em;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--teal-glow);
+  box-shadow: 0 0 8px rgba(0, 229, 196, 0.55);
+}
+.map-page .plot-ai-thinking {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 10px;
+  color: #88a0aa;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.map-page .plot-ai-thinking-icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgba(0, 229, 196, 0.25);
+  border-radius: 9px;
+  color: var(--teal-glow);
+  background: rgba(0, 229, 196, 0.08);
+}
+.map-page .plot-ai-thinking-dots {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.map-page .plot-ai-thinking-dots i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #6c818c;
+  animation: map-plot-ai-pulse 1.15s infinite ease-in-out;
+}
+.map-page .plot-ai-thinking-dots i:nth-child(2) {
+  animation-delay: 140ms;
+}
+.map-page .plot-ai-thinking-dots i:nth-child(3) {
+  animation-delay: 280ms;
+}
+@keyframes map-plot-ai-pulse {
+  0%,
+  70%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  35% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+.map-page .box-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--teal-soft);
+  margin-bottom: 6px;
+}
+.map-page .direction-box .box-label {
+  color: var(--gold);
+}
+.map-page .selection-message {
+  border: 0.5px solid rgba(232, 74, 74, 0.35);
+  background: rgba(232, 74, 74, 0.08);
+  color: #ffb3b3;
+}
+.map-page .submit-success {
+  border: 0.5px solid rgba(0, 229, 196, 0.35);
+  background: rgba(0, 229, 196, 0.08);
+  color: #bdfdf2;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 16px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* adjacency warning */
+.map-page .adjacency-warning {
+  border: 0.5px solid rgba(245, 166, 35, 0.4);
+  background: rgba(245, 166, 35, 0.08);
+  color: #ffdca0;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 12px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  animation: warn-flash 0.3s ease;
+}
+@keyframes warn-flash {
+  0% {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* actions */
+.map-page .detail-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.map-page .btn-primary {
+  width: 100%;
+  padding: 12px;
+  border-radius: 8px;
+  background: linear-gradient(
+    135deg,
+    rgba(10, 255, 212, 0.15),
+    rgba(0, 229, 196, 0.1)
+  );
+  border: 0.5px solid var(--border-gold);
+  color: var(--gold);
+  font-size: 14px;
+  font-family: "Be Vietnam Pro", sans-serif;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  letter-spacing: 0.02em;
+}
+.map-page .btn-primary:hover {
+  background: rgba(10, 255, 212, 0.22);
+  color: var(--gold-bright);
+}
+
+.map-page .btn-secondary {
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  background: transparent;
+  border: 0.5px solid var(--border-dim);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-family: "Be Vietnam Pro", sans-serif;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.map-page .btn-secondary:hover {
+  border-color: var(--border-soft);
+  color: var(--text-main);
+}
+
+.map-page .btn-cancel-request {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid rgba(232, 136, 136, 0.55);
+  border-radius: 8px;
+  color: #ffd0d0;
+  background: rgba(151, 48, 48, 0.12);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.map-page .btn-cancel-request:hover:not(:disabled) {
+  background: rgba(151, 48, 48, 0.22);
+}
+
+.map-page .btn-cancel-request:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.map-cancel-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(1, 5, 10, 0.78);
+  backdrop-filter: blur(5px);
+}
+
+.map-cancel-dialog {
+  width: min(540px, 100%);
+  padding: 22px;
+  border: 1px solid rgba(96, 130, 189, 0.28);
+  border-radius: 12px;
+  color: var(--text-main);
+  background: #08111d;
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.45);
+}
+
+.map-cancel-dialog header,
+.map-cancel-dialog footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.map-cancel-dialog header span {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.map-cancel-dialog h2 {
+  margin: 5px 0 0;
+  color: var(--text-main);
+  font-size: 20px;
+}
+
+.map-cancel-dialog header > button {
+  border: 0;
+  color: var(--text-muted);
+  background: transparent;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.map-cancel-dialog > p {
+  margin: 17px 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.map-cancel-dialog label {
+  display: grid;
+  gap: 8px;
+  color: var(--text-main);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.map-cancel-dialog textarea {
+  width: 100%;
+  resize: vertical;
+  padding: 11px;
+  border: 1px solid var(--border-dim);
+  border-radius: 8px;
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.04);
+  font: inherit;
+}
+
+.map-cancel-error {
+  margin-top: 10px;
+  color: #efb6b6;
+  font-size: 12px;
+}
+
+.map-cancel-dialog footer {
+  justify-content: flex-end;
+  margin-top: 18px;
+}
+
+.map-cancel-dialog footer .btn-secondary,
+.map-cancel-dialog footer .btn-cancel-request {
+  width: auto;
+  min-width: 130px;
+}
+
+/* ---------- cluster panel (Family/Clan mode) ---------- */
+.map-page .cluster-panel {
+  border-top: 0.5px solid var(--border-dim);
+  padding: 20px 24px;
+  margin-top: auto;
+}
+
+.map-page .cluster-title {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--teal-soft);
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.map-page .cluster-title::after {
+  content: "";
+  flex: 1;
+  height: 0.5px;
+  background: var(--border-dim);
+}
+
+.map-page .cluster-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.map-page .cluster-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: rgba(0, 229, 196, 0.04);
+  border: 0.5px solid var(--border-dim);
+  font-size: 12px;
+}
+
+.map-page .cluster-item-code {
+  color: var(--teal-glow);
+  font-weight: 500;
+}
+.map-page .cluster-item-price {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.map-page .cluster-remove-btn {
+  background: none;
+  border: none;
+  color: var(--red);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: all 0.15s;
+  font-family: "Be Vietnam Pro", sans-serif;
+  line-height: 1;
+}
+.map-page .cluster-remove-btn:hover {
+  background: rgba(232, 74, 74, 0.15);
+}
+
+.map-page .cluster-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 0 0;
+  border-top: 0.5px solid var(--border-dim);
+}
+
+.map-page .cluster-summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+}
+.map-page .cluster-summary-label {
+  color: var(--text-muted);
+}
+.map-page .cluster-summary-val {
+  color: var(--text-main);
+  font-weight: 500;
+}
+.map-page .cluster-summary-val.total {
+  color: var(--gold-bright);
+  font-family: "Playfair Display", serif;
+  font-size: 18px;
+}
+
+.map-page .cluster-empty {
+  text-align: center;
+  padding: 20px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/* ---------- tooltip ---------- */
+.map-page .map-tooltip {
+  position: fixed;
+  z-index: 100;
+  background: rgba(8, 13, 26, 0.95);
+  border: 0.5px solid var(--border-soft);
+  border-radius: 8px;
+  padding: 10px 14px;
+  pointer-events: none;
+  display: none;
+  font-size: 12px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+}
+.map-page .tooltip-id {
+  font-family: "Playfair Display", serif;
+  font-size: 14px;
+  color: #e8f4f0;
+  margin-bottom: 3px;
+}
+.map-page .tooltip-status {
+  font-size: 11px;
+}
+.map-page .tooltip-price {
+  font-size: 11px;
+  color: var(--gold);
+  margin-top: 3px;
+}
+
+/* ============================================================
+   Responsive
+   ============================================================ */
+
+/* tablet: detail panel drops below */
+@media (max-width: 1180px) {
+  .map-page {
+    height: auto;
+    overflow: visible auto;
+  }
+  .map-page .app-body {
+    grid-template-columns: 260px minmax(420px, 1fr);
+    grid-template-rows: minmax(560px, 1fr) auto;
+    height: auto;
+    overflow: visible;
+  }
+  .map-page .panel-right {
+    grid-column: 1 / -1;
+  }
+}
+
+/* mobile: single column */
+@media (max-width: 820px) {
+  .map-page .breadcrumb {
+    padding: 14px 18px;
+  }
+  .map-page .app-body {
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    overflow: visible;
+  }
+  .map-page .sidebar-left {
+    max-height: none;
+  }
+  .map-page .map-area {
+    min-height: 520px;
+  }
+  .map-page .map-canvas-wrap {
+    overflow: auto;
+  }
+  .map-page #cemetery-map {
+    width: 1500px;
+    height: 1120px;
+  }
+  .map-page .map-toolbar {
+    top: 10px;
+    left: 12px;
+  }
+  .map-page .detail-panel {
+    padding: 20px;
+  }
+  .map-page .mode-btn {
+    padding: 6px 12px;
+    font-size: 11px;
+  }
+}
+
+/* small mobile */
+@media (max-width: 520px) {
+  .map-page .stats-grid {
+    grid-template-columns: 1fr;
+  }
+  .map-page .map-minimap,
+  .map-page .map-scale {
+    display: none;
+  }
+  .map-page .map-zoom {
+    bottom: 16px;
+  }
+  .map-page .detail-row {
+    flex-direction: column;
+    gap: 2px;
+  }
+  .map-page .detail-row-val {
+    text-align: left;
+    max-width: none;
+  }
+  .map-page .cluster-summary-val.total {
+    font-size: 16px;
+  }
+}

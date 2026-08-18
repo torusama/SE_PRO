@@ -1,0 +1,459 @@
+/* src/pages/customer/notification/NotificationPage.css
+   Chuyển thể 1:1 từ mockup fr09_thong_bao.html.
+   Bỏ <nav> riêng của mockup (CustomerLayout đã có Navbar dùng chung) và
+   bảng cài đặt kênh thông báo (đã có sẵn ở trang Hồ sơ > Liên hệ & thông báo,
+   không tạo state trùng lặp — chỉ để 1 nút dẫn sang đó).
+   Mọi selector bọc trong .notification-page để không đụng class với trang khác. */
+
+.notification-page {
+  --ink-void: #04060e;
+  --teal-glow: #00e5c4;
+  --teal-soft: #00b89e;
+  --gold: #0affd4;
+  --gold-dim: #067a68;
+  --blue-glow: #4da6ff;
+  --purple: #7b6bcc;
+  --red: #e05c5c;
+  --text-main: #d4e8e0;
+  --text-muted: #7a9a90;
+  --border-dim: rgba(0, 229, 196, 0.12);
+  --border-soft: rgba(0, 229, 196, 0.25);
+  --border-gold: rgba(10, 255, 212, 0.25);
+
+  position: relative;
+  background: var(--ink-void);
+  color: var(--text-main);
+  font-family: "Be Vietnam Pro", sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* BG */
+.notification-page .bg-canvas {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+.notification-page .glow-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(100px);
+  animation: nt-pulse-orb 8s ease-in-out infinite;
+}
+@keyframes nt-pulse-orb {
+  0%,
+  100% {
+    opacity: 0.08;
+  }
+  50% {
+    opacity: 0.15;
+  }
+}
+.notification-page .stars {
+  position: absolute;
+  inset: 0;
+}
+.notification-page .star {
+  position: absolute;
+  background: #fff;
+  border-radius: 50%;
+  animation: nt-twinkle var(--d, 3s) ease-in-out infinite var(--delay, 0s);
+}
+@keyframes nt-twinkle {
+  0%,
+  100% {
+    opacity: 0.05;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+/* BREADCRUMB */
+.notification-page .breadcrumb {
+  position: relative;
+  z-index: 10;
+  padding: 16px 48px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.notification-page .breadcrumb a {
+  color: var(--text-muted);
+  text-decoration: none;
+  cursor: pointer;
+}
+.notification-page .breadcrumb a:hover {
+  color: var(--teal-glow);
+}
+.notification-page .breadcrumb .sep {
+  opacity: 0.4;
+}
+.notification-page .breadcrumb .current {
+  color: var(--teal-soft);
+}
+
+/* LAYOUT */
+.notification-page .page-wrap {
+  position: relative;
+  z-index: 10;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 0 48px 60px;
+}
+.notification-page .page-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 28px;
+  padding-top: 8px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.notification-page .page-title {
+  font-family: "Playfair Display", serif;
+  font-size: 26px;
+  color: var(--text-main);
+  letter-spacing: 0.03em;
+}
+.notification-page .page-title small {
+  display: block;
+  font-family: "Be Vietnam Pro", sans-serif;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-muted);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.notification-page .header-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.notification-page .btn-outline {
+  background: none;
+  border: 1px solid var(--border-soft);
+  color: var(--teal-soft);
+  font-family: "Be Vietnam Pro", sans-serif;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  padding: 8px 18px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border-radius: 4px;
+}
+.notification-page .btn-outline:hover:not(:disabled) {
+  background: rgba(0, 229, 196, 0.06);
+  border-color: var(--teal-glow);
+}
+.notification-page .btn-outline:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.notification-page .badge-count {
+  background: var(--red);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 10px;
+  padding: 1px 7px;
+  margin-left: 6px;
+}
+.notification-page .error-banner {
+  margin-bottom: 20px;
+  padding: 12px 16px;
+  border: 1px solid rgba(224, 92, 92, 0.35);
+  border-radius: 8px;
+  color: #ffb3b3;
+  background: rgba(224, 92, 92, 0.08);
+  font-size: 13px;
+}
+
+/* FILTER TABS */
+.notification-page .filter-bar {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--border-dim);
+  flex-wrap: wrap;
+}
+.notification-page .filter-tab {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-family: "Be Vietnam Pro", sans-serif;
+  font-size: 13px;
+  padding: 10px 20px;
+  cursor: pointer;
+  transition: color 0.2s;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  position: relative;
+}
+.notification-page .filter-tab.active {
+  color: var(--teal-glow);
+  border-bottom-color: var(--teal-glow);
+}
+.notification-page .filter-tab:hover {
+  color: var(--text-main);
+}
+.notification-page .filter-tab .tab-badge {
+  display: inline-block;
+  background: rgba(224, 92, 92, 0.18);
+  color: var(--red);
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  margin-left: 6px;
+}
+.notification-page .filter-tab.active .tab-badge {
+  background: rgba(0, 229, 196, 0.12);
+  color: var(--teal-glow);
+}
+
+/* NOTIF LIST */
+.notification-page .notif-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.notification-page .notif-item {
+  display: grid;
+  grid-template-columns: 48px 1fr auto;
+  align-items: start;
+  gap: 16px;
+  padding: 18px 20px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+}
+.notification-page .notif-item:hover {
+  background: rgba(0, 229, 196, 0.04);
+  border-color: var(--border-dim);
+}
+.notification-page .notif-item.unread {
+  background: rgba(0, 229, 196, 0.03);
+  border-color: rgba(0, 229, 196, 0.08);
+}
+.notification-page .notif-item.unread::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 60%;
+  background: var(--teal-glow);
+  border-radius: 0 2px 2px 0;
+}
+
+.notification-page .notif-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+.notification-page .notif-icon.type-payment {
+  background: rgba(10, 255, 212, 0.12);
+  border: 1px solid var(--border-gold);
+}
+.notification-page .notif-icon.type-service {
+  background: rgba(0, 229, 196, 0.08);
+  border: 1px solid var(--border-soft);
+}
+.notification-page .notif-icon.type-alert {
+  background: rgba(224, 92, 92, 0.1);
+  border: 1px solid rgba(224, 92, 92, 0.2);
+}
+.notification-page .notif-icon.type-info {
+  background: rgba(77, 166, 255, 0.1);
+  border: 1px solid rgba(77, 166, 255, 0.2);
+}
+.notification-page .notif-icon.type-reminder {
+  background: rgba(123, 107, 204, 0.12);
+  border: 1px solid rgba(123, 107, 204, 0.2);
+}
+
+.notification-page .notif-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-main);
+  margin-bottom: 4px;
+  line-height: 1.4;
+}
+.notification-page .notif-item.unread .notif-title {
+  color: #e8f4f0;
+}
+.notification-page .notif-desc {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.6;
+  /* Một số thông báo (vd: nhắc giấy tờ cần mang theo khi ký kết) có nhiều
+     dòng và có gạch đầu dòng ("•"); giữ nguyên xuống dòng và căn đều lề để
+     hiển thị đúng như nội dung đã soạn, thay vì gộp thành một đoạn liền. */
+  white-space: pre-line;
+  text-align: justify;
+}
+.notification-page .notif-tags {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.notification-page .notif-tag {
+  font-size: 11px;
+  padding: 2px 10px;
+  border-radius: 20px;
+  letter-spacing: 0.05em;
+}
+.notification-page .notif-tag.tag-payment {
+  background: rgba(10, 255, 212, 0.1);
+  color: var(--gold);
+  border: 1px solid var(--border-gold);
+}
+.notification-page .notif-tag.tag-service {
+  background: rgba(0, 229, 196, 0.06);
+  color: var(--teal-soft);
+  border: 1px solid var(--border-dim);
+}
+.notification-page .notif-tag.tag-urgent {
+  background: rgba(224, 92, 92, 0.1);
+  color: var(--red);
+  border: 1px solid rgba(224, 92, 92, 0.2);
+}
+.notification-page .notif-tag.tag-done {
+  background: rgba(0, 229, 196, 0.06);
+  color: var(--teal-soft);
+  border: 1px solid var(--border-dim);
+}
+.notification-page .notif-action {
+  margin-top: 12px;
+  padding: 8px 13px;
+  border: 1px solid var(--teal-glow);
+  border-radius: 7px;
+  background: rgba(0, 229, 196, 0.1);
+  color: var(--teal-soft);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.notification-page .notif-action:hover {
+  background: rgba(0, 229, 196, 0.18);
+  box-shadow: 0 0 18px rgba(0, 229, 196, 0.12);
+}
+
+.notification-page .notif-meta {
+  text-align: right;
+  flex-shrink: 0;
+  min-width: 90px;
+}
+.notification-page .notif-time {
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+}
+.notification-page .notif-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--teal-glow);
+  margin: 8px 0 0 auto;
+  box-shadow: 0 0 8px rgba(0, 229, 196, 0.5);
+}
+
+.notification-page .section-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 20px 0 10px;
+  border-bottom: 1px solid var(--border-dim);
+  margin-bottom: 2px;
+}
+
+/* EMPTY STATE */
+.notification-page .empty-state {
+  text-align: center;
+  padding: 60px 0;
+  color: var(--text-muted);
+}
+.notification-page .empty-state .empty-icon {
+  font-size: 40px;
+  margin-bottom: 16px;
+  opacity: 0.4;
+}
+.notification-page .empty-state p {
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+/* PAGINATION */
+.notification-page .pagination {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border-dim);
+}
+.notification-page .pg-btn {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border-dim);
+  background: none;
+  color: var(--text-muted);
+  font-family: "Be Vietnam Pro", sans-serif;
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.notification-page .pg-btn.active {
+  border-color: var(--teal-glow);
+  color: var(--teal-glow);
+  background: rgba(0, 229, 196, 0.06);
+}
+.notification-page .pg-btn:hover:not(.active):not(:disabled) {
+  border-color: var(--border-soft);
+  color: var(--text-main);
+}
+.notification-page .pg-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+@media (max-width: 700px) {
+  .notification-page .page-wrap {
+    padding: 0 20px 60px;
+  }
+  .notification-page .breadcrumb {
+    padding: 16px 20px;
+  }
+  .notification-page .notif-item {
+    grid-template-columns: 40px 1fr;
+  }
+  .notification-page .notif-meta {
+    grid-column: 1 / -1;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .notification-page .notif-dot {
+    margin: 0;
+  }
+}
