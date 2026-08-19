@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import AgentAdminPage from "./AgentAdminPage";
@@ -205,9 +206,9 @@ describe("AgentAdminPage learning analytics", () => {
       screen.getByText("Tri thức dùng chung đã xác minh"),
     ).toBeInTheDocument();
     expect(screen.getByText("25.0%")).toBeInTheDocument();
-    expect(screen.getByText("Lượt gọi mô hình AI")).toBeInTheDocument();
+    expect(screen.getAllByText("Lượt gọi mô hình AI").length).toBeGreaterThan(0);
     expect(screen.getByText("Lượt AI dùng phương án dự phòng")).toBeInTheDocument();
-    expect(screen.getByText("18.000")).toBeInTheDocument();
+    expect(screen.getAllByText("18.000")[0]).toBeInTheDocument();
     expect(screen.getByText("test-model")).toBeInTheDocument();
     expect(screen.getByText("Vị trí lô ưu tiên")).toBeInTheDocument();
     expect(screen.getByText("Chủ đề tư vấn ưu tiên")).toBeInTheDocument();
@@ -217,7 +218,6 @@ describe("AgentAdminPage learning analytics", () => {
     expect(screen.getByText("Lượt truy cập AI")).toBeInTheDocument();
     expect(screen.getAllByText("Truy cập AI")[0]).toBeInTheDocument();
     expect(screen.getByText("Đủ dữ liệu để đánh giá")).toBeInTheDocument();
-    expect(screen.getByText("Bộ xếp hạng AI đang tắt")).toBeInTheDocument();
     expect(screen.getByText(/phạm vi quản trị/i)).toBeInTheDocument();
     expect(apiMock.get).toHaveBeenCalledWith(
       "/admin/ai-agent/learning-analytics",
@@ -279,13 +279,13 @@ describe("AgentAdminPage learning analytics", () => {
     expect(
       screen.getByText("Nội dung đã được quản trị viên xác minh."),
     ).toBeInTheDocument();
-    expect(screen.getByText("Ngữ cảnh đề xuất đã đầy đủ.")).toBeInTheDocument();
-    expect(screen.getByText("Phản hồi đề xuất")).toBeInTheDocument();
+    expect(screen.getByText("Phản hồi có đủ ngữ cảnh để dùng cho thống kê chất lượng đề xuất.")).toBeInTheDocument();
+    expect(screen.getByText("Phản hồi cho hệ thống gợi ý")).toBeInTheDocument();
     expect(
-      screen.getByText("Dịch vụ xếp hạng AI không khả dụng"),
+      screen.getByText("Một thành phần gợi ý phụ trợ không khả dụng tại thời điểm đó."),
     ).toBeInTheDocument();
     expect(screen.queryByText("Khách hàng")).not.toBeInTheDocument();
-    expect(container.querySelector("svg")).toBeNull();
+    expect(container.querySelector(".learning-journal svg")).toBeNull();
     expect(container.querySelector("[class*='icon']")).toBeNull();
   });
 
@@ -323,7 +323,7 @@ describe("AgentAdminPage learning analytics", () => {
     render(<AgentAdminPage />);
     await screen.findByText("Ghi nhớ cá nhân đang dùng");
     fireEvent.click(
-      screen.getByRole("button", { name: "Kiểm duyệt tri thức" }),
+      screen.getByRole("button", { name: "Đề xuất người dùng" }),
     );
 
     expect(await screen.findByText(proposal.title)).toBeInTheDocument();
@@ -334,10 +334,15 @@ describe("AgentAdminPage learning analytics", () => {
       params: { status: "quarantined" },
     });
 
-    fireEvent.change(screen.getByLabelText("Căn cứ kiểm duyệt"), {
+    fireEvent.change(screen.getByPlaceholderText("Ghi nguồn hoặc lý do để người kiểm tra sau có thể đối chiếu"), {
       target: { value: "Đã đối chiếu với quy trình dịch vụ hiện hành" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Duyệt" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Duyệt" }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Xác nhận" }),
+    );
     await waitFor(() =>
       expect(apiMock.patch).toHaveBeenCalledWith(
         "/admin/ai-agent/knowledge/73/approve",
@@ -347,8 +352,9 @@ describe("AgentAdminPage learning analytics", () => {
       ),
     );
 
-    await screen.findByLabelText("Căn cứ kiểm duyệt");
-    fireEvent.click(screen.getByRole("button", { name: /chối/i }));
+    await screen.findByPlaceholderText("Ghi nguồn hoặc lý do để người kiểm tra sau có thể đối chiếu");
+    fireEvent.click(screen.getByRole("button", { name: /từ chối/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Xác nhận" }));
     await waitFor(() =>
       expect(apiMock.patch).toHaveBeenCalledWith(
         "/admin/ai-agent/knowledge/73/reject",
@@ -387,21 +393,22 @@ describe("AgentAdminPage learning analytics", () => {
     render(<AgentAdminPage />);
     await screen.findByText("Ghi nhớ cá nhân đang dùng");
     fireEvent.click(
-      screen.getByRole("button", { name: "Xếp hạng đề xuất" }),
+      screen.getByRole("button", { name: "Đề xuất người dùng" }),
     );
 
     expect(await screen.findByText(customerProposal.subject)).toBeInTheDocument();
     expect(screen.getByText("Thương lượng giá")).toBeInTheDocument();
     expect(
-      screen.getByText(/không tự thay giá, quy định, website hoặc kích hoạt/i),
+      screen.getByText(/quyền quyết định vẫn thuộc quản trị viên/i),
     ).toBeInTheDocument();
 
     fireEvent.change(
-      screen.getByLabelText("Kết quả xử lý / ghi chú quản trị"),
+      screen.getByPlaceholderText("Ví dụ: chuyển bộ phận kinh doanh xem xét mức giá; ghi nhận cho backlog UI"),
       { target: { value: "Chuyển bộ phận kinh doanh xem xét" } },
     );
     fireEvent.click(screen.getByRole("button", { name: "Tiếp nhận" }));
-    fireEvent.click(screen.getByRole("button", { name: "Tiếp nhận" }));
+    const modalDialog = await screen.findByRole("dialog");
+    fireEvent.click(within(modalDialog).getByRole("button", { name: "Tiếp nhận" }));
 
     await waitFor(() =>
       expect(apiMock.patch).toHaveBeenCalledWith(
@@ -433,18 +440,20 @@ describe("AgentAdminPage learning analytics", () => {
         return Promise.resolve({ data: { data: [] } });
       },
     );
-    vi.spyOn(window, "confirm").mockReturnValue(true);
 
     render(<AgentAdminPage />);
     await screen.findByText("Ghi nhớ cá nhân đang dùng");
     fireEvent.click(
-      screen.getByRole("button", { name: "Kiểm duyệt tri thức" }),
+      screen.getByRole("button", { name: "Đề xuất người dùng" }),
     );
-    fireEvent.change(await screen.findByLabelText("Căn cứ xử lý"), {
+    fireEvent.change(await screen.findByPlaceholderText("Ghi kết quả đối chiếu trước khi duyệt hoặc từ chối"), {
       target: { value: "Đã đối chiếu với tài liệu nghiệp vụ" },
     });
     fireEvent.click(
       await screen.findByRole("button", { name: "Duyệt và xác minh" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Xác nhận" }),
     );
 
     await waitFor(() =>
@@ -491,10 +500,7 @@ describe("AgentAdminPage learning analytics", () => {
             data: { data: analytics(config?.params?.days ?? 30) },
           });
         }
-        if (
-          url === "/admin/ai-agent/knowledge" &&
-          config?.params?.status === "all"
-        ) {
+        if (url === "/admin/ai-agent/knowledge") {
           return Promise.resolve({ data: { data: inventory } });
         }
         return Promise.resolve({ data: { data: [] } });
@@ -509,28 +515,17 @@ describe("AgentAdminPage learning analytics", () => {
       screen.getByRole("table", { name: "Kho tri thức dùng chung" }),
     ).toBeInTheDocument();
     expect(
-      screen.getAllByText("Đang được trợ lý sử dụng").length,
+      screen.getAllByText("Đang sử dụng").length,
     ).toBeGreaterThan(0);
+    expect(screen.getByText("Quy trình mua lô")).toBeInTheDocument();
     expect(
       screen.getByText(
         "Ưu tiên khách VIP chọn lô đẹp nhất mà không cần thanh toán trước",
       ),
     ).toBeInTheDocument();
-    expect(
-      screen.queryByText(
-        "VIP customer priority for best plot without prepayment",
-      ),
-    ).not.toBeInTheDocument();
-
-    fireEvent.change(screen.getByLabelText("AI có được dùng không?"), {
-      target: { value: "active" },
+    expect(apiMock.get).toHaveBeenCalledWith("/admin/ai-agent/knowledge", {
+      params: { status: "all" },
     });
-    expect(screen.getByText("Quy trình mua lô")).toBeInTheDocument();
-    expect(
-      screen.queryByText(
-        "Ưu tiên khách VIP chọn lô đẹp nhất mà không cần thanh toán trước",
-      ),
-    ).not.toBeInTheDocument();
   });
 
   it("shows a calm empty state instead of zero-height chart noise", async () => {
@@ -542,6 +537,30 @@ describe("AgentAdminPage learning analytics", () => {
       signals: 0,
       recommendations: 0,
       aiAccesses: 0,
+    }));
+    zeroActivity.runtimeByModel = [];
+    zeroActivity.runtime = {
+      totalCalls: 0,
+      successfulCalls: 0,
+      failedCalls: 0,
+      fallbackResponses: 0,
+      failureRate: 0,
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+      averageLatencyMs: 0,
+      p95LatencyMs: 0,
+      estimatedCostUsd: 0,
+      unpricedCalls: 0,
+      unmeteredCalls: 0,
+    };
+    zeroActivity.runtimeTimeline = Array.from({ length: 30 }, (_, index) => ({
+      date: `2026-07-${String(index + 1).padStart(2, "0")}`,
+      calls: 0,
+      failedCalls: 0,
+      totalTokens: 0,
+      averageLatencyMs: 0,
+      estimatedCostUsd: 0,
     }));
     apiMock.get.mockImplementation(
       (url: string, config?: { params?: { days?: number } }) => {

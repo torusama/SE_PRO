@@ -170,7 +170,9 @@ export interface PlotCandidate {
   id: number;
   plotCode: string;
   zoneId: number;
+  zoneCode: string;
   zoneName: string;
+  zoneDescription: string | null;
   price: number;
   status: string;
   direction: string | null;
@@ -179,6 +181,8 @@ export interface PlotCandidate {
   rowNumber: string | null;
   columnNumber: string | null;
   description: string | null;
+  imageUrl: string | null;
+  updatedAt: string | null;
   mapX: number | null;
   mapY: number | null;
   mapWidth: number | null;

@@ -4845,3 +4845,83 @@ button.agent-bazi-followup-item:hover {
   font-family: "Noto Serif SC", "Songti SC", "STSong", "SimSun", serif;
   font-weight: 800;
 }
+
+
+/* Grounded plot details exposed by recommendation responses. */
+.agent-option-details {
+  margin-top: 14px;
+  border-top: 1px solid var(--agent-border, rgba(35, 42, 53, 0.12));
+  padding-top: 12px;
+}
+
+.agent-option-details > summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  color: inherit;
+  list-style-position: inside;
+}
+
+.agent-option-details-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.agent-option-details-list > article {
+  border: 1px solid var(--agent-border, rgba(35, 42, 53, 0.12));
+  border-radius: 12px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.38);
+}
+
+.agent-option-details-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.agent-option-details-head span {
+  font-size: 12px;
+  opacity: 0.72;
+}
+
+.agent-option-details-list dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 14px;
+  margin: 0;
+}
+
+.agent-option-details-list dl > div {
+  min-width: 0;
+}
+
+.agent-option-details-list dt {
+  font-size: 11px;
+  opacity: 0.62;
+  margin-bottom: 2px;
+}
+
+.agent-option-details-list dd {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.agent-option-details-list article > p,
+.agent-option-image-note {
+  display: block;
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.55;
+  opacity: 0.78;
+}
+
+@media (max-width: 680px) {
+  .agent-option-details-list dl {
+    grid-template-columns: 1fr;
+  }
+}

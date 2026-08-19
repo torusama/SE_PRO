@@ -24,6 +24,7 @@ export class AgentToolRegistryService {
     'estimate_total_cost',
     'suggest_bazi_direction',
     'get_purchase_process',
+    'get_plot_details',
     'analyze_plot_competitiveness',
     'get_customer_care_overview',
     'propose_knowledge_update',
@@ -215,6 +216,10 @@ export class AgentToolRegistryService {
         });
       case 'get_purchase_process':
         return this.knowledge.getPurchaseProcess();
+      case 'get_plot_details':
+        return this.insights.getPlotDetails(
+          this.requiredString(args.plotCode, 'plotCode', 50),
+        );
       case 'analyze_plot_competitiveness':
         return this.insights.analyzePlotCompetitiveness(
           this.requiredString(args.plotCode, 'plotCode', 50),

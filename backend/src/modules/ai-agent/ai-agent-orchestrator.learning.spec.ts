@@ -169,7 +169,7 @@ function setup(
   const tools = {
     isAllowed: jest.fn<any, any>(() => true),
     execute: jest.fn<any, any>(
-      (name: string, args?: { memoryType?: string }) => {
+      (name: string, args?: Record<string, unknown>) => {
         if (name === 'propose_knowledge_update') {
           if (memoryFailure) throw new Error('memory unavailable');
           if (args?.memoryType === 'faq') {
@@ -197,6 +197,32 @@ function setup(
                 category: 'Chăm sóc',
               },
             ],
+          };
+        }
+        if (name === 'get_plot_details') {
+          const plotCode =
+            typeof args?.plotCode === 'string'
+              ? args.plotCode
+              : 'A-01-001';
+          return {
+            found: true,
+            plot: {
+              plotCode,
+              status: 'available',
+              listedPrice: plotCode === 'B-01-001' ? 30_000_000 : 50_000_000,
+              zoneCode: plotCode.startsWith('B-') ? 'B' : 'A',
+              zoneName: plotCode.startsWith('B-')
+                ? 'Khu B - Tiêu chuẩn'
+                : 'Khu A - Cao cấp',
+              rowNumber: '01',
+              columnNumber: '001',
+              plotType: 'single',
+              areaSqm: plotCode === 'B-01-001' ? 3.5 : 4,
+              direction: 'Nam',
+              description: 'Lô thử nghiệm',
+              imageUrl: null,
+              accessSummary: 'Thuộc nhóm gần Cổng chính trên sơ đồ nội khu',
+            },
           };
         }
         if (name === 'analyze_plot_competitiveness') {
@@ -1043,7 +1069,7 @@ Mình ưu tiên B-01-001 vì phương án này vẫn nằm trong ngân sách và
     expect(process.intent).toBe('purchase_process');
     expect(process.assistantMessage).toContain('Chọn lô');
     expect(tools.execute).toHaveBeenCalledWith(
-      'analyze_plot_competitiveness',
+      'get_plot_details',
       { plotCode: 'A-01-001' },
       expect.anything(),
     );
@@ -1524,7 +1550,7 @@ Mình ưu tiên B-01-001 vì phương án này vẫn nằm trong ngân sách và
     );
 
     expect(tools.execute).toHaveBeenCalledWith(
-      'analyze_plot_competitiveness',
+      'get_plot_details',
       { plotCode: 'B-01-001' },
       expect.objectContaining({ userId: 7, role: 'customer' }),
     );

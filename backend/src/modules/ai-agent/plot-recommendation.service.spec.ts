@@ -1,7 +1,6 @@
 import { DatabaseService } from '../../database/database.service';
 import { PlotAdjacencyService } from '../plots/plot-adjacency.service';
 import { BaziRuleService } from './bazi-rule.service';
-import { PlotRankerClient } from './plot-ranker.client';
 import { PlotRecommendationService } from './plot-recommendation.service';
 
 describe('PlotRecommendationService', () => {
@@ -193,7 +192,7 @@ describe('PlotRecommendationService', () => {
     });
 
     const [sql, params] = database.query.mock.calls[0];
-    expect(sql).toContain('NOT (plot_id = ANY(');
+    expect(sql).toContain('NOT (p.plot_id = ANY(');
     expect(params).toContainEqual([1, 2]);
   });
 
@@ -243,22 +242,14 @@ describe('PlotRecommendationService', () => {
     });
   });
 
-  it('uses deterministic ranking and logs a fallback trace when ML is unavailable', async () => {
+  it('builds a grounded candidate pool without invoking a separate trained ranker', async () => {
     const database = {
       query: jest.fn().mockResolvedValueOnce(plots).mockResolvedValueOnce([]),
-    };
-    const ranker = {
-      predict: jest.fn().mockResolvedValue({
-        enabled: true,
-        prediction: null,
-        fallbackReason: 'ml_service_error',
-      }),
     };
     const service = new PlotRecommendationService(
       database as unknown as DatabaseService,
       new PlotAdjacencyService(),
       new BaziRuleService(),
-      ranker as unknown as PlotRankerClient,
     );
 
     const result = await service.recommend(
@@ -274,9 +265,9 @@ describe('PlotRecommendationService', () => {
       },
     );
 
-    expect(result.fallbackUsed).toBe(true);
-    expect(result.rankerVersion).toBe('rule-based-v1');
-    expect(result.rankerFallbackReason).toBe('ml_service_error');
+    expect(result.fallbackUsed).toBe(false);
+    expect(result.rankerVersion).toBe('grounded-candidate-pool-v2');
+    expect(result.rankerFallbackReason).toBe('llm_final_selection');
     expect(result.recommendations[0].plotIds).toEqual([1, 2]);
     const traceInsert = database.query.mock.calls.find(([sql]) =>
       String(sql).includes('INSERT INTO ai_recommendation_runs'),
@@ -286,9 +277,9 @@ describe('PlotRecommendationService', () => {
         7,
         10,
         20,
-        'rule-based-v1',
-        true,
-        'ml_service_error',
+        'grounded-candidate-pool-v2',
+        false,
+        'llm_final_selection',
       ]),
     );
     expect(String(traceInsert?.[1]?.[6])).not.toContain(

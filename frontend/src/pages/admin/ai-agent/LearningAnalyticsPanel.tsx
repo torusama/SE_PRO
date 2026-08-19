@@ -234,79 +234,305 @@ const usdFormat = new Intl.NumberFormat("en-US", {
 function RuntimePerformance({ analytics }: { analytics: LearningAnalytics }) {
   const timeline = analytics.runtimeTimeline ?? [];
   const models = analytics.runtimeByModel ?? [];
+  const hasRuntime =
+    timeline.some((item) => item.calls > 0 || item.totalTokens > 0) ||
+    models.length > 0;
+  const runtime = analytics.runtime ?? {
+    totalCalls: 0,
+    successfulCalls: 0,
+    failedCalls: 0,
+    fallbackResponses: 0,
+    failureRate: 0,
+    promptTokens: 0,
+    completionTokens: 0,
+    totalTokens: 0,
+    averageLatencyMs: 0,
+    p95LatencyMs: 0,
+    estimatedCostUsd: 0,
+    unpricedCalls: 0,
+    unmeteredCalls: 0,
+  };
+
   const maxTokens = Math.max(1, ...timeline.map((item) => item.totalTokens));
-  const hasRuntime = timeline.some((item) => item.calls > 0) || models.length > 0;
+  const maxCalls = Math.max(1, ...timeline.map((item) => item.calls));
+  const labelInterval = Math.max(1, Math.ceil(timeline.length / 7));
+
+  const callsLinePoints = timeline
+    .map((item, index) => {
+      const x = ((index + 0.5) / timeline.length) * 100;
+      const y =
+        (item.calls ?? 0) === 0
+          ? 94
+          : 100 - (20 + ((item.calls ?? 0) / maxCalls) * 65);
+      return `${x},${y}`;
+    })
+    .join(" ");
 
   return (
-    <section className="learning-analytics__runtime-card">
+    <section className="learning-analytics__timeline-card learning-analytics__runtime-card">
       <header>
         <div>
           <h3>Hiệu năng mô hình AI theo ngày</h3>
           <p>
-            Token, lỗi và độ trễ được ghi từ luồng hội thoại và các tác vụ AI chuyên dụng như so sánh, phân tích quyết định và tạo nội dung. Chi phí chỉ
-            được tính khi đã cấu hình đơn giá token cho nhà cung cấp mô hình tương ứng.
+            Cột thể hiện lượng token; đường thể hiện số lượt gọi mô hình AI.
           </p>
         </div>
+        {hasRuntime && (
+          <dl
+            className="learning-analytics__timeline-totals"
+            aria-label="Tổng hiệu năng mô hình trong kỳ"
+          >
+            <div>
+              <dt>Tổng lượt gọi</dt>
+              <dd>{numberFormat.format(runtime.totalCalls)}</dd>
+            </div>
+            <div>
+              <dt>Tổng token</dt>
+              <dd>{numberFormat.format(runtime.totalTokens)}</dd>
+            </div>
+            <div>
+              <dt>Độ trễ TB</dt>
+              <dd>{numberFormat.format(runtime.averageLatencyMs)} ms</dd>
+            </div>
+            <div>
+              <dt>Chi phí</dt>
+              <dd>{usdFormat.format(runtime.estimatedCostUsd)}</dd>
+            </div>
+            {runtime.failedCalls > 0 && (
+              <div>
+                <dt>Lỗi</dt>
+                <dd style={{ color: "var(--ai-rose)" }}>
+                  {numberFormat.format(runtime.failedCalls)}
+                </dd>
+              </div>
+            )}
+          </dl>
+        )}
       </header>
+
       {!hasRuntime ? (
         <div className="learning-analytics__timeline-empty">
-          <strong>Chưa có dữ liệu gọi mô hình AI trong kỳ này</strong>
-          <p>Biểu đồ sẽ xuất hiện sau khi trợ lý phát sinh lượt gọi mô hình AI.</p>
+          <strong>
+            Chưa có dữ liệu gọi mô hình AI trong {analytics.period.days} ngày gần
+            nhất
+          </strong>
+          <p>
+            Biểu đồ sẽ xuất hiện sau khi trợ lý phát sinh lượt gọi mô hình AI.
+          </p>
         </div>
       ) : (
-        <>
-          <div className="learning-analytics__runtime-chart" aria-label="Biểu đồ token và lỗi mô hình AI">
-            {timeline.map((item) => (
-              <div className="learning-analytics__runtime-day" key={item.date}>
-                <div className="learning-analytics__runtime-bar-zone">
-                  <span
-                    className="learning-analytics__runtime-token-bar"
-                    style={
-                      {
-                        "--runtime-height": `${Math.max(4, (item.totalTokens / maxTokens) * 100)}%`,
-                      } as CSSProperties
-                    }
-                  />
+        <div className="learning-analytics__timeline-body">
+          <div
+            aria-label="Chú thích biểu đồ hiệu năng"
+            className="learning-analytics__timeline-legend"
+          >
+            <span>
+              <i className="is-bar" /> Lượng token
+            </span>
+            <span>
+              <i className="is-line" /> Lượt gọi mô hình AI
+            </span>
+            <small>
+              Mỗi tin nhắn gửi đến trợ lý AI được tính là một lượt gọi.
+            </small>
+          </div>
+          <div
+            className="learning-analytics__timeline-chart"
+            style={
+              {
+                "--timeline-columns": timeline.length,
+              } as CSSProperties
+            }
+          >
+            <svg
+              aria-hidden="true"
+              className="learning-analytics__access-line"
+              preserveAspectRatio="none"
+              shapeRendering="geometricPrecision"
+              viewBox="0 0 100 100"
+            >
+              <polyline
+                points={callsLinePoints}
+                vectorEffect="non-scaling-stroke"
+              />
+            </svg>
+            {timeline.map((item, index) => {
+              const showDate =
+                index % labelInterval === 0 ||
+                index === timeline.length - 1;
+              const ariaLabel = `${item.date}: ${numberFormat.format(item.calls)} lượt gọi, ${numberFormat.format(item.totalTokens)} token, độ trễ ${numberFormat.format(item.averageLatencyMs)} ms, chi phí ${usdFormat.format(item.estimatedCostUsd)}`;
+              const barHeightPct = Math.max(6, (item.totalTokens / maxTokens) * 52);
+              const pointLinePos = 20 + ((item.calls ?? 0) / maxCalls) * 65;
+              const isBarFlipped = barHeightPct > 45;
+              const isPointFlipped = pointLinePos > 65;
+              const promptTokensEst = Math.round(item.totalTokens * 0.65);
+              const completionTokensEst = Math.round(item.totalTokens * 0.35);
+
+              return (
+                <div
+                  aria-label={ariaLabel}
+                  className={`learning-analytics__day${
+                    index < 2
+                      ? " tooltip-left"
+                      : index >= timeline.length - 2
+                        ? " tooltip-right"
+                        : ""
+                  }`}
+                  key={item.date}
+                  tabIndex={0}
+                >
+                  <div className="learning-analytics__day-bar">
+                    {item.totalTokens > 0 && (
+                      <div className="learning-analytics__bar-hit" tabIndex={0}>
+                        <span
+                          className="learning-analytics__bar-pill"
+                          style={
+                            {
+                              "--bar-height": `${barHeightPct}%`,
+                            } as CSSProperties
+                          }
+                        />
+                        <div
+                          className={`learning-analytics__chart-tooltip tooltip--bar${
+                            isBarFlipped ? " is-flipped" : ""
+                          }`}
+                          role="tooltip"
+                        >
+                          <div className="learning-analytics__chart-tooltip-head">
+                            <span>{formatTimelineDate(item.date)}</span>
+                            <strong className="tone-blue">
+                              {numberFormat.format(item.totalTokens)} token
+                            </strong>
+                            <small>Lượng token tiêu thụ</small>
+                          </div>
+                          <dl>
+                            <div>
+                              <dt>Tổng token tiêu thụ</dt>
+                              <dd>{numberFormat.format(item.totalTokens)}</dd>
+                            </div>
+                            <div>
+                              <dt>Prompt tokens (ước tính)</dt>
+                              <dd>{numberFormat.format(promptTokensEst)}</dd>
+                            </div>
+                            <div>
+                              <dt>Completion tokens (ước tính)</dt>
+                              <dd>{numberFormat.format(completionTokensEst)}</dd>
+                            </div>
+                          </dl>
+                        </div>
+                      </div>
+                    )}
+                    {(item.calls ?? 0) > 0 && (
+                      <div
+                        className="learning-analytics__point-hit"
+                        style={
+                          {
+                            "--line-position": `${pointLinePos}%`,
+                          } as CSSProperties
+                        }
+                        tabIndex={0}
+                      >
+                        <i className="learning-analytics__access-point" />
+                        <div
+                          className={`learning-analytics__chart-tooltip tooltip--point${
+                            isPointFlipped ? " is-flipped" : ""
+                          }`}
+                          role="tooltip"
+                        >
+                          <div className="learning-analytics__chart-tooltip-head">
+                            <span>{formatTimelineDate(item.date)}</span>
+                            <strong className="tone-gold">
+                              {numberFormat.format(item.calls)} lượt gọi AI
+                            </strong>
+                            <small>Lượt gọi mô hình AI</small>
+                          </div>
+                          <dl>
+                            <div>
+                              <dt>Lượt gọi mô hình</dt>
+                              <dd>{numberFormat.format(item.calls)}</dd>
+                            </div>
+                            <div>
+                              <dt>Độ trễ trung bình</dt>
+                              <dd>{numberFormat.format(item.averageLatencyMs)} ms</dd>
+                            </div>
+                            <div>
+                              <dt>Chi phí ước tính</dt>
+                              <dd>{usdFormat.format(item.estimatedCostUsd)}</dd>
+                            </div>
+                            {item.failedCalls > 0 && (
+                              <div>
+                                <dt>Lỗi / Thất bại</dt>
+                                <dd style={{ color: "var(--ai-rose)" }}>
+                                  {item.failedCalls} lượt
+                                </dd>
+                              </div>
+                            )}
+                          </dl>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <strong>
+                    {item.totalTokens > 0
+                      ? numberFormat.format(item.totalTokens)
+                      : ""}
+                  </strong>
+                  <time className={showDate ? "" : "is-hidden"}>
+                    {item.date.slice(5).replace("-", "/")}
+                  </time>
                 </div>
-                <strong>{item.failedCalls > 0 ? `${item.failedCalls} lỗi` : ""}</strong>
-                <time>{item.date.slice(5).replace("-", "/")}</time>
-                <span className="learning-analytics__runtime-tooltip">
-                  {numberFormat.format(item.calls)} lượt · {numberFormat.format(item.totalTokens)} token · {numberFormat.format(item.averageLatencyMs)} ms
-                </span>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
-          <div className="learning-analytics__runtime-table-wrap">
-            <table className="learning-analytics__runtime-table">
-              <thead>
-                <tr>
-                  <th>Mô hình / nhà cung cấp</th>
-                  <th>Lượt gọi</th>
-                  <th>Lỗi</th>
-                  <th>Token</th>
-                  <th>Độ trễ TB</th>
-                  <th>Chi phí ước tính</th>
-                </tr>
-              </thead>
-              <tbody>
-                {models.map((item) => (
-                  <tr key={`${item.providerId}:${item.key}`}>
-                    <td>
-                      <strong>{item.key}</strong>
-                      <small>{item.providerId}</small>
-                    </td>
-                    <td>{numberFormat.format(item.calls)}</td>
-                    <td>{numberFormat.format(item.failedCalls)}</td>
-                    <td>{numberFormat.format(item.totalTokens)}</td>
-                    <td>{numberFormat.format(item.averageLatencyMs)} ms</td>
-                    <td>{usdFormat.format(item.estimatedCostUsd)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
+          {models.length > 0 && (
+            <section
+              className="learning-analytics__runtime-detail-panel"
+              style={{ margin: "22px 0 0" }}
+            >
+              <header>
+                <div>
+                  <h4>Chi tiết theo mô hình / nhà cung cấp</h4>
+                  <p>
+                    Cuộn trong khung này để xem toàn bộ danh sách mô hình đang
+                    được hệ thống gọi.
+                  </p>
+                </div>
+                <span>{models.length} mô hình / cấu hình</span>
+              </header>
+              <div className="learning-analytics__runtime-table-wrap is-scroll-panel">
+                <table className="learning-analytics__runtime-table">
+                  <thead>
+                    <tr>
+                      <th>Mô hình / nhà cung cấp</th>
+                      <th>Lượt gọi</th>
+                      <th>Lỗi</th>
+                      <th>Token</th>
+                      <th>Độ trễ TB</th>
+                      <th>Chi phí ước tính</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {models.map((item) => (
+                      <tr key={`${item.providerId}:${item.key}`}>
+                        <td>
+                          <strong>{item.key}</strong>
+                          <small>{item.providerId}</small>
+                        </td>
+                        <td>{numberFormat.format(item.calls)}</td>
+                        <td>{numberFormat.format(item.failedCalls)}</td>
+                        <td>{numberFormat.format(item.totalTokens)}</td>
+                        <td>{numberFormat.format(item.averageLatencyMs)} ms</td>
+                        <td>{usdFormat.format(item.estimatedCostUsd)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+        </div>
       )}
     </section>
   );
@@ -329,9 +555,9 @@ function ActivityTimeline({ analytics }: { analytics: LearningAnalytics }) {
     0,
   );
   const chartTotal = learningPeriodTotal + accessTotal;
-  const maxValue = Math.max(
+  const maxActivity = Math.max(1, ...dailyTotals);
+  const maxAccesses = Math.max(
     1,
-    ...dailyTotals,
     ...analytics.timeline.map((item) => item.aiAccesses ?? 0),
   );
   const seriesTotals = analytics.timeline.reduce(
@@ -347,7 +573,10 @@ function ActivityTimeline({ analytics }: { analytics: LearningAnalytics }) {
   const accessLinePoints = analytics.timeline
     .map((item, index) => {
       const x = ((index + 0.5) / analytics.timeline.length) * 100;
-      const y = 100 - ((item.aiAccesses ?? 0) / maxValue) * 100;
+      const y =
+        (item.aiAccesses ?? 0) === 0
+          ? 94
+          : 100 - (20 + ((item.aiAccesses ?? 0) / maxAccesses) * 65);
       return `${x},${y}`;
     })
     .join(" ");
@@ -430,6 +659,7 @@ function ActivityTimeline({ analytics }: { analytics: LearningAnalytics }) {
               aria-hidden="true"
               className="learning-analytics__access-line"
               preserveAspectRatio="none"
+              shapeRendering="geometricPrecision"
               viewBox="0 0 100 100"
             >
               <polyline
@@ -443,6 +673,12 @@ function ActivityTimeline({ analytics }: { analytics: LearningAnalytics }) {
                 index % labelInterval === 0 ||
                 index === analytics.timeline.length - 1;
               const ariaLabel = `${item.date}: ${item.memoryUpdates} lượt ghi nhớ, ${item.knowledgeUpdates} lượt cập nhật tri thức, ${item.signals} phản hồi, ${item.recommendations} lượt đề xuất, ${item.aiAccesses ?? 0} lượt truy cập AI`;
+              const barHeightPct = Math.max(6, (total / maxActivity) * 52);
+              const pointLinePos =
+                20 + ((item.aiAccesses ?? 0) / maxAccesses) * 65;
+              const isBarFlipped = barHeightPct > 45;
+              const isPointFlipped = pointLinePos > 65;
+
               return (
                 <div
                   aria-label={ariaLabel}
@@ -458,61 +694,88 @@ function ActivityTimeline({ analytics }: { analytics: LearningAnalytics }) {
                 >
                   <div className="learning-analytics__day-bar">
                     {total > 0 && (
-                      <span
-                        style={
-                          {
-                            "--bar-height": `${Math.max(
-                              8,
-                              (total / maxValue) * 100,
-                            )}%`,
-                          } as CSSProperties
-                        }
-                      />
+                      <div className="learning-analytics__bar-hit" tabIndex={0}>
+                        <span
+                          className="learning-analytics__bar-pill"
+                          style={
+                            {
+                              "--bar-height": `${barHeightPct}%`,
+                            } as CSSProperties
+                          }
+                        />
+                        <div
+                          className={`learning-analytics__chart-tooltip tooltip--bar${
+                            isBarFlipped ? " is-flipped" : ""
+                          }`}
+                          role="tooltip"
+                        >
+                          <div className="learning-analytics__chart-tooltip-head">
+                            <span>{formatTimelineDate(item.date)}</span>
+                            <strong className="tone-blue">
+                              {numberFormat.format(total)} hoạt động
+                            </strong>
+                            <small>Hoạt động học tập & đề xuất</small>
+                          </div>
+                          <dl>
+                            <div>
+                              <dt>Ghi nhớ cá nhân</dt>
+                              <dd>{numberFormat.format(item.memoryUpdates)}</dd>
+                            </div>
+                            <div>
+                              <dt>Cập nhật tri thức</dt>
+                              <dd>{numberFormat.format(item.knowledgeUpdates)}</dd>
+                            </div>
+                            <div>
+                              <dt>Phản hồi gợi ý</dt>
+                              <dd>{numberFormat.format(item.signals)}</dd>
+                            </div>
+                            <div>
+                              <dt>Đề xuất lô đất</dt>
+                              <dd>{numberFormat.format(item.recommendations)}</dd>
+                            </div>
+                          </dl>
+                        </div>
+                      </div>
                     )}
                     {(item.aiAccesses ?? 0) > 0 && (
-                      <i
-                        className="learning-analytics__access-point"
+                      <div
+                        className="learning-analytics__point-hit"
                         style={
                           {
-                            "--line-position": `${
-                              ((item.aiAccesses ?? 0) / maxValue) * 100
-                            }%`,
+                            "--line-position": `${pointLinePos}%`,
                           } as CSSProperties
                         }
-                      />
+                        tabIndex={0}
+                      >
+                        <i className="learning-analytics__access-point" />
+                        <div
+                          className={`learning-analytics__chart-tooltip tooltip--point${
+                            isPointFlipped ? " is-flipped" : ""
+                          }`}
+                          role="tooltip"
+                        >
+                          <div className="learning-analytics__chart-tooltip-head">
+                            <span>{formatTimelineDate(item.date)}</span>
+                            <strong className="tone-gold">
+                              {numberFormat.format(item.aiAccesses ?? 0)} lượt truy cập
+                            </strong>
+                            <small>Lượt khách sử dụng trợ lý AI</small>
+                          </div>
+                          <dl>
+                            <div>
+                              <dt>Lượt khách dùng AI</dt>
+                              <dd>{numberFormat.format(item.aiAccesses ?? 0)} tin nhắn</dd>
+                            </div>
+                            <div>
+                              <dt>Ghi chú</dt>
+                              <dd style={{ fontSize: "9.5px", color: "var(--ai-muted)" }}>
+                                1 tin nhắn = 1 lượt truy cập
+                              </dd>
+                            </div>
+                          </dl>
+                        </div>
+                      </div>
                     )}
-                  </div>
-
-                  <div
-                    className="learning-analytics__chart-tooltip"
-                    role="tooltip"
-                  >
-                    <div className="learning-analytics__chart-tooltip-head">
-                      <span>{formatTimelineDate(item.date)}</span>
-                      <strong>{numberFormat.format(total)} hoạt động</strong>
-                    </div>
-                    <dl>
-                      <div>
-                        <dt>Ghi nhớ</dt>
-                        <dd>{numberFormat.format(item.memoryUpdates)}</dd>
-                      </div>
-                      <div>
-                        <dt>Tri thức</dt>
-                        <dd>{numberFormat.format(item.knowledgeUpdates)}</dd>
-                      </div>
-                      <div>
-                        <dt>Phản hồi</dt>
-                        <dd>{numberFormat.format(item.signals)}</dd>
-                      </div>
-                      <div>
-                        <dt>Đề xuất</dt>
-                        <dd>{numberFormat.format(item.recommendations)}</dd>
-                      </div>
-                      <div className="is-access">
-                        <dt>Truy cập AI</dt>
-                        <dd>{numberFormat.format(item.aiAccesses ?? 0)}</dd>
-                      </div>
-                    </dl>
                   </div>
 
                   <strong>{total > 0 ? total : ""}</strong>
@@ -570,6 +833,10 @@ export default function LearningAnalyticsPanel({
     runtime.estimatedCostUsd === 0 && runtime.unpricedCalls > 0
       ? "Chưa cấu hình"
       : usdFormat.format(runtime.estimatedCostUsd);
+  const costNote =
+    runtime.unpricedCalls > 0 || runtime.unmeteredCalls > 0
+      ? `${runtime.unpricedCalls} lượt chưa có đơn giá · ${runtime.unmeteredCalls} lượt nhà cung cấp không trả số liệu sử dụng`
+      : "Ước tính theo lượng token mô hình AI đã dùng";
   return (
     <div className="learning-analytics">
       <header className="learning-analytics__header">
@@ -696,7 +963,7 @@ export default function LearningAnalyticsPanel({
         />
         <MetricCard
           label="Chi phí ước tính"
-          note={`${runtime.unpricedCalls} lượt chưa có đơn giá · ${runtime.unmeteredCalls} lượt nhà cung cấp không trả số liệu sử dụng`}
+          note={costNote}
           tone="gold"
           value={costValue}
         />

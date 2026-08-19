@@ -12,8 +12,8 @@ const eventTypeLabel = (value: string) =>
   ({
     user_memory: "Ghi nhớ cá nhân",
     global_knowledge: "Tri thức dùng chung",
-    recommendation_signal: "Phản hồi cho hệ thống đề xuất",
-    ranking_run: "Lượt xếp hạng lô",
+    recommendation_signal: "Phản hồi cho hệ thống gợi ý",
+    ranking_run: "Lượt chuẩn bị phương án lô",
   })[value] ?? "Hoạt động AI";
 
 const sourceLabel = (value: string) =>
@@ -52,8 +52,8 @@ const actionLabel = (value: string) =>
     deleted: "Xóa khỏi kho",
     signal_recorded: "Ghi nhận phản hồi",
     fallback: "Dùng phương án dự phòng",
-    ml_ranked: "Xếp hạng bằng bộ xếp hạng thử nghiệm",
-    rule_ranked: "Xếp hạng theo quy tắc nghiệp vụ",
+    ml_ranked: "Tạo phương án lô bằng cơ chế cũ",
+    rule_ranked: "Tạo tập ứng viên lô từ dữ liệu nghiệp vụ",
   })[value] ?? "Cập nhật trạng thái";
 
 const statusLabel = (value: string) =>
@@ -66,8 +66,8 @@ const statusLabel = (value: string) =>
     training_ready: "Đủ dữ liệu để phân tích",
     analytics_only: "Chỉ dùng cho thống kê",
     fallback: "Đã dùng phương án dự phòng",
-    ranker_enabled: "Bộ xếp hạng thử nghiệm đang bật",
-    rule_based: "Đang dùng quy tắc nghiệp vụ",
+    ranker_enabled: "Bản ghi tương thích từ cơ chế gợi ý cũ",
+    rule_based: "Đã lấy tập ứng viên từ dữ liệu nghiệp vụ",
   })[value] ?? "Đã ghi nhận";
 
 const formatDate = (value: string) => {
@@ -86,12 +86,12 @@ const isAsciiTechnical = (value: string) =>
 const detailLabel = (value: string | null) => {
   if (!value) return undefined;
   const known = ({
-    disabled: "Bộ xếp hạng thử nghiệm đang tắt nên hệ thống dùng quy tắc nghiệp vụ.",
-    no_active_model: "Chưa có phiên bản xếp hạng thử nghiệm nào đang hoạt động.",
-    service_unavailable: "Dịch vụ xếp hạng thử nghiệm không khả dụng tại thời điểm đó.",
-    invalid_response: "Kết quả từ bộ xếp hạng thử nghiệm không hợp lệ nên bị bỏ qua.",
-    incomplete_response: "Kết quả xếp hạng chưa đủ dữ liệu nên hệ thống quay về phương án an toàn.",
-    request_failed: "Yêu cầu tới bộ xếp hạng thử nghiệm thất bại.",
+    disabled: "Luồng gợi ý đã dùng phương án dự phòng ở lượt này.",
+    no_active_model: "Không có thành phần phụ trợ khả dụng ở bản ghi cũ này.",
+    service_unavailable: "Một thành phần gợi ý phụ trợ không khả dụng tại thời điểm đó.",
+    invalid_response: "Kết quả gợi ý phụ trợ không hợp lệ nên đã bị bỏ qua.",
+    incomplete_response: "Kết quả gợi ý chưa đủ dữ liệu nên hệ thống dùng phương án an toàn.",
+    request_failed: "Một bước tạo phương án lô đã thất bại và được ghi lại.",
     "Complete recommendation context.": "Phản hồi có đủ ngữ cảnh để dùng cho thống kê chất lượng đề xuất.",
     "Verified admin update.": "Nội dung đã được quản trị viên xác minh.",
   } as Record<string, string>)[value];
@@ -138,7 +138,7 @@ const eventTitle = (event: LearningAnalytics["recentEvents"][number]) => {
     return "Phản hồi về chất lượng đề xuất lô";
   }
   if (event.eventType === "ranking_run") {
-    return "Hệ thống vừa xếp hạng danh sách lô phù hợp";
+    return "Hệ thống vừa chuẩn bị các phương án lô phù hợp";
   }
   return "Hoạt động AI";
 };
@@ -162,11 +162,11 @@ const eventDescription = (event: LearningAnalytics["recentEvents"][number]) => {
       }
       return "Kho tri thức dùng chung vừa được cập nhật. Mục này đang hoạt động nên AI có thể truy xuất khi câu hỏi của khách phù hợp.";
     case "recommendation_signal":
-      return "Hệ thống chỉ lưu tín hiệu phản hồi để đo chất lượng và cải thiện cách xếp hạng lô. Tín hiệu này không trở thành sự thật trong kho tri thức và không thay đổi mô hình hội thoại nền.";
+      return "Hệ thống chỉ lưu tín hiệu phản hồi để đo chất lượng các gợi ý lô và giúp AI chọn phương án tốt hơn ở tầng ứng dụng. Tín hiệu này không trở thành sự thật trong kho tri thức và không huấn luyện lại mô hình hội thoại nền.";
     case "ranking_run":
       return event.actionType === "fallback"
-        ? "Bộ xếp hạng thử nghiệm không thể dùng ở lượt này, nên hệ thống quay về quy tắc nghiệp vụ để vẫn trả kết quả ổn định."
-        : "Hệ thống đã ghi lại cách các lô hợp lệ được xếp hạng để quản trị viên theo dõi hiệu năng. Việc này không tự sửa kho tri thức.";
+        ? "Luồng gợi ý không hoàn tất theo cách bình thường ở lượt này, nên hệ thống dùng phương án dự phòng từ dữ liệu lô thật để vẫn trả kết quả ổn định."
+        : "Hệ thống đã ghi nhận một lượt chuẩn bị tập ứng viên lô từ dữ liệu thật để AI lựa chọn và giải thích cho khách. Việc này không tạo tri thức mới và không huấn luyện lại mô hình AI nền.";
     default:
       return "Hệ thống đã ghi nhận một thay đổi liên quan đến cơ chế ghi nhớ hoặc học ở tầng ứng dụng.";
   }
@@ -183,7 +183,7 @@ const eventImpact = (event: LearningAnalytics["recentEvents"][number]) => {
     return "Chỉ dùng để thống kê / đánh giá chất lượng đề xuất";
   }
   if (event.eventType === "ranking_run") {
-    return "Chỉ ảnh hưởng thứ tự các lô trong lượt đề xuất tương ứng";
+    return "Chỉ ảnh hưởng các phương án lô của đúng lượt tư vấn đó";
   }
   return "Không xác định";
 };
@@ -262,8 +262,8 @@ export default function LearningJournalPanel({
           <h2>AI đang ghi nhớ và tự học những gì?</h2>
           <p>
             Nhật ký này giải thích bằng ngôn ngữ quản trị: AI đã lưu sở thích
-            nào, tri thức dùng chung thay đổi ra sao và hệ thống xếp hạng lô đã
-            học từ phản hồi như thế nào. Đây không phải nội dung chat thô.
+            nào, tri thức dùng chung thay đổi ra sao và phản hồi về gợi ý lô
+            được ghi nhận như thế nào. Đây không phải nội dung chat thô.
           </p>
         </div>
         <div
@@ -305,8 +305,9 @@ export default function LearningJournalPanel({
           <span>Học từ phản hồi</span>
           <strong>Không huấn luyện lại mô hình AI nền</strong>
           <p>
-            Phản hồi chọn lô chỉ giúp đo chất lượng và thử xếp hạng tốt hơn; nó
-            không tự biến thành tri thức và không sửa mô hình hội thoại nền.
+            Phản hồi chọn lô chỉ giúp đo chất lượng và làm ngữ cảnh cải thiện
+            cách chọn phương án ở tầng ứng dụng; nó không tự biến thành tri thức
+            và không huấn luyện lại mô hình hội thoại nền.
           </p>
         </article>
       </section>
@@ -328,7 +329,7 @@ export default function LearningJournalPanel({
           <strong>{numberFormat.format(countByType("global_knowledge"))}</strong>
         </article>
         <article>
-          <span>Phản hồi / lượt xếp hạng được ghi nhận</span>
+          <span>Phản hồi / lượt gợi ý lô được ghi nhận</span>
           <strong>
             {numberFormat.format(
               countByType("recommendation_signal") + countByType("ranking_run"),

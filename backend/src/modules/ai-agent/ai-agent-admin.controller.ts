@@ -26,6 +26,7 @@ import { KnowledgeService } from './knowledge.service';
 import { ReviewKnowledgeDto } from './dto/review-knowledge.dto';
 import { ManageKnowledgeDto } from './dto/manage-knowledge.dto';
 import { ReviewCustomerProposalDto } from './dto/review-customer-proposal.dto';
+import { ManageUserMemoryDto } from './dto/manage-user-memory.dto';
 import { CustomerProposalService } from './customer-proposal.service';
 import {
   AdminFeedbackReviewQueryDto,
@@ -199,6 +200,40 @@ export class AiAgentAdminController {
         'reject',
         dto.reviewNote,
       ),
+    };
+  }
+
+  @Get('user-memories')
+  async listUserMemories(@Query('limit') limit?: string) {
+    return {
+      success: true,
+      message: 'Active user memory entries retrieved',
+      data: await this.knowledge.listUserMemoriesForAdmin(limit),
+    };
+  }
+
+  @Patch('user-memories/:id')
+  async updateUserMemory(
+    @CurrentUser() user: AdminUser,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ManageUserMemoryDto,
+  ) {
+    return {
+      success: true,
+      message: 'User memory entry updated by administrator',
+      data: await this.knowledge.updateAdminUserMemory(id, user.id, dto),
+    };
+  }
+
+  @Delete('user-memories/:id')
+  async deleteUserMemory(
+    @CurrentUser() user: AdminUser,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return {
+      success: true,
+      message: 'User memory entry deleted by administrator',
+      data: await this.knowledge.deleteAdminUserMemory(id, user.id),
     };
   }
 

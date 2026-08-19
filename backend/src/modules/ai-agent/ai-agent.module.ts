@@ -13,9 +13,7 @@ import { KnowledgeService } from './knowledge.service';
 import { KnowledgeEmbeddingService } from './knowledge-embedding.service';
 import { NvidiaNemotronService } from './nvidia-nemotron.service';
 import { PlotRecommendationService } from './plot-recommendation.service';
-import { PlotRankerClient } from './plot-ranker.client';
 import { FeedbackService } from './feedback.service';
-import { TrainingService } from './training.service';
 import { ConversationHistoryService } from './conversation-history.service';
 import { ConversationMemoryService } from './conversation-memory.service';
 import { ProactiveConciergeService } from './proactive-concierge.service';
@@ -37,6 +35,7 @@ import { ScheduleModule } from '../schedule/schedule.module';
 import { PlotIntroductionService } from './plot-introduction.service';
 import { MemorialEmailDraftService } from './memorial-email-draft.service';
 import { CustomerProposalService } from './customer-proposal.service';
+import { TrainingService } from './training.service';
 
 @Module({
   imports: [
@@ -59,12 +58,10 @@ import { CustomerProposalService } from './customer-proposal.service';
     NvidiaNemotronService,
     MultiProviderLlmService,
     PlotRecommendationService,
-    PlotRankerClient,
     BaziRuleService,
     KnowledgeService,
     KnowledgeEmbeddingService,
     FeedbackService,
-    TrainingService,
     ConversationHistoryService,
     ConversationMemoryService,
     AgentBookingService,
@@ -75,6 +72,7 @@ import { CustomerProposalService } from './customer-proposal.service';
     PlotIntroductionService,
     MemorialEmailDraftService,
     CustomerProposalService,
+    TrainingService,
   ],
   exports: [AiAgentService, PlotRecommendationService, BaziRuleService],
 })

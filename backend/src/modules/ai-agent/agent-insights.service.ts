@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../../database/database.service';
 import { RemindersService } from '../reminders/reminders.service';
+import { calculatePlotEntranceAccess } from './cemetery-map-access';
 
 type CompetitionLevel = 'low' | 'moderate' | 'high' | 'not_applicable';
 type PricePosition =
@@ -22,12 +23,34 @@ interface PlotPressureRow {
   latestInterestAt: string | null;
 }
 
+interface PlotDetailRow {
+  plotId: number;
+  plotCode: string;
+  status: string;
+  zoneId: number;
+  zoneCode: string;
+  zoneName: string;
+  zoneDescription: string | null;
+  rowNumber: string | null;
+  columnNumber: string | null;
+  plotType: string;
+  direction: string | null;
+  areaSqm: number | string | null;
+  price: number | string;
+  description: string | null;
+  imageUrl: string | null;
+  reservedUntil: string | null;
+  updatedAt: string | null;
+}
+
 interface CareSummaryRow {
   ownedPlotCount: number | string;
   activeContractCount: number | string;
   activeRequestCount: number | string;
   activeServiceOrderCount: number | string;
+  activeTransferRequestCount: number | string;
   upcomingAppointmentCount: number | string;
+  unreadNotificationCount: number | string;
 }
 
 interface CareReminder {
@@ -45,6 +68,76 @@ export class AgentInsightsService {
     private readonly database: DatabaseService,
     private readonly reminders: RemindersService,
   ) {}
+
+  async getPlotDetails(plotCode: string) {
+    const normalizedCode = plotCode.trim().toUpperCase();
+    const row = await this.database.queryOne<PlotDetailRow>(
+      `SELECT p.plot_id AS "plotId", p.plot_code AS "plotCode", p.status,
+              p.zone_id AS "zoneId", z.zone_code AS "zoneCode",
+              z.zone_name AS "zoneName", z.description AS "zoneDescription",
+              p.row_number AS "rowNumber", p.column_number AS "columnNumber",
+              p.plot_type AS "plotType", p.direction,
+              p.area_sqm::float AS "areaSqm", p.price::float, p.description,
+              p.image_url AS "imageUrl", p.reserved_until::text AS "reservedUntil",
+              p.updated_at::text AS "updatedAt"
+       FROM plots p
+       JOIN cemetery_zones z ON z.zone_id = p.zone_id
+       WHERE UPPER(p.plot_code) = $1 AND p.is_deleted = FALSE
+       LIMIT 1`,
+      [normalizedCode],
+    );
+
+    if (!row) {
+      return {
+        found: false as const,
+        plotCode: normalizedCode,
+        message: 'Plot code was not found in the current cemetery inventory.',
+      };
+    }
+
+    const access = calculatePlotEntranceAccess({
+      plotCode: row.plotCode,
+      zoneName: row.zoneName,
+      rowNumber: row.rowNumber,
+      columnNumber: row.columnNumber,
+    });
+
+    return {
+      found: true as const,
+      generatedAt: new Date().toISOString(),
+      plot: {
+        plotId: Number(row.plotId),
+        plotCode: row.plotCode,
+        status: row.status,
+        zoneId: Number(row.zoneId),
+        zoneCode: row.zoneCode,
+        zoneName: row.zoneName,
+        zoneDescription: row.zoneDescription,
+        rowNumber: row.rowNumber,
+        columnNumber: row.columnNumber,
+        plotType: row.plotType,
+        direction: row.direction,
+        areaSqm: row.areaSqm === null ? null : Number(row.areaSqm),
+        listedPrice: Number(row.price),
+        currency: 'VND' as const,
+        description: row.description,
+        imageUrl: row.imageUrl,
+        reservedUntil: row.reservedUntil,
+        updatedAt: row.updatedAt,
+        nearestEntrance: access.nearestEntrance,
+        entranceProximity: access.entranceProximity,
+        accessSummary:
+          access.entranceProximity === 'near'
+            ? `Thuộc nhóm gần ${access.nearestEntrance === 'main' ? 'Cổng chính' : 'Cổng phụ'} trên sơ đồ nội khu`
+            : access.entranceProximity === 'moderate'
+              ? `Khoảng tiếp cận trung bình tới ${access.nearestEntrance === 'main' ? 'Cổng chính' : 'Cổng phụ'} trên sơ đồ nội khu`
+              : access.entranceProximity === 'far'
+                ? `Nằm sâu hơn so với ${access.nearestEntrance === 'main' ? 'Cổng chính' : 'Cổng phụ'} trên sơ đồ nội khu`
+                : null,
+      },
+      source: 'authoritative_plot_inventory' as const,
+    };
+  }
 
   async analyzePlotCompetitiveness(plotCode: string) {
     const normalizedCode = plotCode.trim().toUpperCase();
@@ -188,7 +281,7 @@ export class AgentInsightsService {
       return {
         loginRequired: true as const,
         message:
-          'Sign in to view account-specific plot requests, service orders, appointments, reminders, and owned plots.',
+          'Sign in to view account-specific owned plots, purchase requests, contracts, service orders, transfer/inheritance requests, appointments, reminders, and notifications.',
       };
     }
 
@@ -197,8 +290,10 @@ export class AgentInsightsService {
       ownedPlots,
       requests,
       serviceOrders,
+      transferRequests,
       appointments,
       reminders,
+      latestNotifications,
     ] = await Promise.all([
       this.database.queryOne<CareSummaryRow>(
         `SELECT
@@ -220,11 +315,18 @@ export class AgentInsightsService {
                WHERE user_id = $1
                  AND status IN ('submitted', 'pending_confirm', 'confirmed', 'in_progress')
                  AND is_deleted = FALSE) AS "activeServiceOrderCount",
+             (SELECT COUNT(*)::int FROM reservation_requests
+               WHERE user_id = $1 AND request_type = 'transfer'
+                 AND status IN ('pending', 'approved')
+                 AND is_deleted = FALSE) AS "activeTransferRequestCount",
              (SELECT COUNT(*)::int FROM schedule_appointments
                WHERE requester_id = $1
                  AND status IN ('pending', 'confirmed')
                  AND appointment_date >= CURRENT_DATE)
-               AS "upcomingAppointmentCount"`,
+               AS "upcomingAppointmentCount",
+             (SELECT COUNT(*)::int FROM notifications
+               WHERE user_id = $1 AND is_read = FALSE)
+               AS "unreadNotificationCount"`,
         [userId],
       ),
       this.database.query(
@@ -283,6 +385,53 @@ export class AgentInsightsService {
         [userId],
       ),
       this.database.query(
+        `SELECT rr.request_id AS id, rr.transfer_type AS "transferType", rr.status,
+                  trd.recipient_full_name AS "recipientName",
+                  rr.admin_note AS "adminNote",
+                  COALESCE((
+                    SELECT ARRAY_AGG(p.plot_code ORDER BY p.plot_code)
+                    FROM request_plots rp
+                    JOIN plots p ON p.plot_id = rp.plot_id
+                    WHERE rp.request_id = rr.request_id
+                  ), '{}') AS "plotCodes",
+                  appointment.scheduled_at::text AS "appointmentStart",
+                  appointment.scheduled_end_at::text AS "appointmentEnd",
+                  appointment.location AS "appointmentLocation",
+                  appointment.customer_status AS "appointmentCustomerStatus",
+                  contract.contract_code AS "contractCode",
+                  contract.status AS "contractStatus",
+                  contract.payment_status AS "paymentStatus",
+                  contract.total_amount::float AS "contractTotalAmount",
+                  contract.paid_amount::float AS "contractPaidAmount",
+                  rr.created_at::text AS "createdAt",
+                  rr.reviewed_at::text AS "reviewedAt"
+           FROM reservation_requests rr
+           JOIN transfer_request_details trd ON trd.request_id = rr.request_id
+           LEFT JOIN LATERAL (
+             SELECT oa.scheduled_at, oa.scheduled_end_at, oa.location,
+                    oa.customer_status
+             FROM offline_appointments oa
+             WHERE oa.request_id = rr.request_id AND oa.is_deleted = FALSE
+             ORDER BY oa.created_at DESC
+             LIMIT 1
+           ) appointment ON TRUE
+           LEFT JOIN LATERAL (
+             SELECT c.contract_code, c.status, c.payment_status,
+                    c.total_amount, c.paid_amount
+             FROM contracts c
+             WHERE c.request_id = rr.request_id AND c.is_deleted = FALSE
+             ORDER BY c.created_at DESC
+             LIMIT 1
+           ) contract ON TRUE
+           WHERE rr.user_id = $1 AND rr.request_type = 'transfer'
+             AND rr.is_deleted = FALSE
+           ORDER BY
+             CASE WHEN rr.status IN ('pending', 'approved') THEN 0 ELSE 1 END,
+             rr.created_at DESC
+           LIMIT 6`,
+        [userId],
+      ),
+      this.database.query(
         `SELECT a.appointment_date::text AS date,
                   a.start_time::text AS "startTime",
                   a.end_time::text AS "endTime",
@@ -297,6 +446,15 @@ export class AgentInsightsService {
         [userId],
       ),
       this.reminders.my(userId),
+      this.database.query(
+        `SELECT notification_id AS id, type, title, message,
+                  is_read AS "isRead", created_at::text AS "createdAt"
+           FROM notifications
+           WHERE user_id = $1
+           ORDER BY is_read ASC, created_at DESC
+           LIMIT 5`,
+        [userId],
+      ),
     ]);
 
     const upcomingReminders = (reminders as CareReminder[])
@@ -323,9 +481,13 @@ export class AgentInsightsService {
         activeContractCount: Number(summary?.activeContractCount ?? 0),
         activeRequestCount: Number(summary?.activeRequestCount ?? 0),
         activeServiceOrderCount: Number(summary?.activeServiceOrderCount ?? 0),
+        activeTransferRequestCount: Number(
+          summary?.activeTransferRequestCount ?? 0,
+        ),
         upcomingAppointmentCount: Number(
           summary?.upcomingAppointmentCount ?? 0,
         ),
+        unreadNotificationCount: Number(summary?.unreadNotificationCount ?? 0),
         activeReminderCount: (reminders as CareReminder[]).filter(
           (reminder) => reminder.isActive,
         ).length,
@@ -333,10 +495,12 @@ export class AgentInsightsService {
       ownedPlots,
       reservationRequests: requests,
       serviceOrders,
+      transferRequests,
       upcomingAppointments: appointments,
       upcomingReminders,
+      latestNotifications,
       limitations: [
-        'Only records belonging to the authenticated account are included.',
+        'Only records belonging to the authenticated account are included; identity-document contents are intentionally excluded from chat context.',
         'Statuses are a point-in-time view and may change after staff processing.',
       ],
     };

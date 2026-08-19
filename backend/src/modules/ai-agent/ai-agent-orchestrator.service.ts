@@ -436,7 +436,7 @@ export function asksForPlotCompetitiveness(message: string) {
 
 export function asksForCustomerCare(message: string) {
   const normalized = normalizeFallbackIntent(message);
-  return /(?:customer care|account overview|my (?:requests|orders|appointments|reminders|plots)|tong quan (?:cham soc|tai khoan)|yeu cau cua (?:toi|minh|tui)|don dich vu cua (?:toi|minh|tui)|lich hen cua (?:toi|minh|tui)|nhac lich cua (?:toi|minh|tui)|lo cua (?:toi|minh|tui))/.test(
+  return /(?:customer care|account overview|my (?:requests|orders|appointments|reminders|plots|contracts|transfers|notifications)|tong quan (?:cham soc|tai khoan)|yeu cau cua (?:toi|minh|tui)|don dich vu cua (?:toi|minh|tui)|lich hen cua (?:toi|minh|tui)|nhac lich cua (?:toi|minh|tui)|lo cua (?:toi|minh|tui)|hop dong cua (?:toi|minh|tui)|(?:chuyen nhuong|thua ke|tang cho|yeu cau chuyen) cua (?:toi|minh|tui)|thong bao cua (?:toi|minh|tui))/.test(
     normalized,
   );
 }
@@ -1197,7 +1197,7 @@ export class AiAgentOrchestratorService {
       const toolOutput = await this.withTimeout(
         Promise.resolve(
           this.tools.execute(
-            'analyze_plot_competitiveness',
+            'get_plot_details',
             { plotCode: requirements.selectedPlotCode },
             {
               conversationId: conversation?.id ?? null,
@@ -2394,8 +2394,8 @@ export class AiAgentOrchestratorService {
 <OUTPUT_CONTRACT>
 Return one JSON object with these required fields:
 {"intent":"general_question","action":"none","contextMode":"continue","needsClarification":false,"clarificationQuestion":"","directResponse":""}
-Allowed intents: recommend_plots, service_suggestions, plot_request, service_booking, purchase_process, bazi_suggestion, plot_competitiveness, customer_care, appointment_booking, memorial_reminder, general_question.
-Allowed actions: rank_plot_options, browse_available_plots, get_service_suggestions, prepare_plot_request, prepare_service_order, cancel_service_order, confirm_pending_action, cancel_pending_action, get_purchase_process, suggest_bazi_direction, analyze_plot_competitiveness, get_customer_care_overview, prepare_appointment, prepare_memorial_reminder, none.
+Allowed intents: recommend_plots, plot_details, service_suggestions, plot_request, service_booking, purchase_process, bazi_suggestion, plot_competitiveness, customer_care, appointment_booking, memorial_reminder, general_question.
+Allowed actions: rank_plot_options, browse_available_plots, get_plot_details, get_service_suggestions, prepare_plot_request, prepare_service_order, cancel_service_order, confirm_pending_action, cancel_pending_action, get_purchase_process, suggest_bazi_direction, analyze_plot_competitiveness, get_customer_care_overview, prepare_appointment, prepare_memorial_reminder, none.
 Add only relevant optional fields at the top level: budgetMin, budgetMax, numberOfPlots, recommendationCount, comparisonRequested, preferredZone, preferredDirection, plotType, minAreaSqm, maxAreaSqm, needAdjacent, preferNearEntrance, birthDate, birthTime, gender, zodiacSign, consultationGoal, requestType, serviceQuery, serviceQueries, serviceTypeId, serviceOrderId, selectedPlotCode, requestedDate, appointmentDate, appointmentStartTime, appointmentEndTime, appointmentTopic, reminderTitle, reminderDescription, reminderDate, reminderRecurring, reminderCalendarType, reminderNotifyDaysBefore, reminderNotifyEmails, note, memoryProposals, customerProposal.
 For action=none, directResponse is the complete natural Vietnamese answer. For an action that needs authoritative data, directResponse must be empty. Never emit fields with guessed values.
 </OUTPUT_CONTRACT>
@@ -2655,6 +2655,12 @@ Today: ${new Date().toISOString().slice(0, 10)}`,
       return 'Bạn cho mình biết ngày sinh để mình tham khảo hướng theo Bazi nhé. Đây chỉ là gợi ý văn hóa, không phải kết luận bắt buộc.';
     }
     if (
+      plan.action === 'get_plot_details' &&
+      !plan.requirements.selectedPlotCode
+    ) {
+      return 'Bạn cho mình mã lô cần xem để mình đọc đúng giá, trạng thái và toàn bộ thông tin hiện có của lô đó nhé.';
+    }
+    if (
       plan.action === 'analyze_plot_competitiveness' &&
       !plan.requirements.selectedPlotCode
     ) {
@@ -2699,6 +2705,8 @@ Today: ${new Date().toISOString().slice(0, 10)}`,
         return {};
       case 'get_purchase_process':
         return {};
+      case 'get_plot_details':
+        return { plotCode: plan.requirements.selectedPlotCode };
       case 'analyze_plot_competitiveness':
         return { plotCode: plan.requirements.selectedPlotCode };
       case 'get_customer_care_overview':
@@ -3026,6 +3034,12 @@ Write the final helpful, highly consultative response now.
     if (input.baziSuggestion) {
       return this.describeBaziSuggestion(input.baziSuggestion);
     }
+    if (input.plan.action === 'get_plot_details') {
+      return this.describeBasicPlotDetails(
+        input.toolOutput,
+        input.plan.requirements.selectedPlotCode ?? '',
+      );
+    }
     if (input.plan.action === 'analyze_plot_competitiveness') {
       return this.describePlotCompetitiveness(input.toolOutput);
     }
@@ -3176,25 +3190,44 @@ Bạn muốn mình so sánh tiếp lô ${plotCode} với một mã lô cụ th�
     const status = this.asSafeString(plot.status, 'chưa xác định');
     const price = Number(plot.listedPrice);
     const area = Number(plot.areaSqm);
+    const zoneName = this.asSafeString(plot.zoneName, '');
+    const zoneCode = this.asSafeString(plot.zoneCode, '');
+    const rowNumber = this.asSafeString(plot.rowNumber, '');
+    const columnNumber = this.asSafeString(plot.columnNumber, '');
+    const description = this.asSafeString(plot.description, '');
+    const accessSummary = this.asSafeString(plot.accessSummary, '');
+    const hasImage = Boolean(this.asSafeString(plot.imageUrl, ''));
     const facts = [
       `trạng thái **${statusLabels[status] ?? status}**`,
       Number.isFinite(price)
         ? `giá niêm yết **${price.toLocaleString('vi-VN')} VND**`
         : '',
-      plot.zoneName ? `thuộc **${this.asSafeString(plot.zoneName, '')}**` : '',
-      plot.plotType ? `loại **${this.plotTypeLabel(this.asSafeString(plot.plotType, ''))}**` : '',
+      zoneName
+        ? `thuộc **${zoneName}${zoneCode ? ` (${zoneCode})` : ''}**`
+        : '',
+      rowNumber || columnNumber
+        ? `vị trí nội khu **${[rowNumber && `hàng ${rowNumber}`, columnNumber && `cột ${columnNumber}`].filter(Boolean).join(', ')}**`
+        : '',
+      plot.plotType
+        ? `loại **${this.plotTypeLabel(this.asSafeString(plot.plotType, ''))}**`
+        : '',
       Number.isFinite(area) && area > 0
         ? `diện tích **${area.toLocaleString('vi-VN')} m²**`
         : '',
       plot.direction
         ? `hướng **${this.asSafeString(plot.direction, '')}**`
         : '',
+      accessSummary ? accessSummary : '',
+      hasImage ? 'có ảnh minh họa trong hồ sơ lô' : '',
     ].filter(Boolean);
+    const descriptionText = description
+      ? `\n\n**Mô tả lô:** ${description}`
+      : '';
     const nextStep =
       status === 'available'
         ? 'Lô đang trống tại thời điểm kiểm tra. Bạn muốn xem trên bản đồ, so sánh với lô khác hay bắt đầu yêu cầu mua?'
         : 'Lô hiện không ở trạng thái có thể chọn mới. Mình có thể tìm các lô đang trống có tiêu chí tương tự cho bạn.';
-    return `**Lô ${code}:** ${facts.join(', ')}.\n\n${nextStep}`;
+    return `**Lô ${code}:** ${facts.join(', ')}.${descriptionText}\n\n${nextStep}`;
   }
 
   private describeCustomerCareOverview(toolOutput: unknown) {
@@ -3203,14 +3236,16 @@ Bạn muốn mình so sánh tiếp lô ${plotCode} với một mã lô cụ th�
       return 'Mình chưa đọc được dữ liệu chăm sóc tài khoản. Bạn muốn mình thử kiểm tra lại sau khi đăng nhập không?';
     }
     if (result.loginRequired === true) {
-      return 'Bạn cần đăng nhập để mình xem đúng hồ sơ của bạn, gồm lô đang sở hữu, yêu cầu đặt lô, đơn dịch vụ, lịch hẹn và nhắc lịch. Bạn đăng nhập rồi muốn mình ưu tiên kiểm tra mục nào trước?';
+      return 'Bạn cần đăng nhập để mình xem đúng hồ sơ của bạn, gồm lô đang sở hữu, yêu cầu mua lô, hợp đồng, đơn dịch vụ, yêu cầu chuyển nhượng/thừa kế, lịch hẹn, nhắc lịch và thông báo. Bạn đăng nhập rồi muốn mình ưu tiên kiểm tra mục nào trước?';
     }
 
     const summary = this.asRecord(result.summary) ?? {};
     const requests = this.asRecordArray(result.reservationRequests);
     const orders = this.asRecordArray(result.serviceOrders);
+    const transfers = this.asRecordArray(result.transferRequests);
     const appointments = this.asRecordArray(result.upcomingAppointments);
     const reminders = this.asRecordArray(result.upcomingReminders);
+    const notifications = this.asRecordArray(result.latestNotifications);
     const activeRequest = requests.find((item) =>
       ['draft', 'submitted', 'pending'].includes(String(item.status)),
     );
@@ -3219,8 +3254,16 @@ Bạn muốn mình so sánh tiếp lô ${plotCode} với một mã lô cụ th�
         String(item.status),
       ),
     );
+    const activeTransfer = transfers.find((item) =>
+      ['pending', 'approved'].includes(
+        String(item.status),
+      ),
+    );
     const nextAppointment = appointments[0];
     const nextReminder = reminders[0];
+    const latestUnreadNotification = notifications.find(
+      (item) => item.isRead === false,
+    );
     const plotCodes = Array.isArray(activeRequest?.plotCodes)
       ? activeRequest.plotCodes.map(String)
       : [];
@@ -3231,17 +3274,43 @@ Bạn muốn mình so sánh tiếp lô ${plotCode} với một mã lô cụ th�
       activeOrder
         ? `Đơn **${this.asSafeString(activeOrder.serviceName, 'dịch vụ')}** đang ở trạng thái **${this.asSafeString(activeOrder.status, 'chưa xác định')}**${activeOrder.plotCode ? ` tại lô ${this.asSafeString(activeOrder.plotCode, '')}` : ''}.`
         : '',
+      activeTransfer
+        ? [
+            `Yêu cầu **${this.transferTypeLabel(this.asSafeString(activeTransfer.transferType, 'transfer'))}** đang ở trạng thái **${this.asSafeString(activeTransfer.status, 'chưa xác định')}**${Array.isArray(activeTransfer.plotCodes) && activeTransfer.plotCodes.length ? ` cho ${activeTransfer.plotCodes.map(String).join(', ')}` : ''}.`,
+            activeTransfer.appointmentStart
+              ? `Lịch ký gần nhất: **${this.asSafeString(activeTransfer.appointmentStart, '')}**${activeTransfer.appointmentLocation ? ` tại ${this.asSafeString(activeTransfer.appointmentLocation, '')}` : ''}.`
+              : '',
+            activeTransfer.contractCode
+              ? `Hợp đồng **${this.asSafeString(activeTransfer.contractCode, '')}** đang ở trạng thái **${this.asSafeString(activeTransfer.contractStatus, 'chưa xác định')}**, thanh toán **${this.asSafeString(activeTransfer.paymentStatus, 'chưa xác định')}**.`
+              : '',
+          ]
+            .filter(Boolean)
+            .join(' ')
+        : '',
       nextAppointment
         ? `Lịch hẹn gần nhất: **${String(nextAppointment.date)} ${String(nextAppointment.startTime).slice(0, 5)}** với ${String(nextAppointment.hostName)}.`
         : '',
       nextReminder
         ? `Nhắc lịch gần nhất: **${String(nextReminder.title)}** vào ${String(nextReminder.nextDate)}.`
         : '',
+      latestUnreadNotification
+        ? `Thông báo chưa đọc gần nhất: **${this.asSafeString(latestUnreadNotification.title, 'Thông báo mới')}**.`
+        : '',
     ].filter(Boolean);
 
-    return `**Tổng quan chăm sóc tài khoản hiện tại:** ${Number(summary.ownedPlotCount ?? 0)} lô đang sở hữu, ${Number(summary.activeRequestCount ?? 0)} yêu cầu lô đang mở, ${Number(summary.activeServiceOrderCount ?? 0)} đơn dịch vụ đang xử lý, ${Number(summary.upcomingAppointmentCount ?? 0)} lịch hẹn sắp tới và ${Number(summary.activeReminderCount ?? 0)} nhắc lịch đang bật.${details.length ? `\n\n${details.join(' ')}` : '\n\nHiện chưa có đầu việc đang mở hoặc lịch sắp tới cần ưu tiên.'}
+    return `**Tổng quan tài khoản hiện tại:** ${Number(summary.ownedPlotCount ?? 0)} lô đang sở hữu, ${Number(summary.activeRequestCount ?? 0)} yêu cầu mua lô đang mở, ${Number(summary.activeServiceOrderCount ?? 0)} đơn dịch vụ đang xử lý, ${Number(summary.activeTransferRequestCount ?? 0)} yêu cầu chuyển nhượng/thừa kế đang mở, ${Number(summary.upcomingAppointmentCount ?? 0)} lịch hẹn sắp tới, ${Number(summary.activeReminderCount ?? 0)} nhắc lịch đang bật và ${Number(summary.unreadNotificationCount ?? 0)} thông báo chưa đọc.${details.length ? `\n\n${details.join(' ')}` : '\n\nHiện chưa có đầu việc đang mở hoặc lịch sắp tới cần ưu tiên.'}
 
-Bạn muốn mình đi sâu vào yêu cầu lô, đơn dịch vụ hay lịch chăm sóc trước?`;
+Bạn muốn mình đi sâu vào yêu cầu mua lô, đơn dịch vụ, chuyển nhượng/thừa kế, lịch hẹn hay thông báo trước?`;
+  }
+
+  private transferTypeLabel(value: string) {
+    return (
+      {
+        sale: 'chuyển nhượng',
+        inheritance: 'thừa kế',
+        gift: 'tặng/cho tặng',
+      } as Record<string, string>
+    )[value] ?? 'chuyển quyền sử dụng lô';
   }
 
   private asRecord(value: unknown): Record<string, unknown> | null {

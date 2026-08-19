@@ -22,6 +22,7 @@ export const AGENT_PLANNER_TOOL = {
           type: 'string',
           enum: [
             'recommend_plots',
+            'plot_details',
             'service_suggestions',
             'plot_request',
             'service_booking',
@@ -39,6 +40,7 @@ export const AGENT_PLANNER_TOOL = {
           enum: [
             'rank_plot_options',
             'browse_available_plots',
+            'get_plot_details',
             'get_service_suggestions',
             'prepare_plot_request',
             'prepare_service_order',
@@ -296,6 +298,7 @@ export const AGENT_PLANNER_TOOL = {
 
 export type AgentPlanIntent =
   | 'recommend_plots'
+  | 'plot_details'
   | 'service_suggestions'
   | 'plot_request'
   | 'service_booking'
@@ -310,6 +313,7 @@ export type AgentPlanIntent =
 export type AgentPlanAction =
   | 'rank_plot_options'
   | 'browse_available_plots'
+  | 'get_plot_details'
   | 'get_service_suggestions'
   | 'prepare_plot_request'
   | 'prepare_service_order'
@@ -360,6 +364,7 @@ export interface AgentPlan {
 
 const INTENTS = new Set<AgentPlanIntent>([
   'recommend_plots',
+  'plot_details',
   'service_suggestions',
   'plot_request',
   'service_booking',
@@ -374,6 +379,7 @@ const INTENTS = new Set<AgentPlanIntent>([
 const ACTIONS = new Set<AgentPlanAction>([
   'rank_plot_options',
   'browse_available_plots',
+  'get_plot_details',
   'get_service_suggestions',
   'prepare_plot_request',
   'prepare_service_order',

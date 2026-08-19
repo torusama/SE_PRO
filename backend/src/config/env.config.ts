@@ -38,39 +38,39 @@ export const envConfig = () => ({
     telemetry: {
       openaiPrimary: {
         inputUsdPerMillion:
-          Number(process.env.AI_OPENAI_PRIMARY_INPUT_USD_PER_1M_TOKENS) || 0,
+          Number(process.env.AI_OPENAI_PRIMARY_INPUT_USD_PER_1M_TOKENS) || 0.15,
         outputUsdPerMillion:
-          Number(process.env.AI_OPENAI_PRIMARY_OUTPUT_USD_PER_1M_TOKENS) || 0,
+          Number(process.env.AI_OPENAI_PRIMARY_OUTPUT_USD_PER_1M_TOKENS) || 0.60,
       },
       openaiSecondary: {
         inputUsdPerMillion:
-          Number(process.env.AI_OPENAI_SECONDARY_INPUT_USD_PER_1M_TOKENS) || 0,
+          Number(process.env.AI_OPENAI_SECONDARY_INPUT_USD_PER_1M_TOKENS) || 2.50,
         outputUsdPerMillion:
-          Number(process.env.AI_OPENAI_SECONDARY_OUTPUT_USD_PER_1M_TOKENS) || 0,
+          Number(process.env.AI_OPENAI_SECONDARY_OUTPUT_USD_PER_1M_TOKENS) || 10.00,
       },
       nvidia: {
         inputUsdPerMillion:
-          Number(process.env.AI_NVIDIA_INPUT_USD_PER_1M_TOKENS) || 0,
+          Number(process.env.AI_NVIDIA_INPUT_USD_PER_1M_TOKENS) || 0.60,
         outputUsdPerMillion:
-          Number(process.env.AI_NVIDIA_OUTPUT_USD_PER_1M_TOKENS) || 0,
+          Number(process.env.AI_NVIDIA_OUTPUT_USD_PER_1M_TOKENS) || 1.20,
       },
       emailDraft: {
         inputUsdPerMillion:
-          Number(process.env.AI_EMAIL_DRAFT_INPUT_USD_PER_1M_TOKENS) || 0,
+          Number(process.env.AI_EMAIL_DRAFT_INPUT_USD_PER_1M_TOKENS) || 0.20,
         outputUsdPerMillion:
-          Number(process.env.AI_EMAIL_DRAFT_OUTPUT_USD_PER_1M_TOKENS) || 0,
+          Number(process.env.AI_EMAIL_DRAFT_OUTPUT_USD_PER_1M_TOKENS) || 0.40,
       },
       comparison: {
         inputUsdPerMillion:
-          Number(process.env.AI_COMPARISON_INPUT_USD_PER_1M_TOKENS) || 0,
+          Number(process.env.AI_COMPARISON_INPUT_USD_PER_1M_TOKENS) || 0.30,
         outputUsdPerMillion:
-          Number(process.env.AI_COMPARISON_OUTPUT_USD_PER_1M_TOKENS) || 0,
+          Number(process.env.AI_COMPARISON_OUTPUT_USD_PER_1M_TOKENS) || 0.60,
       },
       decisionComparison: {
         inputUsdPerMillion:
-          Number(process.env.AI_DECISION_COMPARISON_INPUT_USD_PER_1M_TOKENS) || 0,
+          Number(process.env.AI_DECISION_COMPARISON_INPUT_USD_PER_1M_TOKENS) || 0.50,
         outputUsdPerMillion:
-          Number(process.env.AI_DECISION_COMPARISON_OUTPUT_USD_PER_1M_TOKENS) || 0,
+          Number(process.env.AI_DECISION_COMPARISON_OUTPUT_USD_PER_1M_TOKENS) || 1.00,
       },
     },
     router: {

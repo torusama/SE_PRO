@@ -74,6 +74,7 @@ export type AgentToolName =
   | 'estimate_total_cost'
   | 'suggest_bazi_direction'
   | 'get_purchase_process'
+  | 'get_plot_details'
   | 'analyze_plot_competitiveness'
   | 'get_customer_care_overview'
   | 'propose_knowledge_update';

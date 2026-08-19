@@ -10,4 +10,8 @@ export class AdminKnowledgeReviewQueryDto {
   @IsOptional()
   @IsIn(['all', 'quarantined', 'active', 'rejected', 'superseded'])
   status?: 'all' | 'quarantined' | 'active' | 'rejected' | 'superseded';
+
+  @IsOptional()
+  @IsIn(['customer', 'admin', 'system'])
+  sourceRole?: 'customer' | 'admin' | 'system';
 }

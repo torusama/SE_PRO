@@ -25,6 +25,9 @@ describe('AI Agent insight fallbacks', () => {
     'Show my customer care overview.',
     'Tổng quan chăm sóc tài khoản của tôi.',
     'Kiểm tra lịch hẹn của tôi.',
+    'Yêu cầu chuyển nhượng của tôi tới đâu rồi?',
+    'Hợp đồng của tôi đã thanh toán chưa?',
+    'Tôi có thông báo nào mới không?',
   ])('recognizes an authenticated lifecycle request: %s', (message) => {
     expect(asksForCustomerCare(message)).toBe(true);
   });

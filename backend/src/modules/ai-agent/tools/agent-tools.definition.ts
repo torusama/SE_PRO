@@ -62,7 +62,7 @@ export const AGENT_TOOL_DEFINITIONS = [
     function: {
       name: 'rank_plot_options',
       description:
-        'Create and rank valid plot options from structured customer requirements.',
+        'Build a grounded candidate pool of valid current plot options from structured customer requirements. Final customer-facing selection and ordering belongs to the response LLM; this is not a separately trained ranking model.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -196,6 +196,26 @@ export const AGENT_TOOL_DEFINITIONS = [
   {
     type: 'function',
     function: {
+      name: 'get_plot_details',
+      description:
+        'Read all customer-relevant authoritative details for one exact cemetery plot code. Use this for price, status, area, direction, zone, row/column, description, image, and access questions. Do not use it for market/competition analysis.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          plotCode: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 50,
+          },
+        },
+        required: ['plotCode'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'analyze_plot_competitiveness',
       description:
         'Analyze a real plot code using current internal request interest, comparable available inventory, and internal listed-price position. This is not an external market appraisal or investment forecast.',
@@ -220,7 +240,7 @@ export const AGENT_TOOL_DEFINITIONS = [
     function: {
       name: 'get_customer_care_overview',
       description:
-        'Get the authenticated customer account overview: owned plots, plot requests, service orders, upcoming appointments, and reminders. Never accepts a caller-supplied user ID.',
+        'Get the authenticated customer account overview from authoritative data: owned plots, purchase requests, contracts/payment state, service orders, transfer/inheritance/gift requests, appointments, memorial reminders, and latest notifications. Never accepts a caller-supplied user ID and never returns recipient identity-document contents.',
       parameters: { type: 'object', additionalProperties: false },
     },
   },

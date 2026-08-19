@@ -1,7 +1,29 @@
+export interface AgentPlotDetail {
+  id: number;
+  plotCode: string;
+  zoneId: number;
+  zoneCode: string;
+  zoneName: string;
+  zoneDescription?: string | null;
+  price: number;
+  status: string;
+  direction?: string | null;
+  plotType: string;
+  areaSqm?: number | null;
+  rowNumber?: string | null;
+  columnNumber?: string | null;
+  description?: string | null;
+  imageUrl?: string | null;
+  updatedAt?: string | null;
+  nearestEntrance?: "main" | "secondary" | null;
+  entranceProximity?: "near" | "moderate" | "far" | null;
+}
+
 export interface AgentRecommendation {
   optionId: string;
   plotIds: number[];
   plotCodes: string[];
+  plots?: AgentPlotDetail[];
   score: number;
   plotCost: number;
   serviceCost: number;

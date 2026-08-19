@@ -5,7 +5,6 @@ import { DatabaseService } from '../../database/database.service';
 import { PlotAdjacencyService } from '../plots/plot-adjacency.service';
 import { RecommendPlotsDto } from './dto/recommend-plots.dto';
 import { BaziRuleService } from './bazi-rule.service';
-import { PlotRankerClient } from './plot-ranker.client';
 import { calculatePlotEntranceAccess } from './cemetery-map-access';
 import {
   AgentRequirements,
@@ -19,7 +18,9 @@ interface PlotRow extends QueryResultRow {
   id: number;
   plotCode: string;
   zoneId: number;
+  zoneCode: string;
   zoneName: string;
+  zoneDescription: string | null;
   price: number | string;
   status: string;
   direction: string | null;
@@ -28,6 +29,8 @@ interface PlotRow extends QueryResultRow {
   rowNumber: string | null;
   columnNumber: string | null;
   description: string | null;
+  imageUrl: string | null;
+  updatedAt: string | null;
   mapX: number | string | null;
   mapY: number | string | null;
   mapWidth: number | string | null;
@@ -56,7 +59,6 @@ export class PlotRecommendationService {
     private readonly database: DatabaseService,
     private readonly adjacency: PlotAdjacencyService,
     private readonly bazi: BaziRuleService,
-    private readonly ranker?: PlotRankerClient,
   ) {}
 
   async recommend(
@@ -90,43 +92,12 @@ export class PlotRecommendationService {
       .sort((left, right) => this.compareRecommendations(left, right, dto))
       .slice(0, 20);
 
+    // This service no longer trains or invokes a separate PlotRanker model.
+    // Its job is to build a bounded, authoritative candidate pool from live
+    // inventory. In normal LLM-first flow the composer chooses the final
+    // customer-facing subset/order; the deterministic score remains only as a
+    // reproducible provider-outage fallback.
     const deterministicRanking = this.rankingSnapshot(recommendations);
-    const featureInputs = recommendations.map((option) => ({
-      optionId: option.optionId,
-      features: this.buildFeatures(option, dto),
-    }));
-    let rankerVersion = 'rule-based-v1';
-    let fallbackUsed = true;
-    let mlRanking: ReturnType<typeof this.rankingSnapshot> | null = null;
-    const rankerAttempt = this.ranker
-      ? await this.ranker.predict(featureInputs)
-      : {
-          enabled: false,
-          prediction: null,
-          fallbackReason: 'disabled' as const,
-        };
-    if (rankerAttempt.prediction) {
-      const scores = new Map(
-        rankerAttempt.prediction.predictions.map((item) => [
-          item.optionId,
-          Math.max(0, Math.min(1, Number(item.score))),
-        ]),
-      );
-      const scoredRecommendations = recommendations.map((option) => ({
-        ...option,
-        score: scores.get(option.optionId) ?? option.score,
-      }));
-      mlRanking = this.rankingSnapshot(
-        [...scoredRecommendations].sort(
-          (left, right) => right.score - left.score,
-        ),
-      );
-      recommendations = scoredRecommendations.sort((left, right) =>
-        this.compareRecommendations(left, right, dto),
-      );
-      rankerVersion = rankerAttempt.prediction.modelVersion;
-      fallbackUsed = false;
-    }
     recommendations = this.applyComparativeFitScores(
       this.selectDiverseRecommendationOptions(
         recommendations,
@@ -151,11 +122,11 @@ export class PlotRecommendationService {
       candidateOptionIds: recommendations.map((option) => option.optionId),
       featureSnapshot: finalFeatureSnapshot,
       deterministicRanking,
-      mlRanking,
+      mlRanking: null,
       finalRanking: this.rankingSnapshot(recommendations),
-      modelVersion: rankerVersion,
-      rankerEnabled: rankerAttempt.enabled,
-      fallbackReason: rankerAttempt.fallbackReason,
+      modelVersion: 'grounded-candidate-pool-v2',
+      rankerEnabled: false,
+      fallbackReason: 'llm_final_selection',
     });
 
     const baziSuggestion = dto.birthDate
@@ -172,9 +143,9 @@ export class PlotRecommendationService {
       suggestedServices: [],
       baziSuggestion,
       inventoryPriceContext: this.buildInventoryPriceContext(candidates),
-      rankerVersion,
-      fallbackUsed,
-      rankerFallbackReason: rankerAttempt.fallbackReason,
+      rankerVersion: 'grounded-candidate-pool-v2',
+      fallbackUsed: false,
+      rankerFallbackReason: 'llm_final_selection',
       ...(recommendationRunId ? { recommendationRunId } : {}),
     };
   }
@@ -262,29 +233,29 @@ export class PlotRecommendationService {
   async searchAvailablePlots(dto: RecommendPlotsDto) {
     const params: unknown[] = [];
     const conditions = [
-      `status = 'available'`,
-      `price IS NOT NULL`,
-      `price > 0`,
+      `p.status = 'available'`,
+      `p.price IS NOT NULL`,
+      `p.price > 0`,
     ];
     const add = (value: unknown) => {
       params.push(value);
       return `$${params.length}`;
     };
 
-    conditions.push(`price <= ${add(dto.budgetMax)}`);
+    conditions.push(`p.price <= ${add(dto.budgetMax)}`);
     if (dto.budgetMin !== undefined) {
-      conditions.push(`price >= ${add(dto.budgetMin)}`);
+      conditions.push(`p.price >= ${add(dto.budgetMin)}`);
     }
     if (dto.preferredZone) {
-      conditions.push(`zone_name ILIKE ${add(`%${dto.preferredZone}%`)}`);
+      conditions.push(`z.zone_name ILIKE ${add(`%${dto.preferredZone}%`)}`);
     }
     if (dto.preferredDirection) {
       conditions.push(
-        `COALESCE(direction, '') ILIKE ${add(`%${dto.preferredDirection}%`)}`,
+        `COALESCE(p.direction, '') ILIKE ${add(`%${dto.preferredDirection}%`)}`,
       );
     }
     if (dto.plotType) {
-      conditions.push(`plot_type = ${add(dto.plotType)}`);
+      conditions.push(`p.plot_type = ${add(dto.plotType)}`);
     }
     if (dto.excludePlotIds?.length) {
       const excluded = [...new Set(dto.excludePlotIds)]
@@ -292,28 +263,32 @@ export class PlotRecommendationService {
         .filter((value) => Number.isInteger(value) && value > 0)
         .slice(0, 100);
       if (excluded.length) {
-        conditions.push(`NOT (plot_id = ANY(${add(excluded)}::int[]))`);
+        conditions.push(`NOT (p.plot_id = ANY(${add(excluded)}::int[]))`);
       }
     }
     if (dto.minAreaSqm !== undefined) {
-      conditions.push(`area_sqm >= ${add(dto.minAreaSqm)}`);
+      conditions.push(`p.area_sqm >= ${add(dto.minAreaSqm)}`);
     }
     if (dto.maxAreaSqm !== undefined) {
-      conditions.push(`area_sqm <= ${add(dto.maxAreaSqm)}`);
+      conditions.push(`p.area_sqm <= ${add(dto.maxAreaSqm)}`);
     }
     const limitParam = add(this.candidateLimit);
 
     const rows = await this.database.query<PlotRow>(
-      `SELECT plot_id AS id, plot_code AS "plotCode", zone_id AS "zoneId",
-              zone_name AS "zoneName", price::float, status, direction,
-              plot_type AS "plotType", area_sqm::float AS "areaSqm",
-              row_number AS "rowNumber", column_number AS "columnNumber",
-              description,
-              map_x::float AS "mapX", map_y::float AS "mapY",
-              map_width::float AS "mapWidth", map_height::float AS "mapHeight"
-       FROM vw_plots_map
-       WHERE ${conditions.join(' AND ')}
-       ORDER BY price ASC, zone_name ASC, row_number ASC, column_number ASC
+      `SELECT p.plot_id AS id, p.plot_code AS "plotCode", p.zone_id AS "zoneId",
+              z.zone_code AS "zoneCode", z.zone_name AS "zoneName",
+              z.description AS "zoneDescription", p.price::float, p.status,
+              p.direction, p.plot_type AS "plotType",
+              p.area_sqm::float AS "areaSqm", p.row_number AS "rowNumber",
+              p.column_number AS "columnNumber", p.description,
+              p.image_url AS "imageUrl", p.updated_at::text AS "updatedAt",
+              p.map_x::float AS "mapX", p.map_y::float AS "mapY",
+              p.map_width::float AS "mapWidth", p.map_height::float AS "mapHeight"
+       FROM plots p
+       JOIN cemetery_zones z ON z.zone_id = p.zone_id
+       WHERE p.is_deleted = FALSE AND z.is_active = TRUE
+         AND ${conditions.join(' AND ')}
+       ORDER BY p.price ASC, z.zone_name ASC, p.row_number ASC, p.column_number ASC
        LIMIT ${limitParam}`,
       params,
     );
@@ -359,16 +334,20 @@ export class PlotRecommendationService {
       throw new BadRequestException('Invalid adjacent group request');
     }
     const rows = await this.database.query<PlotRow>(
-      `SELECT plot_id AS id, plot_code AS "plotCode", zone_id AS "zoneId",
-              zone_name AS "zoneName", price::float, status, direction,
-              plot_type AS "plotType", area_sqm::float AS "areaSqm",
-              row_number AS "rowNumber", column_number AS "columnNumber",
-              description,
-              map_x::float AS "mapX", map_y::float AS "mapY",
-              map_width::float AS "mapWidth", map_height::float AS "mapHeight"
-       FROM vw_plots_map
-       WHERE plot_id = ANY($1::int[]) AND status = 'available'
-       ORDER BY plot_id`,
+      `SELECT p.plot_id AS id, p.plot_code AS "plotCode", p.zone_id AS "zoneId",
+              z.zone_code AS "zoneCode", z.zone_name AS "zoneName",
+              z.description AS "zoneDescription", p.price::float, p.status,
+              p.direction, p.plot_type AS "plotType",
+              p.area_sqm::float AS "areaSqm", p.row_number AS "rowNumber",
+              p.column_number AS "columnNumber", p.description,
+              p.image_url AS "imageUrl", p.updated_at::text AS "updatedAt",
+              p.map_x::float AS "mapX", p.map_y::float AS "mapY",
+              p.map_width::float AS "mapWidth", p.map_height::float AS "mapHeight"
+       FROM plots p
+       JOIN cemetery_zones z ON z.zone_id = p.zone_id
+       WHERE p.plot_id = ANY($1::int[]) AND p.status = 'available'
+         AND p.is_deleted = FALSE AND z.is_active = TRUE
+       ORDER BY p.plot_id`,
       [uniqueIds],
     );
     const candidates = rows.map((row) => this.normalizePlot(row));
