@@ -541,7 +541,6 @@ function RuntimePerformance({ analytics }: { analytics: LearningAnalytics }) {
 function ActivityTimeline({ analytics }: { analytics: LearningAnalytics }) {
   const dailyTotals = analytics.timeline.map(
     (item) =>
-      item.memoryUpdates +
       item.knowledgeUpdates +
       item.signals +
       item.recommendations,
@@ -562,12 +561,11 @@ function ActivityTimeline({ analytics }: { analytics: LearningAnalytics }) {
   );
   const seriesTotals = analytics.timeline.reduce(
     (totals, item) => ({
-      memory: totals.memory + item.memoryUpdates,
       knowledge: totals.knowledge + item.knowledgeUpdates,
       signals: totals.signals + item.signals,
       recommendations: totals.recommendations + item.recommendations,
     }),
-    { memory: 0, knowledge: 0, signals: 0, recommendations: 0 },
+    { knowledge: 0, signals: 0, recommendations: 0 },
   );
   const labelInterval = Math.max(1, Math.ceil(analytics.timeline.length / 7));
   const accessLinePoints = analytics.timeline
@@ -597,10 +595,6 @@ function ActivityTimeline({ analytics }: { analytics: LearningAnalytics }) {
             aria-label="Tổng hoạt động trong kỳ"
           >
             <div>
-              <dt>Ghi nhớ</dt>
-              <dd>{numberFormat.format(seriesTotals.memory)}</dd>
-            </div>
-            <div>
               <dt>Tri thức</dt>
               <dd>{numberFormat.format(seriesTotals.knowledge)}</dd>
             </div>
@@ -627,8 +621,8 @@ function ActivityTimeline({ analytics }: { analytics: LearningAnalytics }) {
             nhất
           </strong>
           <p>
-            Biểu đồ sẽ xuất hiện khi trợ lý lưu ghi nhớ, cập nhật kho tri thức
-            hoặc ghi nhận một lượt đề xuất.
+            Biểu đồ sẽ xuất hiện khi trợ lý cập nhật kho tri thức, ghi nhận phản hồi
+            hoặc tạo một lượt đề xuất.
           </p>
         </div>
       ) : (
@@ -672,7 +666,7 @@ function ActivityTimeline({ analytics }: { analytics: LearningAnalytics }) {
               const showDate =
                 index % labelInterval === 0 ||
                 index === analytics.timeline.length - 1;
-              const ariaLabel = `${item.date}: ${item.memoryUpdates} lượt ghi nhớ, ${item.knowledgeUpdates} lượt cập nhật tri thức, ${item.signals} phản hồi, ${item.recommendations} lượt đề xuất, ${item.aiAccesses ?? 0} lượt truy cập AI`;
+              const ariaLabel = `${item.date}: ${item.knowledgeUpdates} lượt cập nhật tri thức, ${item.signals} phản hồi, ${item.recommendations} lượt đề xuất, ${item.aiAccesses ?? 0} lượt truy cập AI`;
               const barHeightPct = Math.max(6, (total / maxActivity) * 52);
               const pointLinePos =
                 20 + ((item.aiAccesses ?? 0) / maxAccesses) * 65;
@@ -717,10 +711,6 @@ function ActivityTimeline({ analytics }: { analytics: LearningAnalytics }) {
                             <small>Hoạt động học tập & đề xuất</small>
                           </div>
                           <dl>
-                            <div>
-                              <dt>Ghi nhớ cá nhân</dt>
-                              <dd>{numberFormat.format(item.memoryUpdates)}</dd>
-                            </div>
                             <div>
                               <dt>Cập nhật tri thức</dt>
                               <dd>{numberFormat.format(item.knowledgeUpdates)}</dd>
@@ -843,8 +833,8 @@ export default function LearningAnalyticsPanel({
         <div>
           <h2>Tổng quan học tập</h2>
           <p>
-            Dữ liệu thật từ ghi nhớ cá nhân, kho tri thức dùng chung và các lượt
-            đề xuất trên toàn hệ thống.
+            Dữ liệu vận hành của AI, kho tri thức dùng chung và các lượt
+            đề xuất trên toàn hệ thống. Bộ nhớ cá nhân không hiển thị tại trang quản trị.
           </p>
         </div>
         <div
@@ -870,12 +860,6 @@ export default function LearningAnalyticsPanel({
         className="learning-analytics__metrics current-state"
       >
         <MetricCard
-          label="Ghi nhớ cá nhân đang dùng"
-          note={`${numberFormat.format(current.usersWithMemory)} người dùng có dữ liệu cá nhân hóa`}
-          tone="teal"
-          value={current.activeUserMemories}
-        />
-        <MetricCard
           label="Tri thức dùng chung đã xác minh"
           note="Đang có hiệu lực trong kho tri thức"
           tone="gold"
@@ -894,10 +878,10 @@ export default function LearningAnalyticsPanel({
           value={current.pendingCustomerProposals ?? 0}
         />
         <MetricCard
-          label={`Cập nhật trong ${analytics.period.days} ngày`}
-          note={`${activity.globalKnowledgeUpdates} tri thức dùng chung · ${activity.memoryUpdates} ghi nhớ cá nhân`}
+          label={`Cập nhật tri thức trong ${analytics.period.days} ngày`}
+          note="Chỉ tính kho tri thức dùng chung; không hiển thị bộ nhớ cá nhân"
           tone="blue"
-          value={activity.memoryUpdates + activity.globalKnowledgeUpdates}
+          value={activity.globalKnowledgeUpdates}
         />
       </section>
 
@@ -984,11 +968,6 @@ export default function LearningAnalyticsPanel({
           description="Số lượng hiện tại theo từng trạng thái kiểm duyệt."
           items={analytics.knowledgeByStatus}
           title="Trạng thái kho tri thức"
-        />
-        <Distribution
-          description="Các loại thông tin cá nhân hóa đang dùng; không hiển thị nội dung riêng tư."
-          items={analytics.memoryByKey}
-          title="Thông tin cá nhân hóa được ghi nhận nhiều nhất"
         />
         <Distribution
           description={`Tín hiệu trong ${analytics.period.days} ngày gần nhất.`}

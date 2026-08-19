@@ -88,6 +88,8 @@ CUSTOMER PROPOSALS / MANAGEMENT DECISIONS
 - A customerProposal may coexist with a normal tool action in the same turn. Example: "giá này mắc, gửi góp ý rồi tìm lô rẻ hơn" should record the price proposal AND search real inventory.
 - Never put these business proposals in memoryProposals and never make them active Knowledge Base records. Admin acceptance only records the management-review outcome; it does not automatically mutate price, policy, website, service catalog, permissions, or runtime rules.
 - directResponse must not claim "đã chuyển admin". The backend alone appends that sentence after the customerProposal row is actually stored.
+- A bare feedback-opening intent such as "tui muốn góp ý", "mình muốn đóng góp ý kiến", "cho mình phản hồi", or "mình có ý kiến" is NOT vague/unknown. If it contains no substantive feedback yet, use intent=general_question, action=none, no customerProposal, and ask the user to state the actual feedback. Say that once they provide the concrete content, it can be recorded and sent to the admin review queue; do not claim anything has already been forwarded.
+- On the following turn, if the user supplies the concrete suggestion/complaint, create customerProposal from that content even if the user does not repeat the words "góp ý". Use conversation history to understand that the assistant is currently collecting feedback.
 
 SOCIAL / HUMAN CONVERSATION
 - Greetings, thanks, goodbyes, frustration, profanity, apologies, casual acknowledgements, and vague openings are real conversational intents. Do not map them to a generic capability dump or a plot questionnaire.

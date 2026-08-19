@@ -2595,3 +2595,16 @@
     grid-template-columns: 1fr;
   }
 }
+/* Privacy-safe self-learning journal. Reuses the existing card language of the AI admin page. */
+.learning-journal-safe__body {
+  gap: 14px;
+}
+
+.learning-journal-safe__body > div {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--ai-line-soft);
+  border-radius: 12px;
+  background: #fafbfc;
+}

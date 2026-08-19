@@ -6,10 +6,10 @@ import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import LearningAnalyticsPanel, {
   type LearningAnalytics,
 } from "./LearningAnalyticsPanel";
-import LearningJournalPanel from "./LearningJournalPanel";
-import MemoryManagementPanel, {
-  type UserMemoryItem,
-} from "./MemoryManagementPanel";
+import LearningJournalPanel, {
+  type LearningJournalDraft,
+  type LearningJournalItem,
+} from "./LearningJournalPanel";
 import "./AgentAdminPage.css";
 
 type Feedback = {
@@ -62,8 +62,6 @@ type KnowledgeProposal = {
   effectiveTo?: string;
 };
 
-
-type UserMemory = UserMemoryItem;
 
 type KnowledgeForm = {
   title: string;
@@ -310,7 +308,7 @@ export default function AgentAdminPage() {
   const [knowledgeInventory, setKnowledgeInventory] = useState<
     KnowledgeProposal[]
   >([]);
-  const [userMemories, setUserMemories] = useState<UserMemory[]>([]);
+  const [learningJournal, setLearningJournal] = useState<LearningJournalItem[]>([]);
   const [knowledgeStatus, setKnowledgeStatus] = useState("all");
   const [knowledgeSearch, setKnowledgeSearch] = useState("");
   const [knowledgeReviewNotes, setKnowledgeReviewNotes] = useState<
@@ -347,8 +345,8 @@ export default function AgentAdminPage() {
         api.get("/admin/ai-agent/knowledge", {
           params: { status: "all" },
         }),
-        api.get("/admin/ai-agent/user-memories", {
-          params: { limit: 60 },
+        api.get("/admin/ai-agent/learning-journal", {
+          params: { limit: 100 },
         }),
       ]);
 
@@ -358,7 +356,7 @@ export default function AgentAdminPage() {
         "đề xuất khách hàng",
         "tri thức chờ duyệt",
         "kho tri thức",
-        "ghi nhớ cá nhân",
+        "nhật ký AI tự học",
       ];
       const failed = results.flatMap((result, index) =>
         result.status === "rejected" ? [labels[index]] : [],
@@ -374,13 +372,13 @@ export default function AgentAdminPage() {
       const customerProposalData = payload<CustomerProposal[]>(results[2]);
       const knowledgeData = payload<KnowledgeProposal[]>(results[3]);
       const inventoryData = payload<KnowledgeProposal[]>(results[4]);
-      const memoryData = payload<UserMemory[]>(results[5]);
+      const journalData = payload<LearningJournalItem[]>(results[5]);
       setFeedback(feedbackData ?? []);
       setAnalytics(analyticsData);
       setCustomerProposals(customerProposalData ?? []);
       setKnowledgeProposals(knowledgeData ?? []);
       setKnowledgeInventory(inventoryData ?? []);
-      setUserMemories(memoryData ?? []);
+      setLearningJournal(journalData ?? []);
 
       if (failed.length) {
         setError(
@@ -665,34 +663,35 @@ export default function AgentAdminPage() {
     }
   };
 
-  const saveUserMemory = async (
-    memoryId: number,
-    payload: { title: string; content: string; reviewNote: string },
+  const saveLearningJournal = async (
+    learningJournalId: number,
+    payload: LearningJournalDraft,
   ) => {
     if (payload.title.trim().length < 3) {
-      setError("Tên ghi nhớ cần ít nhất 3 ký tự.");
+      setError("Tên bài học cần ít nhất 3 ký tự.");
       return;
     }
-    if (payload.content.trim().length < 5) {
-      setError("Nội dung ghi nhớ cần ít nhất 5 ký tự.");
+    if (payload.summary.trim().length < 10 || payload.preventionRule.trim().length < 10) {
+      setError("Phần bài học và quy tắc tránh lặp lại cần ít nhất 10 ký tự.");
       return;
     }
     if (
       !(await confirm({
-        title: "Cập nhật ghi nhớ cá nhân",
+        title: "Cập nhật bài học của AI",
         message:
-          "Lưu thay đổi này vào bộ nhớ của AI? Ghi nhớ mới sẽ được dùng ở các lần tư vấn tiếp theo của đúng khách hàng đó.",
-        confirmLabel: "Lưu ghi nhớ",
+          "Lưu thay đổi này? Bài học đang hoạt động sẽ được đưa lại vào ngữ cảnh của AI như một quy tắc hành vi, nhưng không trở thành sự thật nghiệp vụ trong kho tri thức.",
+        confirmLabel: "Lưu bài học",
       }))
     )
       return;
-    setBusy(`user-memory-save-${memoryId}`);
+    setBusy(`learning-journal-save-${learningJournalId}`);
     setError(undefined);
     try {
-      await api.patch(`/admin/ai-agent/user-memories/${memoryId}`, {
+      await api.patch(`/admin/ai-agent/learning-journal/${learningJournalId}`, {
         title: payload.title.trim(),
-        content: payload.content.trim(),
-        reviewNote: payload.reviewNote.trim() || undefined,
+        summary: payload.summary.trim(),
+        preventionRule: payload.preventionRule.trim(),
+        category: payload.category,
       });
       await loadData();
     } catch (error) {
@@ -707,26 +706,26 @@ export default function AgentAdminPage() {
           : undefined;
       setError(
         responseMessage ||
-          "Không thể cập nhật ghi nhớ. Dữ liệu cũ của AI vẫn được giữ nguyên.",
+          "Không thể cập nhật bài học. Bản đang áp dụng vẫn được giữ nguyên.",
       );
     } finally {
       setBusy(undefined);
     }
   };
 
-  const deleteUserMemory = async (item: UserMemory) => {
+  const deleteLearningJournal = async (item: LearningJournalItem) => {
     if (
       !(await confirm({
-        title: "Xóa ghi nhớ cá nhân",
-        message: `Xóa mục ghi nhớ “${item.title}” khỏi bộ nhớ AI? Hệ thống sẽ ngừng dùng nội dung này cho khách hàng tương ứng, nhưng vẫn giữ lịch sử quản trị.`,
-        confirmLabel: "Xóa ghi nhớ",
+        title: "Xóa bài học khỏi nhật ký AI",
+        message: `Xóa “${item.title}”? AI sẽ ngừng nhận quy tắc này ở các lượt tư vấn mới. Lịch sử thao tác quản trị vẫn được giữ trong audit log.`,
+        confirmLabel: "Xóa bài học",
       }))
     )
       return;
-    setBusy(`user-memory-delete-${item.memoryId}`);
+    setBusy(`learning-journal-delete-${item.learningJournalId}`);
     setError(undefined);
     try {
-      await api.delete(`/admin/ai-agent/user-memories/${item.memoryId}`);
+      await api.delete(`/admin/ai-agent/learning-journal/${item.learningJournalId}`);
       await loadData();
     } catch (error) {
       const responseMessage =
@@ -740,7 +739,7 @@ export default function AgentAdminPage() {
           : undefined;
       setError(
         responseMessage ||
-          "Không thể xóa ghi nhớ. Bộ nhớ hiện tại của AI chưa bị thay đổi.",
+          "Không thể xóa bài học. Nhật ký AI hiện tại chưa bị thay đổi.",
       );
     } finally {
       setBusy(undefined);
@@ -774,16 +773,16 @@ export default function AgentAdminPage() {
           <span className="agent-admin__page-kicker">Quản trị trợ lý AI</span>
           <h1>Học tập và tri thức</h1>
           <p>
-            Một nơi để xem trợ lý đã ghi nhớ gì, tri thức nào đã được xác minh,
+            Một nơi để xem nhật ký AI tự học, tri thức nào đã được xác minh,
             đề xuất nào cần quản trị xử lý và hệ thống AI đang hoạt động ra sao.
           </p>
         </div>
         <aside className="agent-admin__guardrail">
           <strong>Phạm vi quản trị</strong>
           <p>
-            Ghi nhớ cá nhân an toàn có thể được lưu cho chính khách hàng đó.
-            Tri thức dùng chung và thay đổi nghiệp vụ luôn cần quản trị viên
-            duyệt; đề xuất khách hàng không tự sửa giá, chính sách hay website.
+            Bộ nhớ cá nhân của khách hàng chỉ được dùng nội bộ để cá nhân hóa
+            đúng tài khoản và không hiển thị trên trang quản trị này. Tri thức
+            dùng chung và thay đổi nghiệp vụ vẫn theo luồng kiểm soát riêng.
           </p>
         </aside>
       </header>
@@ -821,15 +820,10 @@ export default function AgentAdminPage() {
           {tab === "journal" && (
             <div className="agent-admin__section">
               <LearningJournalPanel
-                analytics={analytics}
-                days={analyticsDays}
-                onDaysChange={setAnalyticsDays}
-              />
-              <MemoryManagementPanel
-                items={userMemories}
+                items={learningJournal}
                 busy={busy}
-                onDelete={deleteUserMemory}
-                onSave={saveUserMemory}
+                onDelete={deleteLearningJournal}
+                onSave={saveLearningJournal}
               />
             </div>
           )}

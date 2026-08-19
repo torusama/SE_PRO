@@ -310,21 +310,13 @@ export class LearningAnalyticsService {
       this.distribution(
         `SELECT validation_status AS key, COUNT(*)::int AS count
          FROM ai_knowledge_entries
+         WHERE scope = 'global'
          GROUP BY validation_status
          ORDER BY count DESC, validation_status`,
       ),
       this.distribution(
-        `SELECT memory_key AS key, COUNT(*)::int AS count
-         FROM ai_knowledge_entries
-         WHERE scope = 'user'
-           AND is_active = TRUE
-           AND validation_status = 'active'
-           AND memory_key IS NOT NULL
-           AND (effective_from IS NULL OR effective_from <= NOW())
-           AND (effective_to IS NULL OR effective_to > NOW())
-         GROUP BY memory_key
-         ORDER BY count DESC, memory_key
-         LIMIT 8`,
+        `SELECT NULL::text AS key, 0::int AS count
+         WHERE FALSE`,
       ),
       this.distribution(
         `SELECT
@@ -419,6 +411,7 @@ export class LearningAnalyticsService {
          LEFT JOIN ai_knowledge_entries e
            ON e.knowledge_entry_id = v.entity_id
          WHERE v.entity_type = 'knowledge_entry'
+           AND COALESCE(e.scope, v.new_value->>'scope', v.old_value->>'scope') = 'global'
          ORDER BY v.created_at DESC, v.version_id DESC
          LIMIT 12`,
       ),
@@ -426,28 +419,15 @@ export class LearningAnalyticsService {
         `WITH learning_journal AS (
            SELECT
              'knowledge-' || v.version_id::text AS "eventId",
-             CASE
-               WHEN COALESCE(e.scope, v.new_value->>'scope', v.old_value->>'scope') = 'user'
-                 THEN 'user_memory'
-               ELSE 'global_knowledge'
-             END AS "eventType",
+             'global_knowledge' AS "eventType",
              COALESCE(v.action_type, 'updated') AS "actionType",
-             CASE
-               WHEN COALESCE(e.scope, v.new_value->>'scope', v.old_value->>'scope') = 'user'
-                 THEN COALESCE(
-                   e.memory_key,
-                   v.new_value->>'memoryKey',
-                   v.old_value->>'memoryKey',
-                   'user_preference'
-                 )
-               ELSE COALESCE(
-                 e.title,
-                 v.new_value->>'title',
-                 v.old_value->>'title',
-                 e.knowledge_type,
-                 'global_knowledge'
-               )
-             END AS subject,
+             COALESCE(
+               e.title,
+               v.new_value->>'title',
+               v.old_value->>'title',
+               e.knowledge_type,
+               'global_knowledge'
+             ) AS subject,
              CASE
                WHEN v.action_type = 'deleted' THEN 'deleted'
                ELSE COALESCE(
@@ -458,17 +438,14 @@ export class LearningAnalyticsService {
                )
              END AS status,
              COALESCE(v.actor_role, 'system') AS source,
-             CASE
-               WHEN COALESCE(e.scope, v.new_value->>'scope', v.old_value->>'scope') = 'user'
-                 THEN NULL
-               ELSE COALESCE(v.validation_reason, v.change_reason)
-             END AS detail,
+             COALESCE(v.validation_reason, v.change_reason) AS detail,
              NULL::text AS "modelVersion",
              v.created_at AS "createdAt"
            FROM ai_knowledge_versions v
            LEFT JOIN ai_knowledge_entries e
              ON e.knowledge_entry_id = v.entity_id
            WHERE v.entity_type = 'knowledge_entry'
+             AND COALESCE(e.scope, v.new_value->>'scope', v.old_value->>'scope') = 'global'
              AND v.created_at >= CURRENT_DATE - ($1::int - 1)
 
            UNION ALL

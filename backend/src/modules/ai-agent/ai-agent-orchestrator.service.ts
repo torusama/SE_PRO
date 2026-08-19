@@ -46,6 +46,7 @@ import {
   CustomerProposalPersistenceResult,
   CustomerProposalService,
 } from './customer-proposal.service';
+import { AgentLearningJournalService } from './agent-learning-journal.service';
 import {
   AgentPendingAction,
   AgentRequirements,
@@ -697,6 +698,8 @@ export class AiAgentOrchestratorService {
     private readonly conversationMemory?: ConversationMemoryService,
     @Optional()
     private readonly customerProposals?: CustomerProposalService,
+    @Optional()
+    private readonly learningJournal?: AgentLearningJournalService,
   ) {}
 
   async chat(dto: ChatDto, user?: { id: number; role: string } | null) {
@@ -756,6 +759,12 @@ export class AiAgentOrchestratorService {
     const lowInformationTurn = llmSemanticRouting
       ? false
       : this.isLowInformationTurn(dto.message);
+    const bareCustomerFeedbackOpening = this.isBareCustomerFeedbackOpening(
+      dto.message,
+    );
+    const directRecoveredCustomerProposal = this.recoverCustomerAdminProposal(
+      dto.message,
+    );
     const resetPersonalMemoryRequest = this.isResetPersonalMemoryRequest(
       dto.message,
     );
@@ -801,9 +810,13 @@ export class AiAgentOrchestratorService {
             'history',
           )
         : ([] as PersistedMessage[]);
+    const recoveredCustomerProposal =
+      directRecoveredCustomerProposal ??
+      this.recoverCustomerProposalFollowUp(dto.message, history);
     const [
       pendingAction,
       persistentKnowledgeContext,
+      agentLearningContext,
       conversationMemoryContext,
       conversationMemoryRequirements,
       activeUserPreferences,
@@ -829,6 +842,14 @@ export class AiAgentOrchestratorService {
             '',
             'memory_context',
           ),
+      this.learningJournal
+        ? this.withTimeout(
+            this.learningJournal.getPromptContext(8),
+            700,
+            '',
+            'agent_learning_journal_context',
+          )
+        : Promise.resolve(''),
       this.conversationMemory
         ? this.withTimeout(
             this.conversationMemory.getPromptContext(
@@ -1088,6 +1109,29 @@ export class AiAgentOrchestratorService {
         skipSuggestedFollowUps: true,
         skipConversationMemorySnapshot: true,
         memoryResetBoundary: true,
+        learningResults,
+      });
+    }
+
+    // "Mình muốn góp ý" is a complete feedback-intake intent, not a vague
+    // sentence. Ask for the actual content first; only claim forwarding after
+    // the following substantive proposal has been persisted successfully.
+    if (bareCustomerFeedbackOpening) {
+      await saveUserMessage();
+      return this.finish({
+        conversation,
+        sessionId,
+        userMessageId,
+        userMessage: dto.message,
+        assistantMessage:
+          'Được chứ. Bạn cứ nói rõ ý kiến hoặc góp ý của mình về website, dịch vụ, lô đất, quy trình hay vấn đề khác. Khi bạn gửi nội dung cụ thể, mình sẽ ghi nhận và chuyển vào mục Đề xuất người dùng để quản trị viên xem xét.',
+        intent: 'general_question',
+        requirements,
+        recommendationResult: null,
+        traceId,
+        fallbackUsed: false,
+        llmModel: 'local-feedback-intake',
+        skipSuggestedFollowUps: true,
         learningResults,
       });
     }
@@ -1599,6 +1643,36 @@ export class AiAgentOrchestratorService {
 
     if (!this.nvidia.isConfigured() && !deterministicAgentPlan) {
       await saveUserMessage();
+      if (recoveredCustomerProposal) {
+        customerProposalResult = this.customerProposals
+          ? await this.customerProposals.create(recoveredCustomerProposal, {
+              conversationId: conversation?.id ?? null,
+              sourceMessageId: userMessageId,
+              userId,
+              role: userRole,
+              sessionId,
+            })
+          : { status: 'error' as const };
+        return this.finish({
+          conversation,
+          sessionId,
+          userMessageId,
+          userMessage: dto.message,
+          assistantMessage: this.appendCustomerProposalOutcome(
+            'Mình đã hiểu đây là một góp ý/đề xuất dành cho phía quản trị.',
+            recoveredCustomerProposal,
+            customerProposalResult,
+          ),
+          intent: 'general_question',
+          requirements,
+          recommendationResult: null,
+          traceId,
+          fallbackUsed: false,
+          llmModel: 'local-feedback-intake',
+          skipSuggestedFollowUps: true,
+          learningResults,
+        });
+      }
       learningResults = await this.processMemoryProposals(
         recoveredPreferenceProposal,
         {
@@ -1636,7 +1710,7 @@ export class AiAgentOrchestratorService {
         (await this.createAgentPlan(
           history,
           dto.message,
-          [persistentKnowledgeContext, conversationMemoryContext]
+          [persistentKnowledgeContext, conversationMemoryContext, agentLearningContext]
             .filter(Boolean)
             .join('\n\n'),
           traceId,
@@ -1669,6 +1743,10 @@ export class AiAgentOrchestratorService {
         dto.message,
         plan.intent,
       );
+      // Conservative deterministic backstop: if a clearly worded management
+      // suggestion was present but the semantic planner omitted customerProposal,
+      // persist it rather than silently dropping the user's feedback.
+      plan.customerProposal ??= recoveredCustomerProposal;
       // Final hard backstop for a standalone Bát Tự request. Even if an LLM
       // planner tries to revive an older plot-shopping goal, the latest user
       // turn wins: analyze Bát Tự only and wait for an explicit opt-in before
@@ -1862,6 +1940,7 @@ export class AiAgentOrchestratorService {
             persistentKnowledgeContext: [
               persistentKnowledgeContext,
               conversationMemoryContext,
+              agentLearningContext,
             ]
               .filter(Boolean)
               .join('\n\n'),
@@ -2076,6 +2155,7 @@ export class AiAgentOrchestratorService {
           persistentKnowledgeContext: [
             persistentKnowledgeContext,
             conversationMemoryContext,
+            agentLearningContext,
           ]
             .filter(Boolean)
             .join('\n\n'),
@@ -4512,6 +4592,36 @@ ${JSON.stringify(options)}
         'conversation_memory_snapshot',
       );
     }
+    if (
+      input.conversation &&
+      messageId &&
+      !input.skipConversationMemorySnapshot &&
+      !input.memoryResetBoundary
+    ) {
+      const reflectionUserMessage =
+        input.userMessage?.trim() ||
+        (await this.loadPersistedUserMessage(input.userMessageId));
+      if (reflectionUserMessage && this.learningJournal) {
+        void this.learningJournal
+          .reflectOnTurn({
+            conversationId: input.conversation.id,
+            sourceMessageId: input.userMessageId,
+            userMessage: reflectionUserMessage,
+            assistantMessage,
+            intent: input.intent,
+            forceCandidate: (input.learningResults ?? []).some(
+              (result) => result.learningKind === 'conversation_correction',
+            ),
+          })
+          .catch((error) =>
+            this.logger.warn(
+              `[learning journal] Reflection failed without affecting chat: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+            ),
+          );
+      }
+    }
     return {
       sessionId: input.sessionId,
       messageId,
@@ -4537,9 +4647,9 @@ ${JSON.stringify(options)}
     if (!proposal) return response;
     const base = response.trim();
     if (result?.status === 'stored' || result?.status === 'duplicate') {
-      return `${base}\n\nMình không có thẩm quyền tự phê duyệt hoặc áp dụng thay đổi quản trị từ đề xuất này. Mình đã ghi nhận và chuyển đề xuất sang phần đề xuất khách hàng để quản trị viên xem xét. Việc ghi nhận không đồng nghĩa đề xuất đã được chấp thuận.`;
+      return `${base}\n\nMình đã ghi nhận góp ý này và chuyển vào mục Đề xuất người dùng để quản trị viên xem xét. Mình không có thẩm quyền tự phê duyệt hoặc tự áp dụng thay đổi; việc ghi nhận không đồng nghĩa đề xuất đã được chấp thuận.`;
     }
-    return `${base}\n\nMình không có thẩm quyền tự phê duyệt hoặc áp dụng thay đổi quản trị từ đề xuất này. Hiện hệ thống chưa ghi nhận được đề xuất để chuyển sang quản trị viên. Bạn có thể thử gửi lại sau; mình không muốn báo đã chuyển khi dữ liệu chưa được lưu thành công.`;
+    return `${base}\n\nHiện hệ thống chưa lưu được góp ý này nên mình chưa thể báo là đã chuyển cho quản trị viên. Bạn thử gửi lại giúp mình; mình sẽ chỉ xác nhận đã chuyển khi dữ liệu được lưu thành công.`;
   }
 
   private resolveRequestedRecommendationCount(
@@ -5566,6 +5676,166 @@ ${JSON.stringify(options)}
       return `Ừ, mình nhớ phần trước. Tóm tắt gần nhất của cuộc trao đổi là: ${memorySummary.slice(0, 420)}. Mình sẽ tiếp tục dựa trên ngữ cảnh đó.`;
     }
     return '';
+  }
+
+  private isBareCustomerFeedbackOpening(message: string) {
+    const folded = this.foldForMemory(message);
+    if (!folded || folded.length > 180) return false;
+    const marker = folded.match(
+      /\b(?:gop y|dong gop y kien|gui y kien|co y kien|phan hoi|kien nghi)\b/,
+    );
+    if (!marker) return false;
+    const before = folded.slice(0, marker.index ?? 0).trim();
+    const after = folded
+      .slice((marker.index ?? 0) + marker[0].length)
+      .trim();
+    const plausibleOpening =
+      !before ||
+      /^(?:toi|tui|minh|em|anh|chi|t|cho minh|cho tui|toi muon|tui muon|minh muon|em muon|cho toi|co the cho minh|co the cho tui|co the cho toi)$/.test(
+        before,
+      ) ||
+      /\b(?:muon|can|co|xin|cho)\b/.test(before);
+    if (!plausibleOpening) return false;
+    return (
+      !after ||
+      /^(?:mot chut|chut|ti|ty|voi|nha|nhe|a|duoc khong|co duoc khong|thoi)$/.test(
+        after,
+      )
+    );
+  }
+
+  private recoverCustomerProposalFollowUp(
+    message: string,
+    history: PersistedMessage[],
+  ): AgentPlan['customerProposal'] | undefined {
+    const latestAssistant = [...history]
+      .reverse()
+      .find((item) => item.role === 'assistant' && item.content?.trim());
+    if (!latestAssistant?.content) return undefined;
+    const assistantFolded = this.foldForMemory(latestAssistant.content);
+    const collectingFeedback =
+      /\b(?:noi ro|cho minh biet|ban cu noi|gui noi dung)\b/.test(
+        assistantFolded,
+      ) &&
+      /\b(?:gop y|y kien|phan hoi|de xuat)\b/.test(assistantFolded) &&
+      /\b(?:quan tri|admin|de xuat nguoi dung|ghi nhan)\b/.test(
+        assistantFolded,
+      );
+    if (!collectingFeedback) return undefined;
+
+    const folded = this.foldForMemory(message);
+    if (!folded || folded.length < 4) return undefined;
+    if (/^(?:ok|oke|duoc|cam on|thoi|khong|bo qua|de sau)$/.test(folded)) {
+      return undefined;
+    }
+    const proposal = this.recoverCustomerAdminProposal(`gop y ${message}`);
+    if (!proposal) return undefined;
+    return {
+      ...proposal,
+      content: this.redactSensitiveData(message).trim().slice(0, 5000),
+    };
+  }
+
+  private recoverCustomerAdminProposal(
+    message: string,
+  ): AgentPlan['customerProposal'] | undefined {
+    if (this.isBareCustomerFeedbackOpening(message)) return undefined;
+    const folded = this.foldForMemory(message);
+    if (!folded) return undefined;
+
+    const explicitFeedback =
+      /\b(?:gop y|dong gop y kien|gui y kien|phan hoi|kien nghi)\b/.test(
+        folded,
+      );
+    const directWebsiteSuggestion =
+      /\b(?:web|website|giao dien|ui|trang web|ban do)\b.{0,90}\b(?:nen|can|them|bo sung|sua|doi|bo)\b/.test(
+        folded,
+      ) ||
+      /\b(?:nen|can)\s+(?:them|bo sung|sua|doi)\b.{0,90}\b(?:web|website|giao dien|ui|ban do|nut|bo loc|tinh nang)\b/.test(
+        folded,
+      );
+    const directPolicySuggestion =
+      /\b(?:chinh sach|quy dinh|quy trinh)\b.{0,90}\b(?:nen|can|them|sua|doi|bo)\b/.test(
+        folded,
+      );
+    const directServiceSuggestion =
+      /\b(?:dich vu)\b.{0,90}\b(?:nen|can|them|bo sung|sua|doi)\b/.test(
+        folded,
+      );
+    const complaint = /\b(?:khieu nai|phan nan|buc xuc)\b/.test(folded);
+    const priceNegotiation =
+      /\b(?:giam gia|thuong luong|mac qua|gia cao|gia nay)\b/.test(folded) &&
+      /\b(?:gop y|de nghi|xin|muon|ban|duoc khong|giam|gia)\b/.test(folded);
+    const plotFeedback =
+      explicitFeedback && /\b(?:lo dat|lo mo|lo [a-z]\s*-?\s*\d)\b/.test(folded);
+
+    if (
+      !explicitFeedback &&
+      !directWebsiteSuggestion &&
+      !directPolicySuggestion &&
+      !directServiceSuggestion &&
+      !complaint &&
+      !priceNegotiation
+    ) {
+      return undefined;
+    }
+
+    const proposalType: NonNullable<AgentPlan['customerProposal']>['proposalType'] =
+      priceNegotiation
+        ? 'price_negotiation'
+        : complaint
+          ? 'complaint'
+          : directWebsiteSuggestion ||
+              (explicitFeedback &&
+                /\b(?:web|website|giao dien|ui|nut|bo loc|tinh nang|ban do)\b/.test(
+                  folded,
+                ))
+            ? 'website_suggestion'
+            : directServiceSuggestion ||
+                (explicitFeedback && /\bdich vu\b/.test(folded))
+              ? 'service_suggestion'
+              : directPolicySuggestion ||
+                  (explicitFeedback &&
+                    /\b(?:chinh sach|quy dinh|quy trinh)\b/.test(folded))
+                ? 'policy_suggestion'
+                : plotFeedback
+                  ? 'plot_feedback'
+                  : 'other';
+
+    const subjectByType: Record<
+      NonNullable<AgentPlan['customerProposal']>['proposalType'],
+      string
+    > = {
+      price_negotiation: 'Đề xuất thương lượng giá',
+      website_suggestion: 'Góp ý về website',
+      service_suggestion: 'Đề xuất về dịch vụ',
+      plot_feedback: 'Góp ý về lô đất',
+      policy_suggestion: 'Đề xuất về chính sách hoặc quy trình',
+      complaint: 'Khiếu nại cần quản trị viên xem xét',
+      other: 'Góp ý của người dùng',
+    };
+    const selectedPlotCode = message.match(/\b[A-Z]-\d{1,3}-\d{1,3}\b/i)?.[0];
+    return {
+      proposalType,
+      subject: subjectByType[proposalType],
+      content: this.redactSensitiveData(message).trim().slice(0, 5000),
+      ...(selectedPlotCode
+        ? { selectedPlotCode: selectedPlotCode.toUpperCase() }
+        : {}),
+    };
+  }
+
+  private async loadPersistedUserMessage(messageId: number | null) {
+    if (!messageId) return '';
+    try {
+      const row = await this.database.queryOne<{ content: string | null }>(
+        `SELECT content FROM ai_messages WHERE message_id = $1 AND role = 'user'`,
+        [messageId],
+      );
+      return row?.content?.trim() ?? '';
+    } catch {
+      return '';
+    }
   }
 
   private isLowInformationTurn(message: string) {

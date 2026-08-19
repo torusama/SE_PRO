@@ -11,7 +11,6 @@ import { KnowledgeEmbeddingService } from './knowledge-embedding.service';
 import { PLOT_PENDING_LOCK_MINUTES } from '../reservations/reservation-policy.constants';
 import { isRuntimeOperationalClaim } from './knowledge-safety.util';
 import { ManageKnowledgeDto } from './dto/manage-knowledge.dto';
-import { ManageUserMemoryDto } from './dto/manage-user-memory.dto';
 
 interface PromptKnowledgeRow {
   id: number;
@@ -149,7 +148,7 @@ export class KnowledgeService {
           // rows: only semantically relevant, approved records may enter a prompt.
           const recentUser =
             userId !== null && userRows.length < userLimit
-              ? await this.recentUserMemory(userId, userLimit)
+              ? await this.recentUserPromptMemory(userId, userLimit)
               : [];
           userRows = this.mergeRows(userRows, recentUser, userLimit);
         } catch {
@@ -158,12 +157,12 @@ export class KnowledgeService {
           // the main chat continues without global RAG for this turn.
           globalRows = await this.lexicalGlobalKnowledge(queryText, globalLimit);
           userRows =
-            userId === null ? [] : await this.recentUserMemory(userId, userLimit);
+            userId === null ? [] : await this.recentUserPromptMemory(userId, userLimit);
         }
       } else {
         globalRows = await this.lexicalGlobalKnowledge(queryText, globalLimit);
         userRows =
-          userId === null ? [] : await this.recentUserMemory(userId, userLimit);
+          userId === null ? [] : await this.recentUserPromptMemory(userId, userLimit);
       }
 
       if (spiritualPinnedRows.length) {
@@ -175,7 +174,7 @@ export class KnowledgeService {
       }
 
       const userSection = this.promptSection(
-        'PERSISTENT_USER_PREFERENCES',
+        'PERSISTENT_USER_CONTEXT',
         userRows,
         3000,
       );
@@ -242,7 +241,7 @@ export class KnowledgeService {
          FROM ai_knowledge_entries
          WHERE scope = 'user'
            AND owner_user_id = $1
-           AND knowledge_type = 'user_preference'
+           AND knowledge_type IN ('user_preference', 'conversation_correction')
            AND is_active = TRUE
            AND validation_status = 'active'
            AND embedding IS NOT NULL
@@ -340,7 +339,7 @@ export class KnowledgeService {
       this.recentGlobalKnowledge(globalLimit),
       userId === null
         ? Promise.resolve([])
-        : this.recentUserMemory(userId, userLimit),
+        : this.recentUserPromptMemory(userId, userLimit),
     ]);
   }
 
@@ -359,6 +358,26 @@ export class KnowledgeService {
                 knowledge_entry_id DESC
        LIMIT $1`,
       [limit],
+    );
+  }
+
+  private recentUserPromptMemory(userId: number, limit: number) {
+    return this.database.query<PromptKnowledgeRow>(
+      `SELECT knowledge_entry_id AS id, title, content,
+              knowledge_type AS "knowledgeType",
+              memory_key AS "memoryKey"
+       FROM ai_knowledge_entries
+       WHERE scope = 'user'
+         AND owner_user_id = $1
+         AND knowledge_type IN ('user_preference', 'conversation_correction')
+         AND is_active = TRUE
+         AND validation_status = 'active'
+         AND (effective_from IS NULL OR effective_from <= NOW())
+         AND (effective_to IS NULL OR effective_to > NOW())
+       ORDER BY CASE knowledge_type WHEN 'conversation_correction' THEN 0 ELSE 1 END,
+                updated_at DESC, knowledge_entry_id DESC
+       LIMIT $2`,
+      [userId, limit],
     );
   }
 
@@ -402,7 +421,7 @@ export class KnowledgeService {
     return this.recentUserMemory(userId, safeLimit);
   }
 
-  /** Clears only customer-owned AI preference records. Business records,
+  /** Clears customer-owned AI preferences and private conversation-correction lessons. Business records,
    * orders, contracts and shared/verified knowledge are never touched. */
   async clearUserPersonalMemory(userId: number) {
     const result = await this.database.query<{ count: string }>(
@@ -412,7 +431,7 @@ export class KnowledgeService {
            updated_at = NOW()
        WHERE scope = 'user'
          AND owner_user_id = $1
-         AND knowledge_type = 'user_preference'
+         AND knowledge_type IN ('user_preference', 'conversation_correction')
          AND is_active = TRUE
        RETURNING knowledge_entry_id`,
       [userId],
@@ -1187,265 +1206,6 @@ export class KnowledgeService {
       void this.embeddings.embedKnowledgeEntry(id).catch(() => undefined);
     }
     return reviewed;
-  }
-
-  async listUserMemoriesForAdmin(rawLimit?: string | number) {
-    const parsed = Number(rawLimit ?? 60);
-    const limit = Number.isFinite(parsed)
-      ? Math.min(200, Math.max(1, Math.trunc(parsed)))
-      : 60;
-    return this.database.query(
-      `SELECT k.knowledge_entry_id AS "memoryId",
-              k.owner_user_id AS "userId",
-              u.full_name AS "fullName",
-              u.email,
-              k.category,
-              k.title,
-              k.content,
-              k.memory_key AS "memoryKey",
-              k.created_at AS "createdAt",
-              k.updated_at AS "updatedAt"
-       FROM ai_knowledge_entries k
-       LEFT JOIN users u ON u.user_id = k.owner_user_id
-       WHERE k.scope = 'user'
-         AND k.knowledge_type = 'user_preference'
-         AND k.is_active = TRUE
-         AND k.validation_status = 'active'
-         AND (k.effective_from IS NULL OR k.effective_from <= NOW())
-         AND (k.effective_to IS NULL OR k.effective_to > NOW())
-       ORDER BY k.updated_at DESC, k.knowledge_entry_id DESC
-       LIMIT $1`,
-      [limit],
-    );
-  }
-
-  async updateAdminUserMemory(
-    id: number,
-    adminId: number,
-    dto: ManageUserMemoryDto,
-  ) {
-    const title = this.normalize(dto.title);
-    const content = this.normalize(dto.content);
-    if (title.length < 3) {
-      throw new BadRequestException('Memory title must contain at least 3 characters.');
-    }
-    if (content.length < 5) {
-      throw new BadRequestException('Memory content must contain at least 5 characters.');
-    }
-
-    const updated = await this.database.transaction(async (client) => {
-      const currentResult = await client.query<{
-        knowledge_entry_id: number;
-        owner_user_id: number | null;
-        category: string;
-        title: string;
-        content: string;
-        knowledge_type: string;
-        memory_key: string | null;
-        validation_status: string;
-        is_active: boolean;
-      }>(
-        `SELECT knowledge_entry_id, owner_user_id, category, title, content,
-                knowledge_type, memory_key, validation_status, is_active
-         FROM ai_knowledge_entries
-         WHERE knowledge_entry_id = $1
-           AND scope = 'user'
-           AND knowledge_type = 'user_preference'
-         FOR UPDATE`,
-        [id],
-      );
-      const current = currentResult.rows[0];
-      if (!current) {
-        throw new NotFoundException('User memory entry not found');
-      }
-      if (!current.is_active) {
-        throw new BadRequestException('Only active memory entries can be edited.');
-      }
-
-      const oldSnapshot = {
-        ownerUserId: current.owner_user_id,
-        category: current.category,
-        title: current.title,
-        content: current.content,
-        knowledgeType: current.knowledge_type,
-        memoryKey: current.memory_key,
-        validationStatus: current.validation_status,
-        isActive: current.is_active,
-        scope: 'user',
-      };
-
-      await client.query(
-        `UPDATE ai_knowledge_entries
-         SET title = $2,
-             content = $3,
-             updated_at = NOW()
-         WHERE knowledge_entry_id = $1`,
-        [id, title, content],
-      );
-
-      const versionResult = await client.query<{ version: number }>(
-        `SELECT COALESCE(MAX(version_number), 0) + 1 AS version
-         FROM ai_knowledge_versions
-         WHERE entity_type = 'knowledge_entry' AND entity_id = $1`,
-        [id],
-      );
-      const versionNumber = Number(versionResult.rows[0]?.version ?? 1);
-      const versionName = `user-memory-${id}-v${versionNumber}-${Date.now()}`.slice(
-        0,
-        50,
-      );
-      const newSnapshot = {
-        ...oldSnapshot,
-        title,
-        content,
-      };
-      const reason = dto.reviewNote?.trim() || 'Updated by an authenticated administrator.';
-      await client.query(
-        `INSERT INTO ai_knowledge_versions
-           (version_name, entity_type, entity_id, field_name,
-            old_value, new_value, change_reason, created_by,
-            version_number, action_type, actor_role, validation_reason)
-         VALUES
-           ($1, 'knowledge_entry', $2, 'record', $3::jsonb, $4::jsonb,
-            $5, $6, $7, 'updated', 'admin', $5)`,
-        [
-          versionName,
-          id,
-          JSON.stringify(oldSnapshot),
-          JSON.stringify(newSnapshot),
-          reason,
-          adminId,
-          versionNumber,
-        ],
-      );
-      await client.query(
-        `INSERT INTO audit_logs
-           (user_id, action, entity_type, entity_id, entity_key, old_value, new_value)
-         VALUES ($1, 'ai_user_memory_updated', 'ai_knowledge_entry', $2, $3, $4::jsonb, $5::jsonb)`,
-        [
-          adminId,
-          id,
-          current.memory_key ?? current.category,
-          JSON.stringify(oldSnapshot),
-          JSON.stringify({ snapshot: newSnapshot, reviewNote: reason, versionName }),
-        ],
-      );
-      return {
-        memoryId: id,
-        versionName,
-        updated: true,
-      };
-    });
-
-    if (this.embeddings) {
-      void this.embeddings.embedKnowledgeEntry(id).catch(() => undefined);
-    }
-    return updated;
-  }
-
-  async deleteAdminUserMemory(id: number, adminId: number) {
-    return this.database.transaction(async (client) => {
-      const currentResult = await client.query<{
-        knowledge_entry_id: number;
-        category: string;
-        title: string;
-        content: string;
-        knowledge_type: string;
-        memory_key: string | null;
-        owner_user_id: number | null;
-        validation_status: string;
-        is_active: boolean;
-      }>(
-        `SELECT knowledge_entry_id, category, title, content, knowledge_type,
-                memory_key, owner_user_id, validation_status, is_active
-         FROM ai_knowledge_entries
-         WHERE knowledge_entry_id = $1
-           AND scope = 'user'
-           AND knowledge_type = 'user_preference'
-         FOR UPDATE`,
-        [id],
-      );
-      const current = currentResult.rows[0];
-      if (!current) {
-        throw new NotFoundException('User memory entry not found');
-      }
-      if (!current.is_active) {
-        throw new BadRequestException('This memory entry was already inactive.');
-      }
-
-      const oldSnapshot = {
-        ownerUserId: current.owner_user_id,
-        category: current.category,
-        title: current.title,
-        content: current.content,
-        knowledgeType: current.knowledge_type,
-        memoryKey: current.memory_key,
-        validationStatus: current.validation_status,
-        isActive: current.is_active,
-        scope: 'user',
-      };
-
-      await client.query(
-        `UPDATE ai_knowledge_entries
-         SET is_active = FALSE,
-             effective_to = COALESCE(effective_to, NOW()),
-             updated_at = NOW()
-         WHERE knowledge_entry_id = $1`,
-        [id],
-      );
-
-      const versionResult = await client.query<{ version: number }>(
-        `SELECT COALESCE(MAX(version_number), 0) + 1 AS version
-         FROM ai_knowledge_versions
-         WHERE entity_type = 'knowledge_entry' AND entity_id = $1`,
-        [id],
-      );
-      const versionNumber = Number(versionResult.rows[0]?.version ?? 1);
-      const versionName = `user-memory-${id}-v${versionNumber}-${Date.now()}`.slice(
-        0,
-        50,
-      );
-      const newSnapshot = {
-        ...oldSnapshot,
-        isActive: false,
-      };
-      const reason = 'Deleted by an authenticated administrator.';
-      await client.query(
-        `INSERT INTO ai_knowledge_versions
-           (version_name, entity_type, entity_id, field_name,
-            old_value, new_value, change_reason, created_by,
-            version_number, action_type, actor_role, validation_reason)
-         VALUES
-           ($1, 'knowledge_entry', $2, 'record', $3::jsonb, $4::jsonb,
-            $5, $6, $7, 'deleted', 'admin', $5)`,
-        [
-          versionName,
-          id,
-          JSON.stringify(oldSnapshot),
-          JSON.stringify(newSnapshot),
-          reason,
-          adminId,
-          versionNumber,
-        ],
-      );
-      await client.query(
-        `INSERT INTO audit_logs
-           (user_id, action, entity_type, entity_id, entity_key, old_value, new_value)
-         VALUES ($1, 'ai_user_memory_deleted', 'ai_knowledge_entry', $2, $3, $4::jsonb, $5::jsonb)`,
-        [
-          adminId,
-          id,
-          current.memory_key ?? current.category,
-          JSON.stringify(oldSnapshot),
-          JSON.stringify({ snapshot: newSnapshot, versionName }),
-        ],
-      );
-      return {
-        memoryId: id,
-        deleted: true,
-        versionName,
-      };
-    });
   }
 
   private promptSection(

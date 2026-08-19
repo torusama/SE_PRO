@@ -26,8 +26,9 @@ import { KnowledgeService } from './knowledge.service';
 import { ReviewKnowledgeDto } from './dto/review-knowledge.dto';
 import { ManageKnowledgeDto } from './dto/manage-knowledge.dto';
 import { ReviewCustomerProposalDto } from './dto/review-customer-proposal.dto';
-import { ManageUserMemoryDto } from './dto/manage-user-memory.dto';
 import { CustomerProposalService } from './customer-proposal.service';
+import { AgentLearningJournalService } from './agent-learning-journal.service';
+import { ManageLearningJournalDto } from './dto/manage-learning-journal.dto';
 import {
   AdminFeedbackReviewQueryDto,
   AdminKnowledgeReviewQueryDto,
@@ -48,6 +49,7 @@ export class AiAgentAdminController {
     private readonly analytics: LearningAnalyticsService,
     private readonly knowledge: KnowledgeService,
     @Optional() private readonly customerProposals?: CustomerProposalService,
+    @Optional() private readonly learningJournal?: AgentLearningJournalService,
   ) {}
 
   @Get('conversations')
@@ -203,37 +205,37 @@ export class AiAgentAdminController {
     };
   }
 
-  @Get('user-memories')
-  async listUserMemories(@Query('limit') limit?: string) {
+  @Get('learning-journal')
+  async learningJournalList(@Query('limit') limit?: string) {
     return {
       success: true,
-      message: 'Active user memory entries retrieved',
-      data: await this.knowledge.listUserMemoriesForAdmin(limit),
+      message: 'Privacy-safe AI learning journal retrieved',
+      data: this.learningJournal ? await this.learningJournal.list(limit) : [],
     };
   }
 
-  @Patch('user-memories/:id')
-  async updateUserMemory(
+  @Patch('learning-journal/:id')
+  async updateLearningJournal(
     @CurrentUser() user: AdminUser,
     @Param('id', ParseIntPipe) id: number,
-    @Body() dto: ManageUserMemoryDto,
+    @Body() dto: ManageLearningJournalDto,
   ) {
     return {
       success: true,
-      message: 'User memory entry updated by administrator',
-      data: await this.knowledge.updateAdminUserMemory(id, user.id, dto),
+      message: 'AI learning journal entry updated by administrator',
+      data: await this.learningJournal!.update(id, user.id, dto),
     };
   }
 
-  @Delete('user-memories/:id')
-  async deleteUserMemory(
+  @Delete('learning-journal/:id')
+  async deleteLearningJournal(
     @CurrentUser() user: AdminUser,
     @Param('id', ParseIntPipe) id: number,
   ) {
     return {
       success: true,
-      message: 'User memory entry deleted by administrator',
-      data: await this.knowledge.deleteAdminUserMemory(id, user.id),
+      message: 'AI learning journal entry deleted by administrator',
+      data: await this.learningJournal!.delete(id, user.id),
     };
   }
 
