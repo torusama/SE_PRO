@@ -160,10 +160,10 @@ describe('KnowledgeService prompt retrieval', () => {
     expect(context).toContain('Fallback memory for user 5');
   });
 
-  it('pins verified spiritual KB for Bat Trach questions even without embeddings', async () => {
+  it('retrieves spiritual guidance through semantic embeddings without a keyword router', async () => {
     const database = {
       query: jest.fn((sql: string) => {
-        if (sql.includes("category = 'spiritual_consultation'")) {
+        if (sql.includes('WITH candidate_pool') && sql.includes("scope = 'global'")) {
           return [
             {
               id: 80,
@@ -177,19 +177,44 @@ describe('KnowledgeService prompt retrieval', () => {
         return [];
       }),
     };
-    const service = new KnowledgeService(database as never);
+    const embeddings = {
+      isConfigured: jest.fn().mockReturnValue(true),
+      supportsPgVector: jest.fn().mockResolvedValue(true),
+      embed: jest.fn().mockResolvedValue([0.1, 0.2]),
+      vectorLiteral: jest.fn().mockReturnValue('[0.1,0.2]'),
+      embeddingModel: jest.fn().mockReturnValue('test-embedding'),
+      userRetrievalLimit: jest.fn().mockReturnValue(8),
+      globalRetrievalLimit: jest.fn().mockReturnValue(6),
+    };
+    const service = new KnowledgeService(database as never, embeddings as never);
 
     const context = await service.getUserPromptContext(
       5,
-      'tư vấn Bát Trạch hướng mộ',
+      'coi giúp chuyện hướng theo tuổi của người nhà',
     );
 
+    expect(embeddings.embed).toHaveBeenCalledWith(
+      'coi giúp chuyện hướng theo tuổi của người nhà',
+      'query',
+    );
     expect(context).toContain('Bát Trạch xếp hướng');
     expect(
       database.query.mock.calls.some(([sql]) =>
-        String(sql).includes("category = 'spiritual_consultation'"),
+        String(sql).includes('WITH candidate_pool'),
       ),
     ).toBe(true);
+  });
+
+  it('supplies bounded private context for memory questions without keyword-classifying the request', async () => {
+    const { service } = createService();
+
+    const context = await service.getUserPromptContext(
+      5,
+      'm còn giữ lại những ưu tiên nào của tui vậy',
+    );
+
+    expect(context).toContain('<PERSISTENT_USER_CONTEXT>');
+    expect(context).toContain('Only user 5 can retrieve this preference.');
   });
 
   it('returns empty context instead of interrupting chat when database retrieval fails', async () => {

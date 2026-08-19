@@ -759,15 +759,18 @@ export class AiAgentOrchestratorService {
     const lowInformationTurn = llmSemanticRouting
       ? false
       : this.isLowInformationTurn(dto.message);
-    const bareCustomerFeedbackOpening = this.isBareCustomerFeedbackOpening(
-      dto.message,
-    );
-    const directRecoveredCustomerProposal = this.recoverCustomerAdminProposal(
-      dto.message,
-    );
-    const resetPersonalMemoryRequest = this.isResetPersonalMemoryRequest(
-      dto.message,
-    );
+    // Natural-language feedback and memory-reset intent belong to the semantic
+    // LLM in normal operation. Regex recovery remains only for provider-disabled
+    // fallback mode.
+    const bareCustomerFeedbackOpening = llmSemanticRouting
+      ? false
+      : this.isBareCustomerFeedbackOpening(dto.message);
+    const directRecoveredCustomerProposal = llmSemanticRouting
+      ? undefined
+      : this.recoverCustomerAdminProposal(dto.message);
+    const resetPersonalMemoryRequest = llmSemanticRouting
+      ? false
+      : this.isResetPersonalMemoryRequest(dto.message);
     const clearlyOutOfScope = llmSemanticRouting
       ? false
       : this.isClearlyOutOfScope(dto.message);
@@ -810,9 +813,12 @@ export class AiAgentOrchestratorService {
             'history',
           )
         : ([] as PersistedMessage[]);
-    const recoveredCustomerProposal =
-      directRecoveredCustomerProposal ??
-      this.recoverCustomerProposalFollowUp(dto.message, history);
+    const recoveredCustomerProposal = llmSemanticRouting
+      ? undefined
+      : directRecoveredCustomerProposal ??
+        this.recoverCustomerProposalFollowUp(dto.message, history);
+    const memoryResetConfirmationPending =
+      this.hasPendingPersonalMemoryResetConfirmation(history);
     const [
       pendingAction,
       persistentKnowledgeContext,
@@ -1724,6 +1730,7 @@ export class AiAgentOrchestratorService {
             })),
             ownedPlots,
             customerProfile,
+            memoryResetConfirmationPending,
           },
         ));
       plan = resolvePendingBookingReply(plan, pendingAction, dto.message);
@@ -1743,10 +1750,12 @@ export class AiAgentOrchestratorService {
         dto.message,
         plan.intent,
       );
-      // Conservative deterministic backstop: if a clearly worded management
-      // suggestion was present but the semantic planner omitted customerProposal,
-      // persist it rather than silently dropping the user's feedback.
-      plan.customerProposal ??= recoveredCustomerProposal;
+      // In configured semantic mode the LLM owns management-feedback meaning.
+      // The keyword recovery path is reserved for provider-disabled fallback
+      // only, so a regex never overrides or supplements a valid LLM decision.
+      if (!llmSemanticRouting) {
+        plan.customerProposal ??= recoveredCustomerProposal;
+      }
       // Final hard backstop for a standalone Bát Tự request. Even if an LLM
       // planner tries to revive an older plot-shopping goal, the latest user
       // turn wins: analyze Bát Tự only and wait for an explicit opt-in before
@@ -1780,6 +1789,147 @@ export class AiAgentOrchestratorService {
       plan.requirements = requirements;
       intent = plan.intent;
       await saveUserMessage();
+
+      // Personal-memory deletion is semantically recognized by the LLM, but the
+      // destructive side effect remains backend-controlled and requires an
+      // explicit confirmation round-trip recorded in message metadata.
+      if (
+        llmSemanticRouting &&
+        plan.personalMemoryReset &&
+        plan.personalMemoryReset !== 'none'
+      ) {
+        if (plan.personalMemoryReset === 'request') {
+          if (userId === null) {
+            return this.finish({
+              conversation,
+              sessionId,
+              userMessageId,
+              userMessage: dto.message,
+              assistantMessage:
+                'Để xóa bộ nhớ cá nhân của riêng bạn, bạn cần đăng nhập tài khoản trước. Mình chưa xóa dữ liệu nào.',
+              intent: 'general_question',
+              requirements,
+              recommendationResult: null,
+              traceId,
+              fallbackUsed: false,
+              llmModel: this.nvidia.model,
+              skipSuggestedFollowUps: true,
+              learningResults,
+            });
+          }
+          return this.finish({
+            conversation,
+            sessionId,
+            userMessageId,
+            userMessage: dto.message,
+            assistantMessage:
+              'Bạn đang yêu cầu xóa bộ nhớ cá nhân mà AI dùng để cá nhân hóa, gồm các sở thích đã lưu và tóm tắt/ngữ cảnh hội thoại. Việc này không xóa lịch sử chat hiển thị, lô đất, đơn hàng, lịch hẹn, hợp đồng hay giao dịch. Bạn có chắc muốn xóa không?',
+            intent: 'general_question',
+            requirements,
+            recommendationResult: null,
+            quickReplies: [
+              {
+                id: 'confirm-personal-memory-reset',
+                label: 'Xác nhận xóa',
+                message: 'Xác nhận xóa bộ nhớ cá nhân của tôi',
+                emphasis: 'strong',
+              },
+              {
+                id: 'cancel-personal-memory-reset',
+                label: 'Hủy',
+                message: 'Hủy yêu cầu xóa bộ nhớ cá nhân',
+              },
+            ],
+            traceId,
+            fallbackUsed: false,
+            llmModel: this.nvidia.model,
+            skipSuggestedFollowUps: true,
+            pendingPersonalMemoryResetConfirmation: true,
+            learningResults,
+          });
+        }
+
+        if (plan.personalMemoryReset === 'cancel') {
+          return this.finish({
+            conversation,
+            sessionId,
+            userMessageId,
+            userMessage: dto.message,
+            assistantMessage:
+              'Đã hủy yêu cầu xóa bộ nhớ cá nhân. Mình chưa xóa dữ liệu nào.',
+            intent: 'general_question',
+            requirements,
+            recommendationResult: null,
+            traceId,
+            fallbackUsed: false,
+            llmModel: this.nvidia.model,
+            skipSuggestedFollowUps: true,
+            learningResults,
+          });
+        }
+
+        if (plan.personalMemoryReset === 'confirm') {
+          if (!memoryResetConfirmationPending) {
+            return this.finish({
+              conversation,
+              sessionId,
+              userMessageId,
+              userMessage: dto.message,
+              assistantMessage:
+                'Hiện không có yêu cầu xóa bộ nhớ cá nhân nào đang chờ xác nhận, nên mình chưa xóa gì. Nếu bạn muốn xóa, hãy nói rõ yêu cầu đó trước.',
+              intent: 'general_question',
+              requirements,
+              recommendationResult: null,
+              traceId,
+              fallbackUsed: false,
+              llmModel: this.nvidia.model,
+              skipSuggestedFollowUps: true,
+              learningResults,
+            });
+          }
+          if (userId === null) {
+            return this.finish({
+              conversation,
+              sessionId,
+              userMessageId,
+              userMessage: dto.message,
+              assistantMessage:
+                'Bạn cần đăng nhập trước khi mình có thể xóa bộ nhớ cá nhân. Mình chưa xóa dữ liệu nào.',
+              intent: 'general_question',
+              requirements,
+              recommendationResult: null,
+              traceId,
+              fallbackUsed: false,
+              llmModel: this.nvidia.model,
+              skipSuggestedFollowUps: true,
+              learningResults,
+            });
+          }
+          const [preferencesCleared, summariesCleared] = await Promise.all([
+            this.knowledge.clearUserPersonalMemory(userId),
+            this.conversationMemory?.clearUserMemory(userId) ??
+              Promise.resolve(0),
+          ]);
+          return this.finish({
+            conversation,
+            sessionId,
+            userMessageId,
+            userMessage: dto.message,
+            assistantMessage: `Mình đã xóa bộ nhớ cá nhân của bạn: ${preferencesCleared} sở thích/bài học riêng đã lưu và ${summariesCleared} tóm tắt hội thoại. Lịch sử chat hiển thị, lô đất, đơn hàng, lịch hẹn, hợp đồng và giao dịch vẫn giữ nguyên. Từ tin nhắn tiếp theo mình sẽ không dùng ngữ cảnh có trước lần reset này để cá nhân hóa câu trả lời nữa.`,
+            intent: 'general_question',
+            requirements: {},
+            recommendationResult: null,
+            traceId,
+            fallbackUsed: false,
+            llmModel: this.nvidia.model,
+            skipSuggestedFollowUps: true,
+            skipConversationMemorySnapshot: true,
+            memoryResetBoundary: true,
+            learningResults,
+          });
+        }
+      }
+
       // Deterministic recovery is a field-level backstop. Always merge it with
       // planner proposals so one LLM-captured preference does not suppress
       // other explicit preferences from the same customer sentence. The merge
@@ -1801,10 +1951,12 @@ export class AiAgentOrchestratorService {
         plan.memoryProposals,
         this.recoverClientActionLearningProposal(dto.clientAction),
       );
-      plan.memoryProposals = this.filterDurableMemoryProposals(
-        plan.memoryProposals,
-        dto.message,
-      );
+      if (!llmSemanticRouting) {
+        plan.memoryProposals = this.filterDurableMemoryProposals(
+          plan.memoryProposals,
+          dto.message,
+        );
+      }
       customerProposalResult = this.customerProposals
         ? await this.customerProposals.create(plan.customerProposal, {
           conversationId: conversation?.id ?? null,
@@ -2464,6 +2616,7 @@ export class AiAgentOrchestratorService {
       }>;
       ownedPlots?: OwnedPlotContext[] | null;
       customerProfile?: CustomerProfileContext | null;
+      memoryResetConfirmationPending?: boolean;
     },
   ) {
     const messages: NvidiaMessage[] = [
@@ -2476,7 +2629,7 @@ Return one JSON object with these required fields:
 {"intent":"general_question","action":"none","contextMode":"continue","needsClarification":false,"clarificationQuestion":"","directResponse":""}
 Allowed intents: recommend_plots, plot_details, service_suggestions, plot_request, service_booking, purchase_process, bazi_suggestion, plot_competitiveness, customer_care, appointment_booking, memorial_reminder, general_question.
 Allowed actions: rank_plot_options, browse_available_plots, get_plot_details, get_service_suggestions, prepare_plot_request, prepare_service_order, cancel_service_order, confirm_pending_action, cancel_pending_action, get_purchase_process, suggest_bazi_direction, analyze_plot_competitiveness, get_customer_care_overview, prepare_appointment, prepare_memorial_reminder, none.
-Add only relevant optional fields at the top level: budgetMin, budgetMax, numberOfPlots, recommendationCount, comparisonRequested, preferredZone, preferredDirection, plotType, minAreaSqm, maxAreaSqm, needAdjacent, preferNearEntrance, birthDate, birthTime, gender, zodiacSign, consultationGoal, requestType, serviceQuery, serviceQueries, serviceTypeId, serviceOrderId, selectedPlotCode, requestedDate, appointmentDate, appointmentStartTime, appointmentEndTime, appointmentTopic, reminderTitle, reminderDescription, reminderDate, reminderRecurring, reminderCalendarType, reminderNotifyDaysBefore, reminderNotifyEmails, note, memoryProposals, customerProposal.
+Add only relevant optional fields at the top level: budgetMin, budgetMax, numberOfPlots, recommendationCount, comparisonRequested, preferredZone, preferredDirection, plotType, minAreaSqm, maxAreaSqm, needAdjacent, preferNearEntrance, birthDate, birthTime, gender, zodiacSign, consultationGoal, requestType, serviceQuery, serviceQueries, serviceTypeId, serviceOrderId, selectedPlotCode, requestedDate, appointmentDate, appointmentStartTime, appointmentEndTime, appointmentTopic, reminderTitle, reminderDescription, reminderDate, reminderRecurring, reminderCalendarType, reminderNotifyDaysBefore, reminderNotifyEmails, note, memoryProposals, customerProposal, personalMemoryReset.
 For action=none, directResponse is the complete natural Vietnamese answer. For an action that needs authoritative data, directResponse must be empty. Never emit fields with guessed values.
 </OUTPUT_CONTRACT>
 
@@ -2493,6 +2646,8 @@ ${JSON.stringify(
       bookingContext?.ownedPlots === null ? 'unavailable' : 'verified',
     ownedPlots: bookingContext?.ownedPlots ?? null,
     customerProfileForBazi: bookingContext?.customerProfile ?? null,
+    memoryResetConfirmationPending:
+      bookingContext?.memoryResetConfirmationPending === true,
   },
   null,
   2,
@@ -2596,7 +2751,17 @@ Today: ${new Date().toISOString().slice(0, 10)}`,
    * belongs to the LLM router; duplicating it with keyword checks caused valid
    * contextual turns to be rejected before tools could run. */
   private isSemanticallyConsistentPlan(plan: AgentPlan, _userMessage: string) {
-    if (plan.action === 'none' && !plan.directResponse?.trim()) return false;
+    const backendOwnsMemoryResetResponse =
+      plan.personalMemoryReset === 'request' ||
+      plan.personalMemoryReset === 'confirm' ||
+      plan.personalMemoryReset === 'cancel';
+    if (
+      plan.action === 'none' &&
+      !plan.directResponse?.trim() &&
+      !backendOwnsMemoryResetResponse
+    ) {
+      return false;
+    }
     if (plan.action !== 'none' && plan.directResponse?.trim()) return false;
     if (plan.needsClarification && !plan.clarificationQuestion?.trim()) {
       return false;
@@ -4443,6 +4608,7 @@ ${JSON.stringify(options)}
     skipSuggestedFollowUps?: boolean;
     skipConversationMemorySnapshot?: boolean;
     memoryResetBoundary?: boolean;
+    pendingPersonalMemoryResetConfirmation?: boolean;
     learningResults?: AutonomousLearningResult[];
   }) {
     const knowledgeVersion = await this.safeKnowledgeVersion();
@@ -4553,6 +4719,9 @@ ${JSON.stringify(options)}
           {
             agentMetadata: metadata,
             ...(input.memoryResetBoundary ? { memoryResetBoundary: true } : {}),
+            ...(input.pendingPersonalMemoryResetConfirmation
+              ? { pendingPersonalMemoryResetConfirmation: true }
+              : {}),
             recommendations,
             suggestedServices,
             baziSuggestion,
@@ -4609,9 +4778,6 @@ ${JSON.stringify(options)}
             userMessage: reflectionUserMessage,
             assistantMessage,
             intent: input.intent,
-            forceCandidate: (input.learningResults ?? []).some(
-              (result) => result.learningKind === 'conversation_correction',
-            ),
           })
           .catch((error) =>
             this.logger.warn(
@@ -5873,6 +6039,17 @@ ${JSON.stringify(options)}
       /[a-z]/.test(compact) &&
       !/[aeiouy]/.test(compact) &&
       /^[a-z0-9]+$/.test(compact)
+    );
+  }
+
+  private hasPendingPersonalMemoryResetConfirmation(
+    history: PersistedMessage[],
+  ) {
+    const latestAssistant = [...history]
+      .reverse()
+      .find((item) => item.role === 'assistant');
+    return (
+      latestAssistant?.metadata?.pendingPersonalMemoryResetConfirmation === true
     );
   }
 

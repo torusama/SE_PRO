@@ -70,6 +70,12 @@ export const AGENT_PLANNER_TOOL = {
           description:
             'For action=none, write the final natural response to the user here so the backend can answer in one LLM call. Do not claim persistence succeeded; the backend appends trusted memory outcomes separately. Omit or leave empty for tool actions.',
         },
+        personalMemoryReset: {
+          type: 'string',
+          enum: ['none', 'request', 'confirm', 'cancel'],
+          description:
+            'Semantic personal-memory reset state. request = user wants to clear AI personal memory but backend must ask confirmation first; confirm/cancel are valid only when TRUSTED_CONVERSATION_STATE says a reset confirmation is pending. Do not infer this from isolated words.',
+        },
         budgetMin: { type: 'number', minimum: 0 },
         budgetMax: {
           type: 'number',
@@ -357,6 +363,7 @@ export interface AgentPlan {
   needsClarification: boolean;
   clarificationQuestion: string;
   directResponse?: string;
+  personalMemoryReset?: 'none' | 'request' | 'confirm' | 'cancel';
   requirements: AgentRequirements;
   memoryProposals?: MemoryProposal[];
   customerProposal?: CustomerAdminProposal;
@@ -478,11 +485,25 @@ function parseMemoryProposals(value: unknown): MemoryProposal[] | undefined {
     )
       ? (record.memoryKey as (typeof USER_MEMORY_KEYS)[number])
       : undefined;
+    const memoryType = record.memoryType as MemoryProposal['memoryType'];
+    // In configured semantic mode the LLM owns durable-preference meaning.
+    // Backend enforces the structured contract instead of re-reading the user
+    // sentence with keyword rules. A durable user preference therefore needs
+    // an explicit stable memoryKey; private conversation corrections must stay
+    // user-scoped.
+    if (memoryType === 'user_preference' && !memoryKey) continue;
+    if (
+      memoryType === 'conversation_correction' &&
+      record.requestedScope !== 'user'
+    ) {
+      continue;
+    }
+    const proposedPrice = optionalPositiveNumber(record.proposedPrice);
     proposals.push({
       category,
       title,
       content,
-      memoryType: record.memoryType as MemoryProposal['memoryType'],
+      memoryType,
       requestedScope: record.requestedScope,
       memoryKey,
       reason,
@@ -490,6 +511,12 @@ function parseMemoryProposals(value: unknown): MemoryProposal[] | undefined {
       effectiveTo: boundedProposalString(record.effectiveTo, 50),
       selectedOptionId: boundedProposalString(record.selectedOptionId, 100),
       rejectedOptionId: boundedProposalString(record.rejectedOptionId, 100),
+      recommendationRunId: boundedProposalString(record.recommendationRunId, 100),
+      targetPlotCode: boundedProposalString(record.targetPlotCode, 80),
+      proposedPrice:
+        proposedPrice !== undefined && Number.isFinite(proposedPrice)
+          ? proposedPrice
+          : undefined,
     });
   }
   return proposals.length ? proposals : undefined;
@@ -646,6 +673,13 @@ export function parseAgentPlan(raw: string): AgentPlan {
     needsClarification: parsed.needsClarification === true,
     clarificationQuestion: optionalString(parsed.clarificationQuestion) ?? '',
     directResponse: optionalString(parsed.directResponse),
+    personalMemoryReset:
+      parsed.personalMemoryReset === 'request' ||
+      parsed.personalMemoryReset === 'confirm' ||
+      parsed.personalMemoryReset === 'cancel' ||
+      parsed.personalMemoryReset === 'none'
+        ? parsed.personalMemoryReset
+        : undefined,
     requirements: Object.fromEntries(
       Object.entries(requirements).filter(([, value]) => value !== undefined),
     ),

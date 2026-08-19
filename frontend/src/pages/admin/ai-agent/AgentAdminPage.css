@@ -328,7 +328,7 @@
 }
 
 .learning-analytics__metrics.current-state {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .learning-analytics__metric,
@@ -1190,18 +1190,13 @@
 }
 
 .agent-admin__review-queue {
-  overflow: hidden;
-  background: var(--ai-paper);
-  border: 1px solid var(--ai-line);
-  border-radius: 12px;
-}
-
-.agent-admin__review-queue {
   display: grid;
-  background: var(--ai-paper);
-  border: 1px solid var(--ai-line);
-  border-radius: 12px;
-  overflow: hidden;
+  gap: 12px;
+  padding: 12px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
 }
 
 .agent-admin__knowledge-review {
@@ -1210,15 +1205,16 @@
   gap: 24px;
   padding: 20px 22px;
   background: var(--ai-paper);
-  transition: background 150ms ease;
+  border: 1px solid var(--ai-line);
+  border-radius: 10px;
+  transition:
+    background 150ms ease,
+    border-color 150ms ease;
 }
 
 .agent-admin__knowledge-review:hover {
   background: #f8f9fb;
-}
-
-.agent-admin__knowledge-review+.agent-admin__knowledge-review {
-  border-top: 1px solid var(--ai-line-soft);
+  border-color: #c6c9cf;
 }
 
 .agent-admin__knowledge-main {

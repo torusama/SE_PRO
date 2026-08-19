@@ -165,6 +165,9 @@ function setup(withData = true) {
           },
         ];
       }
+      if (sql.includes('WHERE FALSE')) {
+        return [];
+      }
       throw new Error(`Unexpected analytics SQL: ${sql.slice(0, 80)}`);
     }),
   };
@@ -213,10 +216,7 @@ describe('LearningAnalyticsService', () => {
       calls: 40,
     });
     expect(result.runtimeTimeline).toHaveLength(2);
-    expect(result.memoryByKey[0]).toEqual({
-      key: 'preferred_plot_location',
-      count: 8,
-    });
+    expect(result.memoryByKey).toEqual([]);
     expect(result.timeline).toHaveLength(2);
     expect(result.timeline.map((item) => item.aiAccesses)).toEqual([6, 9]);
     const timelineQuery = database.query.mock.calls.find(([sql]) =>

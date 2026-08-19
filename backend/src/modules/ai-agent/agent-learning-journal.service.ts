@@ -157,9 +157,10 @@ export class AgentLearningJournalService {
   }
 
   /**
-   * Review one completed turn and persist a generalized lesson only when the
-   * customer clearly indicates that the assistant misunderstood or did the
-   * wrong thing. Raw chat/user identity is never copied into the journal row.
+   * Semantically review every completed conversational turn in the background.
+   * The LLM decides whether there is a reusable lesson; ordinary successful
+   * turns return NO_LESSON. Raw chat/user identity is never copied into the
+   * journal row.
    */
   async reflectOnTurn(input: {
     conversationId: number;
@@ -167,30 +168,38 @@ export class AgentLearningJournalService {
     userMessage?: string;
     assistantMessage: string;
     intent?: string;
-    forceCandidate?: boolean;
   }) {
     const userMessage = input.userMessage?.trim() ?? '';
-    if (!userMessage || !this.shouldReflect(userMessage, input.forceCandidate)) return;
-    if (!this.llm.isConfigured()) return;
+    if (!userMessage || !this.llm.isConfigured()) return;
 
     try {
+      const transcript = await this.recentTranscript(input.conversationId);
       const response = await this.llm.chat(
         [
           {
             role: 'system',
-            content: `Bạn là bộ phận tự phản tư của một AI tư vấn nghĩa trang. Hãy kiểm tra CHỈ lượt hội thoại được đưa vào. Nếu người dùng không cho thấy trợ lý đã hiểu sai, trả đúng chuỗi NO_LESSON.
-Nếu có lỗi/hiểu sai, trả DUY NHẤT JSON hợp lệ theo mẫu:
+            content: `Bạn là bộ phận tự phản tư của AI tư vấn Vĩnh Phúc Viên. Hãy đánh giá NGỮ NGHĨA của hội thoại gần đây và lượt vừa hoàn tất, không dò từ khóa.
+Mục tiêu là phát hiện một bài học hành vi có thể tái sử dụng khi có bằng chứng rằng trợ lý: hiểu sai ý định, bỏ mất ngữ cảnh, hỏi làm rõ sai chỗ, khẳng định dữ liệu chưa được backend xác nhận, chọn sai workflow, hoặc trả lời/tone khiến người dùng phải sửa lại.
+Nếu KHÔNG có bài học tổng quát đáng lưu, trả đúng chuỗi NO_LESSON.
+Nếu có, trả DUY NHẤT JSON hợp lệ:
 {"title":"...","summary":"...","preventionRule":"...","category":"intent|context|grounding|workflow|tone|conversation"}
 Yêu cầu bắt buộc:
-- Khái quát thành bài học hành vi để tránh lặp lại, không chép nguyên câu chat.
+- Suy luận từ toàn ngữ cảnh, kể cả cách diễn đạt gián tiếp như "ý mình không phải vậy", "m đang đi hướng khác", hoặc việc người dùng phải giải thích lại; không yêu cầu một câu khóa cố định.
+- Chỉ lưu bài học tổng quát có ích cho các cuộc trò chuyện sau. Không chép nguyên câu chat.
 - Không lưu tên, email, số điện thoại, ID người dùng, mã lô, ngày sinh, ngân sách, địa chỉ hoặc dữ liệu nhận dạng/cá nhân.
-- Không biến lời người dùng thành sự thật nghiệp vụ, giá, chính sách hay tri thức toàn cục.
-- preventionRule phải là quy tắc thao tác cụ thể, ví dụ nhận đúng ý định, hỏi làm rõ đúng chỗ, dùng dữ liệu backend, hoặc không tự khẳng định đã lưu khi chưa có kết quả persistence.
+- Không biến một lời góp ý/đàm phán của khách thành sự thật nghiệp vụ, giá, chính sách hay tri thức toàn cục.
+- preventionRule phải là quy tắc hành vi cụ thể; các giao dịch giá/lô/dịch vụ/thanh toán vẫn phải dựa trên backend/template/validation hiện có, không được thay bằng suy đoán LLM.
+- Nếu người dùng chỉ đổi ý bình thường mà trợ lý không làm sai, trả NO_LESSON.
 - Viết tiếng Việt tự nhiên, ngắn gọn.`,
           },
           {
             role: 'user',
-            content: `Ý định hệ thống ghi nhận: ${input.intent ?? 'không xác định'}\nTin nhắn người dùng (chỉ để phân tích, không được chép dữ liệu riêng tư vào bài học): ${userMessage.slice(0, 1600)}\nCâu trả lời trợ lý: ${input.assistantMessage.slice(0, 2200)}`,
+            content: `Ý định hệ thống ghi nhận: ${input.intent ?? 'không xác định'}
+Hội thoại gần đây (chỉ để phân tích, tuyệt đối không chép dữ liệu riêng tư vào bài học):
+${transcript}
+
+Lượt người dùng vừa xử lý: ${userMessage.slice(0, 1600)}
+Câu trả lời trợ lý vừa hoàn tất: ${input.assistantMessage.slice(0, 2200)}`,
           },
         ],
         [],
@@ -218,20 +227,32 @@ Yêu cầu bắt buộc:
     }
   }
 
-  private shouldReflect(message: string, forced?: boolean) {
-    if (forced) return true;
-    const folded = message
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/đ/g, 'd')
-      .replace(/Đ/g, 'D')
-      .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-    return /\b(?:sai roi|sai y|khong phai y|minh noi khong phai|hieu sai|khong hieu|ban hieu sai|tra loi sai|noi sai|lam sai|nham roi|khong dung y|y toi la|toi dang noi|tui dang noi|gop y|phan hoi)\b/.test(
-      folded,
-    );
+  private async recentTranscript(conversationId: number) {
+    try {
+      const rows = await this.database.query<{
+        role: 'user' | 'assistant';
+        content: string | null;
+      }>(
+        `SELECT role, content
+         FROM ai_messages
+         WHERE conversation_id = $1
+           AND role IN ('user', 'assistant')
+           AND content IS NOT NULL
+         ORDER BY created_at DESC, message_id DESC
+         LIMIT 8`,
+        [conversationId],
+      );
+      return rows
+        .reverse()
+        .map(
+          (row) =>
+            `${row.role === 'user' ? 'Khách' : 'Trợ lý'}: ${row.content ?? ''}`,
+        )
+        .join('\n')
+        .slice(-7000);
+    } catch {
+      return '';
+    }
   }
 
   private parseLesson(raw: string): ReflectionLesson | undefined {

@@ -122,6 +122,73 @@ describe('agent planner', () => {
     expect(plan.memoryProposals).toBeUndefined();
   });
 
+  it('requires a stable memory key for semantic durable preferences', () => {
+    const plan = parseAgentPlan(
+      JSON.stringify({
+        intent: 'general_question',
+        action: 'none',
+        contextMode: 'continue',
+        needsClarification: false,
+        clarificationQuestion: '',
+        directResponse: 'Đã hiểu.',
+        memoryProposals: [
+          {
+            category: 'preference',
+            title: 'Durable preference',
+            content: 'Ưu tiên vị trí dễ tiếp cận.',
+            memoryType: 'user_preference',
+            requestedScope: 'user',
+            reason: 'Reusable preference but missing stable key',
+          },
+        ],
+      }),
+    );
+
+    expect(plan.memoryProposals).toBeUndefined();
+  });
+
+  it('keeps private conversation corrections user-scoped', () => {
+    const plan = parseAgentPlan(
+      JSON.stringify({
+        intent: 'general_question',
+        action: 'none',
+        contextMode: 'continue',
+        needsClarification: false,
+        clarificationQuestion: '',
+        directResponse: 'Mình đã hiểu lại ý bạn.',
+        memoryProposals: [
+          {
+            category: 'conversation',
+            title: 'Corrected intent',
+            content: 'Do not resume an older goal when the current goal changed.',
+            memoryType: 'conversation_correction',
+            requestedScope: 'global',
+            reason: 'Prevent repeating a contextual misunderstanding.',
+          },
+        ],
+      }),
+    );
+
+    expect(plan.memoryProposals).toBeUndefined();
+  });
+
+  it('parses semantic personal-memory reset control without inventing an action', () => {
+    const plan = parseAgentPlan(
+      JSON.stringify({
+        intent: 'general_question',
+        action: 'none',
+        contextMode: 'continue',
+        needsClarification: false,
+        clarificationQuestion: '',
+        directResponse: '',
+        personalMemoryReset: 'request',
+      }),
+    );
+
+    expect(plan.personalMemoryReset).toBe('request');
+    expect(plan.action).toBe('none');
+  });
+
   it('exposes only the canonical memory proposal field names and enums', () => {
     const schema = JSON.stringify(AGENT_PLANNER_TOOL);
     expect(schema).toContain('memoryProposals');
