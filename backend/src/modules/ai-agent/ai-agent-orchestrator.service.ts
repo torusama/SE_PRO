@@ -437,7 +437,13 @@ export function asksForPlotCompetitiveness(message: string) {
 
 export function asksForCustomerCare(message: string) {
   const normalized = normalizeFallbackIntent(message);
-  return /(?:customer care|account overview|my (?:requests|orders|appointments|reminders|plots|contracts|transfers|notifications)|tong quan (?:cham soc|tai khoan)|yeu cau cua (?:toi|minh|tui)|don dich vu cua (?:toi|minh|tui)|lich hen cua (?:toi|minh|tui)|nhac lich cua (?:toi|minh|tui)|lo cua (?:toi|minh|tui)|hop dong cua (?:toi|minh|tui)|(?:chuyen nhuong|thua ke|tang cho|yeu cau chuyen) cua (?:toi|minh|tui)|thong bao cua (?:toi|minh|tui))/.test(
+  if (
+    /(?:dich vu|chi phi|gia dich vu)/.test(normalized) &&
+    /(?:cham soc|su dung|co the dung|dung duoc)/.test(normalized)
+  ) {
+    return false;
+  }
+  return /(?:customer care|account overview|my (?:requests|orders|appointments|reminders|plots|contracts|transfers|notifications)|tong quan (?:cham soc|tai khoan)|yeu cau cua (?:toi|minh|tui)|don dich vu cua (?:toi|minh|tui)|lich hen cua (?:toi|minh|tui)|nhac lich cua (?:toi|minh|tui)|lo cua (?:toi|minh|tui)|hop dong cua (?:toi|minh|tui)|(?:chuyen nhuong|thua ke|tang cho|yeu cau chuyen) cua (?:toi|minh|tui)|thong bao cua (?:toi|minh|tui)|(?:toi|minh|tui) co (?:thong bao|lich hen|nhac lich|don dich vu|yeu cau|hop dong|lo) nao)/.test(
     normalized,
   );
 }
@@ -722,22 +728,15 @@ export class AiAgentOrchestratorService {
     // requirement parsing is retained only as an outage fallback; it no longer
     // decides the meaning of a configured AI conversation. Deterministic code
     // below remains responsible for authorization, confirmation and database
-    // state transitions where probabilistic interpretation would be unsafe.
     const llmSemanticRouting = this.shouldUseLlmForSemanticTurns();
-    let directRequirements = llmSemanticRouting
-      ? ({} as AgentRequirements)
-      : this.extractRequirements(dto.message);
+    let directRequirements = this.extractRequirements(dto.message);
     const ambiguousDomainTurn = llmSemanticRouting
       ? null
       : this.buildAmbiguousDomainTurn(dto.message);
-    let directIntent = llmSemanticRouting
-      ? 'general_question'
-      : ambiguousDomainTurn
-        ? 'general_question'
-        : this.detectIntent(dto.message);
-    const directZodiacPlotConsultation = llmSemanticRouting
-      ? null
-      : this.resolveZodiacPlotConsultation(dto.message);
+    let directIntent = this.detectIntent(dto.message);
+    const directZodiacPlotConsultation = this.resolveZodiacPlotConsultation(
+      dto.message,
+    );
     if (directZodiacPlotConsultation) {
       directIntent = 'bazi_suggestion';
       directRequirements = {
@@ -936,15 +935,15 @@ export class AiAgentOrchestratorService {
     // Precedence is intentional: older chat context < persistent active memory
     // < the user's latest explicit message. This means a saved budget/location
     // is automatically reused, while a new value in the current turn wins.
-    const historyRequirements = llmSemanticRouting
-      ? ({} as AgentRequirements)
-      : this.extractRequirementsFromHistory(history);
+    const historyRequirements = this.extractRequirementsFromHistory(history);
     const memoryRequirements = this.requirementsFromPreferences(
       activeUserPreferences,
     );
-    const baziContextActive = llmSemanticRouting
-      ? false
-      : this.isBaziConversationTurn(dto.message, history, directIntent);
+    const baziContextActive = this.isBaziConversationTurn(
+      dto.message,
+      history,
+      directIntent,
+    );
     if (baziContextActive && directIntent === 'general_question') {
       directIntent = 'bazi_suggestion';
     }
@@ -985,23 +984,19 @@ export class AiAgentOrchestratorService {
     ) {
       delete trustedRequirements.consultationGoal;
     }
-    if (!llmSemanticRouting) {
-      trustedRequirements = this.applyNaturalRecommendationDefaults(
-        dto.message,
-        directIntent,
-        trustedRequirements,
-      );
-    }
+    trustedRequirements = this.applyNaturalRecommendationDefaults(
+      dto.message,
+      directIntent,
+      trustedRequirements,
+    );
 
-    const context = llmSemanticRouting
-      ? { requirements: trustedRequirements, intent: 'general_question' }
-      : this.contextualizeClarificationReply(
-          dto.message,
-          history,
-          trustedRequirements,
-          directIntent,
-          baziContextActive,
-        );
+    const context = this.contextualizeClarificationReply(
+      dto.message,
+      history,
+      trustedRequirements,
+      directIntent,
+      baziContextActive,
+    );
     let requirements = context.requirements;
     let intent = context.intent;
     let userMessageId: number | null = null;
@@ -1142,9 +1137,9 @@ export class AiAgentOrchestratorService {
       });
     }
 
-    // A bare domain noun is a topic signal, not authorization to run a search.
-    // Ask one useful question instead of silently reusing old filters and
-    // producing a full recommendation the customer did not request.
+    // When LLM is configured (online mode), all ambiguous topics, social turns,
+    // and domain questions flow to the LLM Planner and Composer to decide
+    // dynamically. The gates below run ONLY when LLM is unavailable (offline fallback).
     if (!llmSemanticRouting && ambiguousDomainTurn && !baziTopicRefinement) {
       await saveUserMessage();
       const assistantMessage = history.length
@@ -1167,10 +1162,6 @@ export class AiAgentOrchestratorService {
       });
     }
 
-    // Short, unambiguous human conversation should feel immediate. It does not
-    // need to consume a main-chat key or wait for provider failover. A greeting
-    // followed by a real domain question does not match this gate and still uses
-    // the semantic planner with the full trusted conversation state.
     if (
       !this.shouldUseLlmForSemanticTurns() &&
       socialTurn &&
@@ -1238,7 +1229,6 @@ export class AiAgentOrchestratorService {
         learningResults,
       });
     }
-
     if (
       !llmSemanticRouting &&
       this.isBasicPlotDetailsQuestion(dto.message, requirements)
@@ -2076,12 +2066,13 @@ export class AiAgentOrchestratorService {
       // This keeps the LLM as the primary conversational decision-maker and avoids
       // a second API request for greetings, memory requests, explanations, casual
       // in-scope chat, and out-of-scope redirects.
-      if (plan.action === 'none' && !plan.needsClarification) {
+      if (plan.action === 'none') {
         const localFallback = await this.buildNoSecondLlmFallback(
           dto.message,
           userId,
         );
         const llmDirectResponse =
+          (plan.needsClarification ? plan.clarificationQuestion : '')?.trim() ||
           plan.directResponse?.trim() ||
           (await this.composeAgentResponse({
             history,
@@ -2109,15 +2100,13 @@ export class AiAgentOrchestratorService {
           sessionId,
           userMessageId,
           assistantMessage: directResponse,
-          intent: plan.intent,
+          intent: plan.needsClarification ? 'clarification' : plan.intent,
           requirements,
           recommendationResult: null,
           quickReplies: this.quickRepliesForConversationalTurn(plan.intent),
           traceId,
           fallbackUsed: false,
-          skipSuggestedFollowUps:
-            plan.intent === 'bazi_suggestion' &&
-            plan.requirements.consultationGoal === 'bazi_then_plots',
+          skipSuggestedFollowUps: true,
           learningResults,
         });
       }
@@ -2376,9 +2365,55 @@ export class AiAgentOrchestratorService {
           },
         );
       }
-      // Chat must always produce a user-facing answer. API/provider failures are
-      // logged in metadata, but never converted into an outage message for the
-      // customer.
+      const fallbackPlan = this.buildDeterministicAgentPlan(
+        dto.message,
+        intent,
+        context.requirements,
+        history,
+      );
+      if (fallbackPlan) {
+        try {
+          const execution = await this.executeAgentPlan({
+            plan: fallbackPlan,
+            conversationId: conversation?.id ?? null,
+            userMessageId,
+            userId,
+            role: userRole,
+            sessionId,
+          });
+          return this.finish({
+            conversation,
+            sessionId,
+            userMessageId,
+            assistantMessage: this.describePlanResult({
+              plan: fallbackPlan,
+              recommendationResult: execution.recommendationResult,
+              suggestedServices: execution.suggestedServices,
+              baziSuggestion: execution.baziSuggestion,
+              toolOutput: execution.toolOutput,
+              ownedPlots: ownedPlots ?? null,
+              userMessage: dto.message,
+              prefix: '',
+            }),
+            intent: fallbackPlan.intent,
+            requirements: fallbackPlan.requirements,
+            recommendationResult: execution.recommendationResult,
+            suggestedServices: execution.suggestedServices,
+            baziSuggestion: execution.baziSuggestion,
+            ownedPlots,
+            traceId,
+            fallbackUsed: true,
+            fallbackReason:
+              error instanceof ServiceUnavailableException
+                ? 'LLM_API_UNAVAILABLE'
+                : 'LLM_AGENT_PLAN_FAILED',
+            llmModel: 'local-authoritative-data',
+            learningResults,
+          });
+        } catch {
+          // continue to ruleBasedFallback below
+        }
+      }
       return this.ruleBasedFallback({
         conversation,
         sessionId,
@@ -2486,6 +2521,13 @@ export class AiAgentOrchestratorService {
       return deterministicPlan('service_booking', 'prepare_service_order');
     }
 
+    if (
+      this.isBasicPlotDetailsQuestion(message, requirements) &&
+      requirements.selectedPlotCode
+    ) {
+      return deterministicPlan('plot_details', 'get_plot_details');
+    }
+
     if (asksForPlotCompetitiveness(message) && requirements.selectedPlotCode) {
       return deterministicPlan(
         'plot_competitiveness',
@@ -2540,7 +2582,13 @@ export class AiAgentOrchestratorService {
         latestAssistantFolded,
       );
 
-    if (!explicitDiscovery && !contextualDiscovery) return null;
+    const isZodiacPlotContinuation =
+      requirements.consultationGoal === 'bazi_then_plots' &&
+      Boolean(requirements.birthDate);
+
+    if (!explicitDiscovery && !contextualDiscovery && !isZodiacPlotContinuation) {
+      return null;
+    }
 
     const normalizedRequirements: AgentRequirements = {
       ...requirements,
@@ -2849,6 +2897,14 @@ Today: ${new Date().toISOString().slice(0, 10)}`,
 
     // A known budget changes only which authoritative recommendation tool is
     // appropriate; it does not reinterpret what the customer meant.
+    if (effectiveIntent === 'recommend_plots' && next.action === 'none') {
+      next.intent = 'recommend_plots';
+      next.action = next.requirements.budgetMax
+        ? 'rank_plot_options'
+        : 'browse_available_plots';
+      next.directResponse = '';
+    }
+
     if (next.intent === 'recommend_plots') {
       if (next.action === 'browse_available_plots' && next.requirements.budgetMax) {
         next.action = 'rank_plot_options';
@@ -4813,7 +4869,7 @@ ${JSON.stringify(options)}
     if (!proposal) return response;
     const base = response.trim();
     if (result?.status === 'stored' || result?.status === 'duplicate') {
-      return `${base}\n\nMình đã ghi nhận góp ý này và chuyển vào mục Đề xuất người dùng để quản trị viên xem xét. Mình không có thẩm quyền tự phê duyệt hoặc tự áp dụng thay đổi; việc ghi nhận không đồng nghĩa đề xuất đã được chấp thuận.`;
+      return `${base}\n\nMình đã ghi nhận và chuyển đề xuất này vào mục Đề xuất người dùng để quản trị viên xem xét. Mình không có thẩm quyền tự phê duyệt hoặc tự áp dụng thay đổi; việc ghi nhận không đồng nghĩa đề xuất đã được chấp thuận.`;
     }
     return `${base}\n\nHiện hệ thống chưa lưu được góp ý này nên mình chưa thể báo là đã chuyển cho quản trị viên. Bạn thử gửi lại giúp mình; mình sẽ chỉ xác nhận đã chuyển khi dữ liệu được lưu thành công.`;
   }
@@ -5080,7 +5136,7 @@ ${JSON.stringify(options)}
       input.directRequirements.birthDate && input.directRequirements.gender,
     );
 
-    if (!requirements.birthTime && !skipsBirthTime && !directlyProvidedCore) {
+    if (!requirements.birthTime && !skipsBirthTime) {
       const knownParts =
         profileDateUsed || profileGenderUsed
           ? `Mình thấy hồ sơ tài khoản có ngày sinh ${this.formatVietnameseDate(requirements.birthDate)} và giới tính ${this.vietnameseGender(requirements.gender)}; bạn không cần nhập lại hai thông tin này.`
@@ -5120,10 +5176,70 @@ ${JSON.stringify(options)}
    * word "dịch vụ" must still reach service consultation, while an explicit
    * proposal for admin review is stored as unverified global knowledge.
    */
-  private recoverExplicitKnowledgeProposal(
+  recoverExplicitKnowledgeProposal(
     message: string,
   ): MemoryProposal[] | undefined {
     const folded = this.foldForMemory(message);
+
+    // 1. Bargaining / price proposal
+    const targetPlotCode = message.match(/\b([A-Z]-\d{1,3}-\d{1,3})\b/i)?.[1]?.toUpperCase();
+    const isBargaining =
+      /\b(?:bot|giam|ha gia|bot gia|thuong luong|re hon)\b/.test(folded) &&
+      /\b(?:con|xuong|tam|duoc khong|duoc ko|di)\b/.test(folded);
+    if (isBargaining) {
+      const proposedPrice = this.extractMoneyAmount(message);
+      if (proposedPrice) {
+        return [
+          {
+            category: 'Thương lượng giá',
+            title: `Đề xuất giá cho lô ${targetPlotCode ?? ''}`.trim(),
+            content: this.redactSensitiveData(message).trim().slice(0, 5000),
+            memoryType: 'price_proposal',
+            requestedScope: 'global',
+            targetPlotCode: targetPlotCode ?? undefined,
+            proposedPrice,
+            reason: 'Khách hàng đề xuất thương lượng mức giá cho lô đất.',
+          },
+        ];
+      }
+    }
+
+    // 2. Conversation misunderstanding / correction
+    const isFactCorrection =
+      /\b(?:noi sai gia|gia sai|thong tin sai|sai thong tin|gia dung phai)\b/.test(
+        folded,
+      );
+    if (isFactCorrection) {
+      return [
+        {
+          category: 'Hiệu chỉnh thông tin nghiệp vụ',
+          title: 'Khách hàng phản ánh thông tin chưa chính xác',
+          content: this.redactSensitiveData(message).trim().slice(0, 5000),
+          memoryType: 'information_correction',
+          requestedScope: 'global',
+          targetPlotCode: targetPlotCode ?? undefined,
+          reason: 'Khách hàng đính chính dữ liệu thực tế để quản trị viên kiểm tra.',
+        },
+      ];
+    }
+    const isMisunderstanding =
+      /\b(?:hieu sai|bat sai|tra loi sai|sai y|khong dung y|khong phai y|cau tra loi vua roi khong dung)\b/.test(
+        folded,
+      );
+    if (isMisunderstanding) {
+      return [
+        {
+          category: 'Sửa lỗi hiểu ngữ cảnh',
+          title: 'Khách hàng phản ánh AI hiểu sai ngữ cảnh',
+          content: this.redactSensitiveData(message).trim().slice(0, 5000),
+          memoryType: 'conversation_correction',
+          requestedScope: 'user',
+          reason: 'Khách hàng điều chỉnh lại ngữ cảnh hội thoại hiện tại.',
+        },
+      ];
+    }
+
+    // 3. FAQ submission
     const isFaqSubmission = /\b(?:faq|cau hoi thuong gap)\b/.test(folded);
     const isContribution =
       /\b(?:dong gop|de xuat|gui|tao|them|nen ghi|nen them|can ghi|can them|nen noi|nen co)\b/.test(
@@ -5139,33 +5255,52 @@ ${JSON.stringify(options)}
       );
 
     if (
-      !isFaqSubmission ||
-      !isContribution ||
-      (!asksForReview && !directFaqEditorialSuggestion)
+      isFaqSubmission &&
+      isContribution &&
+      (asksForReview || directFaqEditorialSuggestion)
     ) {
-      return undefined;
+      const sanitized = this.redactSensitiveData(message).trim().slice(0, 5000);
+      const question =
+        sanitized.match(/:\s*([^?\n]{5,300}\?)/)?.[1]?.trim() ??
+        sanitized.match(/(?:^|\n)\s*([^?\n]{5,300}\?)/)?.[1]?.trim() ??
+        '';
+      const concernsCareService = /\b(?:dich vu|cham soc|mo tu xa)\b/.test(
+        folded,
+      );
+
+      return [
+        {
+          category: concernsCareService ? 'Dịch vụ chăm sóc mộ' : 'FAQ đề xuất',
+          title: question || 'Đề xuất FAQ từ khách hàng',
+          content: sanitized,
+          memoryType: 'faq',
+          requestedScope: 'global',
+          reason:
+            'The customer explicitly submitted this FAQ candidate for administrator review.',
+        },
+      ];
     }
 
-    const sanitized = this.redactSensitiveData(message).trim().slice(0, 5000);
-    const question =
-      sanitized.match(/:\s*([^?\n]{5,300}\?)/)?.[1]?.trim() ??
-      sanitized.match(/(?:^|\n)\s*([^?\n]{5,300}\?)/)?.[1]?.trim() ??
-      '';
-    const concernsCareService = /\b(?:dich vu|cham soc|mo tu xa)\b/.test(
-      folded,
-    );
+    // 4. Consultation feedback / business rule
+    const isConsultationFeedback =
+      !isFaqSubmission &&
+      /\b(?:gop y|y kien|de nghi|de xuat)\b/.test(folded) &&
+      /\b(?:ai|bot|tro ly|no|he thong|app)\b/.test(folded) &&
+      /\b(?:phai|nen|can|dung|dung co)\b/.test(folded);
+    if (isConsultationFeedback) {
+      return [
+        {
+          category: 'Hành vi tư vấn AI',
+          title: 'Góp ý về quy tắc tư vấn AI',
+          content: this.redactSensitiveData(message).trim().slice(0, 5000),
+          memoryType: 'business_rule',
+          requestedScope: 'global',
+          reason: 'Khách hàng đề xuất cải thiện quy tắc xử lý của AI.',
+        },
+      ];
+    }
 
-    return [
-      {
-        category: concernsCareService ? 'Dịch vụ chăm sóc mộ' : 'FAQ đề xuất',
-        title: question || 'Đề xuất FAQ từ khách hàng',
-        content: sanitized,
-        memoryType: 'faq',
-        requestedScope: 'global',
-        reason:
-          'The customer explicitly submitted this FAQ candidate for administrator review.',
-      },
-    ];
+    return undefined;
   }
 
   /**
@@ -7322,7 +7457,11 @@ Hệ thống không còn lựa chọn giữ chỗ riêng. Việc gửi yêu cầ
     let intent = directIntent;
 
     if (baziContextActive) {
-      intent = 'bazi_suggestion';
+      intent =
+        requirements.consultationGoal === 'bazi_then_plots' &&
+        requirements.birthDate
+          ? 'recommend_plots'
+          : 'bazi_suggestion';
       if (!requirements.birthTime) {
         const standaloneBirthTime = extractStandaloneClockTime(message);
         if (standaloneBirthTime) requirements.birthTime = standaloneBirthTime;
@@ -7409,7 +7548,7 @@ Hệ thống không còn lựa chọn giữ chỗ riêng. Việc gửi yêu cầ
       /\b(?:gio sinh|ngay sinh|sinh luc|nam \d{1,2}h|nu \d{1,2}h|\d{1,2}h\d{2}|\d{1,2}:\d{2})\b/.test(folded) ||
       /\b(?:khong biet|khong ro|bo qua|khong co)\b.{0,30}\bgio\b/.test(folded),
     );
-    return awaitingBaziInput && suppliesBaziInput;
+    return suppliesBaziInput;
   }
 
   private isBaziTopicRefinement(message: string, history: PersistedMessage[]) {
@@ -7595,6 +7734,11 @@ Hệ thống không còn lựa chọn giữ chỗ riêng. Việc gửi yêu cầ
           requirements,
           this.extractRequirements(item.content),
         );
+        const zodiac = this.resolveZodiacPlotConsultation(item.content);
+        if (zodiac) {
+          requirements.zodiacSign = zodiac;
+          requirements.consultationGoal = 'bazi_then_plots';
+        }
         continue;
       }
       // Only the MOST RECENT Bát Tự assistant state can carry the multi-turn
@@ -7604,8 +7748,13 @@ Hệ thống không còn lựa chọn giữ chỗ riêng. Việc gửi yêu cầ
         latestBaziState = (item.extractedData ?? {}) as AgentRequirements;
       }
     }
-    if (latestBaziState?.consultationGoal === 'bazi_then_plots') {
-      requirements = this.mergeDefinedRequirements(requirements, latestBaziState);
+    if (
+      latestBaziState?.consultationGoal === 'bazi_then_plots' ||
+      requirements.consultationGoal === 'bazi_then_plots'
+    ) {
+      if (latestBaziState) {
+        requirements = this.mergeDefinedRequirements(requirements, latestBaziState);
+      }
     } else {
       delete requirements.consultationGoal;
     }
@@ -7722,6 +7871,9 @@ Hệ thống không còn lựa chọn giữ chỗ riêng. Việc gửi yêu cầ
     ) {
       return 'general_question';
     }
+    if (this.isBirthProfilePlotConsultation(message)) {
+      return 'bazi_suggestion';
+    }
     if (
       /(tâm linh|phong thủy|phong thuỷ|bát tự|hướng mộ|hướng đất|yếu tố.*hướng)/i.test(
         normalized,
@@ -7743,6 +7895,17 @@ Hệ thống không còn lựa chọn giữ chỗ riêng. Việc gửi yêu cầ
       return 'service_suggestions';
     }
     return 'general_question';
+  }
+
+  isBirthProfilePlotConsultation(message: string) {
+    const folded = this.foldForMemory(message);
+    const hasBirthFact =
+      extractBirthDate(message) !== null ||
+      /\b(?:sinh ngay|sinh nam|nam sinh|ngay sinh|tuoi|nam nu)\b/.test(folded);
+    const asksPlot = /\b(?:chon o lo|nam lo|chon lo|lo nao|huong nao|dat mo|mo phan|chon cat)\b/.test(
+      folded,
+    );
+    return hasBirthFact && asksPlot;
   }
 
   private extractRequirements(message: string): AgentRequirements {
