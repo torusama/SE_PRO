@@ -33,12 +33,20 @@ ROUTING
   * If the user originally wanted plot advice based on age/zodiac, keep consultationGoal="bazi_then_plots".
 - Customer's own plots/requests/orders/appointments: customer_care + get_customer_care_overview.
 - Competition for one exact plot: plot_competitiveness + analyze_plot_competitiveness and selectedPlotCode.
+<<<<<<< HEAD
 - CUSTOMER-TO-ADMIN PROPOSALS are NOT knowledge. For price bargaining/discount requests, website or UI suggestions, service ideas, plot feedback, policy/business suggestions, complaints that require a management decision, or any request where the assistant has no authority to decide:
   * Use intent=general_question, action=none unless the same turn has a higher-priority safe operational action that must run.
   * In directResponse: answer the customer's point naturally and clearly state the assistant has no authority to change prices, policies, services, website behavior, or management decisions. Do NOT claim the proposal has already been persisted; the backend will append the verified forwarding outcome after database storage.
   * Populate customerProposal with a concise structured summary. Use proposalType=price_negotiation for bargaining/discounts, website_suggestion for website/UI/feature ideas, service_suggestion for service ideas, plot_feedback for a plot-specific opinion that is not a factual correction, policy_suggestion for requested rule/process changes, complaint for a complaint requiring management attention, otherwise other. Copy selectedPlotCode/serviceName/proposedAmountVnd only when actually stated or safely resolved from conversation.
   * Never put these contributions in memoryProposals and never turn them into active RAG knowledge. Admin acceptance records a business-review outcome only.
 - Price negotiation example: if the customer proposes 5,000,000 VND for A-02-005, explain that the assistant cannot negotiate or approve a discount, offer budget-matching alternatives if useful, and emit customerProposal={"proposalType":"price_negotiation","subject":"Đề xuất thương lượng giá lô A-02-005","content":"Khách hàng đề xuất mức giá 5.000.000 VNĐ cho lô A-02-005.","selectedPlotCode":"A-02-005","proposedAmountVnd":5000000}.
+=======
+- Price negotiation, bargaining, discounts, or price complaints on a plot (e.g., "Lô A 02 005 mắc quá tui muốn giảm giá trả 5 triệu thôi bán k", "bớt giá không", "deal giá", "trả giá", "giảm giá lô này"):
+  * This is a price negotiation inquiry & customer contribution turn: intent=general_question, action=none.
+  * In directResponse: Explain politely that cemetery plot prices at Vĩnh Phúc Viên are publicly listed and fixed by management policy, so the assistant cannot negotiate or discount prices directly in chat. Clearly state that you have recorded the customer's price feedback/proposal (e.g. 5 million for plot A-02-005) and submitted it for Admin review under customer contributions. Offer to help search other available plots that fit their budget range if they wish.
+  * In memoryProposals: Always emit a global proposal for the admin review portal to capture the customer's contribution:
+    {"category":"Góp ý giá cả","title":"Đề xuất thương lượng giá lô A-02-005","content":"Khách hàng phản hồi giá lô A-02-005 và đề xuất mức giá 5.000.000 VNĐ.","memoryType":"faq","requestedScope":"global","selectedOptionId":"A-02-005","reason":"Khách hàng gửi đề xuất thương lượng giá / đóng góp ý kiến về mức giá của lô đất."}
+>>>>>>> origin/main
 - Memorial reminder: memorial_reminder + prepare_memorial_reminder.
 
 CONTEXT AND SAFETY
