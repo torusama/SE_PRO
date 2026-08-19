@@ -1,7 +1,9 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  Optional,
   Param,
   ParseIntPipe,
   Patch,
@@ -22,6 +24,9 @@ import { AdminAiActivityQueryDto } from './dto/admin-ai-activity-query.dto';
 import { LearningAnalyticsService } from './learning-analytics.service';
 import { KnowledgeService } from './knowledge.service';
 import { ReviewKnowledgeDto } from './dto/review-knowledge.dto';
+import { ManageKnowledgeDto } from './dto/manage-knowledge.dto';
+import { ReviewCustomerProposalDto } from './dto/review-customer-proposal.dto';
+import { CustomerProposalService } from './customer-proposal.service';
 import {
   AdminFeedbackReviewQueryDto,
   AdminKnowledgeReviewQueryDto,
@@ -41,6 +46,7 @@ export class AiAgentAdminController {
     private readonly conversations: ConversationHistoryService,
     private readonly analytics: LearningAnalyticsService,
     private readonly knowledge: KnowledgeService,
+    @Optional() private readonly customerProposals?: CustomerProposalService,
   ) {}
 
   @Get('conversations')
@@ -114,6 +120,43 @@ export class AiAgentAdminController {
     };
   }
 
+  @Post('knowledge')
+  async createKnowledge(
+    @CurrentUser() user: AdminUser,
+    @Body() dto: ManageKnowledgeDto,
+  ) {
+    return {
+      success: true,
+      message: 'Knowledge entry created and activated by administrator',
+      data: await this.knowledge.createAdminKnowledge(user.id, dto),
+    };
+  }
+
+  @Patch('knowledge/:id')
+  async updateKnowledge(
+    @CurrentUser() user: AdminUser,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ManageKnowledgeDto,
+  ) {
+    return {
+      success: true,
+      message: 'Knowledge entry updated and activated by administrator',
+      data: await this.knowledge.updateAdminKnowledge(id, user.id, dto),
+    };
+  }
+
+  @Delete('knowledge/:id')
+  async deleteKnowledge(
+    @CurrentUser() user: AdminUser,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return {
+      success: true,
+      message: 'Knowledge entry deleted by administrator',
+      data: await this.knowledge.deleteAdminKnowledge(id, user.id),
+    };
+  }
+
   @Get('knowledge/:id')
   async getKnowledge(@Param('id', ParseIntPipe) id: number) {
     return {
@@ -151,6 +194,53 @@ export class AiAgentAdminController {
       success: true,
       message: 'AI knowledge proposal rejected',
       data: await this.knowledge.reviewKnowledgeProposal(
+        id,
+        user.id,
+        'reject',
+        dto.reviewNote,
+      ),
+    };
+  }
+
+  @Get('customer-proposals')
+  async listCustomerProposals(@Query('status') status?: string) {
+    return {
+      success: true,
+      message: 'Customer proposals retrieved',
+      data: this.customerProposals
+        ? await this.customerProposals.list(status)
+        : [],
+    };
+  }
+
+  @Patch('customer-proposals/:id/accept')
+  async acceptCustomerProposal(
+    @CurrentUser() user: AdminUser,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ReviewCustomerProposalDto,
+  ) {
+    return {
+      success: true,
+      message: 'Customer proposal accepted for management review',
+      data: await this.customerProposals!.review(
+        id,
+        user.id,
+        'accept',
+        dto.reviewNote,
+      ),
+    };
+  }
+
+  @Patch('customer-proposals/:id/reject')
+  async rejectCustomerProposal(
+    @CurrentUser() user: AdminUser,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ReviewCustomerProposalDto,
+  ) {
+    return {
+      success: true,
+      message: 'Customer proposal rejected',
+      data: await this.customerProposals!.review(
         id,
         user.id,
         'reject',

@@ -7,7 +7,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import type {
   AgentRecommendation,
@@ -90,7 +90,9 @@ function splitBaziPlotNarrative(
     // first returned plot code and move the whole paragraph containing it
     // below the compass.
     const firstPlotCodeIndex = plotCodes
-      .map((plotCode) => content.search(new RegExp(escapeRegExp(plotCode), "iu")))
+      .map((plotCode) =>
+        content.search(new RegExp(escapeRegExp(plotCode), "iu")),
+      )
       .filter((index) => index >= 0)
       .sort((a, b) => a - b)[0];
 
@@ -125,7 +127,7 @@ async function writeClipboard(content: string) {
   textarea.remove();
 }
 
-export default function AgentMessage({
+function AgentMessage({
   message,
   comparedIds,
   busy,
@@ -141,6 +143,7 @@ export default function AgentMessage({
 }: AgentMessageProps) {
   const isAssistant = message.role === "assistant";
   const animated = isAssistant && message.animatePresentation === true;
+  const livePresentationRef = useRef(animated);
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(message.content);
@@ -170,13 +173,15 @@ export default function AgentMessage({
   const messageRef = useRef(message);
   const baziExperienceRef = useRef<HTMLDivElement>(null);
   const baziElementGlyph = baziSuggestion?.element
-    ? ({
-        Kim: "金",
-        Mộc: "木",
-        Thủy: "水",
-        Hỏa: "火",
-        Thổ: "土",
-      } as Record<string, string>)[baziSuggestion.element] || "命"
+    ? (
+        {
+          Kim: "金",
+          Mộc: "木",
+          Thủy: "水",
+          Hỏa: "火",
+          Thổ: "土",
+        } as Record<string, string>
+      )[baziSuggestion.element] || "命"
     : "命";
   // Only count facts that actually render as a badge below, so the grid's
   // column count (--bazi-fact-count) always matches the real number of
@@ -291,7 +296,7 @@ export default function AgentMessage({
 
   return (
     <article
-      className={`agent-message ${isAssistant ? "assistant" : "user"}${baziSuggestion ? " has-bazi" : ""}`}
+      className={`agent-message ${isAssistant ? "assistant" : "user"}${baziSuggestion ? " has-bazi" : ""}${livePresentationRef.current ? " is-live-presentation" : ""}`}
     >
       <div className="agent-message-avatar">
         {isAssistant ? <Bot size={18} /> : <UserRound size={18} />}
@@ -344,7 +349,6 @@ export default function AgentMessage({
         {/* Bazi Phong Thủy Section */}
         {baziSuggestion && presentationComplete && (
           <div className="agent-bazi-experience" ref={baziExperienceRef}>
-
             <div className="agent-bazi-head">
               {/* Invisible spacer the same size as the seal, mirrored on the
                   left. This keeps the title mathematically centered (in
@@ -356,7 +360,9 @@ export default function AgentMessage({
                 aria-hidden="true"
               />
               <div className="agent-bazi-title">
-                <span className="agent-bazi-eyebrow">Phong thủy truyền thống</span>
+                <span className="agent-bazi-eyebrow">
+                  Phong thủy truyền thống
+                </span>
                 <strong>La Bàn Bát Trạch</strong>
                 <span className="agent-bazi-subtitle">
                   Tra cứu hướng âm trạch theo Cung Mệnh &amp; năm sinh
@@ -554,7 +560,9 @@ export default function AgentMessage({
                     }
                   >
                     <strong>Giải thích từng hướng</strong>
-                    <span>Phân tích sao, ý nghĩa và cách dùng khi cân nhắc lô</span>
+                    <span>
+                      Phân tích sao, ý nghĩa và cách dùng khi cân nhắc lô
+                    </span>
                   </button>
                   <button
                     type="button"
@@ -567,7 +575,9 @@ export default function AgentMessage({
                     }
                   >
                     <strong>Ưu tiên tiêu chí thực tế</strong>
-                    <span>Quay về ngân sách, vị trí, diện tích và nhu cầu gia đình</span>
+                    <span>
+                      Quay về ngân sách, vị trí, diện tích và nhu cầu gia đình
+                    </span>
                   </button>
                 </div>
               </div>
@@ -744,3 +754,18 @@ export default function AgentMessage({
     </article>
   );
 }
+
+function sameMessageProps(
+  previous: AgentMessageProps,
+  next: AgentMessageProps,
+) {
+  return (
+    previous.message === next.message &&
+    previous.busy === next.busy &&
+    previous.showFollowUps === next.showFollowUps &&
+    previous.comparedIds.length === next.comparedIds.length &&
+    previous.comparedIds.every((id, index) => id === next.comparedIds[index])
+  );
+}
+
+export default memo(AgentMessage, sameMessageProps);

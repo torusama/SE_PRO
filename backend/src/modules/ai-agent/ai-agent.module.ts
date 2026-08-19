@@ -36,6 +36,7 @@ import { AgentInsightsService } from './agent-insights.service';
 import { ScheduleModule } from '../schedule/schedule.module';
 import { PlotIntroductionService } from './plot-introduction.service';
 import { MemorialEmailDraftService } from './memorial-email-draft.service';
+import { CustomerProposalService } from './customer-proposal.service';
 
 @Module({
   imports: [
@@ -73,6 +74,7 @@ import { MemorialEmailDraftService } from './memorial-email-draft.service';
     AgentInsightsService,
     PlotIntroductionService,
     MemorialEmailDraftService,
+    CustomerProposalService,
   ],
   exports: [AiAgentService, PlotRecommendationService, BaziRuleService],
 })

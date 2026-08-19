@@ -35,6 +35,44 @@ export const envConfig = () => ({
     plotRankerEnabled:
       (process.env.AI_PLOT_RANKER_ENABLED ?? 'false') === 'true',
     retrainMinSamples: Number(process.env.AI_RETRAIN_MIN_SAMPLES) || 20,
+    telemetry: {
+      openaiPrimary: {
+        inputUsdPerMillion:
+          Number(process.env.AI_OPENAI_PRIMARY_INPUT_USD_PER_1M_TOKENS) || 0,
+        outputUsdPerMillion:
+          Number(process.env.AI_OPENAI_PRIMARY_OUTPUT_USD_PER_1M_TOKENS) || 0,
+      },
+      openaiSecondary: {
+        inputUsdPerMillion:
+          Number(process.env.AI_OPENAI_SECONDARY_INPUT_USD_PER_1M_TOKENS) || 0,
+        outputUsdPerMillion:
+          Number(process.env.AI_OPENAI_SECONDARY_OUTPUT_USD_PER_1M_TOKENS) || 0,
+      },
+      nvidia: {
+        inputUsdPerMillion:
+          Number(process.env.AI_NVIDIA_INPUT_USD_PER_1M_TOKENS) || 0,
+        outputUsdPerMillion:
+          Number(process.env.AI_NVIDIA_OUTPUT_USD_PER_1M_TOKENS) || 0,
+      },
+      emailDraft: {
+        inputUsdPerMillion:
+          Number(process.env.AI_EMAIL_DRAFT_INPUT_USD_PER_1M_TOKENS) || 0,
+        outputUsdPerMillion:
+          Number(process.env.AI_EMAIL_DRAFT_OUTPUT_USD_PER_1M_TOKENS) || 0,
+      },
+      comparison: {
+        inputUsdPerMillion:
+          Number(process.env.AI_COMPARISON_INPUT_USD_PER_1M_TOKENS) || 0,
+        outputUsdPerMillion:
+          Number(process.env.AI_COMPARISON_OUTPUT_USD_PER_1M_TOKENS) || 0,
+      },
+      decisionComparison: {
+        inputUsdPerMillion:
+          Number(process.env.AI_DECISION_COMPARISON_INPUT_USD_PER_1M_TOKENS) || 0,
+        outputUsdPerMillion:
+          Number(process.env.AI_DECISION_COMPARISON_OUTPUT_USD_PER_1M_TOKENS) || 0,
+      },
+    },
     router: {
       totalTimeoutMs: Number(process.env.AI_LLM_TOTAL_TIMEOUT_MS) || 10000,
       providerTimeoutMs: Number(process.env.AI_LLM_PROVIDER_TIMEOUT_MS) || 6000,

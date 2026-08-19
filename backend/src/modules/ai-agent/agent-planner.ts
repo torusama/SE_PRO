@@ -199,6 +199,32 @@ export const AGENT_PLANNER_TOOL = {
           items: { type: 'string' },
         },
         note: { type: 'string', maxLength: 1000 },
+        customerProposal: {
+          type: 'object',
+          additionalProperties: false,
+          description:
+            'A customer suggestion, negotiation, complaint or business request that must be forwarded to administrators. This is NOT knowledge and must never be auto-activated in RAG.',
+          properties: {
+            proposalType: {
+              type: 'string',
+              enum: [
+                'price_negotiation',
+                'website_suggestion',
+                'service_suggestion',
+                'plot_feedback',
+                'policy_suggestion',
+                'complaint',
+                'other',
+              ],
+            },
+            subject: { type: 'string', minLength: 1, maxLength: 220 },
+            content: { type: 'string', minLength: 1, maxLength: 5000 },
+            selectedPlotCode: { type: 'string', maxLength: 80 },
+            serviceName: { type: 'string', maxLength: 220 },
+            proposedAmountVnd: { type: 'number', minimum: 0 },
+          },
+          required: ['proposalType', 'subject', 'content'],
+        },
         memoryProposals: {
           type: 'array',
           description:
@@ -298,6 +324,28 @@ export type AgentPlanAction =
   | 'prepare_memorial_reminder'
   | 'none';
 
+export const CUSTOMER_ADMIN_PROPOSAL_TYPES = [
+  'price_negotiation',
+  'website_suggestion',
+  'service_suggestion',
+  'plot_feedback',
+  'policy_suggestion',
+  'complaint',
+  'other',
+] as const;
+
+export type CustomerAdminProposalType =
+  (typeof CUSTOMER_ADMIN_PROPOSAL_TYPES)[number];
+
+export interface CustomerAdminProposal {
+  proposalType: CustomerAdminProposalType;
+  subject: string;
+  content: string;
+  selectedPlotCode?: string;
+  serviceName?: string;
+  proposedAmountVnd?: number;
+}
+
 export interface AgentPlan {
   intent: AgentPlanIntent;
   action: AgentPlanAction;
@@ -307,6 +355,7 @@ export interface AgentPlan {
   directResponse?: string;
   requirements: AgentRequirements;
   memoryProposals?: MemoryProposal[];
+  customerProposal?: CustomerAdminProposal;
 }
 
 const INTENTS = new Set<AgentPlanIntent>([
@@ -366,6 +415,34 @@ function boundedProposalString(
     return undefined;
   }
   return normalized;
+}
+
+function parseCustomerProposal(
+  value: unknown,
+): CustomerAdminProposal | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  if (
+    !CUSTOMER_ADMIN_PROPOSAL_TYPES.includes(
+      record.proposalType as CustomerAdminProposalType,
+    )
+  ) {
+    return undefined;
+  }
+  const subject = boundedProposalString(record.subject, 220);
+  const content = boundedProposalString(record.content, 5000);
+  if (!subject || !content) return undefined;
+  const proposedAmountVnd = optionalPositiveNumber(record.proposedAmountVnd);
+  return {
+    proposalType: record.proposalType as CustomerAdminProposalType,
+    subject,
+    content,
+    selectedPlotCode: boundedProposalString(record.selectedPlotCode, 80),
+    serviceName: boundedProposalString(record.serviceName, 220),
+    proposedAmountVnd,
+  };
 }
 
 function parseMemoryProposals(value: unknown): MemoryProposal[] | undefined {
@@ -549,6 +626,7 @@ export function parseAgentPlan(raw: string): AgentPlan {
   }
 
   const memoryProposals = parseMemoryProposals(parsed.memoryProposals);
+  const customerProposal = parseCustomerProposal(parsed.customerProposal);
 
   return {
     intent: parsed.intent as AgentPlanIntent,
@@ -566,6 +644,7 @@ export function parseAgentPlan(raw: string): AgentPlan {
       Object.entries(requirements).filter(([, value]) => value !== undefined),
     ),
     memoryProposals,
+    customerProposal,
   };
 }
 

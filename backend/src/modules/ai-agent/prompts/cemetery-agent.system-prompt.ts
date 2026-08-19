@@ -1,5 +1,5 @@
 export const CEMETERY_AGENT_PROMPT_VERSION =
-  'cemetery-agent-v20-llm-plot-consultation';
+  'cemetery-agent-v21-semantic-router-admin-proposals';
 
 export const CEMETERY_AGENT_SYSTEM_PROMPT = `
 You are the AI Cemetery Concierge for Vĩnh Phúc Viên.

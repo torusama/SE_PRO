@@ -340,6 +340,109 @@ describe('AI Agent regression routing helpers', () => {
     ]);
   });
 
+  it('routes birth details plus a burial-plot question through Bát Tự without requiring the keyword', () => {
+    const message = 'Mình sinh ngày 12/03/1999, nữ, nên chôn ở lô nào thì hợp?';
+
+    expect(orchestrator.isBirthProfilePlotConsultation(message)).toBe(true);
+    expect(orchestrator.detectIntent(message)).toBe('bazi_suggestion');
+  });
+
+  it('requires an explicit birth-time answer even when date and gender arrive together', () => {
+    const intake = orchestrator.buildBaziIntakeTurn({
+      message: 'Mình sinh ngày 12/03/1999, nữ, nên chôn ở lô nào?',
+      intent: 'bazi_suggestion',
+      requirements: {
+        birthDate: '1999-03-12',
+        gender: 'female',
+        consultationGoal: 'bazi_then_plots',
+      },
+      directRequirements: {
+        birthDate: '1999-03-12',
+        gender: 'female',
+      },
+      customerProfile: null,
+    });
+
+    expect(intake).toMatchObject({
+      assistantMessage: expect.stringContaining('giờ sinh'),
+      requirements: { consultationGoal: 'bazi_then_plots' },
+    });
+  });
+
+  it('turns natural consultation feedback into an admin-review proposal', () => {
+    const proposals = orchestrator.recoverExplicitKnowledgeProposal(
+      'Mình góp ý là AI phải hỏi giờ sinh trước khi tư vấn Bát Tự, chứ đừng tự phân tích luôn.',
+    );
+
+    expect(proposals).toEqual([
+      expect.objectContaining({
+        category: 'Hành vi tư vấn AI',
+        memoryType: 'business_rule',
+        requestedScope: 'global',
+      }),
+    ]);
+
+    expect(
+      orchestrator.recoverExplicitKnowledgeProposal(
+        'Tui góp ý là nó phải hiểu ngày sinh với câu hỏi lô nào là tư vấn Bát Tự và phải hỏi giờ sinh.',
+      ),
+    ).toEqual([expect.objectContaining({ memoryType: 'business_rule' })]);
+  });
+
+  it('keeps a reported conversational misunderstanding out of admin review', () => {
+    const proposals = orchestrator.recoverExplicitKnowledgeProposal(
+      'Bạn hiểu sai ý mình rồi, câu trả lời vừa rồi không đúng; mình đang hỏi lô phù hợp theo ngày sinh.',
+    );
+
+    expect(proposals).toEqual([
+      expect.objectContaining({
+        category: 'Sửa lỗi hiểu ngữ cảnh',
+        memoryType: 'conversation_correction',
+        requestedScope: 'user',
+      }),
+    ]);
+
+    expect(
+      orchestrator.recoverExplicitKnowledgeProposal(
+        'M bắt sai ý tui rồi, m phải hiểu là tui đang góp ý chứ không nhờ coi lô.',
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        memoryType: 'conversation_correction',
+        requestedScope: 'user',
+      }),
+    ]);
+  });
+
+  it('still sends authoritative factual corrections for administrator verification', () => {
+    const proposals = orchestrator.recoverExplicitKnowledgeProposal(
+      'Bạn nói sai giá lô A-01-001 rồi, giá đúng phải là 120 triệu.',
+    );
+
+    expect(proposals).toEqual([
+      expect.objectContaining({
+        category: 'Hiệu chỉnh thông tin nghiệp vụ',
+        memoryType: 'information_correction',
+        requestedScope: 'global',
+      }),
+    ]);
+  });
+
+  it('turns bargaining into a dedicated price proposal with plot and offer details', () => {
+    const proposals = orchestrator.recoverExplicitKnowledgeProposal(
+      'Lô A-01-002 bớt còn 100 triệu được không?',
+    );
+
+    expect(proposals).toEqual([
+      expect.objectContaining({
+        memoryType: 'price_proposal',
+        requestedScope: 'global',
+        targetPlotCode: 'A-01-002',
+        proposedPrice: 100_000_000,
+      }),
+    ]);
+  });
+
   it('records a real recommendation-card selection as analytics without inferring a durable preference', () => {
     const proposals = orchestrator.recoverClientActionLearningProposal({
       type: 'START_PLOT_REQUEST',
@@ -386,9 +489,9 @@ describe('AI Agent regression routing helpers', () => {
   });
 
   it('keeps a standalone Bát Tự request separate from plot discovery', () => {
-    expect(orchestrator.isExplicitBaziOnlyTurn('Tư vấn Bát Tự cho mình thôi.')).toBe(
-      true,
-    );
+    expect(
+      orchestrator.isExplicitBaziOnlyTurn('Tư vấn Bát Tự cho mình thôi.'),
+    ).toBe(true);
     expect(
       orchestrator.isExplicitBaziOnlyTurn(
         'Phân tích Bát Tự rồi lọc lô phù hợp cho mình.',

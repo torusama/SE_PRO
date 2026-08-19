@@ -1,4 +1,7 @@
-import { RecommendationResult } from './types/agent-response.types';
+import {
+  RecommendationOption,
+  RecommendationResult,
+} from './types/agent-response.types';
 
 export function isRecommendationResult(
   value: unknown,
@@ -49,24 +52,59 @@ export function isGroundedRecommendationNarrative(
   return true;
 }
 
+export interface RecommendationNarrativeValidationOptions {
+  /** Default true for backward compatibility with existing deterministic-sized results. */
+  requireEveryOption?: boolean;
+  /** Minimum number of grounded recommendation groups that must be discussed. */
+  minimumOptions?: number;
+  /** Maximum number of grounded recommendation groups that may be discussed. */
+  maximumOptions?: number;
+}
+
+function mentionedRecommendationOptions(
+  content: string,
+  result: RecommendationResult,
+): RecommendationOption[] {
+  return result.recommendations.filter((option) =>
+    option.plotCodes.some((code) => content.includes(code)),
+  );
+}
+
 export function isConsultativeRecommendationNarrative(
   content: string,
   result: RecommendationResult,
+  options: RecommendationNarrativeValidationOptions = {},
 ) {
   if (!isGroundedRecommendationNarrative(content, result)) return false;
   if (!result.recommendations.length) return true;
+
+  const discussedOptions = mentionedRecommendationOptions(content, result);
+  const requireEveryOption = options.requireEveryOption ?? true;
+  if (
+    requireEveryOption &&
+    discussedOptions.length !== result.recommendations.length
+  ) {
+    return false;
+  }
+  if (
+    options.minimumOptions !== undefined &&
+    discussedOptions.length < options.minimumOptions
+  ) {
+    return false;
+  }
+  if (
+    options.maximumOptions !== undefined &&
+    discussedOptions.length > options.maximumOptions
+  ) {
+    return false;
+  }
 
   const wordCount = content.trim().split(/\s+/u).filter(Boolean).length;
   // A concise, grounded answer is preferable to rejecting a useful response
   // and waiting through another large-model timeout. Coverage, trade-off,
   // recommendation and grounding checks below still protect quality.
-  const minimumWords = result.recommendations.length > 1 ? 80 : 55;
+  const minimumWords = discussedOptions.length > 1 ? 80 : 55;
   if (wordCount < minimumWords) return false;
-
-  const coversEveryOption = result.recommendations.every((option) =>
-    option.plotCodes.some((code) => content.includes(code)),
-  );
-  if (!coversEveryOption) return false;
 
   const hasTradeOff =
     /(?:cân\s+nhắc|lưu\s+ý|đổi\s+lại|hạn\s+chế|đánh\s+đổi|cần\s+kiểm\s+tra|trade-?off|consider|however|limitation|verify)/iu.test(
@@ -79,6 +117,72 @@ export function isConsultativeRecommendationNarrative(
   const endsWithQuestion = /\?\s*$/u.test(content);
 
   return hasTradeOff && hasProfessionalRecommendation && endsWithQuestion;
+}
+
+/**
+ * Convert an LLM-written ranking back into an authoritative UI payload. The
+ * model may choose/reorder only options already present in the grounded
+ * candidate result; it can never manufacture a new plot through prose.
+ */
+export function selectRecommendationsFromNarrative(
+  content: string,
+  result: RecommendationResult,
+  desiredCount: number,
+): RecommendationResult | null {
+  if (!Number.isInteger(desiredCount) || desiredCount < 1) return null;
+  if (!isGroundedRecommendationNarrative(content, result)) return null;
+
+  const optionByCode = new Map<string, RecommendationOption>();
+  const canonicalCodes = new Map<string, string>();
+  for (const option of result.recommendations) {
+    for (const code of option.plotCodes) {
+      optionByCode.set(code.toUpperCase(), option);
+      canonicalCodes.set(code.toUpperCase(), code);
+    }
+  }
+
+  const ordered: RecommendationOption[] = [];
+  const seen = new Set<string>();
+  const addCode = (code: string) => {
+    const option = optionByCode.get(code.trim().toUpperCase());
+    if (!option || seen.has(option.optionId)) return;
+    seen.add(option.optionId);
+    ordered.push(option);
+  };
+
+  // The recommendation headings are the clearest statement of the model's
+  // final order. Match against the actual grounded codes rather than assuming
+  // a fixed A-01-001 format so future admin-defined plot codes still work.
+  const upperContent = content.toUpperCase();
+  for (const match of content.matchAll(
+    /^###\s+Phương\s+án\s+\d+\s+[—-]\s+(.+)$/gimu,
+  )) {
+    const headingTail = match[1].trim().toUpperCase();
+    const code = [...canonicalCodes.keys()]
+      .sort((a, b) => b.length - a.length)
+      .find((candidate) => headingTail.startsWith(candidate));
+    if (code) addCode(code);
+  }
+  if (ordered.length < desiredCount) {
+    const mentions = [...canonicalCodes.keys()]
+      .map((code) => ({ code, index: upperContent.indexOf(code) }))
+      .filter((item) => item.index >= 0)
+      .sort((a, b) => a.index - b.index);
+    for (const mention of mentions) {
+      addCode(mention.code);
+      if (ordered.length === desiredCount) break;
+    }
+  }
+
+  if (ordered.length !== desiredCount) return null;
+  return {
+    ...result,
+    requirements: {
+      ...result.requirements,
+      recommendationCount: desiredCount,
+    },
+    recommendations: ordered,
+  };
 }
 
 /**

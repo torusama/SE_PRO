@@ -375,6 +375,38 @@ describe('agent planner', () => {
     });
   });
 
+  it('parses structured plot price proposals for administrator review', () => {
+    const plan = parseAgentPlan(
+      JSON.stringify({
+        intent: 'general_question',
+        action: 'none',
+        contextMode: 'continue',
+        needsClarification: false,
+        clarificationQuestion: '',
+        directResponse: 'Mình ghi nhận mức giá bạn đề xuất.',
+        memoryProposals: [
+          {
+            category: 'Đề xuất thương lượng giá',
+            title: 'Khách đề xuất giá cho lô A-01-002',
+            content: 'Khách đề nghị mức 100 triệu đồng.',
+            memoryType: 'price_proposal',
+            requestedScope: 'global',
+            reason: 'Cần quản trị viên xem xét.',
+            targetPlotCode: 'A-01-002',
+            proposedPrice: 100_000_000,
+          },
+        ],
+      }),
+    );
+
+    expect(plan.memoryProposals?.[0]).toMatchObject({
+      memoryType: 'price_proposal',
+      requestedScope: 'global',
+      targetPlotCode: 'A-01-002',
+      proposedPrice: 100_000_000,
+    });
+  });
+
   it('does not preserve a legacy hold choice from planner output', () => {
     const plan = parseAgentPlan(
       JSON.stringify({

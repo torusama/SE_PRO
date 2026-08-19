@@ -11,9 +11,10 @@ backend/.env.*
 !backend/.env.example
 server/.env
 server/.env.*
-vinh-hang-frontend/.env
-vinh-hang-frontend/.env.*
-!vinh-hang-frontend/.env.example
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+SE_PRO/
 
 # Local uploads (avatars, etc.)
 backend/uploads/

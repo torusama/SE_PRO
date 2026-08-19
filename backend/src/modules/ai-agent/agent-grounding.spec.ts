@@ -2,6 +2,7 @@ import {
   ensureRecommendationParagraphs,
   isConsultativeRecommendationNarrative,
   isGroundedRecommendationNarrative,
+  selectRecommendationsFromNarrative,
 } from './agent-grounding';
 import { RecommendationResult } from './types/agent-response.types';
 
@@ -122,6 +123,56 @@ describe('agent recommendation consultation depth', () => {
     expect(isConsultativeRecommendationNarrative(consultative, result)).toBe(
       true,
     );
+  });
+});
+
+describe('LLM recommendation candidate selection', () => {
+  it('lets an LLM choose a strict grounded subset without requiring every candidate', () => {
+    const consultative = `${'Mình đã cân nhắc kỹ ngân sách, khu vực, diện tích và khả năng tiếp cận của gia đình. '.repeat(10)}
+
+  ### Phương án 1 — B-01-001
+  B-01-001 là phương án mình ưu tiên. Điểm cần cân nhắc là cần kiểm tra vị trí thực tế. Bạn muốn mình mở lô này trên bản đồ?`;
+    expect(
+      isConsultativeRecommendationNarrative(consultative, result, {
+        requireEveryOption: false,
+        minimumOptions: 1,
+        maximumOptions: 1,
+      }),
+    ).toBe(true);
+  });
+
+  it('converts the LLM heading order back into the final grounded recommendation payload', () => {
+    const selected = selectRecommendationsFromNarrative(
+      '### Phương án 1 — B-01-001\nPhân tích.\n\n### Phương án 2 — A-01-001\nPhân tích.',
+      result,
+      2,
+    );
+
+    expect(selected?.recommendations.map((item) => item.optionId)).toEqual([
+      'OPT-002',
+      'OPT-001',
+    ]);
+    expect(selected?.requirements.recommendationCount).toBe(2);
+  });
+
+  it('maps admin-defined plot codes without assuming the legacy A-01-001 shape', () => {
+    const customCodeResult: RecommendationResult = {
+      ...result,
+      recommendations: [
+        {
+          ...result.recommendations[0],
+          optionId: 'OPT-VIP',
+          plotCodes: ['VIP-A1'],
+        },
+      ],
+    };
+    const selected = selectRecommendationsFromNarrative(
+      '### Phương án 1 — VIP-A1\nPhân tích phương án VIP-A1.',
+      customCodeResult,
+      1,
+    );
+
+    expect(selected?.recommendations[0].optionId).toBe('OPT-VIP');
   });
 });
 

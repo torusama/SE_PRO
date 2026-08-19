@@ -191,6 +191,19 @@ export class KnowledgeEmbeddingService implements OnModuleInit {
       : new Error('Embedding API unavailable');
   }
 
+  async invalidateKnowledgeEntry(entryId: number) {
+    if (!(await this.supportsPgVector())) return false;
+    await this.database.query(
+      `UPDATE ai_knowledge_entries
+       SET embedding = NULL,
+           embedding_model = NULL,
+           embedded_at = NULL
+       WHERE knowledge_entry_id = $1`,
+      [entryId],
+    );
+    return true;
+  }
+
   async embedKnowledgeEntry(entryId: number) {
     if (!this.isConfigured() || !(await this.supportsPgVector())) return false;
     const row = await this.database.queryOne<MissingEmbeddingRow>(

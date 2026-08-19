@@ -328,7 +328,7 @@ describe('AutonomousLearningService', () => {
     expect(insert?.[1]?.[14]).toBe(false);
   });
 
-  it('activates and audits a validated rule from the trusted admin role', async () => {
+  it('quarantines trusted-admin chat knowledge until explicit portal review', async () => {
     const { client, service } = setup({
       source:
         'The support team reviews submitted service requests before scheduling.',
@@ -348,12 +348,13 @@ describe('AutonomousLearningService', () => {
       context({ role: 'admin', userId: 9 }),
     );
 
-    expect(result.status).toBe('verified_and_activated');
+    expect(result.status).toBe('stored_for_validation');
     const insert = client.query.mock.calls.find(([sql]) =>
       String(sql).includes('INSERT INTO ai_knowledge_entries'),
     );
-    expect(insert?.[1]?.[7]).toBe('active');
+    expect(insert?.[1]?.[7]).toBe('quarantined');
     expect(insert?.[1]?.[10]).toBe('admin');
+    expect(insert?.[1]?.[14]).toBe(false);
     expect(
       client.query.mock.calls.some(([sql]) =>
         String(sql).includes('INSERT INTO ai_knowledge_versions'),

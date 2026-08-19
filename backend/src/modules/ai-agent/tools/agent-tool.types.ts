@@ -3,6 +3,8 @@ export const MEMORY_TYPES = [
   'business_rule',
   'faq',
   'information_correction',
+  'conversation_correction',
+  'price_proposal',
   'recommendation_feedback',
 ] as const;
 
@@ -20,6 +22,9 @@ export const USER_MEMORY_KEYS = [
   'response_detail_preference',
   'service_interest',
   'consultation_topic_preference',
+  'birth_date',
+  'birth_time',
+  'birth_gender',
 ] as const;
 
 export type UserMemoryKey = (typeof USER_MEMORY_KEYS)[number];
@@ -37,6 +42,8 @@ export interface MemoryProposal {
   selectedOptionId?: string;
   rejectedOptionId?: string;
   recommendationRunId?: string;
+  targetPlotCode?: string;
+  proposedPrice?: number;
 }
 
 export type AutonomousLearningStatus =
@@ -52,8 +59,10 @@ export type AutonomousLearningStatus =
 export interface AutonomousLearningResult {
   status: AutonomousLearningStatus;
   message: string;
+  learningKind?: MemoryType;
   knowledgeEntryId?: number;
   learningSignalId?: number;
+  feedbackId?: number;
 }
 
 export type AgentToolName =

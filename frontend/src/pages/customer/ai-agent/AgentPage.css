@@ -537,7 +537,6 @@
   min-height: 0;
   flex: 1;
   overflow-y: auto;
-  scroll-behavior: smooth;
 }
 
 .agent-message-column {
@@ -651,6 +650,12 @@
   align-items: flex-start;
   gap: 11px;
   margin: 0 0 24px;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 180px;
+}
+
+.agent-message.has-bazi {
+  contain-intrinsic-size: auto 1200px;
 }
 
 .agent-message.user {
@@ -3679,7 +3684,7 @@ button.agent-bazi-followup-item:hover {
   width: 100%;
 }
 
-.agent-message.assistant .agent-message-bubble {
+.agent-message.assistant.is-live-presentation .agent-message-bubble {
   animation: agentAssistantTextReveal 380ms cubic-bezier(.2,.8,.2,1) both;
 }
 
@@ -4531,6 +4536,36 @@ button.agent-bazi-followup-item:hover {
     filter: none !important;
     stroke-dashoffset: 0 !important;
   }
+}
+
+/* History is restored fully formed. Replaying every ceremonial animation in
+   a long conversation causes large paint/layout spikes while scrolling. */
+.agent-message:not(.is-live-presentation) .agent-message-bubble,
+.agent-message:not(.is-live-presentation) .agent-bazi-experience,
+.agent-message:not(.is-live-presentation) .agent-bazi-head,
+.agent-message:not(.is-live-presentation) .agent-bazi-element-seal,
+.agent-message:not(.is-live-presentation) .bazi-compass-container,
+.agent-message:not(.is-live-presentation) .bazi-compass-frame,
+.agent-message:not(.is-live-presentation) .bazi-svg-sector,
+.agent-message:not(.is-live-presentation) .bazi-svg-ring,
+.agent-message:not(.is-live-presentation) .bazi-svg-spoke,
+.agent-message:not(.is-live-presentation) .bazi-svg-label-group,
+.agent-message:not(.is-live-presentation) .bazi-svg-center-layer,
+.agent-message:not(.is-live-presentation) .bazi-compass-legend,
+.agent-message:not(.is-live-presentation) .agent-bazi-grid,
+.agent-message:not(.is-live-presentation) .agent-bazi-analysis,
+.agent-message:not(.is-live-presentation) .agent-bazi-directions-section,
+.agent-message:not(.is-live-presentation) .agent-bazi-relations,
+.agent-message:not(.is-live-presentation) .agent-bazi-followup,
+.agent-message:not(.is-live-presentation) .agent-bazi-disclaimer,
+.agent-message:not(.is-live-presentation) .agent-options,
+.agent-message:not(.is-live-presentation) .agent-services,
+.agent-message:not(.is-live-presentation) .agent-quick-replies {
+  animation: none !important;
+  opacity: 1 !important;
+  transform: none !important;
+  filter: none !important;
+  stroke-dashoffset: 0 !important;
 }
 
 /* ========================================================================== */

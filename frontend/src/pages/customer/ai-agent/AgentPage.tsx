@@ -10,7 +10,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent, KeyboardEvent, MouseEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { ROUTES } from "@/constants/routes";
@@ -183,6 +183,27 @@ const createLocalId = () =>
 
 const getTimestamp = () => Date.now();
 
+function AgentElapsedTimer({ startedAt }: { startedAt: number }) {
+  const [elapsedMs, setElapsedMs] = useState(0);
+
+  useEffect(() => {
+    const updateElapsed = () => setElapsedMs(Date.now() - startedAt);
+    updateElapsed();
+    const timer = window.setInterval(updateElapsed, 100);
+    return () => window.clearInterval(timer);
+  }, [startedAt]);
+
+  return (
+    <span className="agent-composer-timer">
+      {(elapsedMs / 1000).toLocaleString("vi-VN", {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1,
+      })}
+      s
+    </span>
+  );
+}
+
 const comparisonText = (value: unknown, maxLength: number) =>
   String(value ?? "")
     .trim()
@@ -299,7 +320,6 @@ export default function AgentPage() {
     (message) => message.role === "assistant" && message.animatePresentation,
   );
   const isBusy = loading || isPacing;
-  const [elapsedMs, setElapsedMs] = useState(0);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [conversationLoading, setConversationLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -321,12 +341,11 @@ export default function AgentPage() {
     AgentRecommendation[]
   >([]);
   const [activeMapIndex, setActiveMapIndex] = useState(0);
-  const messageEndRef = useRef<HTMLDivElement>(null);
+  const messageScrollRef = useRef<HTMLDivElement>(null);
+  const stickToBottomRef = useRef(true);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const accountIdRef = useRef(user?.id);
-  const knownApprovedRequestNotificationsRef = useRef<Set<number> | null>(
-    null,
-  );
+  const knownApprovedRequestNotificationsRef = useRef<Set<number> | null>(null);
   const requestControllerRef = useRef<AbortController | null>(null);
   const sendLockRef = useRef(false);
   const comparisonAssessmentControllerRef = useRef<AbortController | null>(
@@ -408,8 +427,7 @@ export default function AgentPage() {
       }>;
       const approved = notifications.filter(
         (item) =>
-          item.type === "request_approved" &&
-          typeof item.id === "number",
+          item.type === "request_approved" && typeof item.id === "number",
       );
       const known = knownApprovedRequestNotificationsRef.current;
       let newlyApproved: typeof approved;
@@ -481,11 +499,25 @@ export default function AgentPage() {
     setMapOpen(restoredMap.length > 0);
     setWorkflowDirective(asWorkflowDirective(restoredWorkflow?.uiDirective));
     setSidebarOpen(false);
+    stickToBottomRef.current = true;
   }, []);
 
   useEffect(() => {
-    messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isBusy]);
+    const container = messageScrollRef.current;
+    if (!container || !stickToBottomRef.current) return;
+    const frame = window.requestAnimationFrame(() => {
+      container.scrollTop = container.scrollHeight;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [messages.length, isBusy]);
+
+  const trackMessageScroll = useCallback(() => {
+    const container = messageScrollRef.current;
+    if (!container) return;
+    const distanceFromBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight;
+    stickToBottomRef.current = distanceFromBottom <= 96;
+  }, []);
 
   useEffect(() => {
     if (!sidebarOpen) return;
@@ -497,15 +529,6 @@ export default function AgentPage() {
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [sidebarOpen]);
-
-  useEffect(() => {
-    if (!isBusy) return;
-    const updateElapsed = () =>
-      setElapsedMs(Date.now() - requestStartedAtRef.current);
-    updateElapsed();
-    const timer = window.setInterval(updateElapsed, 100);
-    return () => window.clearInterval(timer);
-  }, [isBusy]);
 
   useEffect(
     () => () => {
@@ -669,7 +692,7 @@ export default function AgentPage() {
     setWorkflowDirective(undefined);
     setInput("");
     setLoading(false);
-    setElapsedMs(0);
+    stickToBottomRef.current = true;
     setError("");
     setNotice("");
     setSidebarOpen(false);
@@ -764,7 +787,7 @@ export default function AgentPage() {
     requestControllerRef.current?.abort();
     requestControllerRef.current = controller;
     requestStartedAtRef.current = getTimestamp();
-    setElapsedMs(0);
+    stickToBottomRef.current = true;
     const clientRequestId = createLocalId();
 
     const userMessage: ChatMessage = {
@@ -1004,6 +1027,11 @@ export default function AgentPage() {
     });
   }
 
+  const comparedIds = useMemo(
+    () => compared.map(getRecommendationCompareKey),
+    [compared],
+  );
+
   return (
     <div
       className={`agent-page ${sidebarOpen ? "sidebar-open" : ""} ${mapOpen ? "map-open" : ""} ${workflowDirective ? "workflow-open" : ""}`}
@@ -1147,7 +1175,11 @@ export default function AgentPage() {
               </div>
             </header>
 
-            <div className="agent-messages">
+            <div
+              className="agent-messages"
+              ref={messageScrollRef}
+              onScroll={trackMessageScroll}
+            >
               <div className="agent-message-column">
                 {messages.length === 0 && !conversationLoading && (
                   <section className="agent-welcome">
@@ -1190,7 +1222,7 @@ export default function AgentPage() {
                   <AgentMessage
                     key={message.localId}
                     message={message}
-                    comparedIds={compared.map(getRecommendationCompareKey)}
+                    comparedIds={comparedIds}
                     busy={isBusy}
                     onToggleCompare={toggleCompare}
                     onViewMap={focusOnMap}
@@ -1247,7 +1279,6 @@ export default function AgentPage() {
                     />
                   </>
                 )}
-                <div ref={messageEndRef} />
               </div>
             </div>
 
@@ -1308,13 +1339,9 @@ export default function AgentPage() {
                     maxLength={2000}
                   />
                   {isBusy && (
-                    <span className="agent-composer-timer">
-                      {(elapsedMs / 1000).toLocaleString("vi-VN", {
-                        minimumFractionDigits: 1,
-                        maximumFractionDigits: 1,
-                      })}
-                      s
-                    </span>
+                    <AgentElapsedTimer
+                      startedAt={requestStartedAtRef.current}
+                    />
                   )}
                   <button
                     type={isBusy ? "button" : "submit"}

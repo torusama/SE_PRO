@@ -11,6 +11,25 @@ function setup(withData = true) {
               usersWithMemory: 5,
               activeGlobalKnowledge: 8,
               quarantinedKnowledge: 3,
+              pendingCustomerProposals: 4,
+            }
+          : null;
+      }
+      if (sql.includes('FROM ai_llm_calls')) {
+        return withData
+          ? {
+              totalCalls: 40,
+              successfulCalls: 36,
+              failedCalls: 4,
+              fallbackResponses: 3,
+              promptTokens: 12000,
+              completionTokens: 6000,
+              totalTokens: 18000,
+              averageLatencyMs: 820,
+              p95LatencyMs: 1400,
+              estimatedCostUsd: 0.0325,
+              unpricedCalls: 2,
+              unmeteredCalls: 1,
             }
           : null;
       }
@@ -50,6 +69,39 @@ function setup(withData = true) {
       }
       if (sql.includes('GROUP BY fallback_reason')) {
         return [{ key: 'disabled', count: 5 }];
+      }
+      if (sql.includes('GROUP BY provider_id, provider_name, model')) {
+        return [
+          {
+            key: 'test-model',
+            providerId: 'openai-primary',
+            calls: 40,
+            failedCalls: 4,
+            totalTokens: 18000,
+            averageLatencyMs: 820,
+            estimatedCostUsd: 0.0325,
+          },
+        ];
+      }
+      if (sql.includes('runtime_events AS')) {
+        return [
+          {
+            date: '2026-07-28',
+            calls: 18,
+            failedCalls: 1,
+            totalTokens: 8000,
+            averageLatencyMs: 760,
+            estimatedCostUsd: 0.014,
+          },
+          {
+            date: '2026-07-29',
+            calls: 22,
+            failedCalls: 3,
+            totalTokens: 10000,
+            averageLatencyMs: 870,
+            estimatedCostUsd: 0.0185,
+          },
+        ];
       }
       if (sql.includes('WITH reporting_days')) {
         return [
@@ -136,6 +188,7 @@ describe('LearningAnalyticsService', () => {
       usersWithMemory: 5,
       activeGlobalKnowledge: 8,
       quarantinedKnowledge: 3,
+      pendingCustomerProposals: 4,
     });
     expect(result.periodActivity).toMatchObject({
       memoryUpdates: 7,
@@ -144,6 +197,22 @@ describe('LearningAnalyticsService', () => {
       fallbackRuns: 5,
       fallbackRate: 25,
     });
+    expect(result.runtime).toMatchObject({
+      totalCalls: 40,
+      failedCalls: 4,
+      fallbackResponses: 3,
+      failureRate: 10,
+      totalTokens: 18000,
+      averageLatencyMs: 820,
+      p95LatencyMs: 1400,
+      estimatedCostUsd: 0.0325,
+    });
+    expect(result.runtimeByModel[0]).toMatchObject({
+      key: 'test-model',
+      providerId: 'openai-primary',
+      calls: 40,
+    });
+    expect(result.runtimeTimeline).toHaveLength(2);
     expect(result.memoryByKey[0]).toEqual({
       key: 'preferred_plot_location',
       count: 8,
@@ -205,6 +274,11 @@ describe('LearningAnalyticsService', () => {
     expect(result.period.days).toBe(30);
     expect(result.currentState.activeUserMemories).toBe(0);
     expect(result.periodActivity.recommendationRuns).toBe(0);
+    expect(result.runtime.totalCalls).toBe(0);
+    expect(result.runtime.totalTokens).toBe(0);
+    expect(result.runtime.fallbackResponses).toBe(0);
+    expect(result.runtimeByModel).toEqual([]);
+    expect(result.runtimeTimeline).toEqual([]);
     expect(result.periodActivity.fallbackRate).toBe(0);
     expect(result.knowledgeByStatus).toEqual([]);
     expect(result.timeline).toEqual([]);

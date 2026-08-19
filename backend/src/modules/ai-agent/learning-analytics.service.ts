@@ -7,6 +7,41 @@ interface CurrentStateRow extends QueryResultRow {
   usersWithMemory: number | string;
   activeGlobalKnowledge: number | string;
   quarantinedKnowledge: number | string;
+  pendingCustomerProposals: number | string;
+}
+
+interface RuntimeRow extends QueryResultRow {
+  totalCalls: number | string;
+  successfulCalls: number | string;
+  failedCalls: number | string;
+  fallbackResponses: number | string;
+  promptTokens: number | string;
+  completionTokens: number | string;
+  totalTokens: number | string;
+  averageLatencyMs: number | string;
+  p95LatencyMs: number | string;
+  estimatedCostUsd: number | string;
+  unpricedCalls: number | string;
+  unmeteredCalls: number | string;
+}
+
+interface RuntimeModelRow extends QueryResultRow {
+  key: string;
+  providerId: string;
+  calls: number | string;
+  failedCalls: number | string;
+  totalTokens: number | string;
+  averageLatencyMs: number | string;
+  estimatedCostUsd: number | string;
+}
+
+interface RuntimeTimelineRow extends QueryResultRow {
+  date: string;
+  calls: number | string;
+  failedCalls: number | string;
+  totalTokens: number | string;
+  averageLatencyMs: number | string;
+  estimatedCostUsd: number | string;
 }
 
 interface ActivityRow extends QueryResultRow {
@@ -72,7 +107,40 @@ export interface LearningAnalyticsDashboard {
     usersWithMemory: number;
     activeGlobalKnowledge: number;
     quarantinedKnowledge: number;
+    pendingCustomerProposals: number;
   };
+  runtime: {
+    totalCalls: number;
+    successfulCalls: number;
+    failedCalls: number;
+    fallbackResponses: number;
+    failureRate: number;
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    averageLatencyMs: number;
+    p95LatencyMs: number;
+    estimatedCostUsd: number;
+    unpricedCalls: number;
+    unmeteredCalls: number;
+  };
+  runtimeByModel: Array<{
+    key: string;
+    providerId: string;
+    calls: number;
+    failedCalls: number;
+    totalTokens: number;
+    averageLatencyMs: number;
+    estimatedCostUsd: number;
+  }>;
+  runtimeTimeline: Array<{
+    date: string;
+    calls: number;
+    failedCalls: number;
+    totalTokens: number;
+    averageLatencyMs: number;
+    estimatedCostUsd: number;
+  }>;
   periodActivity: {
     memoryUpdates: number;
     globalKnowledgeUpdates: number;
@@ -139,6 +207,9 @@ export class LearningAnalyticsService {
       timeline,
       recentUpdates,
       recentEvents,
+      runtime,
+      runtimeByModel,
+      runtimeTimeline,
     ] = await Promise.all([
       this.database.queryOne<CurrentStateRow>(
         `SELECT
@@ -166,7 +237,12 @@ export class LearningAnalyticsService {
            COUNT(*) FILTER (
              WHERE scope = 'global'
                AND validation_status = 'quarantined'
-           )::int AS "quarantinedKnowledge"
+           )::int AS "quarantinedKnowledge",
+           (
+             SELECT COUNT(*)::int
+             FROM ai_customer_proposals
+             WHERE status = 'pending'
+           ) AS "pendingCustomerProposals"
          FROM ai_knowledge_entries`,
       ),
       this.database.queryOne<ActivityRow>(
@@ -351,22 +427,41 @@ export class LearningAnalyticsService {
            SELECT
              'knowledge-' || v.version_id::text AS "eventId",
              CASE
-               WHEN COALESCE(e.scope, v.new_value->>'scope') = 'user'
+               WHEN COALESCE(e.scope, v.new_value->>'scope', v.old_value->>'scope') = 'user'
                  THEN 'user_memory'
                ELSE 'global_knowledge'
              END AS "eventType",
              COALESCE(v.action_type, 'updated') AS "actionType",
              CASE
-               WHEN COALESCE(e.scope, v.new_value->>'scope') = 'user'
-                 THEN COALESCE(e.memory_key, v.new_value->>'memoryKey', 'user_preference')
-               ELSE COALESCE(e.title, v.new_value->>'title', e.knowledge_type, 'global_knowledge')
+               WHEN COALESCE(e.scope, v.new_value->>'scope', v.old_value->>'scope') = 'user'
+                 THEN COALESCE(
+                   e.memory_key,
+                   v.new_value->>'memoryKey',
+                   v.old_value->>'memoryKey',
+                   'user_preference'
+                 )
+               ELSE COALESCE(
+                 e.title,
+                 v.new_value->>'title',
+                 v.old_value->>'title',
+                 e.knowledge_type,
+                 'global_knowledge'
+               )
              END AS subject,
-             COALESCE(e.validation_status, v.new_value->>'validationStatus', 'unknown') AS status,
+             CASE
+               WHEN v.action_type = 'deleted' THEN 'deleted'
+               ELSE COALESCE(
+                 e.validation_status,
+                 v.new_value->>'validationStatus',
+                 v.old_value->>'validationStatus',
+                 'unknown'
+               )
+             END AS status,
              COALESCE(v.actor_role, 'system') AS source,
              CASE
-               WHEN COALESCE(e.scope, v.new_value->>'scope') = 'user'
+               WHEN COALESCE(e.scope, v.new_value->>'scope', v.old_value->>'scope') = 'user'
                  THEN NULL
-               ELSE v.validation_reason
+               ELSE COALESCE(v.validation_reason, v.change_reason)
              END AS detail,
              NULL::text AS "modelVersion",
              v.created_at AS "createdAt"
@@ -439,6 +534,87 @@ export class LearningAnalyticsService {
          LIMIT 30`,
         [days],
       ),
+      this.database.queryOne<RuntimeRow>(
+        `SELECT
+           COUNT(*)::int AS "totalCalls",
+           COUNT(*) FILTER (WHERE status = 'success')::int AS "successfulCalls",
+           COUNT(*) FILTER (WHERE status = 'failed')::int AS "failedCalls",
+           (
+             SELECT COUNT(*)::int
+             FROM ai_messages m
+             WHERE m.role = 'assistant'
+               AND COALESCE(
+                 m.metadata -> 'agentMetadata' ->> 'fallbackUsed',
+                 'false'
+               ) = 'true'
+               AND m.created_at >= CURRENT_DATE - ($1::int - 1)
+           ) AS "fallbackResponses",
+           COALESCE(SUM(prompt_tokens), 0)::bigint AS "promptTokens",
+           COALESCE(SUM(completion_tokens), 0)::bigint AS "completionTokens",
+           COALESCE(SUM(total_tokens), 0)::bigint AS "totalTokens",
+           COALESCE(ROUND(AVG(latency_ms)), 0)::int AS "averageLatencyMs",
+           COALESCE(ROUND((percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms))::numeric), 0)::int AS "p95LatencyMs",
+           COALESCE(SUM(estimated_cost_usd), 0)::numeric AS "estimatedCostUsd",
+           COUNT(*) FILTER (
+             WHERE status = 'success'
+               AND total_tokens IS NOT NULL
+               AND estimated_cost_usd IS NULL
+           )::int AS "unpricedCalls",
+           COUNT(*) FILTER (
+             WHERE status = 'success'
+               AND total_tokens IS NULL
+           )::int AS "unmeteredCalls"
+         FROM ai_llm_calls
+         WHERE created_at >= CURRENT_DATE - ($1::int - 1)`,
+        [days],
+      ),
+      this.database.query<RuntimeModelRow>(
+        `SELECT
+           COALESCE(NULLIF(model, ''), provider_name) AS key,
+           provider_id AS "providerId",
+           COUNT(*)::int AS calls,
+           COUNT(*) FILTER (WHERE status = 'failed')::int AS "failedCalls",
+           COALESCE(SUM(total_tokens), 0)::bigint AS "totalTokens",
+           COALESCE(ROUND(AVG(latency_ms)), 0)::int AS "averageLatencyMs",
+           COALESCE(SUM(estimated_cost_usd), 0)::numeric AS "estimatedCostUsd"
+         FROM ai_llm_calls
+         WHERE created_at >= CURRENT_DATE - ($1::int - 1)
+         GROUP BY provider_id, provider_name, model
+         ORDER BY calls DESC, key
+         LIMIT 10`,
+        [days],
+      ),
+      this.database.query<RuntimeTimelineRow>(
+        `WITH reporting_days AS (
+           SELECT generate_series(
+             CURRENT_DATE - ($1::int - 1),
+             CURRENT_DATE,
+             INTERVAL '1 day'
+           )::date AS day
+         ), runtime_events AS (
+           SELECT
+             created_at::date AS day,
+             COUNT(*)::int AS calls,
+             COUNT(*) FILTER (WHERE status = 'failed')::int AS failed_calls,
+             COALESCE(SUM(total_tokens), 0)::bigint AS total_tokens,
+             COALESCE(ROUND(AVG(latency_ms)), 0)::int AS average_latency_ms,
+             COALESCE(SUM(estimated_cost_usd), 0)::numeric AS estimated_cost_usd
+           FROM ai_llm_calls
+           WHERE created_at >= CURRENT_DATE - ($1::int - 1)
+           GROUP BY created_at::date
+         )
+         SELECT
+           TO_CHAR(d.day, 'YYYY-MM-DD') AS date,
+           COALESCE(e.calls, 0)::int AS calls,
+           COALESCE(e.failed_calls, 0)::int AS "failedCalls",
+           COALESCE(e.total_tokens, 0)::bigint AS "totalTokens",
+           COALESCE(e.average_latency_ms, 0)::int AS "averageLatencyMs",
+           COALESCE(e.estimated_cost_usd, 0)::numeric AS "estimatedCostUsd"
+         FROM reporting_days d
+         LEFT JOIN runtime_events e ON e.day = d.day
+         ORDER BY d.day`,
+        [days],
+      ),
     ]);
 
     const rankedRecommendationRuns = this.number(
@@ -461,7 +637,51 @@ export class LearningAnalyticsService {
         usersWithMemory: this.number(currentState?.usersWithMemory),
         activeGlobalKnowledge: this.number(currentState?.activeGlobalKnowledge),
         quarantinedKnowledge: this.number(currentState?.quarantinedKnowledge),
+        pendingCustomerProposals: this.number(
+          currentState?.pendingCustomerProposals,
+        ),
       },
+      runtime: {
+        totalCalls: this.number(runtime?.totalCalls),
+        successfulCalls: this.number(runtime?.successfulCalls),
+        failedCalls: this.number(runtime?.failedCalls),
+        fallbackResponses: this.number(runtime?.fallbackResponses),
+        failureRate:
+          this.number(runtime?.totalCalls) > 0
+            ? Number(
+                (
+                  (this.number(runtime?.failedCalls) /
+                    this.number(runtime?.totalCalls)) *
+                  100
+                ).toFixed(1),
+              )
+            : 0,
+        promptTokens: this.number(runtime?.promptTokens),
+        completionTokens: this.number(runtime?.completionTokens),
+        totalTokens: this.number(runtime?.totalTokens),
+        averageLatencyMs: this.number(runtime?.averageLatencyMs),
+        p95LatencyMs: this.number(runtime?.p95LatencyMs),
+        estimatedCostUsd: this.number(runtime?.estimatedCostUsd),
+        unpricedCalls: this.number(runtime?.unpricedCalls),
+        unmeteredCalls: this.number(runtime?.unmeteredCalls),
+      },
+      runtimeByModel: runtimeByModel.map((row) => ({
+        key: row.key,
+        providerId: row.providerId,
+        calls: this.number(row.calls),
+        failedCalls: this.number(row.failedCalls),
+        totalTokens: this.number(row.totalTokens),
+        averageLatencyMs: this.number(row.averageLatencyMs),
+        estimatedCostUsd: this.number(row.estimatedCostUsd),
+      })),
+      runtimeTimeline: runtimeTimeline.map((row) => ({
+        date: row.date,
+        calls: this.number(row.calls),
+        failedCalls: this.number(row.failedCalls),
+        totalTokens: this.number(row.totalTokens),
+        averageLatencyMs: this.number(row.averageLatencyMs),
+        estimatedCostUsd: this.number(row.estimatedCostUsd),
+      })),
       periodActivity: {
         memoryUpdates: this.number(activity?.memoryUpdates),
         globalKnowledgeUpdates: this.number(activity?.globalKnowledgeUpdates),

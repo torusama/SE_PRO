@@ -265,6 +265,62 @@ describe('EmailDraftAiService', () => {
     jest.resetAllMocks();
   });
 
+  it('records direct dedicated-model tokens, latency and configured cost without double counting router calls', async () => {
+    const configService = new ConfigService();
+    jest.spyOn(configService, 'get').mockImplementation((key: string) => {
+      if (key === 'ai.enableLlm') return true;
+      if (key === 'ai.emailDraft.apiKeys') return 'email-key-1';
+      if (key === 'ai.emailDraft.baseUrl')
+        return 'https://integrate.api.nvidia.com/v1';
+      if (key === 'ai.emailDraft.model') return 'openai/gpt-oss-20b';
+      if (key === 'ai.telemetry.emailDraft.inputUsdPerMillion') return 1;
+      if (key === 'ai.telemetry.emailDraft.outputUsdPerMillion') return 2;
+      return undefined;
+    });
+    const database = { query: jest.fn().mockResolvedValue({ rows: [] }) };
+    const service = new EmailDraftAiService(configService, database as never);
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        model: 'openai/gpt-oss-20b',
+        usage: {
+          prompt_tokens: 100,
+          completion_tokens: 50,
+          total_tokens: 150,
+        },
+        choices: [{ message: { role: 'assistant', content: 'Email draft' } }],
+      }),
+    }) as jest.Mock;
+
+    await service.chat([{ role: 'user', content: 'Draft email' }]);
+    await Promise.resolve();
+
+    expect(database.query).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO ai_llm_calls'),
+      expect.arrayContaining([
+        'email-draft',
+        'EmailDraftAiService',
+        'openai/gpt-oss-20b',
+        'success',
+        100,
+        50,
+        150,
+        0.0002,
+      ]),
+    );
+
+    database.query.mockClear();
+    await service.chat(
+      [{ role: 'user', content: 'Router-owned call' }],
+      [],
+      'auto',
+      { skipRuntimeTelemetry: true },
+    );
+    await Promise.resolve();
+    expect(database.query).not.toHaveBeenCalled();
+  });
+
   it('uses only the dedicated email key namespace and rotates after a rate limit', async () => {
     const configService = new ConfigService();
     jest.spyOn(configService, 'get').mockImplementation((key: string) => {

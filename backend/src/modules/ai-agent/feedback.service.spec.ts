@@ -119,7 +119,6 @@ describe('FeedbackService learning review', () => {
     expect(knowledge.applyApprovedCorrection).toHaveBeenCalledWith(7, 9);
   });
 
-
   it('restores feedback to pending when applying an approved correction fails', async () => {
     const { client, database, knowledge, service } = createService();
     client.query
@@ -179,11 +178,42 @@ describe('FeedbackService learning review', () => {
     expect(knowledge.applyApprovedCorrection).not.toHaveBeenCalled();
   });
 
+  it('never applies an approved price proposal as knowledge', async () => {
+    const { client, knowledge, service } = createService();
+    client.query
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            feedback_type: 'price_proposal',
+            validation_status: 'pending',
+            corrected_content: 'Khách đề nghị 100.000.000 VND',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [{ feedbackId: 7, status: 'approved' }],
+      });
+
+    await expect(
+      service.review(7, 9, 'approve', {
+        reviewNote: 'Đã ghi nhận để xử lý theo quy trình giá',
+        applyCorrection: true,
+      }),
+    ).resolves.toMatchObject({
+      feedbackId: 7,
+      status: 'approved',
+      feedbackType: 'price_proposal',
+    });
+    expect(knowledge.applyApprovedCorrection).not.toHaveBeenCalled();
+  });
+
   it('blocks missing or already-reviewed feedback before any update', async () => {
     const missing = createService();
     missing.client.query.mockResolvedValueOnce({ rows: [] });
     await expect(
-      missing.service.review(404, 9, 'approve', { reviewNote: 'Note for testing' }),
+      missing.service.review(404, 9, 'approve', {
+        reviewNote: 'Note for testing',
+      }),
     ).rejects.toBeInstanceOf(NotFoundException);
     expect(missing.client.query).toHaveBeenCalledTimes(1);
 
@@ -198,7 +228,9 @@ describe('FeedbackService learning review', () => {
       ],
     });
     await expect(
-      reviewed.service.review(7, 9, 'reject', { reviewNote: 'Note for testing' }),
+      reviewed.service.review(7, 9, 'reject', {
+        reviewNote: 'Note for testing',
+      }),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(reviewed.client.query).toHaveBeenCalledTimes(1);
   });

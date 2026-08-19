@@ -1,9 +1,11 @@
 import {
   Injectable,
   Logger,
+  Optional,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { DatabaseService } from '../../database/database.service';
 import { NvidiaChatResponse, NvidiaMessage } from './types/nvidia.types';
 
 class OpenAiHttpError extends Error {
@@ -34,6 +36,8 @@ type LlmCallOptions = {
   validateResponse?: (response: NvidiaChatResponse) => boolean;
   preferredProviderId?: string;
   strictPreferredProvider?: boolean;
+  /** Internal: MultiProviderLlmService records the provider attempt itself. */
+  skipRuntimeTelemetry?: boolean;
 };
 
 interface KeyCandidate {
@@ -52,7 +56,10 @@ export class OpenAiService {
   >();
   private rotationCursor = 0;
 
-  constructor(protected readonly config: ConfigService) {
+  constructor(
+    protected readonly config: ConfigService,
+    @Optional() private readonly database?: DatabaseService,
+  ) {
     this.logger = new Logger(this.constructor.name);
   }
 
@@ -79,6 +86,7 @@ export class OpenAiService {
     toolChoice: unknown = 'auto',
     options: LlmCallOptions = {},
   ): Promise<NvidiaChatResponse> {
+    const runtimeStartedAt = Date.now();
     const apiKeys = this.getConfiguredApiKeys();
     if (
       this.config.get<boolean>('ai.enableLlm') === false ||
@@ -133,9 +141,17 @@ export class OpenAiService {
       options.routingKey,
     );
     if (!candidates.length) {
-      throw new ServiceUnavailableException(
+      const error = new ServiceUnavailableException(
         `All OpenAI API keys are temporarily cooling down for provider (${this.configPrefix})`,
       );
+      this.recordRuntimeMetric({
+        routingKey: options.routingKey,
+        latencyMs: Date.now() - runtimeStartedAt,
+        status: 'failed',
+        error,
+        skip: options.skipRuntimeTelemetry,
+      });
+      throw error;
     }
 
     const deadline = Date.now() + totalTimeoutMs;
@@ -184,6 +200,13 @@ export class OpenAiService {
           throw new EmptyOpenAiResponseError();
         }
         this.rememberAffinity(options.routingKey, candidate.apiKey);
+        this.recordRuntimeMetric({
+          result: payload,
+          routingKey: options.routingKey,
+          latencyMs: Date.now() - runtimeStartedAt,
+          status: 'success',
+          skip: options.skipRuntimeTelemetry,
+        });
         return payload;
       } catch (error) {
         lastError = error;
@@ -219,23 +242,184 @@ export class OpenAiService {
           }
         }
 
-        if (error instanceof ServiceUnavailableException) throw error;
+        if (error instanceof ServiceUnavailableException) {
+          this.recordRuntimeMetric({
+            routingKey: options.routingKey,
+            latencyMs: Date.now() - runtimeStartedAt,
+            status: 'failed',
+            error,
+            skip: options.skipRuntimeTelemetry,
+          });
+          throw error;
+        }
         if (error instanceof OpenAiHttpError) {
-          throw new ServiceUnavailableException(
+          const terminalError = new ServiceUnavailableException(
             `OpenAI API unavailable (HTTP ${error.status})`,
           );
+          this.recordRuntimeMetric({
+            routingKey: options.routingKey,
+            latencyMs: Date.now() - runtimeStartedAt,
+            status: 'failed',
+            error: terminalError,
+            skip: options.skipRuntimeTelemetry,
+          });
+          throw terminalError;
         }
-        throw new ServiceUnavailableException('OpenAI API unavailable');
+        const terminalError = new ServiceUnavailableException(
+          'OpenAI API unavailable',
+        );
+        this.recordRuntimeMetric({
+          routingKey: options.routingKey,
+          latencyMs: Date.now() - runtimeStartedAt,
+          status: 'failed',
+          error: terminalError,
+          skip: options.skipRuntimeTelemetry,
+        });
+        throw terminalError;
       } finally {
         clearTimeout(timer);
       }
     }
 
-    throw new ServiceUnavailableException(
+    const terminalError = new ServiceUnavailableException(
       lastError instanceof OpenAiHttpError
         ? `OpenAI API unavailable (HTTP ${lastError.status})`
         : 'OpenAI API unavailable',
     );
+    this.recordRuntimeMetric({
+      routingKey: options.routingKey,
+      latencyMs: Date.now() - runtimeStartedAt,
+      status: 'failed',
+      error: terminalError,
+      skip: options.skipRuntimeTelemetry,
+    });
+    throw terminalError;
+  }
+
+  private recordRuntimeMetric(input: {
+    result?: NvidiaChatResponse;
+    routingKey?: string;
+    latencyMs: number;
+    status: 'success' | 'failed';
+    error?: unknown;
+    skip?: boolean;
+  }) {
+    if (input.skip || !this.database) return;
+    const usage = input.result?.usage;
+    const promptTokens = this.nonNegativeInteger(
+      usage?.prompt_tokens ?? usage?.promptTokens,
+    );
+    const completionTokens = this.nonNegativeInteger(
+      usage?.completion_tokens ?? usage?.completionTokens,
+    );
+    const totalTokens =
+      this.nonNegativeInteger(usage?.total_tokens ?? usage?.totalTokens) ??
+      (promptTokens !== undefined && completionTokens !== undefined
+        ? promptTokens + completionTokens
+        : undefined);
+    const errorMessage =
+      input.error instanceof Error
+        ? input.error.message.slice(0, 1200)
+        : input.error
+          ? String(input.error).slice(0, 1200)
+          : null;
+    const errorType =
+      input.error instanceof Error ? input.error.name.slice(0, 100) : null;
+
+    void this.database
+      .query(
+        `INSERT INTO ai_llm_calls
+           (routing_key, provider_id, provider_name, model, status,
+            prompt_tokens, completion_tokens, total_tokens, estimated_cost_usd,
+            latency_ms, error_type, error_message)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+        [
+          input.routingKey?.slice(0, 180) ?? null,
+          this.telemetryProviderId(),
+          this.constructor.name,
+          input.result?.model ?? this.model,
+          input.status,
+          promptTokens ?? null,
+          completionTokens ?? null,
+          totalTokens ?? null,
+          this.estimateRuntimeCostUsd(promptTokens, completionTokens),
+          Math.max(0, Math.round(input.latencyMs)),
+          errorType,
+          errorMessage,
+        ],
+      )
+      .catch((error) =>
+        this.logger.warn(
+          `[AI telemetry] Direct runtime metric could not be persisted: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        ),
+      );
+  }
+
+  private telemetryProviderId(): string {
+    switch (this.configPrefix) {
+      case 'ai.openai':
+        return 'openai-primary';
+      case 'ai.openaiSecondary':
+        return 'openai-secondary';
+      case 'ai.emailDraft':
+        return 'email-draft';
+      case 'ai.comparison':
+        return 'comparison';
+      case 'ai.decisionComparison':
+        return 'decision-comparison';
+      default:
+        return this.configPrefix.replace(/^ai\./, '');
+    }
+  }
+
+  private estimateRuntimeCostUsd(
+    promptTokens?: number,
+    completionTokens?: number,
+  ): number | null {
+    if (promptTokens === undefined && completionTokens === undefined) return null;
+    const telemetryKey =
+      this.configPrefix === 'ai.openai'
+        ? 'openaiPrimary'
+        : this.configPrefix === 'ai.openaiSecondary'
+          ? 'openaiSecondary'
+          : this.configPrefix === 'ai.emailDraft'
+            ? 'emailDraft'
+            : this.configPrefix === 'ai.comparison'
+              ? 'comparison'
+              : this.configPrefix === 'ai.decisionComparison'
+                ? 'decisionComparison'
+                : null;
+    if (!telemetryKey) return null;
+    const inputRate = Number(
+      this.config.get<number | string>(
+        `ai.telemetry.${telemetryKey}.inputUsdPerMillion`,
+      ),
+    );
+    const outputRate = Number(
+      this.config.get<number | string>(
+        `ai.telemetry.${telemetryKey}.outputUsdPerMillion`,
+      ),
+    );
+    if (
+      (!Number.isFinite(inputRate) || inputRate <= 0) &&
+      (!Number.isFinite(outputRate) || outputRate <= 0)
+    ) {
+      return null;
+    }
+    return (
+      ((promptTokens ?? 0) * Math.max(0, inputRate || 0) +
+        (completionTokens ?? 0) * Math.max(0, outputRate || 0)) /
+      1_000_000
+    );
+  }
+
+  private nonNegativeInteger(value: unknown): number | undefined {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed >= 0
+      ? Math.floor(parsed)
+      : undefined;
   }
 
   getConfiguredApiKeys(): string[] {

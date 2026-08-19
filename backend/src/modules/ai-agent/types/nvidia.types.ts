@@ -20,4 +20,12 @@ export interface NvidiaChatResponse {
     finish_reason?: string;
   }>;
   model?: string;
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+    promptTokens?: number;
+    completionTokens?: number;
+    totalTokens?: number;
+  };
 }

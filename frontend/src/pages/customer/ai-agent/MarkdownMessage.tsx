@@ -1,13 +1,14 @@
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
-import { sanitizeAgentDisplayContent } from './agentContent'
+import { memo } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { sanitizeAgentDisplayContent } from "./agentContent";
 
 interface MarkdownMessageProps {
-  content: string
+  content: string;
 }
 
-export default function MarkdownMessage({ content }: MarkdownMessageProps) {
-  const safeContent = sanitizeAgentDisplayContent(content)
+function MarkdownMessage({ content }: MarkdownMessageProps) {
+  const safeContent = sanitizeAgentDisplayContent(content);
 
   return (
     <div className="agent-markdown">
@@ -24,5 +25,7 @@ export default function MarkdownMessage({ content }: MarkdownMessageProps) {
         {safeContent}
       </ReactMarkdown>
     </div>
-  )
+  );
 }
+
+export default memo(MarkdownMessage);

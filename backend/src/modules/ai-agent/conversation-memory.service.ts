@@ -1,7 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DatabaseService } from '../../database/database.service';
 import { MultiProviderLlmService } from './multi-provider-llm.service';
-import { AgentPendingAction, AgentRequirements } from './types/agent-response.types';
+import {
+  AgentPendingAction,
+  AgentRequirements,
+} from './types/agent-response.types';
 
 interface MemoryRow {
   conversationId: number;
@@ -86,7 +89,8 @@ export class ConversationMemoryService {
         [conversationId],
       );
 
-      const wantsPastContext = this.referencesEarlierConversation(currentMessage);
+      const wantsPastContext =
+        this.referencesEarlierConversation(currentMessage);
       const previous =
         userId === null
           ? []
@@ -123,7 +127,10 @@ export class ConversationMemoryService {
       if (previous.length) {
         sections.push(
           `<RECENT_USER_CONVERSATION_SUMMARIES>\n${previous
-            .map((row, index) => `Conversation ${index + 1}:\n${this.renderMemory(row, true)}`)
+            .map(
+              (row, index) =>
+                `Conversation ${index + 1}:\n${this.renderMemory(row, true)}`,
+            )
             .join('\n\n')}\n</RECENT_USER_CONVERSATION_SUMMARIES>`,
         );
       }
@@ -163,7 +170,11 @@ export class ConversationMemoryService {
          FROM ai_conversation_memories WHERE conversation_id = $1`,
         [conversationId],
       );
-      if (!row && userId !== null && this.referencesEarlierConversation(currentMessage)) {
+      if (
+        !row &&
+        userId !== null &&
+        this.referencesEarlierConversation(currentMessage)
+      ) {
         row = await this.database.queryOne<MemoryRow>(
           `SELECT conversation_id AS "conversationId", user_id AS "userId",
                   rolling_summary AS "rollingSummary",
@@ -191,7 +202,9 @@ export class ConversationMemoryService {
         budgetMin: source.budgetMin,
         budgetMax:
           source.budgetMax ??
-          (typeof entities.budgetMax === 'number' ? entities.budgetMax : undefined),
+          (typeof entities.budgetMax === 'number'
+            ? entities.budgetMax
+            : undefined),
         recommendationCount: source.recommendationCount,
         numberOfPlots: source.numberOfPlots,
         preferredZone:
@@ -309,7 +322,9 @@ export class ConversationMemoryService {
           JSON.stringify(correctionNotes),
           input.intent,
           JSON.stringify(input.requirements ?? {}),
-          JSON.stringify(input.pendingAction ?? input.requirements.pendingAction ?? null),
+          JSON.stringify(
+            input.pendingAction ?? input.requirements.pendingAction ?? null,
+          ),
           userMessage.slice(0, 4000),
           input.assistantMessage.slice(0, 6000),
         ],
@@ -362,7 +377,10 @@ export class ConversationMemoryService {
 
     const transcript = messages
       .reverse()
-      .map((item) => `${item.role === 'user' ? 'Khách' : 'Trợ lý'}: ${item.content}`)
+      .map(
+        (item) =>
+          `${item.role === 'user' ? 'Khách' : 'Trợ lý'}: ${item.content}`,
+      )
       .join('\n')
       .slice(-9000);
     const response = await this.llm.chat(
@@ -392,7 +410,11 @@ export class ConversationMemoryService {
        SET rolling_summary = $2, summary_model = $3,
            summary_updated_at = NOW(), updated_at = NOW()
        WHERE conversation_id = $1`,
-      [conversationId, summary.slice(0, 5000), response.model ?? this.llm.model],
+      [
+        conversationId,
+        summary.slice(0, 5000),
+        response.model ?? this.llm.model,
+      ],
     );
   }
 
@@ -417,7 +439,9 @@ export class ConversationMemoryService {
       row.currentGoal ? `Current goal: ${row.currentGoal}` : '',
       row.unresolvedContext ? `Unresolved: ${row.unresolvedContext}` : '',
       row.lastIntent ? `Last intent: ${row.lastIntent}` : '',
-      !compact && row.lastRequirements && Object.keys(row.lastRequirements).length
+      !compact &&
+      row.lastRequirements &&
+      Object.keys(row.lastRequirements).length
         ? `Last structured requirements: ${JSON.stringify(row.lastRequirements)}`
         : '',
       row.recentEntities && Object.keys(row.recentEntities).length
@@ -443,8 +467,10 @@ export class ConversationMemoryService {
     if (pendingAction?.kind === 'plot_request') {
       return `Hoàn tất yêu cầu mua lô ${pendingAction.plotCodes.join(', ')}`.trim();
     }
-    if (pendingAction?.kind === 'appointment') return 'Hoàn tất đặt lịch với ban quản lý';
-    if (pendingAction?.kind === 'memorial_reminder') return 'Hoàn tất tạo lịch nhắc tưởng niệm';
+    if (pendingAction?.kind === 'appointment')
+      return 'Hoàn tất đặt lịch với ban quản lý';
+    if (pendingAction?.kind === 'memorial_reminder')
+      return 'Hoàn tất tạo lịch nhắc tưởng niệm';
     const labels: Record<string, string> = {
       recommend_plots: 'Tìm và so sánh lô phù hợp',
       service_booking: 'Đặt dịch vụ nghĩa trang',
@@ -463,9 +489,10 @@ export class ConversationMemoryService {
     pendingAction?: AgentPendingAction,
   ) {
     if (pendingAction) {
-      const stage = pendingAction.stage === 'awaiting_confirmation'
-        ? 'đang chờ khách xác nhận'
-        : 'đang thu thập thông tin';
+      const stage =
+        pendingAction.stage === 'awaiting_confirmation'
+          ? 'đang chờ khách xác nhận'
+          : 'đang thu thập thông tin';
       return `${this.goalForIntent('', pendingAction)} — ${stage}.`;
     }
     const lastQuestion = assistantMessage
@@ -479,7 +506,7 @@ export class ConversationMemoryService {
     const next = [...existing];
     const folded = this.fold(userMessage);
     const looksLikeCorrection =
-      /\b(?:sai|loi|khong dung|khong hieu|hieu sai|nham|vua noi|hoi nay|luc nay|toi bao|minh bao|t bao|ma lai|khong nho|quen ngu canh)\b/.test(
+      /\b(?:sai|loi|khong dung|khong hieu|hieu sai|sai y|bat sai|bat trat|trat y|lech y|khong phai y|nham|vua noi|hoi nay|luc nay|toi bao|minh bao|t bao|ma lai|khong nho|quen ngu canh)\b/.test(
         folded,
       );
     if (looksLikeCorrection && userMessage.trim()) {
@@ -499,10 +526,13 @@ export class ConversationMemoryService {
       ? existing.plotCodes
       : [];
     for (const code of existingCodes) plotCodes.add(String(code));
-    for (const match of userMessage.matchAll(/\b[a-z]\s*-\s*\d{1,3}\s*-\s*\d{1,3}\b/gi)) {
+    for (const match of userMessage.matchAll(
+      /\b[a-z]\s*-\s*\d{1,3}\s*-\s*\d{1,3}\b/gi,
+    )) {
       plotCodes.add(match[0].replace(/\s/g, '').toUpperCase());
     }
-    if (requirements.selectedPlotCode) plotCodes.add(requirements.selectedPlotCode);
+    if (requirements.selectedPlotCode)
+      plotCodes.add(requirements.selectedPlotCode);
     if (pendingAction?.kind === 'plot_request') {
       pendingAction.plotCodes.forEach((code) => plotCodes.add(code));
     }

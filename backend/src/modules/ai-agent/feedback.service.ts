@@ -140,11 +140,17 @@ export class FeedbackService {
 
       return {
         ...result.rows[0],
+        feedbackType: feedback.feedback_type,
         hasCorrection: !!feedback.corrected_content,
       };
     });
 
-    if (action === 'approve' && dto.applyCorrection && reviewed.hasCorrection) {
+    if (
+      action === 'approve' &&
+      dto.applyCorrection &&
+      reviewed.hasCorrection &&
+      reviewed.feedbackType !== 'price_proposal'
+    ) {
       try {
         return await this.knowledge.applyApprovedCorrection(id, adminId);
       } catch (error) {

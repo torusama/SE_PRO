@@ -264,6 +264,10 @@
   gap: 12px;
 }
 
+.learning-analytics__metrics.current-state {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
 .learning-analytics__metric,
 .learning-journal__summary article,
 .agent-admin__ranker-state article {
@@ -317,13 +321,6 @@
   line-height: 1.45;
 }
 
-.learning-analytics__metrics.compact .learning-analytics__metric {
-  padding-block: 15px;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-}
-
 .learning-analytics__metrics.compact {
   gap: 0;
   overflow: hidden;
@@ -332,10 +329,36 @@
   border-radius: 12px;
 }
 
-.learning-analytics__metrics.compact
-  .learning-analytics__metric
-  + .learning-analytics__metric {
+.learning-analytics__metrics.compact .learning-analytics__metric {
+  padding-block: 15px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.learning-analytics__metrics.compact:not(.runtime) .learning-analytics__metric:not(:nth-child(4n + 1)) {
   border-left: 1px solid var(--ai-line-soft);
+}
+
+.learning-analytics__metrics.compact:not(.runtime) .learning-analytics__metric:nth-child(n + 5) {
+  border-top: 1px solid var(--ai-line-soft);
+}
+
+.learning-analytics__metrics.compact.runtime {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.learning-analytics__metrics.compact.runtime .learning-analytics__metric {
+  border-left: 0;
+  border-top: 0;
+}
+
+.learning-analytics__metrics.compact.runtime .learning-analytics__metric:not(:nth-child(3n + 1)) {
+  border-left: 1px solid var(--ai-line-soft);
+}
+
+.learning-analytics__metrics.compact.runtime .learning-analytics__metric:nth-child(n + 4) {
+  border-top: 1px solid var(--ai-line-soft);
 }
 
 .learning-analytics__timeline-card,
@@ -854,7 +877,7 @@
 .learning-journal__event-time {
   display: grid;
   align-content: start;
-  gap: 7px;
+  gap: 4px;
 }
 
 .learning-journal__event-time time {
@@ -863,12 +886,34 @@
   font-weight: 700;
 }
 
+.learning-journal__event-time-range {
+  display: block;
+  color: var(--ai-muted);
+  font-size: 10px;
+  line-height: 1.3;
+}
+
 .learning-journal__event-time span {
   color: var(--ai-muted);
   font-size: 10px;
   font-weight: 700;
   line-height: 1.4;
   text-transform: uppercase;
+}
+
+.learning-journal__event-count {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 999px;
+  line-height: 1.3;
+  text-transform: none;
+  white-space: nowrap;
 }
 
 .learning-journal__event-body > div {
@@ -1319,6 +1364,7 @@
 }
 
 .agent-admin__status.status-superseded,
+.agent-admin__status.status-deleted,
 .agent-admin__status.status-retired {
   border-color: #c9ced7;
   background: #f1f3f5;
@@ -1387,21 +1433,61 @@
   }
 }
 
+@media (max-width: 1100px) and (min-width: 701px) {
+  .learning-analytics__metrics.current-state {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  .learning-analytics__metrics.current-state .learning-analytics__metric:nth-child(1),
+  .learning-analytics__metrics.current-state .learning-analytics__metric:nth-child(2),
+  .learning-analytics__metrics.current-state .learning-analytics__metric:nth-child(3) {
+    grid-column: span 2;
+  }
+
+  .learning-analytics__metrics.current-state .learning-analytics__metric:nth-child(4),
+  .learning-analytics__metrics.current-state .learning-analytics__metric:nth-child(5) {
+    grid-column: span 3;
+  }
+}
+
 @media (max-width: 900px) {
-  .learning-analytics__metrics,
+  .learning-analytics__metrics:not(.current-state),
   .learning-journal__summary,
   .agent-admin__ranker-state {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .learning-analytics__metrics.compact
-    .learning-analytics__metric:nth-child(3) {
-    border-top: 1px solid var(--ai-line-soft);
-    border-left: 0;
+  .learning-analytics__metrics.compact:not(.runtime) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .learning-analytics__metrics.compact
-    .learning-analytics__metric:nth-child(4) {
+  .learning-analytics__metrics.compact:not(.runtime) .learning-analytics__metric {
+    border-left: 0;
+    border-top: 0;
+  }
+
+  .learning-analytics__metrics.compact:not(.runtime) .learning-analytics__metric:not(:nth-child(2n + 1)) {
+    border-left: 1px solid var(--ai-line-soft);
+  }
+
+  .learning-analytics__metrics.compact:not(.runtime) .learning-analytics__metric:nth-child(n + 3) {
+    border-top: 1px solid var(--ai-line-soft);
+  }
+
+  .learning-analytics__metrics.compact.runtime {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .learning-analytics__metrics.compact.runtime .learning-analytics__metric {
+    border-left: 0;
+    border-top: 0;
+  }
+
+  .learning-analytics__metrics.compact.runtime .learning-analytics__metric:not(:nth-child(2n + 1)) {
+    border-left: 1px solid var(--ai-line-soft);
+  }
+
+  .learning-analytics__metrics.compact.runtime .learning-analytics__metric:nth-child(n + 3) {
     border-top: 1px solid var(--ai-line-soft);
   }
 
@@ -1411,6 +1497,18 @@
 }
 
 @media (max-width: 700px) {
+  .learning-analytics__metrics.current-state {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .learning-analytics__metrics.current-state .learning-analytics__metric {
+    grid-column: auto;
+  }
+
+  .learning-analytics__metrics.current-state .learning-analytics__metric:nth-child(5) {
+    grid-column: span 2;
+  }
+
   .agent-admin__page-header,
   .agent-admin__section-header,
   .learning-analytics__header,
@@ -1482,20 +1580,31 @@
 
 @media (max-width: 500px) {
   .learning-analytics__metrics,
+  .learning-analytics__metrics.current-state,
+  .learning-analytics__metrics.compact,
+  .learning-analytics__metrics.compact.runtime,
   .learning-journal__summary,
   .agent-admin__ranker-state {
     grid-template-columns: 1fr;
   }
 
-  .agent-admin__tabs {
-    gap: 18px;
+  .learning-analytics__metrics.current-state .learning-analytics__metric {
+    grid-column: auto !important;
   }
 
-  .learning-analytics__metrics.compact
-    .learning-analytics__metric
-    + .learning-analytics__metric {
-    border-top: 1px solid var(--ai-line-soft);
-    border-left: 0;
+  .learning-analytics__metrics.compact .learning-analytics__metric,
+  .learning-analytics__metrics.compact.runtime .learning-analytics__metric {
+    border-left: 0 !important;
+    border-top: 0 !important;
+  }
+
+  .learning-analytics__metrics.compact .learning-analytics__metric + .learning-analytics__metric,
+  .learning-analytics__metrics.compact.runtime .learning-analytics__metric + .learning-analytics__metric {
+    border-top: 1px solid var(--ai-line-soft) !important;
+  }
+
+  .agent-admin__tabs {
+    gap: 18px;
   }
 
   .learning-analytics__period {
@@ -1523,4 +1632,590 @@
   .agent-admin__ranker-state article {
     transition: none;
   }
+}
+
+/* Runtime LLM telemetry follows the same restrained admin card language. */
+.learning-analytics__runtime-card {
+  overflow: hidden;
+  background: var(--ai-paper);
+  border: 1px solid var(--ai-line);
+  border-radius: 12px;
+}
+
+.learning-analytics__runtime-card > header {
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--ai-line-soft);
+}
+
+.learning-analytics__runtime-card h3 {
+  margin: 0 0 5px;
+  color: var(--ai-ink);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.learning-analytics__runtime-card header p {
+  margin: 0;
+  color: var(--ai-muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.learning-analytics__runtime-chart {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(34px, 1fr));
+  gap: 7px;
+  align-items: end;
+  min-height: 210px;
+  padding: 24px 20px 16px;
+  border-bottom: 1px solid var(--ai-line-soft);
+  background: #f8f9fa;
+}
+
+.learning-analytics__runtime-day {
+  position: relative;
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  text-align: center;
+}
+
+.learning-analytics__runtime-bar-zone {
+  position: relative;
+  height: 132px;
+  overflow: hidden;
+  border-radius: 5px 5px 2px 2px;
+  background: #e9ecef;
+}
+
+.learning-analytics__runtime-token-bar {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: var(--runtime-height);
+  min-height: 4px;
+  background: var(--ai-teal);
+  border-radius: 4px 4px 0 0;
+}
+
+.learning-analytics__runtime-day > strong {
+  min-height: 14px;
+  color: var(--ai-rose);
+  font-size: 9px;
+  font-weight: 650;
+}
+
+.learning-analytics__runtime-day > time {
+  color: var(--ai-muted);
+  font-size: 9px;
+}
+
+.learning-analytics__runtime-tooltip {
+  position: absolute;
+  z-index: 4;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  width: max-content;
+  max-width: 220px;
+  padding: 7px 9px;
+  transform: translateX(-50%) translateY(4px);
+  border: 1px solid var(--ai-line);
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgb(20 31 38 / 10%);
+  color: var(--ai-text);
+  font-size: 9px;
+  line-height: 1.4;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.learning-analytics__runtime-day:hover .learning-analytics__runtime-tooltip,
+.learning-analytics__runtime-day:focus-within .learning-analytics__runtime-tooltip {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+
+.learning-analytics__runtime-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.learning-analytics__runtime-table {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+}
+
+.learning-analytics__runtime-table th,
+.learning-analytics__runtime-table td {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--ai-line-soft);
+  color: var(--ai-text);
+  font-size: 11px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.learning-analytics__runtime-table th {
+  background: #f7f8f9;
+  color: var(--ai-muted);
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.learning-analytics__runtime-table td:first-child {
+  min-width: 230px;
+  white-space: normal;
+}
+
+.learning-analytics__runtime-table td strong,
+.learning-analytics__runtime-table td small {
+  display: block;
+}
+
+.learning-analytics__runtime-table td strong {
+  color: var(--ai-ink);
+  font-weight: 650;
+}
+
+.learning-analytics__runtime-table td small {
+  margin-top: 3px;
+  color: var(--ai-muted);
+  font-size: 9px;
+}
+
+.agent-admin__proposal-content {
+  margin: 10px 0 0;
+  color: var(--ai-text);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+@media (max-width: 720px) {
+  .learning-analytics__runtime-chart {
+    grid-template-columns: repeat(auto-fit, minmax(28px, 1fr));
+    gap: 5px;
+    padding-inline: 14px;
+  }
+
+  .learning-analytics__runtime-bar-zone {
+    height: 110px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .learning-analytics__runtime-tooltip {
+    transition: none;
+  }
+}
+
+/* Keep the existing ranker tab as the single home for customer proposals and
+   the secondary plot-ranking experiment without crowding the two panels. */
+.agent-admin__section + .agent-admin__section {
+  margin-top: 14px;
+}
+
+/* --------------------------------------------------------------------------
+ * Knowledge manager: plain-language inventory + modal CRUD
+ * -------------------------------------------------------------------------- */
+.agent-admin__section-tools {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 14px;
+  align-items: center;
+}
+
+.agent-admin__primary-button {
+  flex: 0 0 auto;
+  padding: 10px 15px;
+  border-color: var(--ai-ink) !important;
+  background: var(--ai-ink) !important;
+  color: #fff !important;
+  white-space: nowrap;
+}
+
+.agent-admin__primary-button:hover {
+  border-color: #0f1011 !important;
+  background: #0f1011 !important;
+}
+
+.agent-admin__knowledge-explain {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  background: var(--ai-paper);
+  border: 1px solid var(--ai-line);
+  border-radius: 10px;
+}
+
+.agent-admin__knowledge-explain article {
+  padding: 14px 16px;
+}
+
+.agent-admin__knowledge-explain article + article {
+  border-left: 1px solid var(--ai-line-soft);
+}
+
+.agent-admin__knowledge-explain strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--ai-ink);
+  font-size: 11px;
+}
+
+.agent-admin__knowledge-explain p {
+  margin: 0;
+  color: var(--ai-muted);
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.agent-admin__knowledge-cell > p {
+  display: -webkit-box;
+  max-width: 620px;
+  margin: 7px 0 0;
+  overflow: hidden;
+  color: var(--ai-muted);
+  font-size: 10px;
+  line-height: 1.5;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.agent-admin__table-actions {
+  display: flex;
+  gap: 6px;
+  min-width: 92px;
+}
+
+.agent-admin__table-actions button {
+  padding: 6px 9px;
+  background: transparent;
+  font-size: 10px;
+}
+
+.agent-admin__dialog-backdrop {
+  position: fixed;
+  z-index: 1200;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(24, 27, 32, 0.48);
+  backdrop-filter: blur(2px);
+}
+
+.agent-admin__knowledge-dialog {
+  width: min(900px, 100%);
+  max-height: min(820px, calc(100vh - 48px));
+  overflow: hidden;
+  background: var(--ai-paper);
+  border: 1px solid var(--ai-line);
+  border-radius: 14px;
+  box-shadow: 0 24px 80px rgba(19, 24, 31, 0.24);
+}
+
+.agent-admin__knowledge-dialog-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  align-items: flex-start;
+  padding: 20px 22px 18px;
+  background: #f2f3f5;
+  border-bottom: 1px solid var(--ai-line);
+}
+
+.agent-admin__knowledge-dialog-header span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--ai-muted);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.agent-admin__knowledge-dialog-header h2 {
+  max-width: 690px;
+  margin: 0;
+  color: var(--ai-ink);
+  font-family: var(--font-display, inherit);
+  font-size: 22px;
+  font-weight: 550;
+  line-height: 1.35;
+}
+
+.agent-admin__dialog-close {
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  background: transparent !important;
+}
+
+.agent-admin__knowledge-dialog-body {
+  max-height: calc(100vh - 150px);
+  overflow-y: auto;
+  padding: 20px 22px 22px;
+}
+
+.agent-admin__knowledge-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.agent-admin__knowledge-facts article {
+  padding: 12px 13px;
+  background: #f7f8f9;
+  border: 1px solid var(--ai-line-soft);
+  border-radius: 8px;
+}
+
+.agent-admin__knowledge-facts span,
+.agent-admin__knowledge-audit-note span,
+.agent-admin__knowledge-form-grid label > span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--ai-muted);
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.agent-admin__knowledge-facts strong {
+  color: var(--ai-ink);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.agent-admin__knowledge-full-content {
+  padding: 16px;
+  background: #fff;
+  border: 1px solid var(--ai-line);
+  border-radius: 9px;
+}
+
+.agent-admin__knowledge-full-content h3 {
+  margin-bottom: 9px;
+  color: var(--ai-ink);
+  font-size: 12px;
+}
+
+.agent-admin__knowledge-full-content p {
+  margin: 0;
+  color: var(--ai-text);
+  font-size: 12px;
+  line-height: 1.72;
+  white-space: pre-wrap;
+}
+
+.agent-admin__knowledge-audit-note {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 0.32fr);
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.agent-admin__knowledge-audit-note > div {
+  padding: 12px 13px;
+  background: #f7f8f9;
+  border-radius: 8px;
+}
+
+.agent-admin__knowledge-audit-note p {
+  margin: 0;
+  color: var(--ai-text);
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.agent-admin__dialog-help {
+  margin: 0 0 16px;
+  padding: 11px 13px;
+  background: #f2f3f5;
+  border-left: 3px solid var(--ai-blue);
+  color: var(--ai-muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.agent-admin__knowledge-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.agent-admin__knowledge-form-grid label {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+}
+
+.agent-admin__knowledge-form-grid label.wide {
+  grid-column: 1 / -1;
+}
+
+.agent-admin__knowledge-form-grid input,
+.agent-admin__knowledge-form-grid select,
+.agent-admin__knowledge-form-grid textarea {
+  width: 100%;
+  border: 1px solid var(--ai-line);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--ai-text);
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+}
+
+.agent-admin__knowledge-form-grid input,
+.agent-admin__knowledge-form-grid select {
+  height: 40px;
+  padding: 0 11px;
+}
+
+.agent-admin__knowledge-form-grid textarea {
+  padding: 10px 11px;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.agent-admin__knowledge-form-grid input:focus,
+.agent-admin__knowledge-form-grid select:focus,
+.agent-admin__knowledge-form-grid textarea:focus {
+  border-color: var(--ai-teal);
+  box-shadow: 0 0 0 2px rgb(28 63 143 / 10%);
+}
+
+.agent-admin__knowledge-form-grid small {
+  justify-self: end;
+  color: var(--ai-muted);
+  font-size: 9px;
+}
+
+.agent-admin__dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--ai-line-soft);
+}
+
+.agent-admin__dialog-actions button {
+  padding: 9px 13px;
+}
+
+.agent-admin__dialog-actions .danger {
+  margin-right: auto;
+  border-color: #e0bcbc;
+  color: var(--ai-rose);
+}
+
+/* Plain-language explanation cards in AI journal. */
+.learning-journal__meaning-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  background: var(--ai-paper);
+  border: 1px solid var(--ai-line);
+  border-radius: 12px;
+}
+
+.learning-journal__meaning-grid article {
+  padding: 16px 18px;
+}
+
+.learning-journal__meaning-grid article + article {
+  border-left: 1px solid var(--ai-line-soft);
+}
+
+.learning-journal__meaning-grid span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--ai-muted);
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.learning-journal__meaning-grid strong {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--ai-ink);
+  font-size: 13px;
+}
+
+.learning-journal__meaning-grid p {
+  margin: 0;
+  color: var(--ai-muted);
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.learning-journal__event-meta {
+  min-width: 235px;
+}
+
+.learning-journal__event-meta div {
+  grid-template-columns: 74px minmax(0, 1fr);
+}
+
+.learning-journal__event-meta dd {
+  line-height: 1.45;
+}
+
+@media (max-width: 900px) {
+  .agent-admin__section-tools {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .agent-admin__knowledge-explain,
+  .learning-journal__meaning-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-admin__knowledge-explain article + article,
+  .learning-journal__meaning-grid article + article {
+    border-top: 1px solid var(--ai-line-soft);
+    border-left: 0;
+  }
+
+  .agent-admin__knowledge-facts,
+  .agent-admin__knowledge-audit-note,
+  .agent-admin__knowledge-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-admin__knowledge-form-grid label.wide {
+    grid-column: auto;
+  }
+
+  .agent-admin__dialog-backdrop {
+    padding: 12px;
+  }
+
+  .agent-admin__knowledge-dialog {
+    max-height: calc(100vh - 24px);
+  }
+}
+
+.agent-admin__dialog-error {
+  margin: 14px 22px 0;
+  padding: 10px 12px;
+  background: #fff4f4;
+  border: 1px solid #e6bdbd;
+  border-radius: 7px;
+  color: #8f3939;
+  font-size: 11px;
+  line-height: 1.5;
 }

@@ -345,8 +345,12 @@ export class AutonomousLearningService {
             'Operational rules must be changed through the authoritative backend workflow, not chat knowledge.',
         };
       }
-      const canActivate =
-        isTrustedAdmin && proposal.memoryType !== 'information_correction';
+      // Global/business knowledge is never activated merely because an LLM
+      // extracted it from chat. Even an authenticated administrator message
+      // must pass the explicit knowledge-review action in the admin portal.
+      // Personal user preferences remain the only durable memory that may be
+      // saved automatically after backend safety validation.
+      const canActivate = false;
       const effectiveFrom = this.parseDate(proposal.effectiveFrom);
       const effectiveTo = this.parseDate(proposal.effectiveTo);
       if (
@@ -444,8 +448,8 @@ export class AutonomousLearningService {
         proposal.memoryType,
         isTrustedAdmin,
       );
-      const sourceType = canActivate
-        ? 'trusted_admin'
+      const sourceType = isTrustedAdmin
+        ? 'trusted_admin_proposal'
         : proposal.memoryType === 'information_correction'
           ? 'unverified_claim'
           : 'customer_claim';
@@ -474,10 +478,11 @@ export class AutonomousLearningService {
           validationStatus,
           validationReason,
           JSON.stringify({
-            source: canActivate
+            source: isTrustedAdmin
               ? 'authenticated_administrator_message'
               : 'unverified_natural_language_claim',
-            trustedRoleValidated: canActivate,
+            trustedRoleValidated: isTrustedAdmin,
+            explicitAdminReviewRequired: true,
           }),
           context.role,
           context.conversationId,
@@ -974,7 +979,7 @@ export class AutonomousLearningService {
     if (!trustedAdmin) {
       return 'Customer-provided business knowledge is unverified and cannot become active.';
     }
-    return 'Authenticated administrator source and backend schema validation succeeded.';
+    return 'Authenticated administrator proposal captured from chat; explicit admin review is still required before activation.';
   }
 
   private parseDate(value?: string): Date | null | undefined {

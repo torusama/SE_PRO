@@ -1,4 +1,4 @@
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import {
   BadRequestException,
   Injectable,
@@ -10,6 +10,7 @@ import { DatabaseService } from '../../database/database.service';
 import { KnowledgeEmbeddingService } from './knowledge-embedding.service';
 import { PLOT_PENDING_LOCK_MINUTES } from '../reservations/reservation-policy.constants';
 import { isRuntimeOperationalClaim } from './knowledge-safety.util';
+import { ManageKnowledgeDto } from './dto/manage-knowledge.dto';
 
 interface PromptKnowledgeRow {
   id: number;
@@ -638,6 +639,339 @@ export class KnowledgeService {
         .catch(() => undefined);
     }
     return applied;
+  }
+
+  async createAdminKnowledge(
+    adminId: number,
+    dto: ManageKnowledgeDto,
+  ) {
+    const title = this.normalize(dto.title);
+    const content = dto.content.trim().replace(/\r\n/g, '\n');
+    const category = this.normalize(dto.category).toLowerCase();
+    const reviewNote = this.normalize(
+      dto.reviewNote?.trim()
+        ? dto.reviewNote
+        : 'Được thêm trực tiếp và xác nhận bởi quản trị viên.',
+    );
+
+    if (isRuntimeOperationalClaim(`${title}\n${content}`)) {
+      throw new BadRequestException(
+        'Nội dung này mô tả thay đổi giá, giảm giá, quyền hạn, thời hạn hoặc hành vi vận hành của hệ thống. Hãy sửa quy tắc nghiệp vụ trong backend thay vì thêm vào kho tri thức để AI tự quyết định.',
+      );
+    }
+
+    const knowledgeKey = `admin-manual-${Date.now()}-${randomUUID().slice(0, 8)}`;
+    const contentHash = createHash('sha256')
+      .update(`${dto.knowledgeType}|${category}|${title}|${content}`.toLowerCase())
+      .digest('hex');
+
+    const created = await this.database.transaction(async (client) => {
+      const entryResult = await client.query<{ id: number }>(
+        `INSERT INTO ai_knowledge_entries
+           (knowledge_key, category, title, content, knowledge_type,
+            source_type, source_reference, scope, owner_user_id, memory_key,
+            validation_status, validation_reason, validation_evidence,
+            source_role, content_hash, is_active, effective_from)
+         VALUES
+           ($1, $2, $3, $4, $5,
+            'admin_manual', 'admin-ai-agent', 'global', NULL, NULL,
+            'active', $6, $7::jsonb,
+            'admin', $8, TRUE, NOW())
+         RETURNING knowledge_entry_id AS id`,
+        [
+          knowledgeKey,
+          category,
+          title,
+          content,
+          dto.knowledgeType,
+          reviewNote,
+          JSON.stringify({
+            manuallyManaged: true,
+            reviewerUserId: adminId,
+            action: 'create',
+          }),
+          contentHash,
+        ],
+      );
+      const entryId = Number(entryResult.rows[0].id);
+      const versionName = `kb-${entryId}-v1-${Date.now()}`.slice(0, 50);
+      const snapshot = {
+        category,
+        title,
+        content,
+        knowledgeType: dto.knowledgeType,
+        scope: 'global',
+        validationStatus: 'active',
+        isActive: true,
+      };
+
+      await client.query(
+        `INSERT INTO ai_knowledge_versions
+           (version_name, entity_type, entity_id, field_name,
+            old_value, new_value, change_reason, created_by,
+            version_number, action_type, actor_role, validation_reason)
+         VALUES
+           ($1, 'knowledge_entry', $2, 'record', NULL, $3::jsonb,
+            $4, $5, 1, 'created', 'admin', $4)`,
+        [versionName, entryId, JSON.stringify(snapshot), reviewNote, adminId],
+      );
+      await client.query(
+        `INSERT INTO audit_logs
+           (user_id, action, entity_type, entity_id, entity_key,
+            old_value, new_value)
+         VALUES
+           ($1, 'ai_knowledge_manual_created', 'ai_knowledge_entry', $2,
+            $3, NULL, $4::jsonb)`,
+        [adminId, entryId, knowledgeKey, JSON.stringify(snapshot)],
+      );
+
+      return { knowledgeEntryId: entryId, versionName };
+    });
+
+    if (this.embeddings) {
+      void this.embeddings
+        .embedKnowledgeEntry(created.knowledgeEntryId)
+        .catch(() => undefined);
+    }
+    return this.getKnowledgeForReview(created.knowledgeEntryId);
+  }
+
+  async updateAdminKnowledge(
+    id: number,
+    adminId: number,
+    dto: ManageKnowledgeDto,
+  ) {
+    const title = this.normalize(dto.title);
+    const content = dto.content.trim().replace(/\r\n/g, '\n');
+    const category = this.normalize(dto.category).toLowerCase();
+    const reviewNote = this.normalize(
+      dto.reviewNote?.trim()
+        ? dto.reviewNote
+        : 'Được chỉnh sửa và xác nhận bởi quản trị viên.',
+    );
+
+    if (isRuntimeOperationalClaim(`${title}\n${content}`)) {
+      throw new BadRequestException(
+        'Nội dung này mô tả thay đổi giá, giảm giá, quyền hạn, thời hạn hoặc hành vi vận hành của hệ thống. Hãy sửa quy tắc nghiệp vụ trong backend thay vì dùng kho tri thức để thay đổi hành vi vận hành.',
+      );
+    }
+
+    const updated = await this.database.transaction(async (client) => {
+      const currentResult = await client.query<{
+        knowledge_key: string | null;
+        category: string;
+        title: string;
+        content: string;
+        knowledge_type: string;
+        validation_status: string;
+        validation_reason: string | null;
+        is_active: boolean;
+      }>(
+        `SELECT knowledge_key, category, title, content, knowledge_type,
+                validation_status, validation_reason, is_active
+         FROM ai_knowledge_entries
+         WHERE knowledge_entry_id = $1 AND scope = 'global'
+         FOR UPDATE`,
+        [id],
+      );
+      const current = currentResult.rows[0];
+      if (!current) throw new NotFoundException('Knowledge entry not found');
+
+      const oldSnapshot = {
+        category: current.category,
+        title: current.title,
+        content: current.content,
+        knowledgeType: current.knowledge_type,
+        validationStatus: current.validation_status,
+        validationReason: current.validation_reason,
+        isActive: current.is_active,
+      };
+      const contentHash = createHash('sha256')
+        .update(`${dto.knowledgeType}|${category}|${title}|${content}`.toLowerCase())
+        .digest('hex');
+
+      await client.query(
+        `UPDATE ai_knowledge_entries
+         SET category = $2,
+             title = $3,
+             content = $4,
+             knowledge_type = $5,
+             source_type = 'admin_manual',
+             source_reference = 'admin-ai-agent',
+             validation_status = 'active',
+             validation_reason = $6,
+             validation_evidence = $7::jsonb,
+             source_role = 'admin',
+             content_hash = $8,
+             is_active = TRUE,
+             effective_from = COALESCE(effective_from, NOW()),
+             effective_to = NULL,
+             updated_at = NOW()
+         WHERE knowledge_entry_id = $1`,
+        [
+          id,
+          category,
+          title,
+          content,
+          dto.knowledgeType,
+          reviewNote,
+          JSON.stringify({
+            manuallyManaged: true,
+            reviewerUserId: adminId,
+            action: 'update',
+          }),
+          contentHash,
+        ],
+      );
+
+      const versionResult = await client.query<{ version: number }>(
+        `SELECT COALESCE(MAX(version_number), 0) + 1 AS version
+         FROM ai_knowledge_versions
+         WHERE entity_type = 'knowledge_entry' AND entity_id = $1`,
+        [id],
+      );
+      const versionNumber = Number(versionResult.rows[0]?.version ?? 1);
+      const versionName = `kb-${id}-v${versionNumber}-${Date.now()}`.slice(0, 50);
+      const newSnapshot = {
+        category,
+        title,
+        content,
+        knowledgeType: dto.knowledgeType,
+        validationStatus: 'active',
+        validationReason: reviewNote,
+        isActive: true,
+      };
+      await client.query(
+        `INSERT INTO ai_knowledge_versions
+           (version_name, entity_type, entity_id, field_name,
+            old_value, new_value, change_reason, created_by,
+            version_number, action_type, actor_role, validation_reason)
+         VALUES
+           ($1, 'knowledge_entry', $2, 'record', $3::jsonb, $4::jsonb,
+            $5, $6, $7, 'updated', 'admin', $5)`,
+        [
+          versionName,
+          id,
+          JSON.stringify(oldSnapshot),
+          JSON.stringify(newSnapshot),
+          reviewNote,
+          adminId,
+          versionNumber,
+        ],
+      );
+      await client.query(
+        `INSERT INTO audit_logs
+           (user_id, action, entity_type, entity_id, entity_key,
+            old_value, new_value)
+         VALUES
+           ($1, 'ai_knowledge_manual_updated', 'ai_knowledge_entry', $2,
+            $3, $4::jsonb, $5::jsonb)`,
+        [
+          adminId,
+          id,
+          current.knowledge_key ?? category,
+          JSON.stringify(oldSnapshot),
+          JSON.stringify(newSnapshot),
+        ],
+      );
+      return { knowledgeEntryId: id, versionName };
+    });
+
+    if (this.embeddings) {
+      await this.embeddings.invalidateKnowledgeEntry(id).catch(() => false);
+      void this.embeddings.embedKnowledgeEntry(id).catch(() => undefined);
+    }
+    return this.getKnowledgeForReview(updated.knowledgeEntryId);
+  }
+
+  async deleteAdminKnowledge(id: number, adminId: number) {
+    return this.database.transaction(async (client) => {
+      const currentResult = await client.query<{
+        knowledge_key: string | null;
+        category: string;
+        title: string;
+        content: string;
+        knowledge_type: string;
+        validation_status: string;
+        validation_reason: string | null;
+        source_type: string | null;
+        source_role: string | null;
+        is_active: boolean;
+      }>(
+        `SELECT knowledge_key, category, title, content, knowledge_type,
+                validation_status, validation_reason, source_type,
+                source_role, is_active
+         FROM ai_knowledge_entries
+         WHERE knowledge_entry_id = $1 AND scope = 'global'
+         FOR UPDATE`,
+        [id],
+      );
+      const current = currentResult.rows[0];
+      if (!current) throw new NotFoundException('Knowledge entry not found');
+
+      const oldSnapshot = {
+        category: current.category,
+        title: current.title,
+        content: current.content,
+        knowledgeType: current.knowledge_type,
+        validationStatus: current.validation_status,
+        validationReason: current.validation_reason,
+        sourceType: current.source_type,
+        sourceRole: current.source_role,
+        isActive: current.is_active,
+      };
+      const versionResult = await client.query<{ version: number }>(
+        `SELECT COALESCE(MAX(version_number), 0) + 1 AS version
+         FROM ai_knowledge_versions
+         WHERE entity_type = 'knowledge_entry' AND entity_id = $1`,
+        [id],
+      );
+      const versionNumber = Number(versionResult.rows[0]?.version ?? 1);
+      const versionName = `kb-${id}-v${versionNumber}-${Date.now()}`.slice(0, 50);
+      const reason = 'Quản trị viên đã xóa tri thức khỏi kho dùng chung.';
+
+      await client.query(
+        `INSERT INTO ai_knowledge_versions
+           (version_name, entity_type, entity_id, field_name,
+            old_value, new_value, change_reason, created_by,
+            version_number, action_type, actor_role, validation_reason)
+         VALUES
+           ($1, 'knowledge_entry', $2, 'record', $3::jsonb, NULL,
+            $4, $5, $6, 'deleted', 'admin', $4)`,
+        [
+          versionName,
+          id,
+          JSON.stringify(oldSnapshot),
+          reason,
+          adminId,
+          versionNumber,
+        ],
+      );
+      await client.query(
+        `INSERT INTO audit_logs
+           (user_id, action, entity_type, entity_id, entity_key,
+            old_value, new_value)
+         VALUES
+           ($1, 'ai_knowledge_manual_deleted', 'ai_knowledge_entry', $2,
+            $3, $4::jsonb, NULL)`,
+        [
+          adminId,
+          id,
+          current.knowledge_key ?? current.category,
+          JSON.stringify(oldSnapshot),
+        ],
+      );
+      await client.query(
+        `DELETE FROM ai_knowledge_entries
+         WHERE knowledge_entry_id = $1 AND scope = 'global'`,
+        [id],
+      );
+      return {
+        knowledgeEntryId: id,
+        deleted: true,
+        versionName,
+      };
+    });
   }
 
   listKnowledgeForReview(status = 'quarantined') {

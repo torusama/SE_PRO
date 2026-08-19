@@ -110,6 +110,12 @@ export class AgentToolRegistryService {
             'rejectedOptionId',
             100,
           ),
+          targetPlotCode: this.optionalProposalString(
+            args.targetPlotCode,
+            'targetPlotCode',
+            50,
+          ),
+          proposedPrice: this.optionalNumber(args.proposedPrice),
         };
         return this.autoLearning.processProposal(proposal, {
           userId: context.userId ?? null,

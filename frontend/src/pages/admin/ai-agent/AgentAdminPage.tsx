@@ -35,6 +35,29 @@ type ModelVersion = {
   createdAt: string;
 };
 
+type CustomerProposal = {
+  proposalId: number;
+  userId?: number | null;
+  proposalType:
+    | "price_negotiation"
+    | "website_suggestion"
+    | "service_suggestion"
+    | "plot_feedback"
+    | "policy_suggestion"
+    | "complaint"
+    | "other";
+  subject: string;
+  content: string;
+  selectedPlotCode?: string | null;
+  serviceName?: string | null;
+  proposedAmountVnd?: number | null;
+  status: "pending" | "accepted" | "rejected";
+  reviewNote?: string | null;
+  sourceMessage?: string | null;
+  createdAt: string;
+  updatedAt?: string;
+};
+
 type KnowledgeProposal = {
   knowledgeEntryId: number;
   category: string;
@@ -50,6 +73,26 @@ type KnowledgeProposal = {
   updatedAt?: string;
   effectiveFrom?: string;
   effectiveTo?: string;
+};
+
+type KnowledgeForm = {
+  title: string;
+  category: string;
+  knowledgeType: "faq" | "business_rule" | "information_correction";
+  content: string;
+  reviewNote: string;
+};
+
+type KnowledgeDialogState =
+  | { mode: "create"; item?: undefined }
+  | { mode: "view" | "edit"; item: KnowledgeProposal };
+
+const emptyKnowledgeForm: KnowledgeForm = {
+  title: "",
+  category: "general",
+  knowledgeType: "faq",
+  content: "",
+  reviewNote: "",
 };
 
 type Tab = "overview" | "journal" | "review" | "knowledge" | "ranker";
@@ -94,10 +137,10 @@ const metricsText = (metrics?: Record<string, number>) =>
 
 const knowledgeTypeLabel = (value: string) =>
   ({
-    faq: "Câu hỏi thường gặp được đề xuất",
-    business_rule: "Quy định đề xuất",
-    information_correction: "Hiệu chỉnh đề xuất",
-  })[value] ?? value;
+    faq: "Thông tin / câu hỏi thường gặp",
+    business_rule: "Quy định nghiệp vụ",
+    information_correction: "Nội dung hiệu chỉnh",
+  })[value] ?? "Loại tri thức khác";
 
 const capitalizeFirstLetter = (value: string) => {
   const normalized = value.trim().replace(/\s+/g, " ");
@@ -158,15 +201,29 @@ const knowledgeTitleLabel = (item: KnowledgeProposal) => {
 const sourceRoleLabel = (value?: string) =>
   ({ customer: "Khách hàng", admin: "Quản trị viên", system: "Hệ thống" })[
     value ?? ""
-  ] ?? "Không xác định";
+  ] ?? "Nguồn hệ thống";
+
+const knowledgeSourceLabel = (item: KnowledgeProposal) => {
+  const sourceType = item.sourceType?.toLowerCase();
+  if (sourceType === "admin_manual") return "Quản trị viên thêm trực tiếp";
+  if (sourceType === "admin_feedback") return "Hiệu chỉnh đã được quản trị viên duyệt";
+  if (sourceType === "system_research") return "Tri thức tham khảo do hệ thống chuẩn bị";
+  if (sourceType === "system") return "Tri thức nền của hệ thống";
+  if (item.sourceRole === "customer") return "Nội dung do khách hàng đề xuất";
+  if (item.sourceRole === "admin") return "Nội dung do quản trị viên xác nhận";
+  return "Tri thức đã lưu trong hệ thống";
+};
 
 const knowledgeStatusLabel = (value: string) =>
   ({
     quarantined: "Chờ xác minh",
     active: "Đang được trợ lý sử dụng",
     rejected: "Đã từ chối",
+    proposed: "Mới được đề xuất",
+    validating: "Đang xác minh",
     superseded: "Đã được thay thế",
-  })[value] ?? value;
+    deleted: "Đã xóa khỏi kho",
+  })[value] ?? "Trạng thái khác";
 
 const feedbackTypeLabel = (value: string) =>
   ({
@@ -180,17 +237,66 @@ const feedbackTypeLabel = (value: string) =>
     positive: "Phản hồi tích cực",
     negative: "Phản hồi chưa hài lòng",
     report: "Báo cáo nội dung",
-  })[value] ?? value;
+  })[value] ?? "Phản hồi khác";
 
-const knowledgeCategoryLabel = (value: string) =>
+const customerProposalTypeLabel = (value: CustomerProposal["proposalType"]) =>
   ({
+    price_negotiation: "Thương lượng giá",
+    website_suggestion: "Góp ý website",
+    service_suggestion: "Đề xuất dịch vụ",
+    plot_feedback: "Góp ý về lô đất",
+    policy_suggestion: "Đề xuất chính sách",
+    complaint: "Khiếu nại cần quản trị xử lý",
+    other: "Đề xuất khác",
+  })[value];
+
+const formatVnd = (value?: number | null) =>
+  typeof value === "number"
+    ? `${new Intl.NumberFormat("vi-VN").format(value)} VNĐ`
+    : undefined;
+
+const knowledgeCategoryLabel = (value: string) => {
+  const normalized = value.trim();
+  const known = ({
     faq: "Câu hỏi thường gặp",
     business_rule: "Quy định nghiệp vụ",
     information_correction: "Hiệu chỉnh thông tin",
-    service: "Dịch vụ chăm sóc",
+    verified_correction: "Nội dung đã được hiệu chỉnh",
+    service: "Dịch vụ nghĩa trang",
+    maintenance: "Chăm sóc và bảo trì phần mộ",
+    ritual: "Nghi lễ và tưởng niệm",
     plot: "Thông tin lô đất",
+    plot_location: "Vị trí và khu vực lô đất",
+    plot_status: "Trạng thái lô đất",
+    plot_ranking: "Tiêu chí lựa chọn lô",
     process: "Quy trình nghiệp vụ",
-  })[value.toLowerCase()] ?? value;
+    purchase_process: "Quy trình mua lô",
+    spiritual_consultation: "Tư vấn phong thủy và âm trạch",
+    conversation_preference: "Sở thích hội thoại",
+    service_request_review: "Xử lý yêu cầu dịch vụ",
+    general: "Tri thức chung",
+  } as Record<string, string>)[normalized.toLowerCase()];
+  if (known) return known;
+  return /^[a-z0-9_\-]+$/i.test(normalized)
+    ? "Nhóm tri thức hệ thống"
+    : capitalizeFirstLetter(normalized);
+};
+
+const knowledgeCategoryOptions = [
+  { value: "general", label: "Tri thức chung" },
+  { value: "faq", label: "Câu hỏi thường gặp" },
+  { value: "process", label: "Quy trình nghiệp vụ" },
+  { value: "service", label: "Dịch vụ nghĩa trang" },
+  { value: "plot", label: "Thông tin lô đất" },
+  { value: "spiritual_consultation", label: "Tư vấn phong thủy và âm trạch" },
+  { value: "business_rule", label: "Quy định nghiệp vụ" },
+];
+
+const knowledgeTypeOptions = [
+  { value: "faq", label: "Thông tin để AI tham khảo khi trả lời" },
+  { value: "business_rule", label: "Quy định / giới hạn nghiệp vụ" },
+  { value: "information_correction", label: "Nội dung dùng để sửa thông tin cũ" },
+] as const;
 
 const modelStatusLabel = (value: string) =>
   ({
@@ -208,6 +314,7 @@ const trainingStatusLabel = (value: string) =>
     rejected: "Không đạt điều kiện triển khai",
     failed: "Thử nghiệm thất bại",
     completed: "Đã hoàn tất",
+    deployed: "Đã triển khai",
   })[value] ?? "Chưa xác định";
 
 const datasetVersionLabel = (value: string) =>
@@ -218,12 +325,15 @@ const reviewReasonLabel = (value?: string) => {
   if (/customer-provided business knowledge is unverified/i.test(value)) {
     return "Nguồn khách hàng, cần quản trị viên xác minh trước khi sử dụng.";
   }
+  if (/authenticated administrator proposal captured from chat/i.test(value)) {
+    return "Nguồn quản trị viên đã xác thực, nhưng tri thức phát sinh từ hội thoại vẫn phải được duyệt rõ ràng tại trang quản trị trước khi trợ lý sử dụng.";
+  }
   if (
     /authenticated administrator source and backend schema validation succeeded/i.test(
       value,
     )
   ) {
-    return "Nguồn quản trị viên đã xác thực và dữ liệu đã vượt qua kiểm tra cấu trúc của hệ thống.";
+    return "Bản ghi cũ từ nguồn quản trị viên đã qua kiểm tra cấu trúc; hãy xác nhận lại trước khi kích hoạt nếu nội dung chưa được duyệt thủ công.";
   }
   if (
     /superseded by (?:knowledge entry|an administrator-approved knowledge proposal)/i.test(
@@ -246,6 +356,11 @@ export default function AgentAdminPage() {
   const [knowledgeProposals, setKnowledgeProposals] = useState<
     KnowledgeProposal[]
   >([]);
+  const [customerProposals, setCustomerProposals] = useState<
+    CustomerProposal[]
+  >([]);
+  const [customerProposalReviewNotes, setCustomerProposalReviewNotes] =
+    useState<Record<number, string>>({});
   const [knowledgeInventory, setKnowledgeInventory] = useState<
     KnowledgeProposal[]
   >([]);
@@ -262,6 +377,10 @@ export default function AgentAdminPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string>();
   const [error, setError] = useState<string>();
+  const [knowledgeDialog, setKnowledgeDialog] =
+    useState<KnowledgeDialogState | null>(null);
+  const [knowledgeForm, setKnowledgeForm] =
+    useState<KnowledgeForm>(emptyKnowledgeForm);
 
   const loadData = useCallback(
     async (silent = false) => {
@@ -273,6 +392,9 @@ export default function AgentAdminPage() {
         api.get("/admin/ai-agent/model-versions"),
         api.get("/admin/ai-agent/learning-analytics", {
           params: { days: analyticsDays },
+        }),
+        api.get("/admin/ai-agent/customer-proposals", {
+          params: { status: "pending" },
         }),
         api.get("/admin/ai-agent/knowledge", {
           params: { status: "quarantined" },
@@ -287,6 +409,7 @@ export default function AgentAdminPage() {
         "lần huấn luyện",
         "phiên bản mô hình",
         "thống kê học tập",
+        "đề xuất khách hàng",
         "tri thức chờ duyệt",
         "kho tri thức",
       ];
@@ -303,12 +426,14 @@ export default function AgentAdminPage() {
       const runsData = payload<TrainingRun[]>(results[1]);
       const modelsData = payload<ModelVersion[]>(results[2]);
       const analyticsData = payload<LearningAnalytics>(results[3]);
-      const knowledgeData = payload<KnowledgeProposal[]>(results[4]);
-      const inventoryData = payload<KnowledgeProposal[]>(results[5]);
+      const customerProposalData = payload<CustomerProposal[]>(results[4]);
+      const knowledgeData = payload<KnowledgeProposal[]>(results[5]);
+      const inventoryData = payload<KnowledgeProposal[]>(results[6]);
       setFeedback(feedbackData ?? []);
       setRuns(runsData ?? []);
       setModels(modelsData ?? []);
       setAnalytics(analyticsData);
+      setCustomerProposals(customerProposalData ?? []);
       setKnowledgeProposals(knowledgeData ?? []);
       setKnowledgeInventory(inventoryData ?? []);
 
@@ -327,6 +452,135 @@ export default function AgentAdminPage() {
   }, [loadData]);
 
   useRealtimeRefresh(["ai"], () => loadData(true));
+
+  const openCreateKnowledge = () => {
+    setError(undefined);
+    setKnowledgeForm(emptyKnowledgeForm);
+    setKnowledgeDialog({ mode: "create" });
+  };
+
+  const openKnowledge = (item: KnowledgeProposal, mode: "view" | "edit" = "view") => {
+    setError(undefined);
+    setKnowledgeForm({
+      title: item.title,
+      category: item.category,
+      knowledgeType:
+        item.knowledgeType === "business_rule" ||
+        item.knowledgeType === "information_correction"
+          ? item.knowledgeType
+          : "faq",
+      content: item.content,
+      reviewNote: "",
+    });
+    setKnowledgeDialog({ mode, item });
+  };
+
+  const closeKnowledgeDialog = () => {
+    if (busy === "knowledge-save" || busy === "knowledge-delete") return;
+    setKnowledgeDialog(null);
+    setKnowledgeForm(emptyKnowledgeForm);
+  };
+
+  const saveKnowledge = async () => {
+    const title = knowledgeForm.title.trim();
+    const content = knowledgeForm.content.trim();
+    if (title.length < 3) {
+      setError("Tên tri thức cần ít nhất 3 ký tự.");
+      return;
+    }
+    if (content.length < 10) {
+      setError("Nội dung tri thức cần ít nhất 10 ký tự.");
+      return;
+    }
+    if (!knowledgeDialog) return;
+
+    const isCreate = knowledgeDialog.mode === "create";
+    if (
+      !(await confirm({
+        title: isCreate ? "Thêm tri thức mới" : "Lưu thay đổi tri thức",
+        message: isCreate
+          ? "Tri thức do quản trị viên thêm trực tiếp sẽ được kích hoạt cho AI sử dụng ngay sau khi lưu. Tiếp tục?"
+          : "Bản sửa này sẽ thay nội dung hiện tại và được kích hoạt cho AI sử dụng ngay. Tiếp tục?",
+        confirmLabel: isCreate ? "Thêm và kích hoạt" : "Lưu và kích hoạt",
+      }))
+    )
+      return;
+
+    setBusy("knowledge-save");
+    setError(undefined);
+    try {
+      const payload = {
+        title,
+        category: knowledgeForm.category,
+        knowledgeType: knowledgeForm.knowledgeType,
+        content,
+        reviewNote: knowledgeForm.reviewNote.trim() || undefined,
+      };
+      if (isCreate) {
+        await api.post("/admin/ai-agent/knowledge", payload);
+      } else {
+        await api.patch(
+          `/admin/ai-agent/knowledge/${knowledgeDialog.item.knowledgeEntryId}`,
+          payload,
+        );
+      }
+      setKnowledgeDialog(null);
+      setKnowledgeForm(emptyKnowledgeForm);
+      await loadData();
+    } catch (error) {
+      const responseMessage =
+        typeof error === "object" &&
+        error !== null &&
+        "response" in error &&
+        typeof (error as { response?: { data?: { message?: unknown } } })
+          .response?.data?.message === "string"
+          ? (error as { response: { data: { message: string } } }).response.data
+              .message
+          : undefined;
+      setError(
+        responseMessage ||
+          "Không thể lưu tri thức. Dữ liệu hiện tại chưa bị thay đổi.",
+      );
+    } finally {
+      setBusy(undefined);
+    }
+  };
+
+  const deleteKnowledge = async (item: KnowledgeProposal) => {
+    if (
+      !(await confirm({
+        title: "Xóa tri thức khỏi kho",
+        message: `Xóa “${knowledgeTitleLabel(item)}” khỏi kho tri thức? AI sẽ không thể truy xuất nội dung này nữa. Lịch sử thao tác quản trị vẫn được giữ để kiểm tra.`,
+        confirmLabel: "Xóa tri thức",
+      }))
+    )
+      return;
+
+    setBusy("knowledge-delete");
+    setError(undefined);
+    try {
+      await api.delete(`/admin/ai-agent/knowledge/${item.knowledgeEntryId}`);
+      setKnowledgeDialog(null);
+      setKnowledgeForm(emptyKnowledgeForm);
+      await loadData();
+    } catch (error) {
+      const responseMessage =
+        typeof error === "object" &&
+        error !== null &&
+        "response" in error &&
+        typeof (error as { response?: { data?: { message?: unknown } } })
+          .response?.data?.message === "string"
+          ? (error as { response: { data: { message: string } } }).response.data
+              .message
+          : undefined;
+      setError(
+        responseMessage ||
+          "Không thể xóa tri thức. Nội dung vẫn được giữ nguyên trong kho.",
+      );
+    } finally {
+      setBusy(undefined);
+    }
+  };
 
   const reviewFeedback = async (
     item: Feedback,
@@ -417,6 +671,52 @@ export default function AgentAdminPage() {
     }
   };
 
+  const reviewCustomerProposal = async (
+    item: CustomerProposal,
+    action: "accept" | "reject",
+  ) => {
+    const reviewNote = customerProposalReviewNotes[item.proposalId]?.trim();
+    if (!reviewNote || reviewNote.length < 5) {
+      setError(
+        "Vui lòng ghi kết quả xử lý đề xuất, tối thiểu 5 ký tự để giữ lịch sử kiểm duyệt.",
+      );
+      return;
+    }
+    const actionLabel = action === "accept" ? "Tiếp nhận" : "Từ chối";
+    if (
+      !(await confirm({
+        title: `${actionLabel} đề xuất khách hàng`,
+        message:
+          action === "accept"
+            ? "Đánh dấu đề xuất này là đã tiếp nhận để quản trị xử lý? Thao tác này không tự đổi giá, chính sách, website hay kho tri thức."
+            : "Từ chối đề xuất này? Nội dung vẫn được giữ trong lịch sử quản trị.",
+        confirmLabel: actionLabel,
+      }))
+    )
+      return;
+
+    setBusy(`customer-proposal-${item.proposalId}`);
+    setError(undefined);
+    try {
+      await api.patch(
+        `/admin/ai-agent/customer-proposals/${item.proposalId}/${action}`,
+        { reviewNote },
+      );
+      setCustomerProposalReviewNotes((current) => {
+        const next = { ...current };
+        delete next[item.proposalId];
+        return next;
+      });
+      await loadData();
+    } catch {
+      setError(
+        "Không thể cập nhật đề xuất khách hàng. Không có thay đổi nghiệp vụ nào được áp dụng.",
+      );
+    } finally {
+      setBusy(undefined);
+    }
+  };
+
   const trainPlotRanker = async () => {
     if (
       !(await confirm({
@@ -480,6 +780,7 @@ export default function AgentAdminPage() {
     (item) => item.status === "pending",
   ).length;
   const pendingKnowledgeCount = knowledgeProposals.length;
+  const pendingCustomerProposalCount = customerProposals.length;
   const activeModel = models.find((item) => item.status === "active");
   const filteredKnowledge = knowledgeInventory.filter((item) => {
     const matchesStatus =
@@ -503,16 +804,16 @@ export default function AgentAdminPage() {
           <span className="agent-admin__page-kicker">Quản trị trợ lý AI</span>
           <h1>Học tập và tri thức</h1>
           <p>
-            Một nơi để xem trợ lý đã ghi nhớ gì, tri thức nào đã được xác minh
-            và hệ thống đề xuất đang hoạt động ra sao.
+            Một nơi để xem trợ lý đã ghi nhớ gì, tri thức nào đã được xác minh,
+            đề xuất nào cần quản trị xử lý và hệ thống AI đang hoạt động ra sao.
           </p>
         </div>
         <aside className="agent-admin__guardrail">
           <strong>Phạm vi quản trị</strong>
           <p>
-            Duyệt tri thức dùng chung, theo dõi điều trợ lý đã ghi nhớ và quản
-            lý bộ xếp hạng đề xuất. Lịch sử trò chuyện cá nhân không hiển thị
-            tại đây.
+            Ghi nhớ cá nhân an toàn có thể được lưu cho chính khách hàng đó.
+            Tri thức dùng chung và thay đổi nghiệp vụ luôn cần quản trị viên
+            duyệt; đề xuất khách hàng không tự sửa giá, chính sách hay website.
           </p>
         </aside>
       </header>
@@ -734,44 +1035,69 @@ export default function AgentAdminPage() {
             <section className="agent-admin__section">
               <header className="agent-admin__section-header">
                 <div>
-                  <h2>Kho tri thức dùng chung</h2>
+                  <h2>Kho tri thức AI đang dùng</h2>
                   <p>
-                    Kiểm tra trạng thái toàn bộ câu hỏi thường gặp, quy định và
-                    nội dung hiệu chỉnh. Chỉ hàng “Đang được trợ lý sử dụng”
-                    được phép tham gia truy xuất kho tri thức.
+                    Đây là nơi quản lý các nội dung dùng chung mà AI có thể tra cứu khi trả lời. Quản trị
+                    viên có thể xem đầy đủ nội dung, thêm mới, chỉnh sửa hoặc xóa.
+                    Chỉ mục có trạng thái “Đang được trợ lý sử dụng” mới được AI
+                    lấy làm ngữ cảnh khi trả lời.
                   </p>
                 </div>
-                <div className="agent-admin__section-count">
-                  <strong>
-                    {
-                      knowledgeInventory.filter(
-                        (item) => item.status === "active",
-                      ).length
-                    }
-                  </strong>
-                  <span>tri thức đang sử dụng</span>
+                <div className="agent-admin__section-tools">
+                  <div className="agent-admin__section-count">
+                    <strong>
+                      {
+                        knowledgeInventory.filter(
+                          (item) => item.status === "active",
+                        ).length
+                      }
+                    </strong>
+                    <span>tri thức AI đang sử dụng</span>
+                  </div>
+                  <button
+                    className="agent-admin__primary-button"
+                    onClick={openCreateKnowledge}
+                    type="button"
+                  >
+                    Thêm tri thức mới
+                  </button>
                 </div>
               </header>
 
+              <div className="agent-admin__knowledge-explain">
+                <article>
+                  <strong>Đang sử dụng</strong>
+                  <p>AI có thể truy xuất nội dung này khi câu hỏi phù hợp.</p>
+                </article>
+                <article>
+                  <strong>Chờ xác minh</strong>
+                  <p>Nội dung mới được ghi nhận nhưng AI chưa được phép dùng.</p>
+                </article>
+                <article>
+                  <strong>Đã từ chối / thay thế</strong>
+                  <p>Nội dung chỉ còn để đối chiếu lịch sử, AI không dùng nội dung này để trả lời.</p>
+                </article>
+              </div>
+
               <div className="agent-admin__knowledge-toolbar">
                 <label>
-                  <span>Tìm trong kho</span>
+                  <span>Tìm tri thức</span>
                   <input
                     onChange={(event) => setKnowledgeSearch(event.target.value)}
-                    placeholder="Tên, nhóm hoặc nội dung tri thức"
+                    placeholder="Tìm theo tên, nhóm hoặc nội dung"
                     type="search"
                     value={knowledgeSearch}
                   />
                 </label>
                 <label>
-                  <span>Trạng thái</span>
+                  <span>AI có được dùng không?</span>
                   <select
                     onChange={(event) => setKnowledgeStatus(event.target.value)}
                     value={knowledgeStatus}
                   >
                     <option value="all">Tất cả</option>
-                    <option value="active">Đang được trợ lý sử dụng</option>
-                    <option value="quarantined">Chờ xác minh</option>
+                    <option value="active">Đang được AI sử dụng</option>
+                    <option value="quarantined">Chờ quản trị xác minh</option>
                     <option value="rejected">Đã từ chối</option>
                     <option value="superseded">Đã được thay thế</option>
                   </select>
@@ -783,10 +1109,11 @@ export default function AgentAdminPage() {
                   <thead>
                     <tr>
                       <th>Tri thức</th>
-                      <th>Loại</th>
-                      <th>Trạng thái sử dụng</th>
-                      <th>Nguồn</th>
+                      <th>Nhóm</th>
+                      <th>AI có đang dùng?</th>
+                      <th>Nguồn nội dung</th>
                       <th>Cập nhật</th>
+                      <th>Thao tác</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -794,16 +1121,10 @@ export default function AgentAdminPage() {
                       <tr key={item.knowledgeEntryId}>
                         <td className="agent-admin__knowledge-cell">
                           <strong>{knowledgeTitleLabel(item)}</strong>
-                          <span>{knowledgeCategoryLabel(item.category)}</span>
-                          <details>
-                            <summary>Xem nội dung và căn cứ</summary>
-                            <p>{item.content}</p>
-                            <small>
-                              {reviewReasonLabel(item.validationReason)}
-                            </small>
-                          </details>
+                          <span>{knowledgeTypeLabel(item.knowledgeType)}</span>
+                          <p>{item.content}</p>
                         </td>
-                        <td>{knowledgeTypeLabel(item.knowledgeType)}</td>
+                        <td>{knowledgeCategoryLabel(item.category)}</td>
                         <td>
                           <span
                             className={`agent-admin__status status-${item.status}`}
@@ -811,8 +1132,24 @@ export default function AgentAdminPage() {
                             {knowledgeStatusLabel(item.status)}
                           </span>
                         </td>
-                        <td>{sourceRoleLabel(item.sourceRole)}</td>
+                        <td>{knowledgeSourceLabel(item)}</td>
                         <td>{formatDate(item.updatedAt ?? item.createdAt)}</td>
+                        <td>
+                          <div className="agent-admin__table-actions">
+                            <button
+                              onClick={() => openKnowledge(item, "view")}
+                              type="button"
+                            >
+                              Xem
+                            </button>
+                            <button
+                              onClick={() => openKnowledge(item, "edit")}
+                              type="button"
+                            >
+                              Sửa
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -828,12 +1165,121 @@ export default function AgentAdminPage() {
 
           {tab === "ranker" && (
             <section className="agent-admin__section">
+              <header className="agent-admin__section-header">
+                <div>
+                  <h2>Đề xuất cần quản trị xử lý</h2>
+                  <p>
+                    Thương lượng giá, góp ý website, dịch vụ, lô đất, chính sách
+                    và khiếu nại được tách khỏi kho tri thức. Trợ lý chỉ ghi nhận
+                    và chuyển tiếp; quyền quyết định vẫn thuộc quản trị viên.
+                  </p>
+                </div>
+                <div className="agent-admin__section-count">
+                  <strong>{pendingCustomerProposalCount}</strong>
+                  <span>đề xuất đang chờ</span>
+                </div>
+              </header>
+
+              <div className="agent-admin__review-queue">
+                {customerProposals.map((item) => (
+                  <article
+                    className="agent-admin__knowledge-review"
+                    key={item.proposalId}
+                  >
+                    <div className="agent-admin__knowledge-main">
+                      <div className="agent-admin__knowledge-meta">
+                        <span className="agent-admin__status status-quarantined">
+                          Chờ quản trị xử lý
+                        </span>
+                        <span>{customerProposalTypeLabel(item.proposalType)}</span>
+                        {item.userId ? <span>Khách hàng #{item.userId}</span> : null}
+                      </div>
+                      <h3>{item.subject}</h3>
+                      <p className="agent-admin__knowledge-category">
+                        {item.selectedPlotCode
+                          ? `Lô ${item.selectedPlotCode}`
+                          : item.serviceName || "Đề xuất nghiệp vụ"}
+                        {formatVnd(item.proposedAmountVnd)
+                          ? ` · Mức khách đề xuất ${formatVnd(item.proposedAmountVnd)}`
+                          : ""}
+                      </p>
+                      <p className="agent-admin__proposal-content">
+                        {item.content}
+                      </p>
+                      {item.sourceMessage && (
+                        <details className="agent-admin__knowledge-content">
+                          <summary>Xem câu chat nguồn</summary>
+                          <p>{item.sourceMessage}</p>
+                        </details>
+                      )}
+                      <p className="agent-admin__review-note">
+                        Tiếp nhận tại đây chỉ xác nhận quản trị viên đã nhận đề
+                        xuất. Hệ thống không tự thay giá, quy định, website hoặc
+                        cho phép AI sử dụng nội dung này trong kho tri thức.
+                      </p>
+                      <label className="agent-admin__review-field">
+                        <span>Kết quả xử lý / ghi chú quản trị</span>
+                        <textarea
+                          maxLength={2000}
+                          onChange={(event) =>
+                            setCustomerProposalReviewNotes((current) => ({
+                              ...current,
+                              [item.proposalId]: event.target.value,
+                            }))
+                          }
+                          placeholder="Ví dụ: chuyển bộ phận kinh doanh xem xét mức giá; ghi nhận cho backlog UI"
+                          rows={2}
+                          value={
+                            customerProposalReviewNotes[item.proposalId] ?? ""
+                          }
+                        />
+                      </label>
+                    </div>
+                    <div className="agent-admin__knowledge-actions">
+                      <time>{formatDate(item.createdAt)}</time>
+                      <div className="agent-admin__actions">
+                        <button
+                          disabled={
+                            busy === `customer-proposal-${item.proposalId}`
+                          }
+                          onClick={() => reviewCustomerProposal(item, "accept")}
+                          type="button"
+                        >
+                          Tiếp nhận
+                        </button>
+                        <button
+                          className="danger"
+                          disabled={
+                            busy === `customer-proposal-${item.proposalId}`
+                          }
+                          onClick={() => reviewCustomerProposal(item, "reject")}
+                          type="button"
+                        >
+                          Từ chối
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+                {!customerProposals.length && (
+                  <div className="agent-admin__empty">
+                    Chưa có đề xuất khách hàng nào chờ quản trị xử lý.
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+
+
+          {tab === "ranker" && (
+            <section className="agent-admin__section">
               <header className="agent-admin__section-header ranker-header">
                 <div>
-                  <h2>Bộ xếp hạng đề xuất thử nghiệm</h2>
+                  <h2>Huấn luyện xếp hạng lô thử nghiệm</h2>
                   <p>
-                    Hệ thống mặc định vẫn xếp hạng bằng quy tắc nghiệp vụ. Bản
-                    thử nghiệm chỉ được tạo từ các mẫu đầy đủ đã được duyệt.
+                    Hệ thống mặc định vẫn xếp hạng lô bằng quy tắc nghiệp vụ. Bản
+                    thử nghiệm chỉ học từ phản hồi xếp hạng lô đầy đủ đã được duyệt.
+                    Phần này độc lập với các đề xuất nghiệp vụ của khách hàng ở phía trên.
                   </p>
                 </div>
                 <button
@@ -849,7 +1295,7 @@ export default function AgentAdminPage() {
               </header>
 
               <section
-                aria-label="Trạng thái bộ xếp hạng đề xuất"
+                aria-label="Trạng thái bộ xếp hạng lô"
                 className="agent-admin__ranker-state"
               >
                 <article>
@@ -975,6 +1421,261 @@ export default function AgentAdminPage() {
             </section>
           )}
         </section>
+      )}
+
+      {knowledgeDialog && (
+        <div
+          aria-label={
+            knowledgeDialog.mode === "create"
+              ? "Thêm tri thức mới"
+              : "Chi tiết tri thức"
+          }
+          aria-modal="true"
+          className="agent-admin__dialog-backdrop"
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target) closeKnowledgeDialog();
+          }}
+          role="dialog"
+        >
+          <section className="agent-admin__knowledge-dialog">
+            <header className="agent-admin__knowledge-dialog-header">
+              <div>
+                <span>
+                  {knowledgeDialog.mode === "create"
+                    ? "Thêm và cho AI sử dụng ngay"
+                    : knowledgeDialog.mode === "edit"
+                      ? "Chỉnh sửa tri thức"
+                      : "Nội dung tri thức"}
+                </span>
+                <h2>
+                  {knowledgeDialog.mode === "create"
+                    ? "Thêm tri thức mới"
+                    : knowledgeTitleLabel(knowledgeDialog.item)}
+                </h2>
+              </div>
+              <button
+                aria-label="Đóng"
+                className="agent-admin__dialog-close"
+                onClick={closeKnowledgeDialog}
+                type="button"
+              >
+                Đóng
+              </button>
+            </header>
+
+            {error && <div className="agent-admin__dialog-error">{error}</div>}
+
+            {knowledgeDialog.mode === "view" ? (
+              <div className="agent-admin__knowledge-dialog-body">
+                <div className="agent-admin__knowledge-facts">
+                  <article>
+                    <span>Nhóm nội dung</span>
+                    <strong>
+                      {knowledgeCategoryLabel(knowledgeDialog.item.category)}
+                    </strong>
+                  </article>
+                  <article>
+                    <span>Mục đích</span>
+                    <strong>
+                      {knowledgeTypeLabel(knowledgeDialog.item.knowledgeType)}
+                    </strong>
+                  </article>
+                  <article>
+                    <span>AI hiện có được dùng?</span>
+                    <strong>
+                      {knowledgeStatusLabel(knowledgeDialog.item.status)}
+                    </strong>
+                  </article>
+                  <article>
+                    <span>Nguồn nội dung</span>
+                    <strong>{knowledgeSourceLabel(knowledgeDialog.item)}</strong>
+                  </article>
+                </div>
+
+                <section className="agent-admin__knowledge-full-content">
+                  <h3>Nội dung AI nhận được khi truy xuất</h3>
+                  <p>{knowledgeDialog.item.content}</p>
+                </section>
+
+                <section className="agent-admin__knowledge-audit-note">
+                  <div>
+                    <span>Căn cứ / trạng thái kiểm duyệt</span>
+                    <p>
+                      {reviewReasonLabel(
+                        knowledgeDialog.item.validationReason,
+                      )}
+                    </p>
+                  </div>
+                  <div>
+                    <span>Cập nhật gần nhất</span>
+                    <p>
+                      {formatDate(
+                        knowledgeDialog.item.updatedAt ??
+                          knowledgeDialog.item.createdAt,
+                      )}
+                    </p>
+                  </div>
+                </section>
+
+                <footer className="agent-admin__dialog-actions">
+                  <button
+                    onClick={() =>
+                      openKnowledge(knowledgeDialog.item, "edit")
+                    }
+                    type="button"
+                  >
+                    Chỉnh sửa
+                  </button>
+                  <button
+                    className="danger"
+                    disabled={busy === "knowledge-delete"}
+                    onClick={() => deleteKnowledge(knowledgeDialog.item)}
+                    type="button"
+                  >
+                    {busy === "knowledge-delete"
+                      ? "Đang xóa…"
+                      : "Xóa khỏi kho tri thức"}
+                  </button>
+                </footer>
+              </div>
+            ) : (
+              <div className="agent-admin__knowledge-dialog-body">
+                <p className="agent-admin__dialog-help">
+                  Nội dung do quản trị viên lưu tại đây được xem là đã duyệt và
+                  sẽ được AI dùng ngay khi hệ thống tìm thấy nội dung phù hợp với câu hỏi. Những
+                  thay đổi giá, quyền hạn, thời hạn hoặc logic giao dịch phải sửa
+                  ở backend, không được dùng kho tri thức để ghi đè.
+                </p>
+
+                <div className="agent-admin__knowledge-form-grid">
+                  <label className="wide">
+                    <span>Tên tri thức</span>
+                    <input
+                      maxLength={200}
+                      onChange={(event) =>
+                        setKnowledgeForm((current) => ({
+                          ...current,
+                          title: event.target.value,
+                        }))
+                      }
+                      placeholder="Ví dụ: Quy trình đặt dịch vụ chăm sóc mộ"
+                      value={knowledgeForm.title}
+                    />
+                  </label>
+                  <label>
+                    <span>Nhóm nội dung</span>
+                    <select
+                      onChange={(event) =>
+                        setKnowledgeForm((current) => ({
+                          ...current,
+                          category: event.target.value,
+                        }))
+                      }
+                      value={knowledgeForm.category}
+                    >
+                      {!knowledgeCategoryOptions.some(
+                        (option) => option.value === knowledgeForm.category,
+                      ) && (
+                        <option value={knowledgeForm.category}>
+                          {knowledgeCategoryLabel(knowledgeForm.category)}
+                        </option>
+                      )}
+                      {knowledgeCategoryOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span>AI dùng nội dung này để làm gì?</span>
+                    <select
+                      onChange={(event) =>
+                        setKnowledgeForm((current) => ({
+                          ...current,
+                          knowledgeType: event.target
+                            .value as KnowledgeForm["knowledgeType"],
+                        }))
+                      }
+                      value={knowledgeForm.knowledgeType}
+                    >
+                      {knowledgeTypeOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="wide">
+                    <span>Nội dung đầy đủ</span>
+                    <textarea
+                      maxLength={12000}
+                      onChange={(event) =>
+                        setKnowledgeForm((current) => ({
+                          ...current,
+                          content: event.target.value,
+                        }))
+                      }
+                      placeholder="Viết rõ thông tin mà AI cần biết. Không cần dùng từ khóa kỹ thuật."
+                      rows={10}
+                      value={knowledgeForm.content}
+                    />
+                    <small>
+                      {knowledgeForm.content.trim().length.toLocaleString(
+                        "vi-VN",
+                      )} / 12.000 ký tự
+                    </small>
+                  </label>
+                  <label className="wide">
+                    <span>Ghi chú quản trị (không bắt buộc)</span>
+                    <textarea
+                      maxLength={1000}
+                      onChange={(event) =>
+                        setKnowledgeForm((current) => ({
+                          ...current,
+                          reviewNote: event.target.value,
+                        }))
+                      }
+                      placeholder="Ví dụ: Đã đối chiếu với quy trình dịch vụ hiện tại"
+                      rows={3}
+                      value={knowledgeForm.reviewNote}
+                    />
+                  </label>
+                </div>
+
+                <footer className="agent-admin__dialog-actions">
+                  <button
+                    className="agent-admin__primary-button"
+                    disabled={busy === "knowledge-save"}
+                    onClick={saveKnowledge}
+                    type="button"
+                  >
+                    {busy === "knowledge-save"
+                      ? "Đang lưu…"
+                      : knowledgeDialog.mode === "create"
+                        ? "Thêm và cho AI sử dụng"
+                        : "Lưu và cho AI sử dụng"}
+                  </button>
+                  {knowledgeDialog.mode === "edit" && (
+                    <button
+                      className="danger"
+                      disabled={busy === "knowledge-delete"}
+                      onClick={() => deleteKnowledge(knowledgeDialog.item)}
+                      type="button"
+                    >
+                      {busy === "knowledge-delete"
+                        ? "Đang xóa…"
+                        : "Xóa tri thức"}
+                    </button>
+                  )}
+                  <button onClick={closeKnowledgeDialog} type="button">
+                    Hủy
+                  </button>
+                </footer>
+              </div>
+            )}
+          </section>
+        </div>
       )}
     </div>
   );

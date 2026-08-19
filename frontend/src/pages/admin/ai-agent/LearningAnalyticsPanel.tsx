@@ -12,7 +12,40 @@ export type LearningAnalytics = {
     usersWithMemory: number;
     activeGlobalKnowledge: number;
     quarantinedKnowledge: number;
+    pendingCustomerProposals?: number;
   };
+  runtime?: {
+    totalCalls: number;
+    successfulCalls: number;
+    failedCalls: number;
+    fallbackResponses: number;
+    failureRate: number;
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    averageLatencyMs: number;
+    p95LatencyMs: number;
+    estimatedCostUsd: number;
+    unpricedCalls: number;
+    unmeteredCalls: number;
+  };
+  runtimeByModel?: Array<{
+    key: string;
+    providerId: string;
+    calls: number;
+    failedCalls: number;
+    totalTokens: number;
+    averageLatencyMs: number;
+    estimatedCostUsd: number;
+  }>;
+  runtimeTimeline?: Array<{
+    date: string;
+    calls: number;
+    failedCalls: number;
+    totalTokens: number;
+    averageLatencyMs: number;
+    estimatedCostUsd: number;
+  }>;
   periodActivity: {
     memoryUpdates: number;
     globalKnowledgeUpdates: number;
@@ -187,6 +220,94 @@ function Distribution({
           </div>
         )}
       </div>
+    </section>
+  );
+}
+
+const usdFormat = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  minimumFractionDigits: 4,
+  maximumFractionDigits: 6,
+});
+
+function RuntimePerformance({ analytics }: { analytics: LearningAnalytics }) {
+  const timeline = analytics.runtimeTimeline ?? [];
+  const models = analytics.runtimeByModel ?? [];
+  const maxTokens = Math.max(1, ...timeline.map((item) => item.totalTokens));
+  const hasRuntime = timeline.some((item) => item.calls > 0) || models.length > 0;
+
+  return (
+    <section className="learning-analytics__runtime-card">
+      <header>
+        <div>
+          <h3>Hiệu năng mô hình AI theo ngày</h3>
+          <p>
+            Token, lỗi và độ trễ được ghi từ luồng hội thoại và các tác vụ AI chuyên dụng như so sánh, phân tích quyết định và tạo nội dung. Chi phí chỉ
+            được tính khi đã cấu hình đơn giá token cho nhà cung cấp mô hình tương ứng.
+          </p>
+        </div>
+      </header>
+      {!hasRuntime ? (
+        <div className="learning-analytics__timeline-empty">
+          <strong>Chưa có dữ liệu gọi mô hình AI trong kỳ này</strong>
+          <p>Biểu đồ sẽ xuất hiện sau khi trợ lý phát sinh lượt gọi mô hình AI.</p>
+        </div>
+      ) : (
+        <>
+          <div className="learning-analytics__runtime-chart" aria-label="Biểu đồ token và lỗi mô hình AI">
+            {timeline.map((item) => (
+              <div className="learning-analytics__runtime-day" key={item.date}>
+                <div className="learning-analytics__runtime-bar-zone">
+                  <span
+                    className="learning-analytics__runtime-token-bar"
+                    style={
+                      {
+                        "--runtime-height": `${Math.max(4, (item.totalTokens / maxTokens) * 100)}%`,
+                      } as CSSProperties
+                    }
+                  />
+                </div>
+                <strong>{item.failedCalls > 0 ? `${item.failedCalls} lỗi` : ""}</strong>
+                <time>{item.date.slice(5).replace("-", "/")}</time>
+                <span className="learning-analytics__runtime-tooltip">
+                  {numberFormat.format(item.calls)} lượt · {numberFormat.format(item.totalTokens)} token · {numberFormat.format(item.averageLatencyMs)} ms
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div className="learning-analytics__runtime-table-wrap">
+            <table className="learning-analytics__runtime-table">
+              <thead>
+                <tr>
+                  <th>Mô hình / nhà cung cấp</th>
+                  <th>Lượt gọi</th>
+                  <th>Lỗi</th>
+                  <th>Token</th>
+                  <th>Độ trễ TB</th>
+                  <th>Chi phí ước tính</th>
+                </tr>
+              </thead>
+              <tbody>
+                {models.map((item) => (
+                  <tr key={`${item.providerId}:${item.key}`}>
+                    <td>
+                      <strong>{item.key}</strong>
+                      <small>{item.providerId}</small>
+                    </td>
+                    <td>{numberFormat.format(item.calls)}</td>
+                    <td>{numberFormat.format(item.failedCalls)}</td>
+                    <td>{numberFormat.format(item.totalTokens)}</td>
+                    <td>{numberFormat.format(item.averageLatencyMs)} ms</td>
+                    <td>{usdFormat.format(item.estimatedCostUsd)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </section>
   );
 }
@@ -430,6 +551,25 @@ export default function LearningAnalyticsPanel({
 
   const activity = analytics.periodActivity;
   const current = analytics.currentState;
+  const runtime = analytics.runtime ?? {
+    totalCalls: 0,
+    successfulCalls: 0,
+    failedCalls: 0,
+    fallbackResponses: 0,
+    failureRate: 0,
+    promptTokens: 0,
+    completionTokens: 0,
+    totalTokens: 0,
+    averageLatencyMs: 0,
+    p95LatencyMs: 0,
+    estimatedCostUsd: 0,
+    unpricedCalls: 0,
+    unmeteredCalls: 0,
+  };
+  const costValue =
+    runtime.estimatedCostUsd === 0 && runtime.unpricedCalls > 0
+      ? "Chưa cấu hình"
+      : usdFormat.format(runtime.estimatedCostUsd);
   return (
     <div className="learning-analytics">
       <header className="learning-analytics__header">
@@ -460,7 +600,7 @@ export default function LearningAnalyticsPanel({
 
       <section
         aria-label="Trạng thái học tập hiện tại"
-        className="learning-analytics__metrics"
+        className="learning-analytics__metrics current-state"
       >
         <MetricCard
           label="Ghi nhớ cá nhân đang dùng"
@@ -475,10 +615,16 @@ export default function LearningAnalyticsPanel({
           value={current.activeGlobalKnowledge}
         />
         <MetricCard
-          label="Đề xuất chờ xác minh"
+          label="Tri thức chờ xác minh"
           note="Chưa được trợ lý dùng để trả lời"
           tone="rose"
           value={current.quarantinedKnowledge}
+        />
+        <MetricCard
+          label="Đề xuất khách hàng chờ xử lý"
+          note="Tách biệt khỏi bộ nhớ cá nhân và kho tri thức dùng chung"
+          tone="rose"
+          value={current.pendingCustomerProposals ?? 0}
         />
         <MetricCard
           label={`Cập nhật trong ${analytics.period.days} ngày`}
@@ -519,6 +665,50 @@ export default function LearningAnalyticsPanel({
           value={`${activity.fallbackRate.toFixed(1)}%`}
         />
       </section>
+
+      <section
+        aria-label="Chi phí và hiệu năng mô hình AI trong kỳ"
+        className="learning-analytics__metrics compact runtime"
+      >
+        <MetricCard
+          label="Lượt gọi mô hình AI"
+          note={`${runtime.successfulCalls} thành công trong kỳ`}
+          tone="teal"
+          value={runtime.totalCalls}
+        />
+        <MetricCard
+          label="Lượt gọi mô hình bị lỗi"
+          note={`${runtime.failureRate.toFixed(1)}% tổng lượt gọi mô hình trong kỳ`}
+          tone="rose"
+          value={runtime.failedCalls}
+        />
+        <MetricCard
+          label="Lượt AI dùng phương án dự phòng"
+          note="Số câu trả lời người dùng phải quay về xử lý dự phòng sau lỗi hoặc phản hồi mô hình AI không hợp lệ"
+          tone="rose"
+          value={runtime.fallbackResponses}
+        />
+        <MetricCard
+          label="Token đã dùng"
+          note={`${numberFormat.format(runtime.promptTokens)} vào · ${numberFormat.format(runtime.completionTokens)} ra`}
+          tone="blue"
+          value={runtime.totalTokens}
+        />
+        <MetricCard
+          label="Chi phí ước tính"
+          note={`${runtime.unpricedCalls} lượt chưa có đơn giá · ${runtime.unmeteredCalls} lượt nhà cung cấp không trả số liệu sử dụng`}
+          tone="gold"
+          value={costValue}
+        />
+        <MetricCard
+          label="Độ trễ mô hình AI"
+          note={`P95 ${numberFormat.format(runtime.p95LatencyMs)} ms`}
+          tone="teal"
+          value={`${numberFormat.format(runtime.averageLatencyMs)} ms`}
+        />
+      </section>
+
+      <RuntimePerformance analytics={analytics} />
 
       <ActivityTimeline analytics={analytics} />
 

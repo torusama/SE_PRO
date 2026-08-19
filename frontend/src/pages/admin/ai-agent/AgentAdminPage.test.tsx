@@ -13,6 +13,7 @@ const apiMock = vi.hoisted(() => ({
   get: vi.fn(),
   patch: vi.fn(),
   post: vi.fn(),
+  delete: vi.fn(),
 }));
 
 vi.mock("../../../lib/api", () => ({
@@ -31,7 +32,52 @@ const analytics = (days: number): LearningAnalytics => ({
     usersWithMemory: 5,
     activeGlobalKnowledge: 8,
     quarantinedKnowledge: 3,
+    pendingCustomerProposals: 2,
   },
+  runtime: {
+    totalCalls: 40,
+    successfulCalls: 36,
+    failedCalls: 4,
+    fallbackResponses: 2,
+    failureRate: 10,
+    promptTokens: 12000,
+    completionTokens: 6000,
+    totalTokens: 18000,
+    averageLatencyMs: 820,
+    p95LatencyMs: 1400,
+    estimatedCostUsd: 0.0325,
+    unpricedCalls: 0,
+    unmeteredCalls: 0,
+  },
+  runtimeByModel: [
+    {
+      key: "test-model",
+      providerId: "openai-primary",
+      calls: 40,
+      failedCalls: 4,
+      totalTokens: 18000,
+      averageLatencyMs: 820,
+      estimatedCostUsd: 0.0325,
+    },
+  ],
+  runtimeTimeline: [
+    {
+      date: "2026-07-28",
+      calls: 18,
+      failedCalls: 1,
+      totalTokens: 8000,
+      averageLatencyMs: 760,
+      estimatedCostUsd: 0.014,
+    },
+    {
+      date: "2026-07-29",
+      calls: 22,
+      failedCalls: 3,
+      totalTokens: 10000,
+      averageLatencyMs: 870,
+      estimatedCostUsd: 0.0185,
+    },
+  ],
   periodActivity: {
     memoryUpdates: 7,
     globalKnowledgeUpdates: 4,
@@ -159,6 +205,10 @@ describe("AgentAdminPage learning analytics", () => {
       screen.getByText("Tri thức dùng chung đã xác minh"),
     ).toBeInTheDocument();
     expect(screen.getByText("25.0%")).toBeInTheDocument();
+    expect(screen.getByText("Lượt gọi mô hình AI")).toBeInTheDocument();
+    expect(screen.getByText("Lượt AI dùng phương án dự phòng")).toBeInTheDocument();
+    expect(screen.getByText("18.000")).toBeInTheDocument();
+    expect(screen.getByText("test-model")).toBeInTheDocument();
     expect(screen.getByText("Vị trí lô ưu tiên")).toBeInTheDocument();
     expect(screen.getByText("Chủ đề tư vấn ưu tiên")).toBeInTheDocument();
     expect(screen.getByText("Khu vực ưu tiên")).toBeInTheDocument();
@@ -219,11 +269,11 @@ describe("AgentAdminPage learning analytics", () => {
 
     expect(
       screen.getByRole("heading", {
-        name: "Trợ lý AI đã ghi nhận và thay đổi những gì?",
+        name: "AI đang ghi nhớ và tự học những gì?",
       }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/không phải lịch sử trò chuyện của từng người/i),
+      screen.getByText(/đây không phải nội dung chat thô/i),
     ).toBeInTheDocument();
     expect(screen.getByText("Quy trình mua lô")).toBeInTheDocument();
     expect(
@@ -303,6 +353,60 @@ describe("AgentAdminPage learning analytics", () => {
       expect(apiMock.patch).toHaveBeenCalledWith(
         "/admin/ai-agent/knowledge/73/reject",
         {},
+      ),
+    );
+  });
+
+  it("keeps customer business proposals separate from RAG and sends admin review", async () => {
+    const customerProposal = {
+      proposalId: 91,
+      userId: 7,
+      proposalType: "price_negotiation",
+      subject: "Đề xuất thương lượng giá lô A-02-005",
+      content: "Khách hàng đề xuất mức giá 5.000.000 VNĐ cho lô A-02-005.",
+      selectedPlotCode: "A-02-005",
+      proposedAmountVnd: 5000000,
+      status: "pending",
+      sourceMessage: "Lô A-02-005 bán 5 triệu được không?",
+      createdAt: "2026-08-18T10:00:00.000Z",
+    };
+    apiMock.get.mockImplementation(
+      (url: string, config?: { params?: { days?: number } }) => {
+        if (url === "/admin/ai-agent/learning-analytics") {
+          return Promise.resolve({
+            data: { data: analytics(config?.params?.days ?? 30) },
+          });
+        }
+        if (url === "/admin/ai-agent/customer-proposals") {
+          return Promise.resolve({ data: { data: [customerProposal] } });
+        }
+        return Promise.resolve({ data: { data: [] } });
+      },
+    );
+
+    render(<AgentAdminPage />);
+    await screen.findByText("Ghi nhớ cá nhân đang dùng");
+    fireEvent.click(
+      screen.getByRole("button", { name: "Xếp hạng đề xuất" }),
+    );
+
+    expect(await screen.findByText(customerProposal.subject)).toBeInTheDocument();
+    expect(screen.getByText("Thương lượng giá")).toBeInTheDocument();
+    expect(
+      screen.getByText(/không tự thay giá, quy định, website hoặc kích hoạt/i),
+    ).toBeInTheDocument();
+
+    fireEvent.change(
+      screen.getByLabelText("Kết quả xử lý / ghi chú quản trị"),
+      { target: { value: "Chuyển bộ phận kinh doanh xem xét" } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Tiếp nhận" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tiếp nhận" }));
+
+    await waitFor(() =>
+      expect(apiMock.patch).toHaveBeenCalledWith(
+        "/admin/ai-agent/customer-proposals/91/accept",
+        { reviewNote: "Chuyển bộ phận kinh doanh xem xét" },
       ),
     );
   });
@@ -418,7 +522,7 @@ describe("AgentAdminPage learning analytics", () => {
       ),
     ).not.toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("Trạng thái"), {
+    fireEvent.change(screen.getByLabelText("AI có được dùng không?"), {
       target: { value: "active" },
     });
     expect(screen.getByText("Quy trình mua lô")).toBeInTheDocument();
