@@ -759,7 +759,6 @@ export class AiAgentOrchestratorService {
     const resetPersonalMemoryRequest = this.isResetPersonalMemoryRequest(
       dto.message,
     );
-<<<<<<< HEAD
     const clearlyOutOfScope = llmSemanticRouting
       ? false
       : this.isClearlyOutOfScope(dto.message);
@@ -780,18 +779,6 @@ export class AiAgentOrchestratorService {
               (socialTurn && !bareAcknowledgement && !ambiguousDomainTurn) ||
               clearlyOutOfScope),
         );
-=======
-    const clearlyOutOfScope = this.isClearlyOutOfScope(dto.message);
-    const contextReferenceTurn = this.isContextReferenceTurn(dto.message);
-    const skipsContextBootstrap = Boolean(
-      !contextReferenceTurn &&
-      (immediateSafetyTurn ||
-        sensitiveDisclosureRequest ||
-        resetPersonalMemoryRequest ||
-        (socialTurn && !bareAcknowledgement && !ambiguousDomainTurn) ||
-        clearlyOutOfScope),
-    );
->>>>>>> origin/main
     const conversation = await this.ensureConversation(sessionId, userId);
     // If a completed HTTP request is retried with the same clientRequestId,
     // return the already persisted assistant response instead of executing the
@@ -928,17 +915,9 @@ export class AiAgentOrchestratorService {
     const memoryRequirements = this.requirementsFromPreferences(
       activeUserPreferences,
     );
-<<<<<<< HEAD
     const baziContextActive = llmSemanticRouting
       ? false
       : this.isBaziConversationTurn(dto.message, history, directIntent);
-=======
-    const baziContextActive = this.isBaziConversationTurn(
-      dto.message,
-      history,
-      directIntent,
-    );
->>>>>>> origin/main
     if (baziContextActive && directIntent === 'general_question') {
       directIntent = 'bazi_suggestion';
     }
@@ -2623,31 +2602,9 @@ Today: ${new Date().toISOString().slice(0, 10)}`,
       next.requirements.numberOfPlots = 1;
     }
 
-    // A clear or contextually continued request to see plots must never collapse
-    // into memory recitation, a generic chat response, or a repeated questionnaire.
-    // However, if the LLM provided a direct response (e.g. for general questions, price bargaining, FAQs),
-    // respect the LLM's decision and do not force inventory search.
-    if (
-      shouldContinuePlotDiscovery &&
-      next.action === 'none' &&
-      !next.directResponse?.trim()
-    ) {
-      next = {
-        ...next,
-        intent: 'recommend_plots',
-        action: next.requirements.budgetMax
-          ? 'rank_plot_options'
-          : 'browse_available_plots',
-        needsClarification: false,
-        clarificationQuestion: '',
-        directResponse: '',
-      };
-    }
-
-    // Browsing does not require a budget. If a saved/known budget exists, use it
-    // automatically and rank against it; otherwise show available options first
-    // and refine afterwards instead of blocking the customer with questions.
-    if (next.intent === 'recommend_plots' && next.action !== 'none') {
+    // A known budget changes only which authoritative recommendation tool is
+    // appropriate; it does not reinterpret what the customer meant.
+    if (next.intent === 'recommend_plots') {
       if (next.action === 'browse_available_plots' && next.requirements.budgetMax) {
         next.action = 'rank_plot_options';
       } else if (
