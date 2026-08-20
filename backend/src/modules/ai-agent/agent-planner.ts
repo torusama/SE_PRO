@@ -124,14 +124,25 @@ export const AGENT_PLANNER_TOOL = {
         needAdjacent: {
           type: 'boolean',
           description:
-            'True when the user asks for adjacent, neighboring, side-by-side, "liền kề", "liền nhau", "cạnh nhau", "kế nhau", or family plots. Omit when not discussed.',
+            'True only when the user semantically asks for adjacent/neighboring/side-by-side/grouped placement. Family or relative context by itself does not imply adjacency. Omit when not discussed.',
         },
         preferNearEntrance: {
           type: 'boolean',
           description:
-            'True when the customer prioritizes a plot near an entrance or asks for easier access from a gate. Preserve it across follow-up turns until the customer changes that preference.',
+            'True only when the customer semantically prioritizes proximity to an entrance/gate. Do not convert generic ease-of-travel wording into this field unless gate proximity is actually intended. Preserve only while the same consultation remains active.',
         },
-        birthDate: { type: 'string' },
+        birthDate: {
+          type: 'string',
+          description:
+            'Full ISO-like birth date when the customer explicitly provides day/month/year. Do not invent day/month from a year-only statement.',
+        },
+        birthYear: {
+          type: 'integer',
+          minimum: 1900,
+          maximum: 2100,
+          description:
+            'Birth year when only the year is known. The current Bát Trạch direction tool can use year + gender without requiring a full date.',
+        },
         birthTime: { type: 'string' },
         gender: {
           type: 'string',
@@ -158,7 +169,7 @@ export const AGENT_PLANNER_TOOL = {
           maxItems: 8,
           items: { type: 'string' },
           description:
-            'Every distinct service name when the customer explicitly asks to order several services together. Preserve their spoken order. Omit for a single service.',
+            'Every distinct service name/concept when the customer explicitly asks about or orders several services together. Preserve their spoken order. Omit for a single service.',
         },
         serviceTypeId: { type: 'integer', minimum: 1 },
         serviceOrderId: {
@@ -591,6 +602,13 @@ export function parseAgentPlan(raw: string): AgentPlan {
         ? parsed.preferNearEntrance
         : undefined,
     birthDate: optionalString(parsed.birthDate),
+    birthYear:
+      optionalPositiveNumber(parsed.birthYear) !== undefined &&
+      Number.isInteger(optionalPositiveNumber(parsed.birthYear)) &&
+      Number(optionalPositiveNumber(parsed.birthYear)) >= 1900 &&
+      Number(optionalPositiveNumber(parsed.birthYear)) <= 2100
+        ? Number(optionalPositiveNumber(parsed.birthYear))
+        : undefined,
     birthTime: optionalString(parsed.birthTime),
     gender:
       parsed.gender === 'male' ||

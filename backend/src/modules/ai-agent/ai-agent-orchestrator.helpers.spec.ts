@@ -2,6 +2,8 @@ import { AgentPlan } from './agent-planner';
 import {
   AiAgentOrchestratorService,
   extractDeterministicRequirements,
+  extractExplicitBudgetBounds,
+  extractSemanticStructuredFacts,
   extractPendingServiceRequestedDate,
   extractRequestedRecommendationCount,
   resolvePendingBookingReply,
@@ -65,6 +67,50 @@ describe('pending service date resolution', () => {
   });
 });
 
+describe('AI Agent semantic-mode hard facts', () => {
+  it('does not let a negotiated amount become a hard budget just because it has a currency unit', () => {
+    const message = 'Lô A-02-005 mắc quá, 5 triệu bán không?';
+    const deterministic = extractDeterministicRequirements(message);
+
+    expect(deterministic.budgetMax).toBe(5_000_000); // legacy outage parser may still see it
+    expect(
+      extractSemanticStructuredFacts(message, deterministic),
+    ).toEqual({ selectedPlotCode: 'A-02-005' });
+  });
+
+  it('keeps an explicitly labelled budget range as deterministic numeric facts', () => {
+    expect(
+      extractExplicitBudgetBounds(
+        'ngân sách tầm 100 đến 200 triệu, có lô nào yên tĩnh không',
+      ),
+    ).toEqual({ budgetMin: 100_000_000, budgetMax: 200_000_000 });
+  });
+
+  it('does not hard-code family, adjacency, access, direction or option-count semantics before the LLM', () => {
+    const message =
+      'Gia đình tui muốn coi 3 lô hướng Đông, đi lại tiện hơn chút để tham khảo.';
+    const deterministic = extractDeterministicRequirements(message);
+    const facts = extractSemanticStructuredFacts(message, deterministic);
+
+    expect(deterministic).toMatchObject({
+      recommendationCount: 3,
+      preferredDirection: 'Đông',
+      plotType: 'family',
+      needAdjacent: true,
+      preferNearEntrance: true,
+    });
+    expect(facts).toEqual({});
+  });
+
+  it('keeps exact plot identifiers hard while leaving the requested action semantic', () => {
+    const message = 'A-01-004 này sổ hồng thế nào bạn?';
+    const deterministic = extractDeterministicRequirements(message);
+    expect(extractSemanticStructuredFacts(message, deterministic)).toEqual({
+      selectedPlotCode: 'A-01-004',
+    });
+  });
+});
+
 describe('AI Agent deterministic requirement extraction', () => {
   it.each([
     'tôi cần lô dòng tộc',
@@ -89,6 +135,17 @@ describe('AI Agent deterministic requirement extraction', () => {
       preferredDirection: 'Đông',
       plotType: 'family',
       needAdjacent: true,
+    });
+  });
+
+  it('extracts a year-only birth input without mistaking accentless "sinh nam" for male gender', () => {
+    expect(
+      extractDeterministicRequirements(
+        'ong tui sinh nam 1952 tuoi Nham Thin, coi huong hop giup tui',
+      ),
+    ).toMatchObject({
+      birthYear: 1952,
+      gender: undefined,
     });
   });
 

@@ -244,7 +244,7 @@ const knowledgeCategoryLabel = (value: string) => {
     general: "Tri thức chung",
   } as Record<string, string>)[normalized.toLowerCase()];
   if (known) return known;
-  return /^[a-z0-9_\-]+$/i.test(normalized)
+  return /^[a-z0-9_-]+$/i.test(normalized)
     ? "Nhóm tri thức hệ thống"
     : capitalizeFirstLetter(normalized);
 };
@@ -298,7 +298,7 @@ const reviewReasonLabel = (value?: string) => {
   ) {
     return "Nội dung này đã được thay thế bằng một bản tri thức mới hơn đã được duyệt.";
   }
-  return /^[\x00-\x7F]+$/.test(value)
+  return !/[^\x20-\x7E\t\r\n]/.test(value)
     ? "Lý do kiểm duyệt được ghi nhận từ phiên bản hệ thống trước."
     : value;
 };

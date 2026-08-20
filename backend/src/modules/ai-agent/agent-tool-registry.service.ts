@@ -197,6 +197,13 @@ export class AgentToolRegistryService {
         return {
           services: await this.recommendations.getServiceSuggestions(
             args.limit === undefined ? 6 : this.integer(args.limit, 'limit'),
+            Array.isArray(args.queries)
+              ? args.queries
+                  .filter((item): item is string => typeof item === 'string')
+                  .map((item) => item.trim())
+                  .filter(Boolean)
+                  .slice(0, 8)
+              : [],
           ),
         };
       case 'estimate_total_cost':
@@ -204,16 +211,31 @@ export class AgentToolRegistryService {
           this.numberArray(args.plotIds, 'plotIds'),
           this.serviceItems(args.services),
         );
-      case 'suggest_bazi_direction':
-        if (typeof args.birthDate !== 'string') {
-          throw new BadRequestException('birthDate is required');
+      case 'suggest_bazi_direction': {
+        const birthDate =
+          typeof args.birthDate === 'string' ? args.birthDate : undefined;
+        const birthYear =
+          typeof args.birthYear === 'number' && Number.isInteger(args.birthYear)
+            ? args.birthYear
+            : undefined;
+        const gender =
+          args.gender === 'male' || args.gender === 'female'
+            ? args.gender
+            : undefined;
+        if (!birthDate && !birthYear) {
+          throw new BadRequestException('birthDate or birthYear is required');
+        }
+        if (!gender) {
+          throw new BadRequestException('gender is required');
         }
         return this.bazi.suggest({
-          birthDate: args.birthDate,
+          birthDate,
+          birthYear,
           birthTime:
             typeof args.birthTime === 'string' ? args.birthTime : undefined,
-          gender: typeof args.gender === 'string' ? args.gender : undefined,
+          gender,
         });
+      }
       case 'get_purchase_process':
         return this.knowledge.getPurchaseProcess();
       case 'get_plot_details':

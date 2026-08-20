@@ -80,7 +80,7 @@
   margin-bottom: 5px;
   color: var(--ai-ink);
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .agent-admin__guardrail p {
@@ -226,7 +226,7 @@
   border: 1px solid transparent !important;
   border-radius: 8px;
   font-size: 13px;
-  font-weight: 550;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -461,7 +461,7 @@
   margin-bottom: 5px;
   color: var(--ai-ink);
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .learning-analytics__timeline-card p,
@@ -913,7 +913,7 @@
 .learning-analytics__chart-tooltip-head span {
   color: var(--ai-muted);
   font-size: 9px;
-  font-weight: 650;
+  font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -921,7 +921,7 @@
 .learning-analytics__chart-tooltip-head strong {
   color: var(--ai-text);
   font-size: 13px;
-  font-weight: 750;
+  font-weight: 700;
 }
 
 .learning-analytics__chart-tooltip-head strong.tone-blue {
@@ -962,7 +962,7 @@
 
 .learning-analytics__chart-tooltip dd {
   color: var(--ai-text);
-  font-weight: 750;
+  font-weight: 700;
 }
 
 .learning-analytics__chart-tooltip .is-access {
@@ -1231,14 +1231,14 @@
 .agent-admin__knowledge-meta>span:not(.agent-admin__status) {
   color: var(--ai-muted);
   font-size: 10px;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .agent-admin__knowledge-review h3 {
   margin: 11px 0 4px;
   color: var(--ai-ink);
   font-size: 15px;
-  font-weight: 650;
+  font-weight: 600;
   line-height: 1.45;
 }
 
@@ -1291,7 +1291,7 @@
 .agent-admin__knowledge-toolbar label>span {
   color: var(--ai-muted);
   font-size: 10px;
-  font-weight: 750;
+  font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -1912,7 +1912,7 @@
   margin: 0 0 5px;
   color: var(--ai-ink);
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .learning-analytics__runtime-card header p {
@@ -1947,7 +1947,7 @@
   background: #f7f8f9;
   color: var(--ai-muted);
   font-size: 9px;
-  font-weight: 650;
+  font-weight: 600;
   letter-spacing: 0.03em;
   text-transform: uppercase;
 }
@@ -1964,7 +1964,7 @@
 
 .learning-analytics__runtime-table td strong {
   color: var(--ai-ink);
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .learning-analytics__runtime-table td small {
@@ -2119,7 +2119,7 @@
   margin-bottom: 5px;
   color: var(--ai-muted);
   font-size: 10px;
-  font-weight: 750;
+  font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
@@ -2130,7 +2130,7 @@
   color: var(--ai-ink);
   font-family: var(--font-display, inherit);
   font-size: 22px;
-  font-weight: 550;
+  font-weight: 500;
   line-height: 1.35;
 }
 
@@ -2167,7 +2167,7 @@
   margin-bottom: 5px;
   color: var(--ai-muted);
   font-size: 9px;
-  font-weight: 750;
+  font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -2326,7 +2326,7 @@
   margin-bottom: 5px;
   color: var(--ai-muted);
   font-size: 9px;
-  font-weight: 750;
+  font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -2461,7 +2461,7 @@
   margin: 0 0 4px;
   color: var(--ai-ink);
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .learning-analytics__runtime-detail-panel p,

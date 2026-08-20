@@ -129,6 +129,13 @@ export const AGENT_TOOL_DEFINITIONS = [
         additionalProperties: false,
         properties: {
           limit: { type: 'integer', minimum: 1, maximum: 20 },
+          queries: {
+            type: 'array',
+            maxItems: 8,
+            items: { type: 'string', minLength: 1, maxLength: 120 },
+            description:
+              'Optional semantic service names/descriptions already understood by the LLM. Backend uses them only to resolve matching active catalogue rows.',
+          },
         },
       },
     },
@@ -177,10 +184,11 @@ export const AGENT_TOOL_DEFINITIONS = [
         additionalProperties: false,
         properties: {
           birthDate: { type: 'string', format: 'date' },
+          birthYear: { type: 'integer', minimum: 1900, maximum: 2100 },
           birthTime: { type: 'string' },
-          gender: { type: 'string', enum: ['male', 'female', 'other'] },
+          gender: { type: 'string', enum: ['male', 'female'] },
         },
-        required: ['birthDate'],
+        required: ['gender'],
       },
     },
   },

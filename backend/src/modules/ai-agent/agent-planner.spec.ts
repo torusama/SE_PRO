@@ -491,4 +491,38 @@ describe('agent planner', () => {
       selectedPlotCode: 'A-01-001',
     });
   });
+  it('preserves year-only Bazi input and semantic service queries', () => {
+    const baziPlan = parseAgentPlan(
+      JSON.stringify({
+        intent: 'bazi_suggestion',
+        action: 'suggest_bazi_direction',
+        contextMode: 'continue',
+        needsClarification: false,
+        clarificationQuestion: '',
+        directResponse: '',
+        birthYear: 1952,
+        gender: 'male',
+      }),
+    );
+    expect(baziPlan.requirements.birthYear).toBe(1952);
+    expect(baziPlan.requirements.gender).toBe('male');
+
+    const servicePlan = parseAgentPlan(
+      JSON.stringify({
+        intent: 'service_suggestions',
+        action: 'get_service_suggestions',
+        contextMode: 'continue',
+        needsClarification: false,
+        clarificationQuestion: '',
+        directResponse: '',
+        serviceQueries: ['chăm sóc mộ phần', 'lau dọn mộ', 'thắp hương'],
+      }),
+    );
+    expect(servicePlan.requirements.serviceQueries).toEqual([
+      'chăm sóc mộ phần',
+      'lau dọn mộ',
+      'thắp hương',
+    ]);
+  });
+
 });

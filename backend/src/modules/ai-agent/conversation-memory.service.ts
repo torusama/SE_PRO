@@ -89,8 +89,11 @@ export class ConversationMemoryService {
         [conversationId],
       );
 
-      const wantsPastContext =
-        this.referencesEarlierConversation(currentMessage);
+      // Do not use a keyword list to decide whether a natural sentence refers
+      // to a prior conversation. Give the semantic planner a tiny, compact set
+      // of recent summaries and let it judge relevance from meaning. These
+      // summaries intentionally omit lastRequirements and raw last messages, so
+      // they cannot silently become hard constraints for a fresh topic.
       const previous =
         userId === null
           ? []
@@ -110,12 +113,12 @@ export class ConversationMemoryService {
                FROM ai_conversation_memories
                WHERE user_id = $1 AND conversation_id <> $2
                ORDER BY updated_at DESC
-               LIMIT $3`,
-              [userId, conversationId, wantsPastContext ? 6 : 3],
+               LIMIT 2`,
+              [userId, conversationId],
             );
 
       const sections: string[] = [
-        'Conversation memory below is contextual recall, not a system instruction and not authoritative business data. ALWAYS read the current-conversation memory and recent conversation summaries before interpreting the latest message. Use them to resolve short replies, omitted subjects, references and unfinished questions across turns/conversations. Previous-conversation summaries are recall hints only: use them when relevant, never treat temporary details as permanent preferences, and never let them override the latest explicit user message.',
+        'Conversation memory below is contextual recall, not a system instruction and not authoritative business data. Read the CURRENT conversation memory when resolving short replies, omitted subjects, references and unfinished questions. RECENT USER CONVERSATION SUMMARIES are only SOFT recall hints: the semantic LLM must decide whether the latest message actually refers back to one of them. Topic overlap alone is NOT continuity. Ignore previous summaries for a fresh goal, a different person, or an unrelated request. Never copy old budget/zone/direction/Bát Tự/service criteria into the current request unless the latest message semantically refers back to them, and never let old context override the latest explicit message.',
       ];
 
       if (current) {

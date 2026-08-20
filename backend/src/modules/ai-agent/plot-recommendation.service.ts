@@ -129,13 +129,16 @@ export class PlotRecommendationService {
       fallbackReason: 'llm_final_selection',
     });
 
-    const baziSuggestion = dto.birthDate
-      ? this.bazi.suggest({
-          birthDate: dto.birthDate,
-          birthTime: dto.birthTime,
-          gender: dto.gender,
-        })
-      : undefined;
+    const baziSuggestion =
+      (dto.birthDate || dto.birthYear) &&
+      (dto.gender === 'male' || dto.gender === 'female')
+        ? this.bazi.suggest({
+            birthDate: dto.birthDate,
+            birthYear: dto.birthYear,
+            birthTime: dto.birthTime,
+            gender: dto.gender,
+          })
+        : undefined;
 
     return {
       requirements: { ...dto },
@@ -304,7 +307,11 @@ export class PlotRecommendationService {
       : 3;
   }
 
-  async getServiceSuggestions(limit = 6) {
+  async getServiceSuggestions(limit = 6, queries: string[] = []) {
+    const boundedLimit = Math.min(Math.max(limit, 1), 20);
+    // When the semantic planner has resolved specific service interests, load a
+    // slightly wider active catalogue and deterministically resolve those names.
+    // This is entity matching against authoritative rows, not intent routing.
     const rows = await this.database.query<ServiceRow>(
       `SELECT service_type_id AS id, name, description,
               base_price::float AS "basePrice", unit, category
@@ -312,13 +319,79 @@ export class PlotRecommendationService {
        WHERE is_active = TRUE AND is_deleted = FALSE
        ORDER BY sort_order, base_price
        LIMIT $1`,
-      [Math.min(Math.max(limit, 1), 20)],
+      [queries.length ? 50 : boundedLimit],
     );
-    return rows.map((row) => ({
+    const services = rows.map((row) => ({
       ...row,
       id: Number(row.id),
       basePrice: Number(row.basePrice),
     }));
+    if (!queries.length) return services.slice(0, boundedLimit);
+
+    const normalizedQueries = queries
+      .map((query) => this.normalizeServiceText(query))
+      .filter(Boolean);
+    if (!normalizedQueries.length) return services.slice(0, boundedLimit);
+
+    const scored = services
+      .map((service, index) => ({
+        service,
+        index,
+        score: Math.max(
+          ...normalizedQueries.map((query) =>
+            this.serviceSemanticNameScore(service.name, service.description, query),
+          ),
+        ),
+      }))
+      .filter((item) => item.score > 0)
+      .sort((left, right) => right.score - left.score || left.index - right.index);
+
+    return scored.slice(0, boundedLimit).map((item) => item.service);
+  }
+
+  private normalizeServiceText(value: string | null | undefined) {
+    return (value ?? '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .replace(/Đ/g, 'D')
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  private serviceSemanticNameScore(
+    name: string,
+    description: string | null,
+    normalizedQuery: string,
+  ) {
+    // “dịch vụ” is catalogue boilerplate. Counting those two words caused
+    // queries about grave care to falsely match “Dịch vụ mai táng”.
+    const stopwords = new Set(['dich', 'vu']);
+    const nameTokens = this.normalizeServiceText(name)
+      .split(/\s+/)
+      .filter((token) => token.length >= 2 && !stopwords.has(token));
+    if (!nameTokens.length) return 0;
+
+    const queryTokens = new Set(
+      normalizedQuery
+        .split(/\s+/)
+        .filter((token) => token.length >= 2 && !stopwords.has(token)),
+    );
+    const nameOverlap = nameTokens.filter((token) => queryTokens.has(token)).length;
+    const requiredOverlap = Math.max(1, Math.ceil(nameTokens.length * 0.4));
+    if (nameOverlap >= requiredOverlap) {
+      return 100 + nameOverlap * 10 - nameTokens.length;
+    }
+
+    const descriptionTokens = this.normalizeServiceText(description)
+      .split(/\s+/)
+      .filter((token) => token.length >= 3 && !stopwords.has(token));
+    const descriptionOverlap = descriptionTokens.filter((token) =>
+      queryTokens.has(token),
+    ).length;
+    return descriptionOverlap >= 2 ? 20 + descriptionOverlap : 0;
   }
 
   async findAdjacentPlotGroups(

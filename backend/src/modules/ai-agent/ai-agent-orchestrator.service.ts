@@ -211,8 +211,17 @@ export function extractDeterministicRequirements(
     isAppointmentContext || reminderContext
       ? undefined
       : extractBirthDate(message);
+  const birthYearMatch =
+    isAppointmentContext || reminderContext
+      ? null
+      : message.match(/\b(?:sinh\s+n[aă]m|n[aă]m\s+sinh|nam\s+sinh)\s*(19\d{2}|20\d{2}|2100)\b/i);
+  const birthYear = birthDate
+    ? new Date(birthDate).getUTCFullYear()
+    : birthYearMatch
+      ? Number(birthYearMatch[1])
+      : undefined;
   const birthProfileContext =
-    Boolean(birthDate) ||
+    Boolean(birthDate || birthYear) ||
     /\b(?:gio sinh|sinh ngay|nam sinh|nu sinh|bat tu|bazi)\b/.test(
       foldedForProfile,
     );
@@ -229,9 +238,16 @@ export function extractDeterministicRequirements(
   // with accent-folded "năm" (year). Accept a natural standalone answer in
   // any position, for example "sinh 12/03/1999, nữ, lúc 8 giờ".
   const rawGenderText = message.toLocaleLowerCase('vi-VN');
-  const gender = /(?:^|[\s,;])(?:nữ|nu|female)(?=$|[\s,;.])/.test(rawGenderText)
+  // Remove year phrases before scanning the accentless token "nam" for male.
+  // Otherwise "ông tui sinh nam 1952" incorrectly sets gender=male because
+  // Vietnamese users often type "năm" without accents. Kinship-based gender is
+  // semantic and is intentionally left for the LLM planner.
+  const genderScanText = rawGenderText
+    .replace(/\bsinh\s+nam\s+(?:19\d{2}|20\d{2}|2100)\b/g, ' ')
+    .replace(/\bnam\s+sinh\s+(?:19\d{2}|20\d{2}|2100)\b/g, ' ');
+  const gender = /(?:^|[\s,;])(?:nữ|nu|female)(?=$|[\s,;.])/.test(genderScanText)
     ? 'female'
-    : /(?:^|[\s,;])(?:nam|male)(?=$|[\s,;.])/.test(rawGenderText)
+    : /(?:^|[\s,;])(?:nam|male)(?=$|[\s,;.])/.test(genderScanText)
       ? 'male'
       : undefined;
   const explicitBirthTimeMatch = isAppointmentContext
@@ -318,6 +334,7 @@ export function extractDeterministicRequirements(
       : undefined,
     preferredDirection,
     birthDate,
+    birthYear,
     birthTime: resolvedBirthTime ?? (isAppointmentContext ? undefined : extractStandaloneClockTime(message)),
     appointmentDate: isAppointmentContext ? operationalDate : undefined,
     appointmentStartTime: appointmentTimeRangeMatch
@@ -368,6 +385,133 @@ export function extractDeterministicRequirements(
       ? 'family'
       : undefined,
   };
+}
+
+
+/**
+ * Hard facts that may safely override the semantic planner in normal LLM mode.
+ *
+ * Important: this intentionally does NOT copy every value discovered by the
+ * legacy regex extractor. A number followed by "triệu" is not necessarily a
+ * budget, "gia đình" does not necessarily mean family-plot/adjacency, and
+ * "dễ đi" does not necessarily mean "near entrance". Those are semantic
+ * roles and belong to the LLM. Deterministic parsing here is reserved for
+ * exact identifiers and transaction-state fields whose meaning is already
+ * fixed by backend state.
+ */
+export function extractSemanticStructuredFacts(
+  message: string,
+  deterministic: AgentRequirements,
+  pendingAction?: AgentPendingAction,
+): AgentRequirements {
+  const facts: AgentRequirements = {};
+
+  // Exact entity identifiers are safe structural facts; they do not decide
+  // what the customer wants to do with the entity.
+  if (deterministic.selectedPlotCode) {
+    facts.selectedPlotCode = deterministic.selectedPlotCode;
+  }
+
+  // Money stays deterministically parsed only when the customer explicitly
+  // labels it as a budget/range. A bare amount may instead be a negotiated
+  // price, service price, payment amount, historical fact, etc.; the semantic
+  // planner must decide that role.
+  Object.assign(facts, extractExplicitBudgetBounds(message));
+
+  // Once a protected backend workflow is already pending, the state machine
+  // fixes the semantic role of dates/times. Keeping those values deterministic
+  // avoids an LLM turning a service date into a birth date (or vice versa).
+  if (pendingAction?.kind === 'appointment') {
+    if (deterministic.appointmentDate)
+      facts.appointmentDate = deterministic.appointmentDate;
+    if (deterministic.appointmentStartTime)
+      facts.appointmentStartTime = deterministic.appointmentStartTime;
+    if (deterministic.appointmentEndTime)
+      facts.appointmentEndTime = deterministic.appointmentEndTime;
+    if (deterministic.appointmentTopic)
+      facts.appointmentTopic = deterministic.appointmentTopic;
+  } else if (pendingAction?.kind === 'memorial_reminder') {
+    if (deterministic.reminderDate) facts.reminderDate = deterministic.reminderDate;
+    if (deterministic.reminderTitle)
+      facts.reminderTitle = deterministic.reminderTitle;
+    if (deterministic.reminderRecurring !== undefined)
+      facts.reminderRecurring = deterministic.reminderRecurring;
+    if (deterministic.reminderCalendarType)
+      facts.reminderCalendarType = deterministic.reminderCalendarType;
+    if (deterministic.reminderNotifyDaysBefore !== undefined)
+      facts.reminderNotifyDaysBefore = deterministic.reminderNotifyDaysBefore;
+    if (deterministic.reminderNotifyEmails?.length)
+      facts.reminderNotifyEmails = deterministic.reminderNotifyEmails;
+  } else if (pendingAction?.kind === 'service_order') {
+    // Explicit service names are structural only inside an already-active
+    // service workflow. Outside it, the semantic planner decides whether a
+    // phrase is service discovery, booking, a complaint, or a proposal.
+    if (deterministic.serviceQuery) facts.serviceQuery = deterministic.serviceQuery;
+  }
+
+  return facts;
+}
+
+/** Parse an explicitly labelled budget without assigning semantic meaning to
+ * arbitrary currency amounts elsewhere in the sentence. */
+export function extractExplicitBudgetBounds(message: string): AgentRequirements {
+  const folded = message
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .toLowerCase();
+  if (!/\b(?:ngan sach|budget|tam gia|khoang gia|muc gia)\b/.test(folded)) {
+    return {};
+  }
+
+  const valueOf = (raw: string, unit?: string) => {
+    const value = Number(raw.replace(',', '.'));
+    if (!Number.isFinite(value)) return undefined;
+    const normalizedUnit = unit?.toLowerCase();
+    if (normalizedUnit === 'ty' || normalizedUnit === 'tỷ')
+      return value * 1_000_000_000;
+    if (
+      normalizedUnit === 'trieu' ||
+      normalizedUnit === 'triệu' ||
+      normalizedUnit === 'tr' ||
+      normalizedUnit === 'cu'
+    )
+      return value * 1_000_000;
+    return value;
+  };
+
+  const compound = folded.match(
+    /\b(?:ngan sach|budget|tam gia|khoang gia|muc gia)\b.{0,30}?\b(\d+(?:[.,]\d+)?)\s*ty\s+(\d+(?:[.,]\d+)?)\s*(?:trieu|tr)\b/,
+  );
+  if (compound) {
+    const billions = Number(compound[1].replace(',', '.'));
+    const millions = Number(compound[2].replace(',', '.'));
+    if (Number.isFinite(billions) && Number.isFinite(millions)) {
+      return { budgetMax: billions * 1_000_000_000 + millions * 1_000_000 };
+    }
+  }
+
+  const range = folded.match(
+    /\b(\d+(?:[.,]\d+)?)\s*(ty|trieu|tr|cu)?\s*(?:den|toi|~|-)\s*(\d+(?:[.,]\d+)?)\s*(ty|trieu|tr|cu)\b/,
+  );
+  if (range) {
+    // A unit written only on the second number applies to the whole spoken
+    // range: "ngân sách 100 đến 200 triệu".
+    const unit1 = range[2] || range[4];
+    const unit2 = range[4] || range[2];
+    const a = valueOf(range[1], unit1);
+    const b = valueOf(range[3], unit2);
+    if (a !== undefined && b !== undefined) {
+      return { budgetMin: Math.min(a, b), budgetMax: Math.max(a, b) };
+    }
+  }
+
+  const single = folded.match(
+    /\b(?:ngan sach|budget|tam gia|khoang gia|muc gia)\b.{0,30}?\b(\d+(?:[.,]\d+)?)\s*(ty|trieu|tr|cu)\b/,
+  );
+  if (!single) return {};
+  const amount = valueOf(single[1], single[2]);
+  return amount === undefined ? {} : { budgetMax: amount };
 }
 
 function normalizeFallbackIntent(message: string) {
@@ -724,10 +868,13 @@ export class AiAgentOrchestratorService {
     const sessionId =
       dto.sessionId?.trim() || requestDerivedSessionId || `SES-${randomUUID()}`;
     const traceId = `TRACE-${randomUUID()}`;
-    // Normal natural-language turns are LLM-first. Keyword/regex intent and
-    // requirement parsing is retained only as an outage fallback; it no longer
-    // decides the meaning of a configured AI conversation. Deterministic code
-    // below remains responsible for authorization, confirmation and database
+    // Normal natural-language turns are LLM-first. Keyword/regex intent
+    // classification is outage-only. The legacy requirement parser still runs
+    // so exact IDs and protected workflow fields can be validated
+    // deterministically, but semantic-mode filtering below prevents its
+    // inferred meanings (budget/adjacency/family/access/etc.) from overriding
+    // the LLM. Deterministic code remains responsible for authorization,
+    // confirmation and database-side effects.
     const llmSemanticRouting = this.shouldUseLlmForSemanticTurns();
     let directRequirements = this.extractRequirements(dto.message);
     let directIntent = this.detectIntent(dto.message);
@@ -864,7 +1011,7 @@ export class AiAgentOrchestratorService {
             'conversation_memory_context',
           )
         : Promise.resolve(''),
-      this.conversationMemory && contextReferenceTurn
+      !llmSemanticRouting && this.conversationMemory && contextReferenceTurn
         ? this.withTimeout(
             this.conversationMemory.getRecoveredRequirements(
               conversation.id,
@@ -957,22 +1104,42 @@ export class AiAgentOrchestratorService {
             dto.message,
           )
         : {};
-    let trustedRequirements = this.mergeDefinedRequirements(
-      profileRequirements,
-      conversationMemoryRequirements,
-    );
-    trustedRequirements = this.mergeDefinedRequirements(
-      trustedRequirements,
-      historyRequirements,
-    );
-    trustedRequirements = this.mergeDefinedRequirements(
-      trustedRequirements,
-      memoryRequirements,
-    );
-    trustedRequirements = this.mergeDefinedRequirements(
-      trustedRequirements,
-      directRequirements,
-    );
+    // In LLM semantic mode only structured facts from the CURRENT message are
+    // hard requirements. Conversation summaries and durable preferences are
+    // supplied separately as soft context so the planner can decide whether
+    // they are relevant to the same person/request. Blindly merging old budget,
+    // zone, direction or exclusions here caused fresh conversations to inherit
+    // stale constraints and could even switch an ordinary plot request into a
+    // previous Bát Tự flow. The legacy hard merge remains outage-only.
+    let trustedRequirements: AgentRequirements;
+    if (llmSemanticRouting) {
+      // Do NOT let the legacy regex extractor decide semantic roles in normal
+      // LLM mode. Only exact/operational facts are allowed to hard-override the
+      // planner; budget-vs-price, family-vs-adjacency, comparison, access
+      // preference, Bát Tự intent, etc. are resolved semantically by the LLM.
+      trustedRequirements = extractSemanticStructuredFacts(
+        dto.message,
+        directRequirements,
+        pendingAction,
+      );
+    } else {
+      trustedRequirements = this.mergeDefinedRequirements(
+        profileRequirements,
+        conversationMemoryRequirements,
+      );
+      trustedRequirements = this.mergeDefinedRequirements(
+        trustedRequirements,
+        historyRequirements,
+      );
+      trustedRequirements = this.mergeDefinedRequirements(
+        trustedRequirements,
+        memoryRequirements,
+      );
+      trustedRequirements = this.mergeDefinedRequirements(
+        trustedRequirements,
+        directRequirements,
+      );
+    }
     // A direct request to view/analyze Bát Tự by itself is a Bát Tự turn,
     // not permission to resume an older "Bát Tự rồi tìm lô" flow. Clear the
     // session-local bridge unless the latest message explicitly asks to choose
@@ -1685,14 +1852,14 @@ export class AiAgentOrchestratorService {
           },
         ));
       plan = resolvePendingBookingReply(plan, pendingAction, dto.message);
-      // The LLM may add genuinely new semantic details, but it must never
-      // erase or replace requirements already known from active memory/history.
-      // The latest explicit user message has already been folded into
-      // context.requirements, so trusted context wins on conflicts.
+      // The semantic planner may resolve soft context from history/preferences,
+      // while deterministic values extracted from the CURRENT message remain
+      // authoritative on conflicts. Do not re-inject historical requirements.
       plan.requirements = this.mergeDefinedRequirements(
         plan.requirements,
         context.requirements,
       );
+      let excludedPreviousThisTurn = false;
       if (
         llmSemanticRouting &&
         plan.excludePreviousRecommendations === true &&
@@ -1701,6 +1868,7 @@ export class AiAgentOrchestratorService {
         const previouslyRecommendedPlotIds =
           this.getPreviouslyRecommendedPlotIds(history);
         if (previouslyRecommendedPlotIds.length) {
+          excludedPreviousThisTurn = true;
           plan.requirements.excludePlotIds = [
             ...new Set([
               ...(plan.requirements.excludePlotIds ?? []),
@@ -1734,7 +1902,7 @@ export class AiAgentOrchestratorService {
       ) {
         delete plan.requirements.consultationGoal;
         plan.intent = 'bazi_suggestion';
-        if (plan.requirements.birthDate) {
+        if (plan.requirements.birthDate || plan.requirements.birthYear) {
           plan.action = 'suggest_bazi_direction';
           plan.directResponse = undefined;
           plan.needsClarification = false;
@@ -2191,7 +2359,7 @@ export class AiAgentOrchestratorService {
         !llmSemanticRouting && this.isBereavementContext(dto.message)
           ? 'Mình rất tiếc về mất mát của gia đình bạn. Mình sẽ hỗ trợ từng bước để bạn đỡ phải xử lý quá nhiều thông tin cùng lúc. '
           : '',
-        requirements.excludePlotIds?.length
+        excludedPreviousThisTurn
           ? 'Được, mình bỏ các phương án vừa rồi và đổi sang những lô khác nhé. '
           : '',
       ].join('');
@@ -2262,7 +2430,13 @@ export class AiAgentOrchestratorService {
       // an emergency fallback after every configured key/provider is exhausted.
       let assistantMessage = fallbackMessage;
       let narrativeFallback = false;
-      if (plan.action !== 'none') {
+      const simpleAuthoritativeTemplateAction = new Set<AgentPlanAction>([
+        'get_service_suggestions',
+        'get_plot_details',
+        'get_purchase_process',
+        'get_customer_care_overview',
+      ]).has(plan.action);
+      if (plan.action !== 'none' && !simpleAuthoritativeTemplateAction) {
         assistantMessage = await this.composeAgentResponse({
           history,
           userMessage: dto.message,
@@ -2461,7 +2635,7 @@ export class AiAgentOrchestratorService {
       }
       if (
         recentMeaningfulIntent === 'bazi_suggestion' &&
-        requirements.birthDate
+        (requirements.birthDate || requirements.birthYear)
       ) {
         return deterministicPlan('bazi_suggestion', 'suggest_bazi_direction');
       }
@@ -2530,7 +2704,10 @@ export class AiAgentOrchestratorService {
     if (asksForCustomerCare(message)) {
       return deterministicPlan('customer_care', 'get_customer_care_overview');
     }
-    if (intent === 'bazi_suggestion' && requirements.birthDate) {
+    if (
+      intent === 'bazi_suggestion' &&
+      (requirements.birthDate || requirements.birthYear)
+    ) {
       return deterministicPlan('bazi_suggestion', 'suggest_bazi_direction');
     }
 
@@ -2561,7 +2738,7 @@ export class AiAgentOrchestratorService {
 
     const isZodiacPlotContinuation =
       requirements.consultationGoal === 'bazi_then_plots' &&
-      Boolean(requirements.birthDate);
+      Boolean(requirements.birthDate || requirements.birthYear);
 
     if (!explicitDiscovery && !contextualDiscovery && !isZodiacPlotContinuation) {
       return null;
@@ -2612,17 +2789,25 @@ export class AiAgentOrchestratorService {
     history: PersistedMessage[],
     userMessage: string,
   ) {
+    const current = this.redactSensitiveData(userMessage).trim();
+    // A substantive latest message is the best semantic retrieval query by
+    // itself. Appending six old turns diluted embeddings and could retrieve an
+    // earlier Bát Tự topic for a new budget/service request. Only very short
+    // fragments need recent dialogue to resolve their omitted subject. This is
+    // a length/context heuristic, not keyword-based intent routing.
+    if (current.length >= 28) {
+      return `Khách hàng hiện tại: ${current}`.slice(-4000);
+    }
+
     const recent = history
-      .slice(-6)
+      .slice(-4)
       .map((item) => {
         const content = this.redactSensitiveData(item.content ?? '').trim();
         if (!content) return '';
         return `${item.role === 'assistant' ? 'Trợ lý' : 'Khách hàng'}: ${content}`;
       })
       .filter(Boolean);
-    recent.push(
-      `Khách hàng hiện tại: ${this.redactSensitiveData(userMessage)}`,
-    );
+    recent.push(`Khách hàng hiện tại: ${current}`);
     return recent.join('\n').slice(-4000);
   }
 
@@ -2654,7 +2839,7 @@ Return one JSON object with these required fields:
 {"intent":"general_question","action":"none","contextMode":"continue","needsClarification":false,"clarificationQuestion":"","directResponse":""}
 Allowed intents: recommend_plots, plot_details, service_suggestions, plot_request, service_booking, purchase_process, bazi_suggestion, plot_competitiveness, customer_care, appointment_booking, memorial_reminder, general_question.
 Allowed actions: rank_plot_options, browse_available_plots, get_plot_details, get_service_suggestions, prepare_plot_request, prepare_service_order, cancel_service_order, confirm_pending_action, cancel_pending_action, get_purchase_process, suggest_bazi_direction, analyze_plot_competitiveness, get_customer_care_overview, prepare_appointment, prepare_memorial_reminder, none.
-Add only relevant optional fields at the top level: budgetMin, budgetMax, numberOfPlots, recommendationCount, comparisonRequested, excludePreviousRecommendations, preferredZone, preferredDirection, plotType, minAreaSqm, maxAreaSqm, needAdjacent, preferNearEntrance, birthDate, birthTime, gender, zodiacSign, consultationGoal, requestType, serviceQuery, serviceQueries, serviceTypeId, serviceOrderId, selectedPlotCode, requestedDate, appointmentDate, appointmentStartTime, appointmentEndTime, appointmentTopic, reminderTitle, reminderDescription, reminderDate, reminderRecurring, reminderCalendarType, reminderNotifyDaysBefore, reminderNotifyEmails, note, memoryProposals, customerProposal, personalMemoryReset.
+Add only relevant optional fields at the top level: budgetMin, budgetMax, numberOfPlots, recommendationCount, comparisonRequested, excludePreviousRecommendations, preferredZone, preferredDirection, plotType, minAreaSqm, maxAreaSqm, needAdjacent, preferNearEntrance, birthDate, birthYear, birthTime, gender, zodiacSign, consultationGoal, requestType, serviceQuery, serviceQueries, serviceTypeId, serviceOrderId, selectedPlotCode, requestedDate, appointmentDate, appointmentStartTime, appointmentEndTime, appointmentTopic, reminderTitle, reminderDescription, reminderDate, reminderRecurring, reminderCalendarType, reminderNotifyDaysBefore, reminderNotifyEmails, note, memoryProposals, customerProposal, personalMemoryReset.
 For action=none, directResponse is the complete natural Vietnamese answer. For an action that needs authoritative data, directResponse must be empty. Never emit fields with guessed values.
 </OUTPUT_CONTRACT>
 
@@ -2928,11 +3113,16 @@ Today: ${new Date().toISOString().slice(0, 10)}`,
         plan.requirements.numberOfPlots ?? 1,
       );
     }
-    if (
-      plan.action === 'suggest_bazi_direction' &&
-      !plan.requirements.birthDate
-    ) {
-      return 'Bạn cho mình biết ngày sinh để mình tham khảo hướng theo Bazi nhé. Đây chỉ là gợi ý văn hóa, không phải kết luận bắt buộc.';
+    if (plan.action === 'suggest_bazi_direction') {
+      if (!plan.requirements.birthDate && !plan.requirements.birthYear) {
+        return 'Bạn cho mình biết năm sinh (hoặc ngày sinh đầy đủ nếu có) để mình tham khảo hướng theo Bát Trạch nhé. Đây chỉ là gợi ý văn hóa, không phải kết luận bắt buộc.';
+      }
+      if (
+        plan.requirements.gender !== 'male' &&
+        plan.requirements.gender !== 'female'
+      ) {
+        return 'Mình đã có năm/ngày sinh. Bạn cho mình biết gia chủ là nam hay nữ để tính Cung Mệnh/Bát Trạch đúng nhé.';
+      }
     }
     if (
       plan.action === 'get_plot_details' &&
@@ -2961,20 +3151,31 @@ Today: ${new Date().toISOString().slice(0, 10)}`,
       case 'rank_plot_options':
         return {
           ...plan.requirements,
-          needAdjacent:
-            plan.requirements.needAdjacent ??
-            (plan.requirements.numberOfPlots ?? 1) > 1,
+          // Buying several plots does not automatically mean they must be
+          // adjacent. The semantic planner sets needAdjacent only when the
+          // customer actually requests grouped/side-by-side placement.
+          needAdjacent: plan.requirements.needAdjacent ?? false,
         };
       case 'browse_available_plots':
         return {
           ...plan.requirements,
           numberOfPlots: plan.requirements.numberOfPlots ?? 1,
-          needAdjacent:
-            plan.requirements.needAdjacent ??
-            (plan.requirements.numberOfPlots ?? 1) > 1,
+          // Buying several plots does not automatically mean they must be
+          // adjacent. The semantic planner sets needAdjacent only when the
+          // customer actually requests grouped/side-by-side placement.
+          needAdjacent: plan.requirements.needAdjacent ?? false,
         };
-      case 'get_service_suggestions':
-        return { limit: 5 };
+      case 'get_service_suggestions': {
+        const queries = [
+          ...(plan.requirements.serviceQueries ?? []),
+          ...(plan.requirements.serviceQuery
+            ? [plan.requirements.serviceQuery]
+            : []),
+        ]
+          .map((item) => item.trim())
+          .filter(Boolean);
+        return { limit: 5, ...(queries.length ? { queries } : {}) };
+      }
       case 'prepare_plot_request':
       case 'prepare_service_order':
       case 'cancel_service_order':
@@ -2994,6 +3195,7 @@ Today: ${new Date().toISOString().slice(0, 10)}`,
       case 'suggest_bazi_direction':
         return {
           birthDate: plan.requirements.birthDate,
+          birthYear: plan.requirements.birthYear,
           birthTime: plan.requirements.birthTime,
           gender: plan.requirements.gender,
         };
@@ -3299,7 +3501,9 @@ Write the final helpful, highly consultative response now.
   }) {
     if (input.recommendationResult) {
       const zodiacContext =
-        input.plan.requirements.zodiacSign && !input.plan.requirements.birthDate
+        input.plan.requirements.zodiacSign &&
+        !input.plan.requirements.birthDate &&
+        !input.plan.requirements.birthYear
           ? `Mình đã hiểu bạn đang chọn lô cho **tuổi ${input.plan.requirements.zodiacSign}**. Con giáp được dùng làm ngữ cảnh tư vấn ban đầu; vì chưa có năm sinh cụ thể nên mình chưa tự gán một hướng là “hợp tuổi”, nhưng vẫn giới thiệu ngay các lô đang trống để bạn có phương án thực tế trước.\n\n`
           : '';
       return `${input.prefix}${zodiacContext}${this.describeRecommendations(input.recommendationResult)}`;
@@ -3309,6 +3513,12 @@ Write the final helpful, highly consultative response now.
         input.suggestedServices,
         input.ownedPlots ?? null,
         input.userMessage,
+        [
+          ...(input.plan.requirements.serviceQueries ?? []),
+          ...(input.plan.requirements.serviceQuery
+            ? [input.plan.requirements.serviceQuery]
+            : []),
+        ],
       );
     }
     if (input.baziSuggestion) {
@@ -3938,7 +4148,7 @@ Bạn muốn mình đi sâu vào yêu cầu mua lô, đơn dịch vụ, chuyển
       }
     } else if (input.intent === 'bazi_suggestion') {
       resolvedIntent = 'bazi_suggestion';
-      if (!input.requirements.birthDate) {
+      if (!input.requirements.birthDate && !input.requirements.birthYear) {
         const folded = this.foldForMemory(input.message);
         assistantMessage = /\b(?:bat tu|bazi)\b/.test(folded)
           ? 'Được, mình chuyển sang Bát Tự nhé. Bạn cho mình ngày sinh trước; nếu có giờ sinh và giới tính thì mình sẽ phân tích hướng tham khảo sát hơn.'
@@ -5078,35 +5288,25 @@ ${JSON.stringify(options)}
       requirements.birthDate === input.customerProfile.dateOfBirth &&
       !input.directRequirements.birthDate,
     );
-    const profileGenderUsed = Boolean(
-      input.customerProfile?.gender &&
-      requirements.gender === input.customerProfile.gender &&
-      !input.directRequirements.gender,
-    );
-
-    if (!requirements.birthDate) {
+    if (!requirements.birthDate && !requirements.birthYear) {
       const zodiacLead = requirements.zodiacSign
-        ? `Mình hiểu bạn muốn chọn lô theo tuổi ${requirements.zodiacSign}. Cùng một con giáp có thể rơi vào các năm Can Chi, Nạp Âm và cung khác nhau nên mình chưa thể gán hướng hợp tuổi chỉ từ chữ “tuổi ${requirements.zodiacSign}”. `
+        ? `Mình hiểu bạn muốn chọn lô theo tuổi ${requirements.zodiacSign}. Cùng một con giáp có thể rơi vào nhiều năm Can Chi, Nạp Âm và cung khác nhau nên mình chưa thể gán hướng chỉ từ chữ “tuổi ${requirements.zodiacSign}”. `
         : '';
       return {
-        assistantMessage: `${zodiacLead}Hiện mình chưa có ngày sinh cụ thể. Để mình tư vấn Bát Tự/Bát Trạch trước rồi mới đối chiếu lô thực tế, bạn gửi giúp ngày/tháng/năm sinh, giới tính và giờ sinh nếu biết. Nếu tiện, cho mình thêm ngân sách cùng khu vực hoặc vị trí mong muốn; chưa có hai tiêu chí này thì mình vẫn có thể luận hướng trước.`,
+        assistantMessage: `${zodiacLead}Bạn cho mình năm sinh của gia chủ (hoặc ngày sinh đầy đủ nếu có) và giới tính nhé. Với phép Bát Trạch hiện tại, năm sinh + giới tính là đủ để luận hướng tham khảo; giờ sinh chỉ là thông tin bổ sung, không bắt buộc.`,
         requirements,
         quickReplies: [],
       };
     }
 
     if (!requirements.gender) {
-      const dateLead = profileDateUsed
-        ? `Mình đã lấy ngày sinh ${this.formatVietnameseDate(requirements.birthDate)} từ hồ sơ tài khoản nên bạn không cần nhập lại.`
-        : `Mình đã có ngày sinh ${this.formatVietnameseDate(requirements.birthDate)}.`;
-      const timePart = requirements.birthTime
-        ? ` và giờ sinh ${requirements.birthTime}`
-        : '';
-      const askPrompt = requirements.birthTime
-        ? 'Bạn cho mình biết thêm giới tính (nam hoặc nữ) để mình phân tích Bát Tự và tìm hướng hợp nhé.'
-        : 'Bạn cho mình giới tính và giờ sinh nếu biết, chẳng hạn “nam, khoảng 8 giờ sáng”. Nếu không biết giờ sinh, bạn chỉ cần nói giới tính và ghi “không biết giờ sinh”.';
+      const birthLead = requirements.birthDate
+        ? profileDateUsed
+          ? `Mình đã lấy ngày sinh ${this.formatVietnameseDate(requirements.birthDate)} từ hồ sơ tài khoản nên bạn không cần nhập lại.`
+          : `Mình đã có ngày sinh ${this.formatVietnameseDate(requirements.birthDate)}.`
+        : `Mình đã có năm sinh ${requirements.birthYear}.`;
       return {
-        assistantMessage: `${dateLead}${timePart ? ` Mình đã ghi nhận giờ sinh ${requirements.birthTime}.` : ''} ${askPrompt}`,
+        assistantMessage: `${birthLead} Bạn cho mình biết gia chủ là nam hay nữ để tính Cung Mệnh/Bát Trạch đúng nhé. Giờ sinh nếu biết có thể bổ sung sau, nhưng không bắt buộc cho phép tính hướng hiện tại.`,
         requirements,
         quickReplies: [
           {
@@ -5124,35 +5324,8 @@ ${JSON.stringify(options)}
       };
     }
 
-    const folded = this.foldForMemory(input.message);
-    const skipsBirthTime =
-      /\b(?:khong biet|khong ro|bo qua|khong co)\b.{0,30}\b(?:gio sinh|gio)\b/.test(
-        folded,
-      ) || /\bphan tich\b.{0,30}\bkhong co gio sinh\b/.test(folded);
-    const directlyProvidedCore = Boolean(
-      input.directRequirements.birthDate && input.directRequirements.gender,
-    );
-
-    if (!requirements.birthTime && !skipsBirthTime) {
-      const knownParts =
-        profileDateUsed || profileGenderUsed
-          ? `Mình thấy hồ sơ tài khoản có ngày sinh ${this.formatVietnameseDate(requirements.birthDate)} và giới tính ${this.vietnameseGender(requirements.gender)}; bạn không cần nhập lại hai thông tin này.`
-          : `Mình đã có ngày sinh ${this.formatVietnameseDate(requirements.birthDate)} và giới tính ${this.vietnameseGender(requirements.gender)}.`;
-      return {
-        assistantMessage: `${knownParts} Bạn cho mình thêm giờ sinh nếu biết để phần tham khảo đầy đủ hơn. Nếu không biết, bạn có thể chọn “Phân tích không có giờ sinh”. Nếu đang xem cho người khác, hãy gửi ngày sinh và giới tính của người đó thay vì dùng hồ sơ của bạn.`,
-        requirements,
-        quickReplies: [
-          {
-            id: 'bazi-without-birth-time',
-            label: 'Phân tích không có giờ sinh',
-            message:
-              'Mình không biết giờ sinh, hãy phân tích theo ngày sinh và giới tính hiện có.',
-            emphasis: 'strong',
-          },
-        ],
-      };
-    }
-
+    // Birth time is optional for the implemented direction calculator. Never
+    // block a valid year/date + gender request merely to collect extra data.
     return null;
   }
 
@@ -6599,6 +6772,18 @@ Hệ thống không còn lựa chọn giữ chỗ riêng. Việc gửi yêu cầ
       conversationMemoryContext,
     );
     if (contextualRecall) return contextualRecall;
+    const socialFallback = this.buildDeterministicSocialTurn(message);
+    if (socialFallback) return socialFallback.assistantMessage;
+    // Provider-outage only: tolerate a longer natural thank-you/closure sentence
+    // instead of returning the generic "không hiểu" fallback. Normal semantic
+    // routing remains fully LLM-owned.
+    if (
+      /\b(?:de toi|de tui|de minh)\b.{0,60}\b(?:ban voi gia dinh|hoi gia dinh|lien he lai)\b/.test(
+        folded,
+      )
+    ) {
+      return 'Không có gì, bạn cứ bàn thêm với gia đình nhé. Khi quay lại, bạn chỉ cần nhắc phương án hoặc tiêu chí muốn tiếp tục; mình sẽ bám theo cuộc trao đổi hiện tại thay vì bắt bạn nói lại từ đầu.';
+    }
     if (/^(?:xin chao|chao|hello|hi|alo|hey)\b/.test(folded)) {
       return 'Chào bạn! Mình có thể hỗ trợ tìm và so sánh lô, xem giá và tình trạng còn trống, giải thích quy trình mua lô, dịch vụ chăm sóc và tư vấn phong thủy mang tính tham khảo. Bạn muốn bắt đầu từ phần nào?';
     }
@@ -6980,6 +7165,7 @@ Hệ thống không còn lựa chọn giữ chỗ riêng. Việc gửi yêu cầ
     services: SuggestedService[],
     ownedPlots: OwnedPlotContext[] | null = null,
     userMessage?: string,
+    semanticServiceQueries: string[] = [],
   ) {
     if (!services.length) {
       return 'Hiện chưa có dịch vụ đang hoạt động để đề xuất. Bạn muốn mình kiểm tra lại sau hay chuyển sang tư vấn lô và quy trình chăm sóc phù hợp?';
@@ -6999,10 +7185,14 @@ Hệ thống không còn lựa chọn giữ chỗ riêng. Việc gửi yêu cầ
               )}. Mình sẽ dùng chính thông tin này để xác định lô áp dụng, phạm vi chăm sóc và phần thông tin còn thiếu trước khi tạo đơn.`
           : 'Mình chưa thấy tài khoản của bạn sở hữu lô đất nào. Bạn vẫn có thể tham khảo danh mục và chi phí dịch vụ; tuy nhiên hệ thống chỉ tạo đơn chăm sóc sau khi có lô thuộc quyền sử dụng. Bạn có muốn mình tư vấn thêm về lô đất phù hợp không?';
 
-    // Identify which services the user specifically asked about
+    // If the semantic planner already resolved explicit service interests,
+    // the registry has filtered the active catalogue to those authoritative
+    // matches. Trust that resolved subset instead of re-classifying intent from
+    // raw keywords. The raw-message matcher below is outage/compatibility only.
     const matchedServices: SuggestedService[] = [];
-    const otherServices: SuggestedService[] = [];
-    if (userMessage) {
+    if (semanticServiceQueries.length) {
+      matchedServices.push(...options);
+    } else if (userMessage) {
       const normalizedMsg = userMessage
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')
@@ -7024,21 +7214,25 @@ Hệ thống không còn lựa chọn giữ chỗ riêng. Việc gửi yêu cầ
           .trim();
         const keywords = normalizedName
           .split(/\s+/)
-          .filter((word) => word.length >= 2);
+          .filter(
+            (word) =>
+              word.length >= 2 && word !== 'dich' && word !== 'vu',
+          );
         const matchingKeywords = keywords.filter((keyword) =>
           normalizedMsg.includes(keyword),
         );
         const threshold = Math.max(1, Math.ceil(keywords.length / 2));
         if (matchingKeywords.length >= threshold) {
           matchedServices.push(service);
-        } else {
-          otherServices.push(service);
         }
       }
     }
 
     // ── User asked about specific services → detailed analysis ──
-    if (matchedServices.length > 0 && matchedServices.length < options.length) {
+    if (
+      matchedServices.length > 0 &&
+      (semanticServiceQueries.length > 0 || matchedServices.length < options.length)
+    ) {
       const sections: string[] = [];
 
       if (matchedServices.length === 1) {
@@ -7095,19 +7289,10 @@ Hệ thống không còn lựa chọn giữ chỗ riêng. Việc gửi yêu cầ
         sections.push(ownershipAdvice);
       }
 
-      // Suggest other services briefly
-      if (otherServices.length > 0) {
-        sections.push(
-          `Ngoài ra, nghĩa trang còn có ${otherServices.length} dịch vụ khác bạn có thể tham khảo thêm:\n\n` +
-            otherServices
-              .map(
-                (service) =>
-                  `- **${service.name}:** ${service.basePrice.toLocaleString('vi-VN')} VND/${service.unit}${service.description ? ` — ${service.description}` : ''}.`,
-              )
-              .join('\n'),
-        );
-      }
-
+      // The customer asked about specific services. Do not append unrelated
+      // catalogue categories here; they can ask to see the full catalogue in a
+      // separate turn. This prevents “mai táng” from appearing in a care-only
+      // answer merely because it is an active service.
       return sections.filter(Boolean).join('\n\n');
     }
 

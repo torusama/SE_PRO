@@ -287,4 +287,63 @@ describe('PlotRecommendationService', () => {
     );
     expect(String(traceInsert?.[1]?.[6])).not.toContain('bazi_direction_match');
   });
+  it('filters specific care-service interests without falsely matching burial from the generic words dich vu', async () => {
+    const database = {
+      query: jest.fn().mockResolvedValue([
+        {
+          id: 1,
+          name: 'Dịch vụ mai táng',
+          description: 'Hỗ trợ quy trình mai táng tại nghĩa trang',
+          basePrice: 5_000_000,
+          unit: 'lần',
+          category: 'burial',
+        },
+        {
+          id: 2,
+          name: 'Chăm sóc mộ định kỳ',
+          description: 'Vệ sinh và chăm sóc mộ phần hàng tháng',
+          basePrice: 500_000,
+          unit: 'tháng',
+          category: 'maintenance',
+        },
+        {
+          id: 3,
+          name: 'Dọn dẹp mộ',
+          description: 'Lau dọn mộ phần',
+          basePrice: 200_000,
+          unit: 'lần',
+          category: 'maintenance',
+        },
+        {
+          id: 4,
+          name: 'Thắp hương',
+          description: 'Thắp hương vào ngày đặc biệt',
+          basePrice: 100_000,
+          unit: 'lần',
+          category: 'memorial',
+        },
+      ]),
+    };
+    const service = new PlotRecommendationService(
+      database as unknown as DatabaseService,
+      new PlotAdjacencyService(),
+      new BaziRuleService(),
+    );
+
+    const services = await service.getServiceSuggestions(5, [
+      'chăm sóc mộ phần',
+      'lau dọn mộ',
+      'thắp hương ngày rằm',
+    ]);
+
+    expect(services.map((item) => item.name)).toEqual(
+      expect.arrayContaining([
+        'Chăm sóc mộ định kỳ',
+        'Dọn dẹp mộ',
+        'Thắp hương',
+      ]),
+    );
+    expect(services.map((item) => item.name)).not.toContain('Dịch vụ mai táng');
+  });
+
 });
