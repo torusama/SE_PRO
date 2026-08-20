@@ -941,7 +941,6 @@ export class AutonomousLearningService {
     if (
       ![
         'user_preference',
-        'conversation_correction',
         'business_rule',
         'faq',
         'information_correction',

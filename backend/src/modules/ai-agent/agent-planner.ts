@@ -96,6 +96,11 @@ export const AGENT_PLANNER_TOOL = {
           description:
             'True when the customer explicitly asks to compare or contrast options.',
         },
+        excludePreviousRecommendations: {
+          type: 'boolean',
+          description:
+            'True only when the customer semantically asks for different/fresh plot options and does not want previously shown recommendations repeated. Backend will translate this into plot-id exclusions from conversation state.',
+        },
         preferredZone: {
           type: 'string',
           description:
@@ -364,6 +369,7 @@ export interface AgentPlan {
   clarificationQuestion: string;
   directResponse?: string;
   personalMemoryReset?: 'none' | 'request' | 'confirm' | 'cancel';
+  excludePreviousRecommendations?: boolean;
   requirements: AgentRequirements;
   memoryProposals?: MemoryProposal[];
   customerProposal?: CustomerAdminProposal;
@@ -679,6 +685,10 @@ export function parseAgentPlan(raw: string): AgentPlan {
       parsed.personalMemoryReset === 'cancel' ||
       parsed.personalMemoryReset === 'none'
         ? parsed.personalMemoryReset
+        : undefined,
+    excludePreviousRecommendations:
+      typeof parsed.excludePreviousRecommendations === 'boolean'
+        ? parsed.excludePreviousRecommendations
         : undefined,
     requirements: Object.fromEntries(
       Object.entries(requirements).filter(([, value]) => value !== undefined),

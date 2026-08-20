@@ -19,7 +19,7 @@ export interface LearningJournalRow {
   updatedAt: string;
 }
 
-export interface ReflectionLesson {
+interface ReflectionLesson {
   title: string;
   summary: string;
   preventionRule: string;
