@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Search,
@@ -273,6 +279,9 @@ export default function ServicePage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const focusedOrderId = Number(searchParams.get("order")) || null;
+  // Cho phép các trang khác (ví dụ Nhắc lịch) điều hướng tới đây kèm
+  // ?lotId=... để tự động chọn sẵn đúng lô khi mở tab đặt dịch vụ.
+  const focusedLotId = Number(searchParams.get("lotId")) || null;
   const token = useAuthStore((s) => s.token);
   const isAuthenticated = Boolean(token);
 
@@ -449,8 +458,14 @@ export default function ServicePage() {
             : [contract],
         );
       setOwnedPlots(plots);
-      if (plots.length && selectedPlotId === null)
-        setSelectedPlotId(plots[0].plotId);
+      if (plots.length && selectedPlotId === null) {
+        const matched =
+          focusedLotId !== null &&
+          plots.some((plot) => plot.plotId === focusedLotId)
+            ? focusedLotId
+            : plots[0].plotId;
+        setSelectedPlotId(matched);
+      }
       const requestedOrderId = focusedOrderId ?? 0;
       const requestedIndex = loadedOrders.findIndex(
         (order) => order.id === requestedOrderId,
@@ -560,18 +575,32 @@ export default function ServicePage() {
     navigate(ROUTES.LOGIN, { state: { from: { pathname: ROUTES.SERVICES } } });
   }
 
+  // Khu vực tab "Danh mục dịch vụ / Đặt dịch vụ / Theo dõi đơn". Khi bấm các
+  // nút CTA ở đầu trang ("Đặt dịch vụ mới", "Theo dõi đơn đã đặt"), ngoài
+  // việc chuyển tab tương ứng còn cần tự cuộn xuống khu vực này để người
+  // dùng thấy ngay nội dung vừa chuyển, thay vì vẫn đứng yên ở đầu trang.
+  const tabSectionRef = useRef<HTMLElement>(null);
+  function scrollToTabSection() {
+    tabSectionRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+    });
+  }
+
   function openBooking(serviceId?: number) {
     if (!isAuthenticated) return goToLogin();
     if (serviceId) setSelectedServiceId(serviceId);
     setSubmitError("");
     setSubmitOk("");
     setTab("book");
+    scrollToTabSection();
   }
 
   function openTrack() {
     if (!isAuthenticated) return goToLogin();
     setTab("track");
     setPage(1);
+    scrollToTabSection();
   }
 
   async function submitBooking() {
@@ -786,7 +815,12 @@ export default function ServicePage() {
           </section>
         )}
 
-        <nav className="tab-bar" data-reveal aria-label="Điều hướng dịch vụ">
+        <nav
+          ref={tabSectionRef}
+          className="tab-bar"
+          data-reveal
+          aria-label="Điều hướng dịch vụ"
+        >
           <button
             className={`tab ${tab === "catalogue" ? "active" : ""}`}
             onClick={() => setTab("catalogue")}

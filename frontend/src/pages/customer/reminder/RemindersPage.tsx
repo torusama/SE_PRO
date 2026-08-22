@@ -612,10 +612,15 @@ export default function RemindersPage() {
     return { cls: "far", text: `Còn ${days} ngày` };
   }
 
-  /** Điều hướng sang trang đặt dịch vụ cúng lễ, gắn kèm lô liên quan nếu có. */
+  /** Điều hướng sang trang đặt dịch vụ cúng lễ, gắn kèm lô liên quan nếu có.
+   * Lưu ý: trước đây dùng ROUTES.SERVICE_BOOK ("/dich-vu/dat/:lotId") nhưng
+   * route này chưa từng được đăng ký trong router, nên bấm vào không dẫn đi
+   * đâu cả. Trang "/dich-vu" (ServicePage) đã hỗ trợ sẵn tham số ?lotId= để
+   * tự động chọn đúng lô, nên điều hướng qua đó thay vì một route không tồn
+   * tại. */
   function goBookService(reminder: Reminder) {
     if (reminder.plotId)
-      navigate(ROUTES.SERVICE_BOOK.replace(":lotId", String(reminder.plotId)));
+      navigate(`${ROUTES.SERVICES}?lotId=${reminder.plotId}`);
     else navigate(ROUTES.SERVICES);
   }
 
