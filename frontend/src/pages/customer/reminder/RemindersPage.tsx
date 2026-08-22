@@ -1050,46 +1050,49 @@ export default function RemindersPage() {
             )}
 
             {form.isRecurring ? (
-              <div className="field field-row">
-                <div>
-                  <label htmlFor="reminder-month">
-                    Tháng (
-                    {form.calendarType === "lunar" ? "âm lịch" : "dương lịch"})
-                  </label>
-                  <select
-                    id="reminder-month"
-                    value={form.remindMonth}
-                    onChange={(e) =>
-                      setForm({ ...form, remindMonth: e.target.value })
-                    }
-                  >
-                    <option value="">--</option>
-                    {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                      <option key={m} value={m}>
-                        Tháng {m}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label htmlFor="reminder-day">Ngày</label>
-                  <select
-                    id="reminder-day"
-                    value={form.remindDay}
-                    onChange={(e) =>
-                      setForm({ ...form, remindDay: e.target.value })
-                    }
-                  >
-                    <option value="">--</option>
-                    {Array.from(
-                      { length: form.calendarType === "lunar" ? 30 : 31 },
-                      (_, i) => i + 1,
-                    ).map((d) => (
-                      <option key={d} value={d}>
-                        Ngày {d}
-                      </option>
-                    ))}
-                  </select>
+              <div className="field">
+                <p className="field-hint field-hint-calendar">
+                  Ngày và tháng bên dưới được tính theo{" "}
+                  {form.calendarType === "lunar" ? "Âm lịch" : "Dương lịch"}.
+                </p>
+                <div className="field-row">
+                  <div>
+                    <label htmlFor="reminder-day">Ngày</label>
+                    <select
+                      id="reminder-day"
+                      value={form.remindDay}
+                      onChange={(e) =>
+                        setForm({ ...form, remindDay: e.target.value })
+                      }
+                    >
+                      <option value="">--</option>
+                      {Array.from(
+                        { length: form.calendarType === "lunar" ? 30 : 31 },
+                        (_, i) => i + 1,
+                      ).map((d) => (
+                        <option key={d} value={d}>
+                          Ngày {d}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="reminder-month">Tháng</label>
+                    <select
+                      id="reminder-month"
+                      value={form.remindMonth}
+                      onChange={(e) =>
+                        setForm({ ...form, remindMonth: e.target.value })
+                      }
+                    >
+                      <option value="">--</option>
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                        <option key={m} value={m}>
+                          Tháng {m}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
                 {form.calendarType === "lunar" &&
                   form.remindDay &&

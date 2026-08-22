@@ -1102,7 +1102,10 @@ function ProfileList({
                 )}
               </div>
               {expandedId === profile.id && (
-                <div onClick={(event) => event.stopPropagation()}>
+                <div
+                  className="df-profile-expanded"
+                  onClick={(event) => event.stopPropagation()}
+                >
                   {editingId === profile.id && run && reload ? (
                     <EditProfileForm
                       profile={profile}
