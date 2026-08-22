@@ -661,10 +661,23 @@
   margin-top: 15px;
 }
 
+/* Ngày sinh & Ngày giỗ đứng riêng từng hàng (thay vì chia đôi cột) để ô
+   Năm có đủ chỗ hiển thị trọn 4 chữ số kể cả khi có nút tăng/giảm. */
+.df-dmy-grid {
+  grid-template-columns: 1fr;
+}
+
 .df-dmy-inputs {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: minmax(64px, 0.7fr) minmax(76px, 0.9fr) minmax(
+      104px,
+      1fr
+    );
   gap: 10px;
+}
+
+.df-dmy-inputs input[type="number"] {
+  padding-right: 6px;
 }
 
 .df-lunar-hint {

@@ -7,7 +7,7 @@ type MenuItem = {
   to: string;
   badge?: number;
   /** Key into useAdminSidebarAlerts() for a live "cần xử lý ngay" count. */
-  alertKey?: "notify" | "requests" | "appointments";
+  alertKey?: "notify" | "requests" | "appointments" | "deceased";
 };
 
 type MenuGroup = {
@@ -49,7 +49,11 @@ const MENU: MenuGroup[] = [
     items: [
       { label: "Quản lý dịch vụ", to: ROUTES.ADMIN_SERVICES },
       { label: "Nhắc lịch ngày giỗ", to: ROUTES.ADMIN_REMINDERS },
-      { label: "Hồ sơ người đã khuất", to: ROUTES.ADMIN_DECEASED },
+      {
+        label: "Hồ sơ người đã khuất",
+        to: ROUTES.ADMIN_DECEASED,
+        alertKey: "deceased",
+      },
     ],
   },
   {

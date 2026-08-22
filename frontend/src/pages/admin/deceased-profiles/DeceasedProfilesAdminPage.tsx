@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
+import { usePromptDialog } from "@/hooks/usePromptDialog";
 import "../AdminCorePages.css";
 import "./DeceasedProfilesAdminPage.css";
 
@@ -98,6 +100,8 @@ export default function DeceasedProfilesAdminPage() {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const { confirm, dialog: confirmDialog } = useConfirmDialog();
+  const { promptFor, dialog: promptDialog } = usePromptDialog();
 
   const load = useCallback(
     async (silent = false) => {
@@ -182,8 +186,15 @@ export default function DeceasedProfilesAdminPage() {
   }
   async function reject() {
     if (!current) return;
-    const reason = window.prompt("Lý do từ chối hồ sơ?");
-    if (!reason) return;
+    const reason = await promptFor({
+      title: "Từ chối hồ sơ",
+      message: "Nhập lý do từ chối hồ sơ này:",
+      placeholder: "Lý do từ chối...",
+      confirmLabel: "Từ chối hồ sơ",
+      variant: "danger",
+      required: true,
+    });
+    if (!reason?.trim()) return;
     setBusy("reject");
     setError("");
     setMessage("");
@@ -199,12 +210,13 @@ export default function DeceasedProfilesAdminPage() {
   }
   async function approveDeletion() {
     if (!current) return;
-    if (
-      !window.confirm(
-        `Duyệt yêu cầu xoá hồ sơ "${current.fullName}"? Hành động này không thể hoàn tác.`,
-      )
-    )
-      return;
+    const confirmed = await confirm({
+      title: "Duyệt yêu cầu xoá hồ sơ",
+      message: `Duyệt yêu cầu xoá hồ sơ "${current.fullName}"? Hành động này không thể hoàn tác.`,
+      confirmLabel: "Duyệt & xoá hồ sơ",
+      variant: "danger",
+    });
+    if (!confirmed) return;
     setBusy("approve-deletion");
     setError("");
     setMessage("");
@@ -220,9 +232,14 @@ export default function DeceasedProfilesAdminPage() {
   }
   async function denyDeletion() {
     if (!current) return;
-    const reason = window.prompt(
-      "Lý do từ chối yêu cầu xoá? (sẽ hiển thị lại cho gia đình)",
-    );
+    const reason = await promptFor({
+      title: "Từ chối yêu cầu xoá",
+      message: "Lý do từ chối yêu cầu xoá? (sẽ hiển thị lại cho gia đình)",
+      placeholder: "Lý do từ chối yêu cầu xoá...",
+      confirmLabel: "Từ chối yêu cầu",
+      variant: "danger",
+      required: true,
+    });
     if (!reason?.trim()) return;
     setBusy("deny-deletion");
     setError("");
@@ -563,6 +580,8 @@ export default function DeceasedProfilesAdminPage() {
           )}
         </main>
       </div>
+      {confirmDialog}
+      {promptDialog}
     </div>
   );
 }

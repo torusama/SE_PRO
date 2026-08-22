@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { HelpCircle } from "lucide-react";
 import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
 import { api } from "@/lib/api";
@@ -6,6 +6,8 @@ import { useAuthStore } from "@/store/authStore";
 import { nextLunarOccurrence } from "@/lib/lunarCalendar";
 import NavyStarfield from "@/components/decor/NavyStarfield";
 import GuidePopup, { type GuideStep } from "@/components/guide/GuidePopup";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
+import { usePromptDialog } from "@/hooks/usePromptDialog";
 import "./DeceasedFamilyPage.css";
 
 const FAMILY_GUIDE_STORAGE_KEY = "hideGuide_deceasedFamilyPage";
@@ -179,6 +181,7 @@ export default function DeceasedFamilyPage() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [guideOpen, setGuideOpen] = useState(false);
+  const { promptFor, dialog: promptDialog } = usePromptDialog();
 
   const run = async (
     operation: () => Promise<void>,
@@ -391,14 +394,23 @@ export default function DeceasedFamilyPage() {
                 }, "Đã xác minh hồ sơ.")
               }
               onReject={(id) => {
-                const reason = window.prompt("Nhập lý do từ chối hồ sơ:");
-                if (!reason?.trim()) return;
-                void run(async () => {
-                  await api.patch(`/admin/deceased/${id}/reject`, {
-                    reason: reason.trim(),
+                void (async () => {
+                  const reason = await promptFor({
+                    title: "Từ chối hồ sơ",
+                    message: "Nhập lý do từ chối hồ sơ này:",
+                    placeholder: "Lý do từ chối...",
+                    confirmLabel: "Từ chối hồ sơ",
+                    variant: "danger",
+                    required: true,
                   });
-                  await load();
-                }, "Đã từ chối hồ sơ.");
+                  if (reason === null || !reason.trim()) return;
+                  await run(async () => {
+                    await api.patch(`/admin/deceased/${id}/reject`, {
+                      reason: reason.trim(),
+                    });
+                    await load();
+                  }, "Đã từ chối hồ sơ.");
+                })();
               }}
             />
           </section>
@@ -417,16 +429,23 @@ export default function DeceasedFamilyPage() {
                   run={run}
                   reload={load}
                   onRequestDeletion={(id) => {
-                    const reason = window.prompt(
-                      "Lý do muốn xoá hồ sơ này? (không bắt buộc, admin sẽ xem để xét duyệt)",
-                    );
-                    if (reason === null) return; // người dùng bấm Hủy
-                    void run(async () => {
-                      await api.post(`/deceased/${id}/request-deletion`, {
-                        reason: reason.trim() || undefined,
+                    void (async () => {
+                      const reason = await promptFor({
+                        title: "Yêu cầu xoá hồ sơ",
+                        message:
+                          "Lý do muốn xoá hồ sơ này? (không bắt buộc, admin sẽ xem để xét duyệt)",
+                        placeholder: "Lý do (không bắt buộc)...",
+                        confirmLabel: "Gửi yêu cầu",
+                        variant: "danger",
                       });
-                      await load();
-                    }, "Đã gửi yêu cầu xoá hồ sơ tới admin, vui lòng chờ duyệt.");
+                      if (reason === null) return; // người dùng bấm Huỷ
+                      await run(async () => {
+                        await api.post(`/deceased/${id}/request-deletion`, {
+                          reason: reason.trim() || undefined,
+                        });
+                        await load();
+                      }, "Đã gửi yêu cầu xoá hồ sơ tới admin, vui lòng chờ duyệt.");
+                    })();
                   }}
                   onCancelDeletionRequest={(id) =>
                     void run(async () => {
@@ -486,6 +505,7 @@ export default function DeceasedFamilyPage() {
           </>
         )}
       </div>
+      {promptDialog}
     </main>
   );
 }
@@ -717,7 +737,7 @@ function CreateProfileForm({
 
       <CalendarModeToggle value={calendarMode} onChange={setCalendarMode} />
 
-      <div className="df-form-grid">
+      <div className="df-form-grid df-dmy-grid">
         <DayMonthYearField
           label="Ngày sinh"
           calendarMode={calendarMode}
@@ -831,10 +851,42 @@ function DayMonthYearField({
   onYearChange: (value: string) => void;
   showLunarPreview?: boolean;
 }) {
-  const preview =
-    showLunarPreview && calendarMode === "lunar" && day && month
-      ? nextLunarOccurrence(Number(day), Number(month))
-      : null;
+  const { confirm, dialog } = useConfirmDialog();
+  // Tránh hiện lại popup nhiều lần cho cùng một cặp ngày/tháng (vd khi
+  // component render lại nhưng người dùng chưa đổi giá trị nào khác).
+  const lastPromptedKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!showLunarPreview || calendarMode !== "lunar" || !day || !month) {
+      lastPromptedKeyRef.current = null;
+      return;
+    }
+    const preview = nextLunarOccurrence(Number(day), Number(month));
+    if (!preview) return;
+    const key = `${day}/${month}`;
+    if (lastPromptedKeyRef.current === key) return;
+    lastPromptedKeyRef.current = key;
+    void confirm({
+      title: "Xác nhận ngày giỗ Âm lịch",
+      message: (
+        <>
+          Ngày giỗ {day}/{month} Âm lịch nhằm ngày:
+          <strong>{preview.toLocaleDateString("vi-VN")}</strong> Dương lịch .
+          Bạn có muốn được Nhắc lịch ngày giỗ vào ngày này ?
+        </>
+      ),
+      confirmLabel: "Được",
+      cancelLabel: "Từ chối",
+      variant: "info",
+    }).then((accepted) => {
+      if (!accepted) {
+        onDayChange("");
+        onMonthChange("");
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [day, month, calendarMode, showLunarPreview]);
+
   return (
     <div className="df-field df-dmy-field">
       <span>
@@ -876,12 +928,7 @@ function DayMonthYearField({
           onChange={(event) => onYearChange(event.target.value)}
         />
       </div>
-      {preview && (
-        <small className="df-lunar-hint">
-          Âm lịch {day}/{month} — hệ thống sẽ tự nhắc vào ngày Dương lịch gần
-          nhất tương ứng: {preview.toLocaleDateString("vi-VN")}.
-        </small>
-      )}
+      {dialog}
     </div>
   );
 }
@@ -1177,7 +1224,7 @@ function EditProfileForm({
         />
       </div>
       <CalendarModeToggle value={calendarMode} onChange={setCalendarMode} />
-      <div className="df-form-grid">
+      <div className="df-form-grid df-dmy-grid">
         <DayMonthYearField
           label="Ngày sinh"
           calendarMode={calendarMode}
