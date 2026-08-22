@@ -14,7 +14,6 @@ server/.env.*
 frontend/.env
 frontend/.env.*
 !frontend/.env.example
-SE_PRO/
 
 # Local uploads (avatars, etc.)
 backend/uploads/

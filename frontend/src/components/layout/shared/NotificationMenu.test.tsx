@@ -117,11 +117,11 @@ describe("NotificationMenu", () => {
       await screen.findByRole("button", { name: "Thông báo, 2 chưa đọc" }),
     );
     fireEvent.click(
-      screen.getByRole("button", { name: /Dịch vụ đã hoàn tất/ }),
+      screen.getByRole("button", { name: /Thông báo hệ thống/ }),
     );
 
     await waitFor(() =>
-      expect(apiMocks.patch).toHaveBeenCalledWith("/notifications/2/read"),
+      expect(apiMocks.patch).toHaveBeenCalledWith("/notifications/1/read"),
     );
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     fireEvent.click(

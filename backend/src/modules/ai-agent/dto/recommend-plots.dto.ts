@@ -88,6 +88,13 @@ export class RecommendPlotsDto {
   birthDate?: string;
 
   @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1900)
+  @Max(2100)
+  birthYear?: number;
+
+  @IsOptional()
   @IsString()
   @MaxLength(10)
   birthTime?: string;

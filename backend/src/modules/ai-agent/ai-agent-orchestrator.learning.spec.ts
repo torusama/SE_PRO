@@ -93,8 +93,9 @@ function setup(
   } | null = null,
 ) {
   let messageId = 100;
+  const persistedMessages: any[] = [];
   const database = {
-    queryOne: jest.fn<any, any>((sql: string) => {
+    queryOne: jest.fn<any, any>((sql: string, params?: any[]) => {
       if (sql.includes('INSERT INTO ai_conversations')) {
         return { id: 10, sessionId: 'SES-1', userId: 7 };
       }
@@ -103,6 +104,14 @@ function setup(
           throw new Error('message database unavailable');
         }
         messageId += 1;
+        persistedMessages.push({
+          id: messageId,
+          role: params?.[1] ?? 'user',
+          content: params?.[2] ?? '',
+          intent: params?.[3] ?? 'general_question',
+          extractedData: params?.[4] ? JSON.parse(params[4]) : {},
+          metadata: params?.[5] ? JSON.parse(params[5]) : {},
+        });
         return { id: messageId };
       }
       if (sql.includes('FROM users')) {
@@ -110,7 +119,12 @@ function setup(
       }
       return null;
     }),
-    query: jest.fn<any, any>(() => []),
+    query: jest.fn<any, any>((sql: string) => {
+      if (sql.includes('FROM ai_messages')) {
+        return [...persistedMessages];
+      }
+      return [];
+    }),
   };
   const config = {
     get: jest.fn<any, any>((key: string) => {

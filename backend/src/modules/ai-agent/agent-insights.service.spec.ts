@@ -137,7 +137,7 @@ describe('AgentInsightsService', () => {
     const result = await service.getCustomerCareOverview(7);
 
     expect(database.queryOne).toHaveBeenCalledWith(expect.any(String), [7]);
-    expect(database.query).toHaveBeenCalledTimes(4);
+    expect(database.query).toHaveBeenCalledTimes(6);
     for (const call of database.query.mock.calls) {
       expect(call[1]).toEqual([7]);
     }

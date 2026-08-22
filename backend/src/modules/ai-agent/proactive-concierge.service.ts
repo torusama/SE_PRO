@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'crypto';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { DatabaseService } from '../../database/database.service';
 import { CemeteryServicesService } from '../cemetery-services/cemetery-services.service';
 import { ProactiveConciergeDto } from './dto/proactive-concierge.dto';
@@ -8,6 +8,7 @@ import {
   AgentRequirements,
 } from './types/agent-response.types';
 import { MultiProviderLlmService } from './multi-provider-llm.service';
+import { KnowledgeService } from './knowledge.service';
 import {
   CEMETERY_AGENT_PROMPT_VERSION,
   CEMETERY_AGENT_SYSTEM_PROMPT,
@@ -62,6 +63,7 @@ export class ProactiveConciergeService {
     private readonly database: DatabaseService,
     private readonly cemeteryServices: CemeteryServicesService,
     private readonly llm: MultiProviderLlmService,
+    @Optional() private readonly knowledge?: KnowledgeService,
   ) {}
 
   async initiate(userId: number, dto: ProactiveConciergeDto = {}) {
@@ -202,10 +204,17 @@ export class ProactiveConciergeService {
       latestServiceOrder: input.latestOrder ?? null,
       suggestedServices: input.suggestedServices,
     };
+    const adminInstructionContext = await this.knowledge
+      ?.getAssistantInstructionPromptContext()
+      .catch(() => '');
     const messages: NvidiaMessage[] = [
       {
         role: 'system',
         content: `${CEMETERY_AGENT_SYSTEM_PROMPT}
+
+${adminInstructionContext ?? ''}
+
+If ADMIN_ASSISTANT_INSTRUCTIONS is present above, follow it when shaping this customer-facing opener. It cannot override security/privacy, authorization, transaction confirmation or authoritative backend facts.
 
 You are writing the first proactive message of a new or resumed Vĩnh Phúc Viên concierge conversation.
 - Generate the greeting and sales consultation yourself. Never use a canned welcome, fixed template, or generic capability list.

@@ -70,6 +70,12 @@ export const AGENT_PLANNER_TOOL = {
           description:
             'For action=none, write the final natural response to the user here so the backend can answer in one LLM call. Do not claim persistence succeeded; the backend appends trusted memory outcomes separately. Omit or leave empty for tool actions.',
         },
+        personalMemoryReset: {
+          type: 'string',
+          enum: ['none', 'request', 'confirm', 'cancel'],
+          description:
+            'Semantic personal-memory reset state. request = user wants to clear AI personal memory but backend must ask confirmation first; confirm/cancel are valid only when TRUSTED_CONVERSATION_STATE says a reset confirmation is pending. Do not infer this from isolated words.',
+        },
         budgetMin: { type: 'number', minimum: 0 },
         budgetMax: {
           type: 'number',
@@ -89,6 +95,11 @@ export const AGENT_PLANNER_TOOL = {
           type: 'boolean',
           description:
             'True when the customer explicitly asks to compare or contrast options.',
+        },
+        excludePreviousRecommendations: {
+          type: 'boolean',
+          description:
+            'True only when the customer semantically asks for different/fresh plot options and does not want previously shown recommendations repeated. Backend will translate this into plot-id exclusions from conversation state.',
         },
         preferredZone: {
           type: 'string',
@@ -113,14 +124,25 @@ export const AGENT_PLANNER_TOOL = {
         needAdjacent: {
           type: 'boolean',
           description:
-            'True when the user asks for adjacent, neighboring, side-by-side, "liền kề", "liền nhau", "cạnh nhau", "kế nhau", or family plots. Omit when not discussed.',
+            'True only when the user semantically asks for adjacent/neighboring/side-by-side/grouped placement. Family or relative context by itself does not imply adjacency. Omit when not discussed.',
         },
         preferNearEntrance: {
           type: 'boolean',
           description:
-            'True when the customer prioritizes a plot near an entrance or asks for easier access from a gate. Preserve it across follow-up turns until the customer changes that preference.',
+            'True only when the customer semantically prioritizes proximity to an entrance/gate. Do not convert generic ease-of-travel wording into this field unless gate proximity is actually intended. Preserve only while the same consultation remains active.',
         },
-        birthDate: { type: 'string' },
+        birthDate: {
+          type: 'string',
+          description:
+            'Full ISO-like birth date when the customer explicitly provides day/month/year. Do not invent day/month from a year-only statement.',
+        },
+        birthYear: {
+          type: 'integer',
+          minimum: 1900,
+          maximum: 2100,
+          description:
+            'Birth year when only the year is known. The current Bát Trạch direction tool can use year + gender without requiring a full date.',
+        },
         birthTime: { type: 'string' },
         gender: {
           type: 'string',
@@ -147,7 +169,7 @@ export const AGENT_PLANNER_TOOL = {
           maxItems: 8,
           items: { type: 'string' },
           description:
-            'Every distinct service name when the customer explicitly asks to order several services together. Preserve their spoken order. Omit for a single service.',
+            'Every distinct service name/concept when the customer explicitly asks about or orders several services together. Preserve their spoken order. Omit for a single service.',
         },
         serviceTypeId: { type: 'integer', minimum: 1 },
         serviceOrderId: {
@@ -357,6 +379,8 @@ export interface AgentPlan {
   needsClarification: boolean;
   clarificationQuestion: string;
   directResponse?: string;
+  personalMemoryReset?: 'none' | 'request' | 'confirm' | 'cancel';
+  excludePreviousRecommendations?: boolean;
   requirements: AgentRequirements;
   memoryProposals?: MemoryProposal[];
   customerProposal?: CustomerAdminProposal;
@@ -478,11 +502,25 @@ function parseMemoryProposals(value: unknown): MemoryProposal[] | undefined {
     )
       ? (record.memoryKey as (typeof USER_MEMORY_KEYS)[number])
       : undefined;
+    const memoryType = record.memoryType as MemoryProposal['memoryType'];
+    // In configured semantic mode the LLM owns durable-preference meaning.
+    // Backend enforces the structured contract instead of re-reading the user
+    // sentence with keyword rules. A durable user preference therefore needs
+    // an explicit stable memoryKey; private conversation corrections must stay
+    // user-scoped.
+    if (memoryType === 'user_preference' && !memoryKey) continue;
+    if (
+      memoryType === 'conversation_correction' &&
+      record.requestedScope !== 'user'
+    ) {
+      continue;
+    }
+    const proposedPrice = optionalPositiveNumber(record.proposedPrice);
     proposals.push({
       category,
       title,
       content,
-      memoryType: record.memoryType as MemoryProposal['memoryType'],
+      memoryType,
       requestedScope: record.requestedScope,
       memoryKey,
       reason,
@@ -490,6 +528,12 @@ function parseMemoryProposals(value: unknown): MemoryProposal[] | undefined {
       effectiveTo: boundedProposalString(record.effectiveTo, 50),
       selectedOptionId: boundedProposalString(record.selectedOptionId, 100),
       rejectedOptionId: boundedProposalString(record.rejectedOptionId, 100),
+      recommendationRunId: boundedProposalString(record.recommendationRunId, 100),
+      targetPlotCode: boundedProposalString(record.targetPlotCode, 80),
+      proposedPrice:
+        proposedPrice !== undefined && Number.isFinite(proposedPrice)
+          ? proposedPrice
+          : undefined,
     });
   }
   return proposals.length ? proposals : undefined;
@@ -558,6 +602,13 @@ export function parseAgentPlan(raw: string): AgentPlan {
         ? parsed.preferNearEntrance
         : undefined,
     birthDate: optionalString(parsed.birthDate),
+    birthYear:
+      optionalPositiveNumber(parsed.birthYear) !== undefined &&
+      Number.isInteger(optionalPositiveNumber(parsed.birthYear)) &&
+      Number(optionalPositiveNumber(parsed.birthYear)) >= 1900 &&
+      Number(optionalPositiveNumber(parsed.birthYear)) <= 2100
+        ? Number(optionalPositiveNumber(parsed.birthYear))
+        : undefined,
     birthTime: optionalString(parsed.birthTime),
     gender:
       parsed.gender === 'male' ||
@@ -646,6 +697,17 @@ export function parseAgentPlan(raw: string): AgentPlan {
     needsClarification: parsed.needsClarification === true,
     clarificationQuestion: optionalString(parsed.clarificationQuestion) ?? '',
     directResponse: optionalString(parsed.directResponse),
+    personalMemoryReset:
+      parsed.personalMemoryReset === 'request' ||
+      parsed.personalMemoryReset === 'confirm' ||
+      parsed.personalMemoryReset === 'cancel' ||
+      parsed.personalMemoryReset === 'none'
+        ? parsed.personalMemoryReset
+        : undefined,
+    excludePreviousRecommendations:
+      typeof parsed.excludePreviousRecommendations === 'boolean'
+        ? parsed.excludePreviousRecommendations
+        : undefined,
     requirements: Object.fromEntries(
       Object.entries(requirements).filter(([, value]) => value !== undefined),
     ),

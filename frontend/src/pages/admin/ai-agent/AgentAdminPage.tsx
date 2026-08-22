@@ -103,6 +103,16 @@ const formatDate = (value?: string) => {
       }).format(date);
 };
 
+const newestFirst = <T extends { createdAt: string }>(items: T[]) =>
+  [...items].sort((a, b) => {
+    const aTime = Date.parse(a.createdAt);
+    const bTime = Date.parse(b.createdAt);
+    if (Number.isNaN(aTime) && Number.isNaN(bTime)) return 0;
+    if (Number.isNaN(aTime)) return 1;
+    if (Number.isNaN(bTime)) return -1;
+    return bTime - aTime;
+  });
+
 const knowledgeTypeLabel = (value: string) =>
   ({
     faq: "Thông tin / câu hỏi thường gặp",
@@ -234,7 +244,7 @@ const knowledgeCategoryLabel = (value: string) => {
     general: "Tri thức chung",
   } as Record<string, string>)[normalized.toLowerCase()];
   if (known) return known;
-  return /^[a-z0-9_\-]+$/i.test(normalized)
+  return /^[a-z0-9_-]+$/i.test(normalized)
     ? "Nhóm tri thức hệ thống"
     : capitalizeFirstLetter(normalized);
 };
@@ -288,7 +298,7 @@ const reviewReasonLabel = (value?: string) => {
   ) {
     return "Nội dung này đã được thay thế bằng một bản tri thức mới hơn đã được duyệt.";
   }
-  return /^[\x00-\x7F]+$/.test(value)
+  return !/[^\x20-\x7E\t\r\n]/.test(value)
     ? "Lý do kiểm duyệt được ghi nhận từ phiên bản hệ thống trước."
     : value;
 };
@@ -373,10 +383,10 @@ export default function AgentAdminPage() {
       const knowledgeData = payload<KnowledgeProposal[]>(results[3]);
       const inventoryData = payload<KnowledgeProposal[]>(results[4]);
       const journalData = payload<LearningJournalItem[]>(results[5]);
-      setFeedback(feedbackData ?? []);
+      setFeedback(newestFirst(feedbackData ?? []));
       setAnalytics(analyticsData);
-      setCustomerProposals(customerProposalData ?? []);
-      setKnowledgeProposals(knowledgeData ?? []);
+      setCustomerProposals(newestFirst(customerProposalData ?? []));
+      setKnowledgeProposals(newestFirst(knowledgeData ?? []));
       setKnowledgeInventory(inventoryData ?? []);
       setLearningJournal(journalData ?? []);
 
@@ -858,10 +868,6 @@ export default function AgentAdminPage() {
                       trả lời những người dùng khác.
                     </p>
                   </div>
-                  <div className="agent-admin__section-count">
-                    <strong>{pendingKnowledgeCount}</strong>
-                    <span>chờ xác minh</span>
-                  </div>
                 </header>
 
               <div className="agent-admin__review-queue">
@@ -946,8 +952,8 @@ export default function AgentAdminPage() {
                 <header>
                   <h3>Hiệu chỉnh câu trả lời cần xử lý</h3>
                   <p>
-                    {pendingCount} phản hồi đang chờ. Chỉ bật “áp dụng hiệu
-                    chỉnh” khi nội dung sửa đã được đối chiếu.
+                    Các phản hồi cần được đối chiếu trước khi duyệt. Chỉ bật
+                    “áp dụng hiệu chỉnh” khi nội dung sửa đã được xác minh.
                   </p>
                 </header>
                 <div className="agent-admin__list">
@@ -1030,10 +1036,6 @@ export default function AgentAdminPage() {
                       và khiếu nại được tách khỏi kho tri thức. Trợ lý chỉ ghi nhận
                       và chuyển tiếp; quyền quyết định vẫn thuộc quản trị viên.
                     </p>
-                  </div>
-                  <div className="agent-admin__section-count">
-                    <strong>{pendingCustomerProposalCount}</strong>
-                    <span>đề xuất đang chờ</span>
                   </div>
                 </header>
                 <div className="agent-admin__review-queue">

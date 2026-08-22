@@ -138,6 +138,8 @@ export interface AgentRequirements {
   /** Session-local plots to omit when the customer asks for different options. */
   excludePlotIds?: number[];
   birthDate?: string;
+  /** Birth year can be enough for the current Bát Trạch/Mệnh Quái calculation. */
+  birthYear?: number;
   birthTime?: string;
   gender?: 'male' | 'female' | 'other';
   /** Zodiac understood from natural language; narrative context, never a hard inventory filter. */

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import {
   BaziBadDirection,
   BaziGoodDirection,
@@ -677,14 +677,26 @@ const ELEMENT_RELATIONS: Record<
 @Injectable()
 export class BaziRuleService {
   suggest(input: {
-    birthDate: string;
+    birthDate?: string;
+    birthYear?: number;
     birthTime?: string;
-    gender?: string;
+    gender: 'male' | 'female';
   }): BaziSuggestion {
-    const dateObj = new Date(input.birthDate);
-    const year = Number.isNaN(dateObj.getTime())
-      ? 1990
-      : dateObj.getUTCFullYear();
+    const dateYear = input.birthDate
+      ? (() => {
+          const dateObj = new Date(input.birthDate);
+          return Number.isNaN(dateObj.getTime())
+            ? undefined
+            : dateObj.getUTCFullYear();
+        })()
+      : undefined;
+    const year = input.birthYear ?? dateYear;
+    if (!year || !Number.isInteger(year) || year < 1900 || year > 2100) {
+      throw new BadRequestException('A valid birthDate or birthYear is required');
+    }
+    if (input.gender !== 'male' && input.gender !== 'female') {
+      throw new BadRequestException('gender is required for Bát Trạch direction calculation');
+    }
 
     // 1. Thiên Can & Địa Chi
     const heavenlyStem = THIEN_CAN[year % 10];
@@ -724,7 +736,7 @@ export class BaziRuleService {
     }
 
     // 4. Bát Trạch & Cung Mệnh chuẩn
-    const isFemale = input.gender?.toLowerCase() === 'female';
+    const isFemale = input.gender === 'female';
     const sumDigits = (n: number): number => {
       let sum = 0;
       let temp = Math.abs(n);

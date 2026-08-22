@@ -111,7 +111,7 @@ const preference = (
   category: 'plot_location',
   title: 'Preferred plot location',
   content: 'My family prefers plots near the entrance.',
-  requestedScope: 'global',
+  requestedScope: 'user',
   memoryKey: 'preferred_plot_location',
   reason: 'Explicit reusable preference',
   ...overrides,
@@ -145,17 +145,17 @@ describe('AutonomousLearningService', () => {
     expect(String(insert?.[0])).toContain("'user_preference'");
   });
 
-  it('rejects a current Bát Tự request that the planner mislabeled as lasting memory', async () => {
+  it('rejects a user preference that lacks the stable key required by the semantic planner contract', async () => {
     const { client, service } = setup({
-      source: 'Mình muốn xem Bát Tự theo ngày sinh.',
+      source: 'Mình thích kiểu tư vấn đó cho những lần sau.',
     });
 
     const result = await service.processProposal(
       preference({
         category: 'Chủ đề tư vấn',
-        title: 'Ưu tiên Bát Tự',
-        content: 'Người dùng muốn xem Bát Tự.',
-        memoryKey: 'consultation_topic_preference',
+        title: 'Ưu tiên cách tư vấn',
+        content: 'Người dùng muốn tiếp tục cách tư vấn này ở các lần sau.',
+        memoryKey: undefined,
       }),
       context(),
     );
@@ -168,9 +168,9 @@ describe('AutonomousLearningService', () => {
     ).toBe(false);
   });
 
-  it('stores a Bát Tự consultation preference only when its future scope is explicit', async () => {
+  it('stores a semantically resolved durable preference without rechecking Vietnamese keywords', async () => {
     const { service } = setup({
-      source: 'Từ giờ hãy nhớ ưu tiên góc nhìn Bát Tự khi tư vấn cho mình.',
+      source: 'Mấy lần sau tư vấn cho t nhớ ưu tiên góc nhìn Bát Tự nha.',
       insertedId: 102,
     });
 
@@ -178,7 +178,7 @@ describe('AutonomousLearningService', () => {
       preference({
         category: 'Chủ đề tư vấn',
         title: 'Ưu tiên Bát Tự',
-        content: 'Từ giờ người dùng ưu tiên góc nhìn Bát Tự khi được tư vấn.',
+        content: 'Người dùng ưu tiên góc nhìn Bát Tự trong các lần tư vấn sau.',
         memoryKey: 'consultation_topic_preference',
       }),
       context(),
@@ -188,6 +188,33 @@ describe('AutonomousLearningService', () => {
       status: 'saved_user_memory',
       knowledgeEntryId: 102,
     });
+  });
+
+  it('stores a private conversation correction selected by the semantic planner', async () => {
+    const { client, service } = setup({ insertedId: 103 });
+
+    const result = await service.processProposal(
+      {
+        memoryType: 'conversation_correction',
+        category: 'conversation',
+        title: 'Continue the active feedback flow',
+        content:
+          'Continue the current feedback flow instead of reviving an older plot-selection intent.',
+        requestedScope: 'user',
+        reason: 'Use the active conversation state before older intents.',
+      },
+      context(),
+    );
+
+    expect(result).toMatchObject({
+      status: 'saved_user_memory',
+      knowledgeEntryId: 103,
+    });
+    const insert = client.query.mock.calls.find(([sql]) =>
+      String(sql).includes('INSERT INTO ai_knowledge_entries'),
+    );
+    expect(String(insert?.[0])).toContain("'conversation_correction'");
+    expect(String(insert?.[0])).toContain("'user'");
   });
 
   it('keeps the same preference separate for two users', async () => {

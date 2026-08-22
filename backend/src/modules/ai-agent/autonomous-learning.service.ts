@@ -8,7 +8,6 @@ import {
   MemoryProposal,
   MemoryType,
   USER_MEMORY_KEYS,
-  UserMemoryKey,
 } from './tools/agent-tool.types';
 import { KnowledgeEmbeddingService } from './knowledge-embedding.service';
 import { isRuntimeOperationalClaim } from './knowledge-safety.util';
@@ -100,6 +99,9 @@ export class AutonomousLearningService {
         case 'user_preference':
           result = await this.storeUserPreference(proposal, context);
           break;
+        case 'conversation_correction':
+          result = await this.storeConversationCorrection(proposal, context);
+          break;
         case 'recommendation_feedback':
           result = await this.storeRecommendationSignal(proposal, context);
           break;
@@ -153,18 +155,18 @@ export class AutonomousLearningService {
 
     return this.database.transaction(async (client) => {
       const sourceMessage = await this.sourceMessage(client, context);
-      const memoryKey = proposal.memoryKey ?? this.inferMemoryKey(proposal);
+      const memoryKey = proposal.memoryKey;
       if (
         !sourceMessage ||
-        !this.isExplicitPreference(sourceMessage) ||
-        (memoryKey === 'consultation_topic_preference' &&
-          !this.isDurableConsultationPreference(sourceMessage)) ||
+        proposal.requestedScope !== 'user' ||
+        !memoryKey ||
+        !USER_MEMORY_KEY_SET.has(memoryKey) ||
         !this.isSafePreference(proposal.content)
       ) {
         return {
           status: 'rejected',
           message:
-            'Only explicit, non-sensitive preferences can be saved persistently.',
+            'Only structured, user-scoped, non-sensitive durable preferences can be saved persistently.',
         };
       }
 
@@ -225,13 +227,13 @@ export class AutonomousLearningService {
            WHERE knowledge_entry_id = $1`,
           [
             previous.id,
-            `Replaced by a newer explicit preference for ${memoryKey}.`,
+            `Replaced by a newer semantically resolved preference for ${memoryKey}.`,
           ],
         );
       }
 
       const validationReason =
-        'Explicit preference from the authenticated account owner.';
+        'Durable preference semantically resolved by the LLM and validated against the structured user-memory contract.';
       const inserted = await client.query<InsertedIdRow>(
         `INSERT INTO ai_knowledge_entries
            (knowledge_key, category, title, content, knowledge_type,
@@ -255,7 +257,8 @@ export class AutonomousLearningService {
           validationReason,
           JSON.stringify({
             source: 'authenticated_user_message',
-            explicitPreferenceValidated: true,
+            semanticPreferenceValidated: true,
+            memoryKeyProvidedByPlanner: true,
           }),
           context.role,
           context.conversationId,
@@ -312,6 +315,138 @@ export class AutonomousLearningService {
       return {
         status: 'saved_user_memory',
         message: 'The preference was saved for future conversations.',
+        knowledgeEntryId: entryId,
+      };
+    });
+  }
+
+  private async storeConversationCorrection(
+    proposal: NormalizedProposal,
+    context: AgentToolContext,
+  ): Promise<AutonomousLearningResult> {
+    if (context.userId === null) {
+      return {
+        status: 'login_required',
+        message: 'Log in to save private conversation corrections.',
+      };
+    }
+    if (
+      proposal.requestedScope !== 'user' ||
+      !this.isSafePreference(proposal.content)
+    ) {
+      return {
+        status: 'rejected',
+        message:
+          'Conversation corrections must remain private, user-scoped and non-sensitive.',
+      };
+    }
+
+    return this.database.transaction(async (client) => {
+      const sourceMessage = await this.sourceMessage(client, context);
+      if (!sourceMessage) {
+        return {
+          status: 'rejected',
+          message: 'A stored source message is required for a conversation correction.',
+        };
+      }
+
+      const contentHash = this.hash([
+        String(context.userId),
+        'conversation_correction',
+        this.normalizeForHash(proposal.content),
+        this.normalizeForHash(proposal.reason),
+      ]);
+      const duplicate = (
+        await client.query<InsertedIdRow>(
+          `SELECT knowledge_entry_id AS id
+           FROM ai_knowledge_entries
+           WHERE scope = 'user'
+             AND owner_user_id = $1
+             AND knowledge_type = 'conversation_correction'
+             AND content_hash = $2
+             AND is_active = TRUE
+             AND validation_status = 'active'
+           ORDER BY updated_at DESC, knowledge_entry_id DESC
+           LIMIT 1
+           FOR UPDATE`,
+          [context.userId, contentHash],
+        )
+      ).rows[0];
+      if (duplicate) {
+        return {
+          status: 'duplicate',
+          message: 'That private conversation correction is already active.',
+          knowledgeEntryId: Number(duplicate.id),
+        };
+      }
+
+      const validationReason =
+        'Private conversational correction semantically resolved from the authenticated user conversation.';
+      const inserted = await client.query<InsertedIdRow>(
+        `INSERT INTO ai_knowledge_entries
+           (knowledge_key, category, title, content, knowledge_type,
+            source_type, source_reference, scope, owner_user_id, memory_key,
+            validation_status, validation_reason, validation_evidence,
+            source_role, source_conversation_id, source_message_id,
+            content_hash, is_active, effective_from)
+         VALUES
+           (NULL, $1, $2, $3, 'conversation_correction',
+            'user_message', $4, 'user', $5, NULL,
+            'active', $6, $7::jsonb,
+            $8, $9, $10, $11, TRUE, NOW())
+         RETURNING knowledge_entry_id AS id`,
+        [
+          proposal.category,
+          proposal.title,
+          proposal.content,
+          this.sourceReference(context.sourceMessageId),
+          context.userId,
+          validationReason,
+          JSON.stringify({
+            source: 'authenticated_user_conversation',
+            semanticConversationCorrection: true,
+            preventionRule: proposal.reason,
+          }),
+          context.role,
+          context.conversationId,
+          context.sourceMessageId,
+          contentHash,
+        ],
+      );
+      const entryId = Number(inserted.rows[0].id);
+      const newSnapshot = {
+        category: proposal.category,
+        title: proposal.title,
+        content: proposal.content,
+        knowledgeType: 'conversation_correction',
+        scope: 'user',
+        ownerUserId: context.userId,
+        memoryKey: null,
+        validationStatus: 'active',
+        isActive: true,
+      };
+
+      await this.recordVersion(client, {
+        entryId,
+        action: 'activated',
+        previousSnapshot: null,
+        newSnapshot,
+        context,
+        validationReason,
+      });
+      await this.recordAudit(client, {
+        entryId,
+        entityKey: `conversation_correction:${entryId}`,
+        action: 'ai_conversation_correction_created',
+        previousSnapshot: null,
+        newSnapshot,
+        context,
+        validationReason,
+      });
+
+      return {
+        status: 'saved_user_memory',
+        message: 'The private conversation correction was saved for future context.',
         knowledgeEntryId: entryId,
       };
     });
@@ -858,108 +993,13 @@ export class AutonomousLearningService {
     return this.boundedText(value, maxLength) ?? undefined;
   }
 
-  private isExplicitPreference(sourceMessage: string) {
-    const folded = this.fold(sourceMessage);
-    const asksToRemember =
-      /\b(remember|please remember|ghi nho|nho giup|hay nho|luu lai|luu giup)\b/.test(
-        folded,
-      );
-    if (asksToRemember) return true;
-
-    // Accept normal colloquial Vietnamese self-reference ("tui", "t", "tao",
-    // "em"...) but require an actual first-person preference assertion. This
-    // avoids treating questions like "bạn biết tui thích gì không?" as new
-    // memory just because they contain the word "thích".
-    const firstPersonPreference =
-      /^(?:i|we|toi|minh|tui|tao|t|to|em|anh|chi|chung toi|gia dinh toi|gia dinh minh)\b.{0,160}\b(?:prefer|preference|want|need|like|priority|uu tien|thich|muon|can|doi y|thay doi|cap nhat|sua lai|khong con can|change|update)\b/.test(
-        folded,
-      );
-    const preferenceQuestion =
-      /\b(?:thich gi|uu tien gi|muon gi|so thich gi|biet .* thich gi)\b/.test(
-        folded,
-      );
-    return firstPersonPreference && !preferenceQuestion;
-  }
-
-  private isDurableConsultationPreference(sourceMessage: string) {
-    const folded = this.fold(sourceMessage);
-    const topic =
-      /\b(?:phong thuy|feng shui|fengshui|bazi|bat tu|am trach|van hoa|tam linh)\b/.test(
-        folded,
-      );
-    if (!topic) return false;
-    const asksToRemember =
-      /\b(?:remember|please remember|ghi nho|nho giup|hay nho|luu lai|luu giup)\b/.test(
-        folded,
-      );
-    const futureScope =
-      /\b(?:tu gio|sau nay|ve sau|lan sau|nhung lan sau|cac lan sau|moi lan|cac lan tu van|nhung lan tu van|trong tuong lai)\b/.test(
-        folded,
-      );
-    const explicitStylePreference =
-      /^(?:i|we|toi|minh|tui|tao|t|em|anh|chi)\b.{0,120}\b(?:prefer|like|thich|uu tien)\b.{0,120}\b(?:consult|conversation|explain|topic|tu van|trao doi|giai thich|chu de|goc nhin)\b/.test(
-        folded,
-      );
-    return asksToRemember || futureScope || explicitStylePreference;
-  }
-
   private isSafePreference(content: string) {
     const folded = this.fold(content);
+    // Hard privacy/safety guard only. This does NOT decide conversational
+    // meaning or durability; the semantic planner already did that.
     return !/\b(psycholog|anxiety|depress|grief|religio|medical|diagnos|health condition|tam ly|lo au|tram cam|ton giao|dao phat|dao chua|benh|chan doan)\b/.test(
       folded,
     );
-  }
-
-  private inferMemoryKey(proposal: NormalizedProposal): UserMemoryKey {
-    const text = this.fold(
-      `${proposal.category} ${proposal.title} ${proposal.content}`,
-    );
-    if (
-      /\b(phong thuy|feng shui|fengshui|bazi|bat tu|am trach|van hoa|cultural|consultation topic|chu de tu van|chu de tro chuyen)\b/.test(
-        text,
-      )
-    ) {
-      return 'consultation_topic_preference';
-    }
-    if (
-      /\b(quiet|yen tinh|entrance|gate|gan cong|vi tri|location)\b/.test(text)
-    ) {
-      return 'preferred_plot_location';
-    }
-    if (/\b(min|minimum|at least|toi thieu|it nhat)\b/.test(text)) {
-      return 'minimum_budget';
-    }
-    if (
-      /\b(max|maximum|under|toi da|khong qua|budget|ngan sach)\b/.test(text)
-    ) {
-      return 'maximum_budget';
-    }
-    if (/\b(adjacent|side by side|lien ke|lien nhau|canh nhau)\b/.test(text)) {
-      return 'adjacent_plot_count';
-    }
-    if (/\b(zone|khu [a-z]|khu vuc)\b/.test(text)) return 'preferred_zone';
-    if (/\b(direction|huong)\b/.test(text)) return 'preferred_direction';
-    if (/\b(access|accessible|wheelchair|de di|di lai)\b/.test(text)) {
-      return 'accessibility_priority';
-    }
-    if (
-      /\b(plot type|single|double|family|lo don|lo doi|lo gia dinh)\b/.test(
-        text,
-      )
-    ) {
-      return 'preferred_plot_type';
-    }
-    if (/\b(short|brief|detail|concise|ngan gon|chi tiet)\b/.test(text)) {
-      return 'response_detail_preference';
-    }
-    if (
-      /\b(service|clean|flower|incense|dich vu|don dep|hoa|thap huong)\b/.test(
-        text,
-      )
-    ) {
-      return 'service_interest';
-    }
-    return 'preferred_plot_location';
   }
 
   private globalKnowledgeKey(proposal: NormalizedProposal) {

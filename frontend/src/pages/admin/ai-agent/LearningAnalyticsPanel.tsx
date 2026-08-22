@@ -857,7 +857,7 @@ export default function LearningAnalyticsPanel({
 
       <section
         aria-label="Trạng thái học tập hiện tại"
-        className="learning-analytics__metrics current-state"
+        className="learning-analytics__metrics compact current-state"
       >
         <MetricCard
           label="Tri thức dùng chung đã xác minh"

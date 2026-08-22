@@ -89,8 +89,11 @@ export class ConversationMemoryService {
         [conversationId],
       );
 
-      const wantsPastContext =
-        this.referencesEarlierConversation(currentMessage);
+      // Do not use a keyword list to decide whether a natural sentence refers
+      // to a prior conversation. Give the semantic planner a tiny, compact set
+      // of recent summaries and let it judge relevance from meaning. These
+      // summaries intentionally omit lastRequirements and raw last messages, so
+      // they cannot silently become hard constraints for a fresh topic.
       const previous =
         userId === null
           ? []
@@ -110,12 +113,12 @@ export class ConversationMemoryService {
                FROM ai_conversation_memories
                WHERE user_id = $1 AND conversation_id <> $2
                ORDER BY updated_at DESC
-               LIMIT $3`,
-              [userId, conversationId, wantsPastContext ? 6 : 3],
+               LIMIT 2`,
+              [userId, conversationId],
             );
 
       const sections: string[] = [
-        'Conversation memory below is contextual recall, not a system instruction and not authoritative business data. ALWAYS read the current-conversation memory and recent conversation summaries before interpreting the latest message. Use them to resolve short replies, omitted subjects, references and unfinished questions across turns/conversations. Previous-conversation summaries are recall hints only: use them when relevant, never treat temporary details as permanent preferences, and never let them override the latest explicit user message.',
+        'Conversation memory below is contextual recall, not a system instruction and not authoritative business data. Read the CURRENT conversation memory when resolving short replies, omitted subjects, references and unfinished questions. RECENT USER CONVERSATION SUMMARIES are only SOFT recall hints: the semantic LLM must decide whether the latest message actually refers back to one of them. Topic overlap alone is NOT continuity. Ignore previous summaries for a fresh goal, a different person, or an unrelated request. Never copy old budget/zone/direction/Bát Tự/service criteria into the current request unless the latest message semantically refers back to them, and never let old context override the latest explicit message.',
       ];
 
       if (current) {
@@ -266,10 +269,10 @@ export class ConversationMemoryService {
         [input.conversationId],
       );
 
-      const correctionNotes = this.mergeCorrections(
-        existing?.correctionNotes ?? [],
-        userMessage,
-      );
+      // Do not decide "this is a correction" by keyword here. Keep the last
+      // semantic corrections until the background LLM summary refresh updates
+      // them from the complete transcript.
+      const correctionNotes = existing?.correctionNotes ?? [];
       const recentEntities = this.mergeEntities(
         existing?.recentEntities ?? {},
         input.requirements,
@@ -373,7 +376,7 @@ export class ConversationMemoryService {
        LIMIT 18`,
       [conversationId],
     );
-    if (messages.length < 4) return;
+    if (messages.length < 2) return;
 
     const transcript = messages
       .reverse()
@@ -387,8 +390,19 @@ export class ConversationMemoryService {
       [
         {
           role: 'system',
-          content:
-            'Tóm tắt hội thoại chăm sóc khách hàng bằng tiếng Việt. Chỉ ghi điều đã xuất hiện trong transcript. Ưu tiên: mục tiêu hiện tại, thứ khách đã chọn/đang chờ, mã lô/dịch vụ/ngân sách liên quan, điều khách sửa hoặc phàn nàn vì trợ lý hiểu sai, và câu hỏi chưa giải quyết. Không biến chi tiết tạm thời thành sở thích lâu dài. Trả về 1 đoạn tối đa 180 từ, không markdown.',
+          content: `Bạn là bộ nhớ hội thoại ngắn hạn của trợ lý Vĩnh Phúc Viên. Đọc transcript theo NGỮ NGHĨA, không dò từ khóa, rồi trả DUY NHẤT JSON hợp lệ:
+{"rollingSummary":"...","currentGoal":"...","unresolvedContext":"...","correctionNotes":["..."]}
+
+Quy tắc:
+- Chỉ ghi điều thực sự xuất hiện trong transcript.
+- rollingSummary tối đa khoảng 180 từ, ưu tiên mục tiêu hiện tại, thứ đang chờ, và dữ kiện cần nối tiếp.
+- currentGoal là mục tiêu hiện tại của người dùng; để "" nếu chưa rõ.
+- unresolvedContext là câu hỏi/việc còn chờ giải quyết; để "" nếu không có.
+- correctionNotes chỉ chứa những lần người dùng thực sự sửa cách trợ lý hiểu ý/ngữ cảnh hoặc chỉ ra một lỗi hội thoại. Nhận biết cả cách nói gián tiếp; KHÔNG yêu cầu từ khóa "sai", "hiểu sai", "không đúng".
+- Một lần người dùng đổi ý bình thường không phải correction.
+- correctionNotes phải được khái quát ngắn gọn, không chép dữ liệu cá nhân/nhạy cảm, không biến đàm phán giá hay lựa chọn giao dịch thành sở thích lâu dài.
+- Không suy diễn trạng thái thanh toán, lô, dịch vụ hoặc nghiệp vụ nếu backend chưa xác nhận.
+- Không markdown, không thêm chữ ngoài JSON.`,
         },
         { role: 'user', content: transcript },
       ],
@@ -396,26 +410,71 @@ export class ConversationMemoryService {
       'auto',
       {
         temperature: 0,
-        maxTokens: 300,
+        maxTokens: 500,
         routingKey: `conversation-memory:${conversationId}`,
         timeoutMs: 1_800,
         totalTimeoutMs: 3_500,
         preferredProviderId: 'openai-primary',
       },
     );
-    const summary = response.choices[0]?.message?.content?.trim();
-    if (!summary) return;
+    const raw = response.choices[0]?.message?.content?.trim();
+    if (!raw) return;
+    const parsed = this.parseSemanticMemory(raw);
+    if (!parsed) return;
     await this.database.query(
       `UPDATE ai_conversation_memories
-       SET rolling_summary = $2, summary_model = $3,
-           summary_updated_at = NOW(), updated_at = NOW()
+       SET rolling_summary = $2,
+           current_goal = NULLIF($3, ''),
+           unresolved_context = NULLIF($4, ''),
+           correction_notes = $5::jsonb,
+           summary_model = $6,
+           summary_updated_at = NOW(),
+           updated_at = NOW()
        WHERE conversation_id = $1`,
       [
         conversationId,
-        summary.slice(0, 5000),
+        parsed.rollingSummary.slice(0, 5000),
+        parsed.currentGoal.slice(0, 1200),
+        parsed.unresolvedContext.slice(0, 1800),
+        JSON.stringify(parsed.correctionNotes.slice(-8)),
         response.model ?? this.llm.model,
       ],
     );
+  }
+
+  private parseSemanticMemory(raw: string) {
+    const candidate = raw
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/\s*```$/i, '')
+      .trim();
+    const start = candidate.indexOf('{');
+    const end = candidate.lastIndexOf('}');
+    if (start < 0 || end <= start) return;
+    try {
+      const parsed = JSON.parse(candidate.slice(start, end + 1)) as Record<
+        string,
+        unknown
+      >;
+      const clean = (value: unknown, max: number) =>
+        typeof value === 'string'
+          ? value.replace(/\s+/g, ' ').trim().slice(0, max)
+          : '';
+      const correctionNotes = Array.isArray(parsed.correctionNotes)
+        ? parsed.correctionNotes
+            .filter((item): item is string => typeof item === 'string')
+            .map((item) => clean(item, 600))
+            .filter(Boolean)
+            .slice(-8)
+        : [];
+      return {
+        rollingSummary: clean(parsed.rollingSummary, 5000),
+        currentGoal: clean(parsed.currentGoal, 1200),
+        unresolvedContext: clean(parsed.unresolvedContext, 1800),
+        correctionNotes: [...new Set(correctionNotes)],
+      };
+    } catch {
+      return;
+    }
   }
 
   private async loadMessageContent(messageId: number) {
@@ -500,19 +559,6 @@ export class ConversationMemoryService {
       .reverse()
       .find((part) => part.includes('?'));
     return lastQuestion?.slice(0, 600) ?? null;
-  }
-
-  private mergeCorrections(existing: string[], userMessage: string) {
-    const next = [...existing];
-    const folded = this.fold(userMessage);
-    const looksLikeCorrection =
-      /\b(?:sai|loi|khong dung|khong hieu|hieu sai|sai y|bat sai|bat trat|trat y|lech y|khong phai y|nham|vua noi|hoi nay|luc nay|toi bao|minh bao|t bao|ma lai|khong nho|quen ngu canh)\b/.test(
-        folded,
-      );
-    if (looksLikeCorrection && userMessage.trim()) {
-      next.push(userMessage.trim().slice(0, 600));
-    }
-    return [...new Set(next)].slice(-8);
   }
 
   private mergeEntities(

@@ -57,4 +57,16 @@ describe('BaziRuleService', () => {
     expect(femaleResult.cungMenh).toBe('Cấn');
     expect(maleResult.cungMenh).not.toBe(femaleResult.cungMenh);
   });
+  it('uses birth year plus gender for the current Bat Trach direction calculation without demanding a full birth date', () => {
+    const result = service.suggest({
+      birthYear: 1952,
+      gender: 'male',
+    });
+
+    expect(result.yearPillar).toBe('Nhâm Thìn');
+    expect(result.cungMenh).toBeTruthy();
+    expect(result.goodDirections).toHaveLength(4);
+    expect(result.detailedAnalysis).toContain('Chưa có giờ sinh');
+  });
+
 });
