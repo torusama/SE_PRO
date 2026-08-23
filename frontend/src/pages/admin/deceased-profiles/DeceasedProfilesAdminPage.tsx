@@ -9,8 +9,10 @@ import "./DeceasedProfilesAdminPage.css";
 
 interface Profile {
   id: number;
-  plotId: number;
+  plotId: number | null;
   plotCode?: string;
+  isExternalPlot?: boolean;
+  externalPlotNote?: string;
   fullName: string;
   dateOfBirth?: string;
   dateOfDeath?: string;
@@ -357,7 +359,9 @@ export default function DeceasedProfilesAdminPage() {
                     {item.fullName}
                   </strong>
                   <span style={{ display: "block", margin: "5px 0" }}>
-                    {item.plotCode ?? `Lô #${item.plotId}`}
+                    {item.isExternalPlot
+                      ? "Ngoài nghĩa trang"
+                      : (item.plotCode ?? `Lô #${item.plotId}`)}
                   </span>
                   <small>
                     <span
@@ -499,7 +503,11 @@ export default function DeceasedProfilesAdminPage() {
               <section className="admin-detail-grid">
                 <div>
                   <span>Mã lô</span>
-                  <strong>{current.plotCode ?? `#${current.plotId}`}</strong>
+                  <strong>
+                    {current.isExternalPlot
+                      ? current.externalPlotNote?.trim() || "Ngoài nghĩa trang"
+                      : (current.plotCode ?? `#${current.plotId}`)}
+                  </strong>
                 </div>
                 <div>
                   <span>Ngày sinh</span>
@@ -551,31 +559,35 @@ export default function DeceasedProfilesAdminPage() {
                 </section>
               )}
 
-              <section>
-                <h3>Cấu hình sức chứa lô</h3>
-                <form
-                  className="deceased-capacity-form"
-                  onSubmit={(event) => void updateCapacity(event)}
-                >
-                  <label>
-                    Sức chứa (số hồ sơ tối đa trên lô{" "}
-                    {current.plotCode ?? `#${current.plotId}`})
-                    <input
-                      className="admin-input"
-                      name="capacity"
-                      type="number"
-                      min={1}
-                      required
-                    />
-                  </label>
-                  <button
-                    className="admin-secondary-button"
-                    disabled={busy === "capacity"}
+              {!current.isExternalPlot && (
+                <section>
+                  <h3>Cấu hình sức chứa lô</h3>
+                  <form
+                    className="deceased-capacity-form"
+                    onSubmit={(event) => void updateCapacity(event)}
                   >
-                    {busy === "capacity" ? "Đang lưu..." : "Cập nhật sức chứa"}
-                  </button>
-                </form>
-              </section>
+                    <label>
+                      Sức chứa (số hồ sơ tối đa trên lô{" "}
+                      {current.plotCode ?? `#${current.plotId}`})
+                      <input
+                        className="admin-input"
+                        name="capacity"
+                        type="number"
+                        min={1}
+                        required
+                      />
+                    </label>
+                    <button
+                      className="admin-secondary-button"
+                      disabled={busy === "capacity"}
+                    >
+                      {busy === "capacity"
+                        ? "Đang lưu..."
+                        : "Cập nhật sức chứa"}
+                    </button>
+                  </form>
+                </section>
+              )}
             </div>
           )}
         </main>

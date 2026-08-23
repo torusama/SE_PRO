@@ -74,6 +74,14 @@ export class DeceasedController {
       .cancelDeletionRequest(u, +id)
       .then((data) => ({ success: true, data }));
   }
+  @Delete(':id') deleteExternal(
+    @CurrentUser() u: AuthUser,
+    @Param('id') id: string,
+  ) {
+    return this.service
+      .deleteExternalNow(u, +id)
+      .then((data) => ({ success: true, data }));
+  }
   @Post(':id/permissions') grant(
     @CurrentUser() u: AuthUser,
     @Param('id') id: string,

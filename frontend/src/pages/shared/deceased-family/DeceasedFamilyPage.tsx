@@ -36,8 +36,13 @@ const FAMILY_GUIDE_STEPS: GuideStep[] = [
 
 type Profile = {
   id: number;
-  plotId: number;
+  plotId: number | null;
   plotCode?: string;
+  // Hồ sơ cho người thân an táng ở lô đất KHÔNG thuộc nghĩa trang (không có
+  // plotId thật) — được lưu/xác nhận ngay, không cần admin duyệt, và có thể
+  // tự xoá thẳng (không cần gửi yêu cầu).
+  isExternalPlot?: boolean;
+  externalPlotNote?: string;
   fullName: string;
   // Trường cũ — vẫn có thể tồn tại trên hồ sơ tạo trước đây, hiển thị nếu có
   // nhưng form tạo hồ sơ mới không còn dùng nữa (đã thay bằng Ngày sinh +
@@ -182,6 +187,7 @@ export default function DeceasedFamilyPage() {
   const [message, setMessage] = useState("");
   const [guideOpen, setGuideOpen] = useState(false);
   const { promptFor, dialog: promptDialog } = usePromptDialog();
+  const { confirm, dialog: confirmDialog } = useConfirmDialog();
 
   const run = async (
     operation: () => Promise<void>,
@@ -453,6 +459,23 @@ export default function DeceasedFamilyPage() {
                       await load();
                     }, "Đã huỷ yêu cầu xoá hồ sơ.")
                   }
+                  onDeleteExternalNow={(id) => {
+                    void (async () => {
+                      const confirmed = await confirm({
+                        title: "Xoá hồ sơ ngoài nghĩa trang",
+                        message:
+                          "Hồ sơ này không gắn với lô đất trong nghĩa trang nên sẽ được xoá NGAY, không cần admin duyệt. Thao tác này KHÔNG THỂ hoàn tác. Bạn có chắc chắn muốn xoá?",
+                        confirmLabel: "Xoá vĩnh viễn",
+                        cancelLabel: "Huỷ",
+                        variant: "danger",
+                      });
+                      if (!confirmed) return;
+                      await run(async () => {
+                        await api.delete(`/deceased/${id}`);
+                        await load();
+                      }, "Đã xoá hồ sơ.");
+                    })();
+                  }}
                 />
                 <CreateProfileForm
                   busy={busy}
@@ -506,6 +529,7 @@ export default function DeceasedFamilyPage() {
         )}
       </div>
       {promptDialog}
+      {confirmDialog}
     </main>
   );
 }
@@ -637,6 +661,11 @@ function CreateProfileForm({
   const [anniversaryDay, setAnniversaryDay] = useState("");
   const [anniversaryMonth, setAnniversaryMonth] = useState("");
   const [anniversaryYear, setAnniversaryYear] = useState("");
+  // Giá trị đặc biệt của select "plotId" khi người dùng chọn người thân được
+  // an táng ở một nơi KHÔNG thuộc lô đất nào của nghĩa trang này.
+  const EXTERNAL_PLOT_VALUE = "external";
+  const [plotSelection, setPlotSelection] = useState("");
+  const isExternalPlot = plotSelection === EXTERNAL_PLOT_VALUE;
 
   function resetDateFields() {
     setBirthDay("");
@@ -655,58 +684,70 @@ function CreateProfileForm({
         const data = new FormData(event.currentTarget);
         const form = event.currentTarget;
         const fullName = String(data.get("fullName") || "").trim();
-        const plotId = Number(data.get("plotId"));
+        const isExternal = plotSelection === EXTERNAL_PLOT_VALUE;
+        const plotId = isExternal ? undefined : Number(plotSelection);
+        const externalPlotNote = isExternal
+          ? String(data.get("externalPlotNote") || "").trim() || undefined
+          : undefined;
         const bDay = birthDay ? Number(birthDay) : null;
         const bMonth = birthMonth ? Number(birthMonth) : null;
         const bYear = birthYear ? Number(birthYear) : null;
         const aDay = anniversaryDay ? Number(anniversaryDay) : null;
         const aMonth = anniversaryMonth ? Number(anniversaryMonth) : null;
         const aYear = anniversaryYear ? Number(anniversaryYear) : null;
-        void run(async () => {
-          const created = unwrap<{ id: number }>(
-            await api.post("/deceased", {
-              plotId,
-              fullName,
-              hometown: data.get("hometown") || undefined,
-              biography: data.get("biography") || undefined,
-              dateCalendarType: calendarMode,
-              birthDay: bDay ?? undefined,
-              birthMonth: bMonth ?? undefined,
-              birthYear: bYear ?? undefined,
-              anniversaryDay: aDay ?? undefined,
-              anniversaryMonth: aMonth ?? undefined,
-              anniversaryYear: aYear ?? undefined,
-            }),
-          );
-          form.reset();
-          resetDateFields();
-          setCalendarMode("solar");
-          await reload();
-
-          if (aDay && aMonth && created?.id) {
-            try {
-              await api.post("/my/reminders", {
-                title: `Ngày giỗ ${fullName}`,
-                description: `Tự động tạo từ hồ sơ tưởng niệm "${fullName}".`,
+        void run(
+          async () => {
+            const created = unwrap<{ id: number }>(
+              await api.post("/deceased", {
                 plotId,
-                deceasedProfileId: created.id,
-                reminderType: "death_anniversary",
-                isRecurring: true,
-                // Dương lịch: nhắc đúng ngày Dương mỗi năm. Âm lịch: nhắc
-                // lịch tự quy đổi sang đúng ngày Dương của năm cần nhắc và
-                // ghi chú rõ đây là Âm lịch (xử lý sẵn ở trang Nhắc lịch).
-                calendarType: calendarMode,
-                remindMonth: aMonth,
-                remindDay: aDay,
-                notifyDaysBefore: 7,
-              });
-            } catch {
-              // Hồ sơ đã tạo thành công; nếu tạo nhắc lịch tự động thất bại
-              // (vd trùng lịch), gia đình vẫn có thể tự thêm thủ công ở
-              // trang "Nhắc lịch" nên bỏ qua lỗi này, không chặn luồng chính.
+                isExternalPlot: isExternal || undefined,
+                externalPlotNote,
+                fullName,
+                hometown: data.get("hometown") || undefined,
+                biography: data.get("biography") || undefined,
+                dateCalendarType: calendarMode,
+                birthDay: bDay ?? undefined,
+                birthMonth: bMonth ?? undefined,
+                birthYear: bYear ?? undefined,
+                anniversaryDay: aDay ?? undefined,
+                anniversaryMonth: aMonth ?? undefined,
+                anniversaryYear: aYear ?? undefined,
+              }),
+            );
+            form.reset();
+            resetDateFields();
+            setCalendarMode("solar");
+            setPlotSelection("");
+            await reload();
+
+            if (aDay && aMonth && created?.id) {
+              try {
+                await api.post("/my/reminders", {
+                  title: `Ngày giỗ ${fullName}`,
+                  description: `Tự động tạo từ hồ sơ tưởng niệm "${fullName}".`,
+                  plotId,
+                  deceasedProfileId: created.id,
+                  reminderType: "death_anniversary",
+                  isRecurring: true,
+                  // Dương lịch: nhắc đúng ngày Dương mỗi năm. Âm lịch: nhắc
+                  // lịch tự quy đổi sang đúng ngày Dương của năm cần nhắc và
+                  // ghi chú rõ đây là Âm lịch (xử lý sẵn ở trang Nhắc lịch).
+                  calendarType: calendarMode,
+                  remindMonth: aMonth,
+                  remindDay: aDay,
+                  notifyDaysBefore: 7,
+                });
+              } catch {
+                // Hồ sơ đã tạo thành công; nếu tạo nhắc lịch tự động thất bại
+                // (vd trùng lịch), gia đình vẫn có thể tự thêm thủ công ở
+                // trang "Nhắc lịch" nên bỏ qua lỗi này, không chặn luồng chính.
+              }
             }
-          }
-        }, "Đã tạo hồ sơ và gửi chờ xác minh.");
+          },
+          isExternal
+            ? "Đã tạo hồ sơ tưởng niệm (ngoài nghĩa trang)."
+            : "Đã tạo hồ sơ và gửi chờ xác minh.",
+        );
       }}
     >
       <div className="df-panel-heading">
@@ -716,12 +757,15 @@ function CreateProfileForm({
       </div>
       <div className="df-form-grid">
         <label className="df-field">
-          <span>Mã số lô đang sở hữu</span>
-          <select name="plotId" required defaultValue="">
+          <span>Lô phần mộ</span>
+          <select
+            name="plotId"
+            required
+            value={plotSelection}
+            onChange={(event) => setPlotSelection(event.target.value)}
+          >
             <option value="" disabled>
-              {ownedPlots.length
-                ? "Chọn lô đang sở hữu"
-                : "Bạn chưa có lô đủ điều kiện"}
+              Chọn lô phần mộ
             </option>
             {ownedPlots.map((plot) => (
               <option key={plot.plotId} value={plot.plotId}>
@@ -729,11 +773,23 @@ function CreateProfileForm({
                 {plot.zoneName ? ` · ${plot.zoneName}` : ""}
               </option>
             ))}
+            <option value={EXTERNAL_PLOT_VALUE}>
+              Lô đất ngoài nghĩa trang
+            </option>
           </select>
         </label>
         <Field name="fullName" label="Họ và tên" />
         <Field name="hometown" label="Quê quán" optional />
+        {isExternalPlot && (
+          <Field name="externalPlotNote" label="Vị trí an táng" optional />
+        )}
       </div>
+      {isExternalPlot && (
+        <p className="df-external-plot-hint">
+          Hồ sơ ở lô đất ngoài nghĩa trang được lưu và xác nhận ngay, không cần
+          admin duyệt.
+        </p>
+      )}
 
       <CalendarModeToggle value={calendarMode} onChange={setCalendarMode} />
 
@@ -771,11 +827,7 @@ function CreateProfileForm({
           placeholder="Ghi lại đôi nét về cuộc đời và những điều gia đình muốn lưu giữ..."
         />
       </label>
-      <button
-        className="df-primary-button"
-        disabled={busy || ownedPlots.length === 0}
-        type="submit"
-      >
+      <button className="df-primary-button" disabled={busy} type="submit">
         Tạo hồ sơ tưởng niệm
       </button>
     </form>
@@ -852,9 +904,14 @@ function DayMonthYearField({
   showLunarPreview?: boolean;
 }) {
   const { confirm, dialog } = useConfirmDialog();
-  // Tránh hiện lại popup nhiều lần cho cùng một cặp ngày/tháng (vd khi
-  // component render lại nhưng người dùng chưa đổi giá trị nào khác).
-  const lastPromptedKeyRef = useRef<string | null>(null);
+  // Tránh hiện lại popup nhiều lần cho cùng một cặp ngày/tháng. Khởi tạo
+  // bằng chính giá trị ngày/tháng ĐANG CÓ SẴN khi form được mở (nếu có) —
+  // để không hỏi lại ngay khi vừa bấm "Chỉnh sửa hồ sơ" mà người dùng chưa
+  // đổi gì. Popup chỉ nên xuất hiện sau khi người dùng THỰC SỰ sửa ngày giỗ
+  // thành một ngày/tháng khác với ban đầu.
+  const lastPromptedKeyRef = useRef<string | null>(
+    day && month ? `${day}/${month}` : null,
+  );
 
   useEffect(() => {
     if (!showLunarPreview || calendarMode !== "lunar" || !day || !month) {
@@ -943,6 +1000,7 @@ function ProfileList({
   reload,
   onRequestDeletion,
   onCancelDeletionRequest,
+  onDeleteExternalNow,
 }: {
   profiles: Profile[];
   admin?: boolean;
@@ -953,6 +1011,7 @@ function ProfileList({
   reload?: () => Promise<void>;
   onRequestDeletion?: (id: number) => void;
   onCancelDeletionRequest?: (id: number) => void;
+  onDeleteExternalNow?: (id: number) => void;
 }) {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -1011,10 +1070,17 @@ function ProfileList({
                   </span>
                 </div>
                 <p>
-                  Lô {profile.plotCode ?? `#${profile.plotId}`}
+                  {profile.isExternalPlot
+                    ? "Ngoài nghĩa trang"
+                    : `Lô ${profile.plotCode ?? `#${profile.plotId}`}`}
                   <span aria-hidden="true"> · </span>
                   Ngày giỗ: {formatAnniversary(profile)}
                 </p>
+                {profile.isExternalPlot && profile.externalPlotNote && (
+                  <small className="df-external-note">
+                    {profile.externalPlotNote}
+                  </small>
+                )}
                 {profile.rejectionReason && (
                   <small className="df-rejection-reason">
                     Lý do từ chối: {profile.rejectionReason}
@@ -1085,6 +1151,18 @@ function ProfileList({
                       >
                         Huỷ yêu cầu xoá
                       </button>
+                    ) : profile.isExternalPlot ? (
+                      <button
+                        className="df-text-danger"
+                        disabled={busy}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onDeleteExternalNow?.(profile.id);
+                        }}
+                        type="button"
+                      >
+                        Xoá hồ sơ
+                      </button>
                     ) : (
                       <button
                         className="df-text-danger"
@@ -1123,6 +1201,15 @@ function ProfileList({
                       <div>
                         <span>Ngày giỗ</span>
                         <strong>{formatAnniversary(profile)}</strong>
+                      </div>
+                      <div>
+                        <span>Nơi an táng</span>
+                        <strong>
+                          {profile.isExternalPlot
+                            ? profile.externalPlotNote?.trim() ||
+                              "Ngoài nghĩa trang"
+                            : `Lô ${profile.plotCode ?? `#${profile.plotId}`}`}
+                        </strong>
                       </div>
                       <div>
                         <span>Quê quán</span>

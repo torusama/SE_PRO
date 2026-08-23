@@ -576,6 +576,14 @@
   font-size: 9px;
 }
 
+.df-external-note {
+  display: block;
+  margin-top: 6px;
+  color: var(--df-muted);
+  font-size: 9px;
+  font-style: italic;
+}
+
 .df-profile-actions,
 .df-invitation-actions,
 .df-family-state-actions {
@@ -589,6 +597,14 @@
   min-height: 32px;
   padding-inline: 10px;
   font-size: 10px;
+}
+
+/* Trong hàng nút hành động (Lưu thay đổi / Huỷ), nút chính không nên kéo
+   giãn hết chiều ngang — chỉ vừa đủ nội dung và đứng ngang hàng với nút
+   Huỷ, thay vì đè nút Huỷ xuống dòng dưới. */
+.df-profile-actions .df-primary-button {
+  width: auto;
+  margin-top: 0;
 }
 
 .df-form {
@@ -613,7 +629,7 @@
 
 .df-field > span {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
   color: #a7b7bd;
@@ -622,6 +638,7 @@
 }
 
 .df-field > span small {
+  flex-shrink: 0;
   color: #566c76;
   font-size: 8px;
   font-weight: 500;
@@ -690,6 +707,13 @@
   font-size: 9.5px;
   line-height: 1.5;
   margin-top: 4px;
+}
+
+.df-external-plot-hint {
+  margin: 10px 0 15px;
+  color: #6c8890;
+  font-size: 9.5px;
+  line-height: 1.5;
 }
 
 .df-calendar-mode {

@@ -16,6 +16,7 @@ import {
 } from './dto';
 
 const PROFILE_SELECT = `dp.deceased_profile_id AS id, dp.plot_id AS "plotId", p.plot_code AS "plotCode",
+ dp.is_external_plot AS "isExternalPlot", dp.external_plot_note AS "externalPlotNote",
  dp.full_name AS "fullName", dp.date_of_birth AS "dateOfBirth", dp.date_of_death AS "dateOfDeath",
  dp.burial_date AS "burialDate", dp.avatar_url AS "avatarUrl", dp.hometown, dp.biography,
  dp.date_calendar_type AS "dateCalendarType",
@@ -24,7 +25,7 @@ const PROFILE_SELECT = `dp.deceased_profile_id AS id, dp.plot_id AS "plotId", p.
  dp.anniversary_year AS "anniversaryYear",
  dp.verification_status AS "verificationStatus", dp.rejection_reason AS "rejectionReason",
  dp.deletion_requested_at AS "deletionRequestedAt", dp.deletion_reason AS "deletionReason",
- dp.deletion_denied_reason AS "deletionDeniedReason",
+ dp.deletion_denied_reason AS "deletionDeniedReason", dp.created_by AS "createdBy",
  dp.is_deleted AS "isDeleted", dp.created_at AS "createdAt", dp.updated_at AS "updatedAt"`;
 
 @Injectable()
@@ -36,18 +37,30 @@ export class DeceasedService {
 
   async create(user: AuthUser, dto: CreateDeceasedProfileDto) {
     this.validateDates(dto);
+    const isExternal = Boolean(dto.isExternalPlot);
+    if (!isExternal && !dto.plotId)
+      throw new BadRequestException('Vui lòng chọn lô đất');
     return this.database.transaction(async (client) => {
-      await this.access.assertPlotOwner(user, dto.plotId, client);
-      await this.assertCapacity(client, dto.plotId);
+      let initialStatus = 'pending_verification';
+      if (isExternal) {
+        // Lô đất ngoài nghĩa trang không thuộc quyền quản lý của hệ thống
+        // nên không cần admin xác minh — lưu và xác nhận ngay.
+        initialStatus = 'verified';
+      } else {
+        await this.access.assertPlotOwner(user, dto.plotId as number, client);
+        await this.assertCapacity(client, dto.plotId as number);
+      }
       const result = await client.query(
         `INSERT INTO deceased_profiles
-         (plot_id,full_name,date_of_birth,date_of_death,burial_date,avatar_url,hometown,biography,
+         (plot_id,is_external_plot,external_plot_note,full_name,date_of_birth,date_of_death,burial_date,avatar_url,hometown,biography,
           date_calendar_type,birth_day,birth_month,birth_year,
-          anniversary_month,anniversary_day,anniversary_year,created_by)
-         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+          anniversary_month,anniversary_day,anniversary_year,verification_status,created_by)
+         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
          RETURNING deceased_profile_id AS id`,
         [
-          dto.plotId,
+          isExternal ? null : dto.plotId,
+          isExternal,
+          isExternal ? dto.externalPlotNote?.trim() || null : null,
           dto.fullName.trim(),
           dto.dateOfBirth ?? null,
           dto.dateOfDeath ?? null,
@@ -62,6 +75,7 @@ export class DeceasedService {
           dto.anniversaryMonth ?? null,
           dto.anniversaryDay ?? null,
           dto.anniversaryYear ?? null,
+          initialStatus,
           user.id,
         ],
       );
@@ -81,7 +95,7 @@ export class DeceasedService {
     if (!this.access.isAdmin(user))
       await this.access.assert(user, 'deceased_profile', id, 'view_profile');
     const row = await this.database.queryOne(
-      `SELECT ${PROFILE_SELECT} FROM deceased_profiles dp JOIN plots p ON p.plot_id=dp.plot_id
+      `SELECT ${PROFILE_SELECT} FROM deceased_profiles dp LEFT JOIN plots p ON p.plot_id=dp.plot_id
        WHERE dp.deceased_profile_id=$1 ${includeDeleted ? '' : 'AND dp.is_deleted=FALSE'}`,
       [id],
     );
@@ -99,6 +113,7 @@ export class DeceasedService {
     if (!admin) {
       const uid = add(user.id);
       conditions.push(`(EXISTS(SELECT 1 FROM ownership_records o WHERE o.plot_id=dp.plot_id AND o.user_id=${uid} AND o.is_current=TRUE)
+        OR (dp.is_external_plot=TRUE AND dp.created_by=${uid})
         OR EXISTS(SELECT 1 FROM resource_permissions rp JOIN family_memberships fm ON fm.membership_id=rp.membership_id AND fm.is_active=TRUE
           JOIN family_groups fg ON fg.family_id=fm.family_id AND fg.status='active' AND fg.is_deleted=FALSE
           WHERE fm.user_id=${uid} AND rp.resource_type='deceased_profile' AND rp.resource_id=dp.deceased_profile_id
@@ -122,7 +137,7 @@ export class DeceasedService {
     );
     values.push(query.pageSize, query.offset);
     const items = await this.database.query(
-      `SELECT ${PROFILE_SELECT} FROM deceased_profiles dp JOIN plots p ON p.plot_id=dp.plot_id ${where}
+      `SELECT ${PROFILE_SELECT} FROM deceased_profiles dp LEFT JOIN plots p ON p.plot_id=dp.plot_id ${where}
       ORDER BY dp.created_at DESC LIMIT $${values.length - 1} OFFSET $${values.length}`,
       values,
     );
@@ -155,27 +170,32 @@ export class DeceasedService {
         anniversaryDay: dto.anniversaryDay ?? current.anniversary_day,
         anniversaryYear: dto.anniversaryYear ?? current.anniversary_year,
       } as Partial<CreateDeceasedProfileDto>);
-      await this.access.assertPlotOwner(user, current.plot_id, client);
+      await this.access.assertProfileOwner(user, current, client);
+      if (dto.plotId !== undefined && current.is_external_plot)
+        throw new BadRequestException(
+          'Không thể gán lô đất hệ thống cho hồ sơ ngoài nghĩa trang',
+        );
       const plotId = dto.plotId ?? current.plot_id;
-      if (plotId !== current.plot_id) {
+      if (plotId !== current.plot_id && !current.is_external_plot) {
         await this.access.assertPlotOwner(user, plotId, client);
         await this.assertCapacity(client, plotId);
       }
       const critical =
-        dto.fullName !== undefined ||
-        dto.dateOfBirth !== undefined ||
-        dto.dateOfDeath !== undefined ||
-        dto.burialDate !== undefined ||
-        dto.birthDay !== undefined ||
-        dto.anniversaryDay !== undefined ||
-        dto.dateCalendarType !== undefined;
+        !current.is_external_plot &&
+        (dto.fullName !== undefined ||
+          dto.dateOfBirth !== undefined ||
+          dto.dateOfDeath !== undefined ||
+          dto.burialDate !== undefined ||
+          dto.birthDay !== undefined ||
+          dto.anniversaryDay !== undefined ||
+          dto.dateCalendarType !== undefined);
       await client.query(
         `UPDATE deceased_profiles SET plot_id=$2,full_name=COALESCE($3,full_name),date_of_birth=COALESCE($4,date_of_birth),
        date_of_death=COALESCE($5,date_of_death),burial_date=COALESCE($6,burial_date),avatar_url=COALESCE($7,avatar_url),
        hometown=COALESCE($8,hometown),biography=COALESCE($9,biography),anniversary_month=COALESCE($10,anniversary_month),
        anniversary_day=COALESCE($11,anniversary_day),date_calendar_type=COALESCE($13,date_calendar_type),
        birth_day=COALESCE($14,birth_day),birth_month=COALESCE($15,birth_month),birth_year=COALESCE($16,birth_year),
-       anniversary_year=COALESCE($17,anniversary_year),
+       anniversary_year=COALESCE($17,anniversary_year),external_plot_note=COALESCE($18,external_plot_note),
        verification_status=CASE WHEN verification_status='verified' AND $12 THEN 'pending_verification' ELSE verification_status END,
        rejection_reason=CASE WHEN $12 THEN NULL ELSE rejection_reason END WHERE deceased_profile_id=$1`,
         [
@@ -196,6 +216,7 @@ export class DeceasedService {
           dto.birthMonth ?? null,
           dto.birthYear ?? null,
           dto.anniversaryYear ?? null,
+          dto.externalPlotNote?.trim() || null,
         ],
       );
       await this.audit(
@@ -217,8 +238,43 @@ export class DeceasedService {
     return this.softState(user, id, false);
   }
 
+  /** Gia đình tự xoá NGAY hồ sơ "ngoài nghĩa trang" — không cần admin
+   * duyệt vì hồ sơ này không gắn với lô nào hệ thống đang quản lý. Frontend
+   * đã yêu cầu người dùng xác nhận qua popup cảnh báo không thể hoàn tác
+   * trước khi gọi tới đây. */
+  async deleteExternalNow(user: AuthUser, id: number) {
+    return this.database.transaction(async (client) => {
+      const row = (
+        await client.query(
+          `SELECT * FROM deceased_profiles WHERE deceased_profile_id=$1 AND is_deleted=FALSE FOR UPDATE`,
+          [id],
+        )
+      ).rows[0];
+      if (!row) throw new NotFoundException('Không tìm thấy hồ sơ');
+      if (!row.is_external_plot)
+        throw new BadRequestException(
+          'Hồ sơ gắn với lô trong nghĩa trang cần gửi yêu cầu xoá để admin duyệt.',
+        );
+      await this.access.assertProfileOwner(user, row, client);
+      await client.query(
+        `UPDATE deceased_profiles SET is_deleted=TRUE, deleted_at=NOW(), deleted_by=$2 WHERE deceased_profile_id=$1`,
+        [id, user.id],
+      );
+      await this.audit(
+        client,
+        user.id,
+        'deceased_profile.delete_external',
+        id,
+        row,
+        { isDeleted: true },
+      );
+      return { id, isDeleted: true };
+    });
+  }
+
   /** Gia đình (chủ lô) gửi yêu cầu xoá hồ sơ — KHÔNG xoá ngay, chỉ đánh dấu
-   * đang chờ admin duyệt. Việc xoá thật sự chỉ diễn ra khi admin approve. */
+   * đang chờ admin duyệt. Việc xoá thật sự chỉ diễn ra khi admin approve.
+   * (Hồ sơ "ngoài nghĩa trang" không đi qua luồng này — xem deleteExternalNow.) */
   async requestDeletion(user: AuthUser, id: number, reason?: string) {
     return this.database.transaction(async (client) => {
       const row = (
@@ -228,7 +284,11 @@ export class DeceasedService {
         )
       ).rows[0];
       if (!row) throw new NotFoundException('Không tìm thấy hồ sơ');
-      await this.access.assertPlotOwner(user, row.plot_id, client);
+      if (row.is_external_plot)
+        throw new BadRequestException(
+          'Hồ sơ ngoài nghĩa trang có thể xoá trực tiếp, không cần gửi yêu cầu.',
+        );
+      await this.access.assertProfileOwner(user, row, client);
       if (row.deletion_requested_at)
         throw new ConflictException(
           'Hồ sơ này đã có một yêu cầu xoá đang chờ admin xử lý.',
@@ -261,7 +321,7 @@ export class DeceasedService {
       ).rows[0];
       if (!row || !row.deletion_requested_at)
         throw new NotFoundException('Không có yêu cầu xoá nào đang chờ.');
-      await this.access.assertPlotOwner(user, row.plot_id, client);
+      await this.access.assertProfileOwner(user, row, client);
       await client.query(
         `UPDATE deceased_profiles SET deletion_requested_at=NULL, deletion_requested_by=NULL,
          deletion_reason=NULL WHERE deceased_profile_id=$1`,
@@ -381,8 +441,9 @@ export class DeceasedService {
       ).rows[0];
       if (!row || row.is_deleted === deleted)
         throw new NotFoundException('Không tìm thấy hồ sơ');
-      await this.access.assertPlotOwner(user, row.plot_id, client);
-      if (!deleted) await this.assertCapacity(client, row.plot_id);
+      await this.access.assertProfileOwner(user, row, client);
+      if (!deleted && !row.is_external_plot)
+        await this.assertCapacity(client, row.plot_id);
       await client.query(
         `UPDATE deceased_profiles SET is_deleted=$2,deleted_at=CASE WHEN $2 THEN NOW() ELSE NULL END,deleted_by=CASE WHEN $2 THEN $3 ELSE NULL END WHERE deceased_profile_id=$1`,
         [id, deleted, user.id],

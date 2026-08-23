@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  IsBoolean,
   IsDateString,
   IsIn,
   IsInt,
@@ -11,7 +12,11 @@ import {
 } from 'class-validator';
 
 export class CreateDeceasedProfileDto {
-  @Type(() => Number) @IsInt() @Min(1) plotId: number;
+  // Bắt buộc trừ khi isExternalPlot=true (hồ sơ cho người thân an táng ở
+  // lô đất ngoài nghĩa trang, không gắn với lô nào hệ thống đang quản lý).
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) plotId?: number;
+  @IsOptional() @IsBoolean() isExternalPlot?: boolean;
+  @IsOptional() @IsString() @MaxLength(255) externalPlotNote?: string;
   @IsString() @MaxLength(100) fullName: string;
   // Legacy: vẫn nhận nếu có (dữ liệu cũ / admin), nhưng form khách hàng mới
   // không còn gửi 2 trường này nữa — dùng birthDay/Month/Year và

@@ -209,6 +209,7 @@ const ENTITY_TYPE_LABELS: Record<string, string> = {
   contract: "Hợp đồng",
   reminder: "Nhắc lịch tưởng niệm",
   admin_broadcast: "Thông báo hệ thống",
+  deceased_profile: "Hồ sơ tưởng niệm",
 };
 
 // Nhãn dự phòng theo nhóm (group) khi gặp entity type lạ/mới chưa kịp khai

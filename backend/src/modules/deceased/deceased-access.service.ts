@@ -31,6 +31,39 @@ export class DeceasedAccessService {
     if (!found) throw new NotFoundException('Không tìm thấy tài nguyên');
   }
 
+  /** Kiểm tra quyền trên một hồ sơ tưởng niệm cụ thể: nếu hồ sơ gắn với lô
+   * trong nghĩa trang thì phải là chủ lô đó; nếu là hồ sơ "ngoài nghĩa
+   * trang" (không có plot_id) thì phải là người đã tạo ra hồ sơ đó. */
+  async assertProfileOwner(
+    user: AuthUser,
+    profile: {
+      plot_id: number | null;
+      is_external_plot: boolean;
+      created_by: number;
+    },
+    client?: PoolClient,
+  ) {
+    if (this.isAdmin(user)) return;
+    if (profile.is_external_plot || profile.plot_id === null) {
+      if (profile.created_by !== user.id)
+        throw new NotFoundException('Không tìm thấy tài nguyên');
+      return;
+    }
+    await this.assertPlotOwner(user, profile.plot_id, client);
+  }
+
+  async isExternalProfileOwner(userId: number, profileId: number) {
+    const row = await this.database.queryOne<{
+      is_external_plot: boolean;
+      created_by: number;
+    }>(
+      `SELECT is_external_plot, created_by FROM deceased_profiles
+       WHERE deceased_profile_id=$1 AND is_deleted=FALSE`,
+      [profileId],
+    );
+    return Boolean(row?.is_external_plot && row.created_by === userId);
+  }
+
   async can(
     user: AuthUser,
     resourceType: ResourceType,
@@ -38,6 +71,11 @@ export class DeceasedAccessService {
     action: PermissionAction,
   ) {
     if (this.isAdmin(user)) return true;
+    if (
+      resourceType === 'deceased_profile' &&
+      (await this.isExternalProfileOwner(user.id, resourceId))
+    )
+      return true;
     const plotId = await this.resourcePlot(resourceType, resourceId);
     if (!plotId) return false;
     const owner = await this.database.queryOne(
