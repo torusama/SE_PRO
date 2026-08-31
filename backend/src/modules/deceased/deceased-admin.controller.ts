@@ -18,6 +18,7 @@ import {
   ConfigurePlotCapacityDto,
   CreateDeceasedProfileDto,
   DeceasedProfileQueryDto,
+  DenyDeletionDto,
   RejectDeceasedProfileDto,
 } from './dto';
 import type { AuthUser } from './deceased.types';
@@ -60,6 +61,23 @@ export class DeceasedAdminController {
   ) {
     return this.verification
       .reject(+id, u.id, d.reason)
+      .then((data) => ({ success: true, data }));
+  }
+  @Post('deceased/:id/approve-deletion') approveDeletion(
+    @CurrentUser() u: AuthUser,
+    @Param('id') id: string,
+  ) {
+    return this.service
+      .approveDeletion(u.id, +id)
+      .then((data) => ({ success: true, data }));
+  }
+  @Post('deceased/:id/deny-deletion') denyDeletion(
+    @CurrentUser() u: AuthUser,
+    @Param('id') id: string,
+    @Body() d: DenyDeletionDto,
+  ) {
+    return this.service
+      .denyDeletion(u.id, +id, d.reason)
       .then((data) => ({ success: true, data }));
   }
   @Patch('plots/:id/deceased-capacity') capacity(

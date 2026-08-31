@@ -16,7 +16,6 @@ export const ROUTES = {
   MY_LOTS: "/lo-cua-toi",
   MY_LOTS_DETAIL: "/lo-cua-toi/:lotId",
   SERVICES: "/dich-vu",
-  SERVICE_BOOK: "/dich-vu/dat/:lotId",
   PROFILE: "/ho-so",
   NOTIFICATION: "/thong-bao",
   REMINDERS: "/nhac-lich",

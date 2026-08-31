@@ -18,6 +18,7 @@ import {
   CreateDeceasedProfileDto,
   DeceasedProfileQueryDto,
   GrantResourcePermissionDto,
+  RequestDeletionDto,
   UpdateDeceasedProfileDto,
 } from './dto';
 import type { AuthUser } from './deceased.types';
@@ -56,14 +57,30 @@ export class DeceasedController {
       .update(u, +id, d)
       .then((data) => ({ success: true, data }));
   }
-  @Delete(':id') remove(@CurrentUser() u: AuthUser, @Param('id') id: string) {
-    return this.service.remove(u, +id);
+  @Post(':id/request-deletion') requestDeletion(
+    @CurrentUser() u: AuthUser,
+    @Param('id') id: string,
+    @Body() d: RequestDeletionDto,
+  ) {
+    return this.service
+      .requestDeletion(u, +id, d.reason)
+      .then((data) => ({ success: true, data }));
   }
-  @Post(':id/restore') restore(
+  @Delete(':id/request-deletion') cancelDeletionRequest(
     @CurrentUser() u: AuthUser,
     @Param('id') id: string,
   ) {
-    return this.service.restore(u, +id);
+    return this.service
+      .cancelDeletionRequest(u, +id)
+      .then((data) => ({ success: true, data }));
+  }
+  @Delete(':id') deleteExternal(
+    @CurrentUser() u: AuthUser,
+    @Param('id') id: string,
+  ) {
+    return this.service
+      .deleteExternalNow(u, +id)
+      .then((data) => ({ success: true, data }));
   }
   @Post(':id/permissions') grant(
     @CurrentUser() u: AuthUser,

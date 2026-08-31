@@ -474,9 +474,14 @@
   background: rgba(5, 18, 29, 0.72);
 }
 
+.df-profile-expanded {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+}
+
 .df-profile-detail {
   display: grid;
-  grid-column: 1 / -1;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   padding-top: 14px;
@@ -571,6 +576,21 @@
   font-size: 9px;
 }
 
+.df-deletion-pending {
+  display: block;
+  margin-top: 6px;
+  color: #e0b35c;
+  font-size: 9px;
+}
+
+.df-external-note {
+  display: block;
+  margin-top: 6px;
+  color: var(--df-muted);
+  font-size: 9px;
+  font-style: italic;
+}
+
 .df-profile-actions,
 .df-invitation-actions,
 .df-family-state-actions {
@@ -584,6 +604,14 @@
   min-height: 32px;
   padding-inline: 10px;
   font-size: 10px;
+}
+
+/* Trong hàng nút hành động (Lưu thay đổi / Huỷ), nút chính không nên kéo
+   giãn hết chiều ngang — chỉ vừa đủ nội dung và đứng ngang hàng với nút
+   Huỷ, thay vì đè nút Huỷ xuống dòng dưới. */
+.df-profile-actions .df-primary-button {
+  width: auto;
+  margin-top: 0;
 }
 
 .df-form {
@@ -608,7 +636,7 @@
 
 .df-field > span {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
   color: #a7b7bd;
@@ -617,6 +645,7 @@
 }
 
 .df-field > span small {
+  flex-shrink: 0;
   color: #566c76;
   font-size: 8px;
   font-weight: 500;
@@ -659,6 +688,74 @@
 
 .df-create-profile > .df-field {
   margin-top: 15px;
+}
+
+/* Ngày sinh & Ngày giỗ đứng riêng từng hàng (thay vì chia đôi cột) để ô
+   Năm có đủ chỗ hiển thị trọn 4 chữ số kể cả khi có nút tăng/giảm. */
+.df-dmy-grid {
+  grid-template-columns: 1fr;
+}
+
+.df-dmy-inputs {
+  display: grid;
+  grid-template-columns: minmax(64px, 0.7fr) minmax(76px, 0.9fr) minmax(
+      104px,
+      1fr
+    );
+  gap: 10px;
+}
+
+.df-dmy-inputs input[type="number"] {
+  padding-right: 6px;
+}
+
+.df-lunar-hint {
+  color: #6c8890;
+  font-size: 9.5px;
+  line-height: 1.5;
+  margin-top: 4px;
+}
+
+.df-external-plot-hint {
+  margin: 10px 0 15px;
+  color: #6c8890;
+  font-size: 9.5px;
+  line-height: 1.5;
+}
+
+.df-calendar-mode {
+  margin-top: 15px;
+}
+
+.df-calendar-mode-options {
+  display: flex;
+  gap: 8px;
+}
+
+.df-calendar-mode-btn {
+  flex: 1;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 229, 196, 0.18);
+  background: rgba(4, 12, 22, 0.6);
+  color: #b7c7cc;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.df-calendar-mode-btn:hover {
+  border-color: rgba(0, 229, 196, 0.4);
+}
+
+.df-calendar-mode-btn.active {
+  background: rgba(0, 229, 196, 0.14);
+  border-color: rgba(0, 229, 196, 0.55);
+  color: #cdfff5;
 }
 
 .df-primary-button {

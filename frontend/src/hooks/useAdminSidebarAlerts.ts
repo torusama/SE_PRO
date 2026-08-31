@@ -15,15 +15,22 @@ interface PendingCounts {
   pendingRequests: number;
   pendingCancellations: number;
   pendingAppointments: number;
+  pendingDeceased: number;
 }
 
 export interface AdminSidebarAlerts {
   notify: number;
   requests: number;
   appointments: number;
+  deceased: number;
 }
 
-const EMPTY: AdminSidebarAlerts = { notify: 0, requests: 0, appointments: 0 };
+const EMPTY: AdminSidebarAlerts = {
+  notify: 0,
+  requests: 0,
+  appointments: 0,
+  deceased: 0,
+};
 
 /**
  * Powers the "cần xử lý ngay" red badges in the admin sidebar (Thông báo /
@@ -64,6 +71,7 @@ export function useAdminSidebarAlerts(): AdminSidebarAlerts {
               (counts?.pendingRequests ?? 0) +
               (counts?.pendingCancellations ?? 0),
             appointments: counts?.pendingAppointments ?? 0,
+            deceased: counts?.pendingDeceased ?? 0,
           });
         } catch {
           // The sidebar badge is best-effort; a later realtime event or
@@ -81,7 +89,7 @@ export function useAdminSidebarAlerts(): AdminSidebarAlerts {
   }, [load]);
 
   useRealtimeRefresh(
-    ["notifications", "reservations", "appointments", "dashboard"],
+    ["notifications", "reservations", "appointments", "dashboard", "deceased"],
     load,
   );
 

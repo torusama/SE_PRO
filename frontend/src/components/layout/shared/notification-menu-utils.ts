@@ -44,6 +44,8 @@ const TYPE_LABELS: Record<string, string> = {
   memorial_reminder: "Nhắc lịch tưởng niệm",
   system_update: "Cập nhật hệ thống",
   announcement: "Thông báo chung",
+  deceased_verified: "Hồ sơ đã được xác nhận",
+  deceased_rejected: "Hồ sơ bị từ chối",
 };
 
 const REQUEST_CANCELLATION_TYPES = new Set([

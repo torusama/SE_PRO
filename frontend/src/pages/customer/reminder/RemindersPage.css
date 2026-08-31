@@ -983,6 +983,10 @@
   line-height: 1.5;
 }
 
+.reminder-page .field-hint-calendar {
+  margin: 0 0 8px;
+}
+
 .reminder-page .type-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

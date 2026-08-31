@@ -43,9 +43,10 @@ export class DashboardService {
   }
 
   // Lightweight counts used to drive the "cần xử lý ngay" badges in the
-  // admin sidebar (Thông báo / Xử lý yêu cầu / Phê duyệt lịch hẹn). Kept
-  // separate from summary() so the sidebar (mounted on every admin page)
-  // doesn't have to pay for the heavier revenue/aggregate queries above.
+  // admin sidebar (Thông báo / Xử lý yêu cầu / Phê duyệt lịch hẹn / Hồ sơ
+  // người đã khuất). Kept separate from summary() so the sidebar (mounted
+  // on every admin page) doesn't have to pay for the heavier
+  // revenue/aggregate queries above.
   async pendingCounts() {
     const row = await this.database.queryOne<Record<string, unknown>>(
       `SELECT
@@ -54,13 +55,17 @@ export class DashboardService {
         (SELECT COUNT(*)::int FROM purchase_request_cancellations
           WHERE status = 'pending') AS "pendingCancellations",
         (SELECT COUNT(*)::int FROM schedule_appointments
-          WHERE status = 'pending') AS "pendingAppointments"`,
+          WHERE status = 'pending') AS "pendingAppointments",
+        (SELECT COUNT(*)::int FROM deceased_profiles
+          WHERE verification_status = 'pending_verification'
+             OR deletion_requested_at IS NOT NULL) AS "pendingDeceased"`,
     );
     return (
       row ?? {
         pendingRequests: 0,
         pendingCancellations: 0,
         pendingAppointments: 0,
+        pendingDeceased: 0,
       }
     );
   }

@@ -107,6 +107,8 @@ const TYPE_LABELS: Record<string, string> = {
   service_submitted: "Đặt dịch vụ mới",
   service_payment_reported: "Khách báo đã thanh toán",
   reminder_created: "Nhắc lịch mới",
+  deceased_verified: "Hồ sơ đã được xác nhận",
+  deceased_rejected: "Hồ sơ bị từ chối",
 };
 
 function notificationSection(item: FeedNotification): FeedSectionValue {
