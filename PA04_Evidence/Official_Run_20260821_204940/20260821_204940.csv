@@ -1,0 +1,185 @@
+Suite/Test/Step Name,Browser,Description,Tag,Start time,End time,Duration,Status
+TS_PA04_MemberB_Plots_Reservations,,Official PA04 Member B suite - 14 API cases,,21-08-2026 20:49:43,21-08-2026 20:49:47,3.379s,PASSED
+,,,,,,,
+Test Cases/TC-PLOT-01_Browse_Public_Plot_List,,,,21-08-2026 20:49:44,21-08-2026 20:49:44,0.685s,PASSED
+"response = sendRequest(findTestObject(""API_Plots_GetPublicList""))",,,,21-08-2026 20:49:44,21-08-2026 20:49:44,0.367s,PASSED
+"verifyResponseStatusCode(response, 200)",,,,21-08-2026 20:49:44,21-08-2026 20:49:44,0.013s,PASSED
+json = JsonSlurper().parseText(response.getResponseBodyContent()),,,,21-08-2026 20:49:44,21-08-2026 20:49:44,0.013s,PASSED
+"assert success == true : ""success phải bằng true""",,,,21-08-2026 20:49:44,21-08-2026 20:49:44,0.007s,PASSED
+"assert data instanceof java.util.List : ""data phải là danh sách""",,,,21-08-2026 20:49:44,21-08-2026 20:49:44,0.001s,PASSED
+"assert data.size() > 0 : ""Danh sách lô đất không được rỗng""",,,,21-08-2026 20:49:44,21-08-2026 20:49:44,0.002s,PASSED
+data.each({ java.lang.Object plot -> ... }),,,,21-08-2026 20:49:44,21-08-2026 20:49:44,0.006s,PASSED
+println(TC-PLOT-01: tìm thấy $json.data.size() lô đất),,,,21-08-2026 20:49:44,21-08-2026 20:49:44,0.011s,PASSED
+"println(Lô đầu tiên: id=$json.data[0].id, plotCode=$json.data[0].plotCode, status=$json.data[0].status)",,,,21-08-2026 20:49:44,21-08-2026 20:49:44,0.004s,PASSED
+,,,,,,,
+Test Cases/TC-PLOT-02_Admin_Search_Filter_Paginate,,PA04 automated API test,PA04,21-08-2026 20:49:44,21-08-2026 20:49:45,0.329s,PASSED
+"token = ApiTestHelper.login(""admin@cemetery.vn"")",,,,21-08-2026 20:49:44,21-08-2026 20:49:45,0.191s,PASSED
+"page1Response = ApiTestHelper.send(""GET"", ""/admin/plots?search=A-01&status=available&zoneId=1&page=1&pageSize=2&sortBy=id&sortOrder=asc"", null, token)",,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.029s,PASSED
+"verifyResponseStatusCode(page1Response, 200)",,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.004s,PASSED
+page1 = ApiTestHelper.json(page1Response),,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.001s,PASSED
+assert success == true,,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.001s,PASSED
+assert page == 1,,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.001s,PASSED
+assert pageSize == 2,,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.001s,PASSED
+assert total >= 3,,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.001s,PASSED
+assert totalPages >= 2,,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.001s,PASSED
+assert items.size() == 2,,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.001s,PASSED
+assert items.every({ -> ... }),,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.007s,PASSED
+"page2Response = ApiTestHelper.send(""GET"", ""/admin/plots?search=A-01&status=available&zoneId=1&page=2&pageSize=2&sortBy=id&sortOrder=asc"", null, token)",,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.028s,PASSED
+"verifyResponseStatusCode(page2Response, 200)",,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.003s,PASSED
+page2 = ApiTestHelper.json(page2Response),,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.001s,PASSED
+assert page == 2,,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.001s,PASSED
+assert items.size() >= 1,,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.001s,PASSED
+assert intersect(id).isEmpty(),,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.004s,PASSED
+"println(TC-PLOT-02 PASS: total=$page1.data.total, page1=$page1.data.items*?.plotCode, page2=$page2.data.items*?.plotCode)",,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.002s,PASSED
+,,,,,,,
+Test Cases/TC-PLOTD-01_View_Valid_Plot_Detail,,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.074s,PASSED
+"response = sendRequest(findTestObject(""API_Plots_GetValidDetail""))",,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.022s,PASSED
+"verifyResponseStatusCode(response, 200)",,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.002s,PASSED
+json = JsonSlurper().parseText(response.getResponseBodyContent()),,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.001s,PASSED
+"assert success == true : ""success phải bằng true""",,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.000s,PASSED
+"assert data != null : ""data không được null""",,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.000s,PASSED
+"assert id == 1 : ""Plot ID trả về phải bằng 1""",,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.001s,PASSED
+"assert plotCode != null : ""Thiếu plotCode""",,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.001s,PASSED
+"assert zoneId != null : ""Thiếu zoneId""",,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.001s,PASSED
+"assert zoneName != null : ""Thiếu zoneName""",,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.000s,PASSED
+"assert rowCode != null : ""Thiếu rowCode""",,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.001s,PASSED
+"assert plotNumber != null : ""Thiếu plotNumber""",,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.000s,PASSED
+"assert status != null : ""Thiếu status""",,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.001s,PASSED
+"assert price != null : ""Thiếu price""",,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.001s,PASSED
+"assert area != null : ""Thiếu area""",,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.000s,PASSED
+"assert direction != null : ""Thiếu direction""",,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.000s,PASSED
+"assert plotType != null : ""Thiếu plotType""",,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.001s,PASSED
+"println(""TC-PLOTD-01 PASS"")",,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.001s,PASSED
+"println(Plot ID=$json.data.id, code=$json.data.plotCode, status=$json.data.status)",,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.001s,PASSED
+,,,,,,,
+Test Cases/TC-PLOTD-02_Nonexistent_Plot_Detail,,PA04 automated API test,PA04,21-08-2026 20:49:45,21-08-2026 20:49:45,0.049s,PASSED
+"response = ApiTestHelper.send(""GET"", ""/plots/999999"")",,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.015s,PASSED
+"verifyResponseStatusCode(response, 404)",,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.003s,PASSED
+json = ApiTestHelper.json(response),,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.001s,PASSED
+assert success == false,,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.001s,PASSED
+assert data == null,,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.000s,PASSED
+"assert message == ""Plot not found""",,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.000s,PASSED
+"assert error == ""NOT_FOUND""",,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.001s,PASSED
+"println(TC-PLOTD-02 PASS: status=404, message=$json.message)",,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.002s,PASSED
+,,,,,,,
+Test Cases/TC-PLOTM-01_NonAdmin_Create_Plot_Forbidden,,PA04 automated API test,PA04,21-08-2026 20:49:45,21-08-2026 20:49:45,0.212s,PASSED
+"token = ApiTestHelper.login(""khachhang1@gmail.com"")",,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.110s,PASSED
+code = TEST_FORBIDDEN_$System.currentTimeMillis(),,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.004s,PASSED
+"body = [""plotCode"":code, ""zoneId"":1, ""rowNumber"":""99"", ""columnNumber"":""901"", ""price"":1000000, ""area"":4, ""direction"":""Nam"", ""plotType"":""single""]",,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.001s,PASSED
+"response = ApiTestHelper.send(""POST"", ""/admin/plots"", body, token)",,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.019s,PASSED
+"verifyResponseStatusCode(response, 403)",,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.003s,PASSED
+json = ApiTestHelper.json(response),,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.001s,PASSED
+assert success == false,,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.001s,PASSED
+"assert error == ""FORBIDDEN""",,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.000s,PASSED
+"list = ApiTestHelper.json(ApiTestHelper.send(""GET"", ""/plots""))",,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.025s,PASSED
+assert !(data.any({ -> ... })),,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.004s,PASSED
+"println(TC-PLOTM-01 PASS: status=403, plotCode=$code was not created)",,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.000s,PASSED
+,,,,,,,
+Test Cases/TC-PLOTM-02_Admin_Create_Plot_Success,,PA04 automated API test,PA04,21-08-2026 20:49:45,21-08-2026 20:49:45,0.267s,PASSED
+"token = ApiTestHelper.login(""admin@cemetery.vn"")",,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.097s,PASSED
+code = TEST_PLOT_$System.currentTimeMillis(),,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.001s,PASSED
+createdId = null,,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.001s,PASSED
+try,,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.056s,PASSED
+Finally,,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.059s,PASSED
+,,,,,,,
+Test Cases/TC-RSV1-01_Unavailable_Plot,,PA04 automated API test,PA04,21-08-2026 20:49:45,21-08-2026 20:49:45,0.241s,PASSED
+"token = ApiTestHelper.login(""khachhang1@gmail.com"")",,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.137s,PASSED
+before = id,,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.023s,PASSED
+"response = ApiTestHelper.send(""POST"", ""/reservations"", [""type"":""reserve"", ""plotIds"":[2], ""note"":""PA04 unavailable plot test""], token)",,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.020s,PASSED
+"verifyResponseStatusCode(response, 400)",,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.001s,PASSED
+json = ApiTestHelper.json(response),,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.001s,PASSED
+assert success == false,,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.000s,PASSED
+"assert toLowerCase().contains(""trống"")",,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.001s,PASSED
+after = id,,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.026s,PASSED
+assert after == before,,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.000s,PASSED
+"println(TC-RSV1-01 PASS: plotId=2 rejected, message=$json.message)",,,,21-08-2026 20:49:45,21-08-2026 20:49:45,0.000s,PASSED
+,,,,,,,
+Test Cases/TC-RSV1-02_NonAdjacent_Plots,,PA04 automated API test,PA04,21-08-2026 20:49:45,21-08-2026 20:49:46,0.195s,PASSED
+"token = ApiTestHelper.login(""khachhang1@gmail.com"")",,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.116s,PASSED
+before = id,,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.018s,PASSED
+"response = ApiTestHelper.send(""POST"", ""/reservations/multiple"", [""type"":""reserve"", ""plotIds"":[1, 13]], token)",,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.014s,PASSED
+"verifyResponseStatusCode(response, 400)",,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.001s,PASSED
+json = ApiTestHelper.json(response),,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.001s,PASSED
+assert success == false,,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.000s,PASSED
+"assert toLowerCase().contains(""adjacent"") || toLowerCase().contains(""liền kề"")",,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.001s,PASSED
+after = id,,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.010s,PASSED
+assert after == before,,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.001s,PASSED
+"println(TC-RSV1-02 PASS: plotIds=[1,13] rejected, message=$json.message)",,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.000s,PASSED
+,,,,,,,
+Test Cases/TC-RSV2-01_Duplicate_PlotId,,PA04 automated API test,PA04,21-08-2026 20:49:46,21-08-2026 20:49:46,0.182s,PASSED
+"token = ApiTestHelper.login(""khachhang1@gmail.com"")",,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.096s,PASSED
+before = id,,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.013s,PASSED
+"response = ApiTestHelper.send(""POST"", ""/reservations"", [""type"":""reserve"", ""plotIds"":[1, 1]], token)",,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.017s,PASSED
+"verifyResponseStatusCode(response, 400)",,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.002s,PASSED
+json = ApiTestHelper.json(response),,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.000s,PASSED
+assert success == false,,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.001s,PASSED
+"assert toLowerCase().contains(""unique"") || toLowerCase().contains(""trùng"")",,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.000s,PASSED
+after = id,,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.025s,PASSED
+assert after == before,,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.000s,PASSED
+"println(TC-RSV2-01 PASS: duplicate plotIds rejected, message=$json.message)",,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.001s,PASSED
+,,,,,,,
+Test Cases/TC-RSV2-02_Empty_PlotIds,,PA04 automated API test,PA04,21-08-2026 20:49:46,21-08-2026 20:49:46,0.194s,PASSED
+"token = ApiTestHelper.login(""khachhang1@gmail.com"")",,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.117s,PASSED
+before = id,,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.021s,PASSED
+"response = ApiTestHelper.send(""POST"", ""/reservations"", [""type"":""reserve"", ""plotIds"":[]], token)",,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.015s,PASSED
+"verifyResponseStatusCode(response, 400)",,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.001s,PASSED
+json = ApiTestHelper.json(response),,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.001s,PASSED
+assert success == false,,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.000s,PASSED
+"assert toLowerCase().contains(""empty"") || toLowerCase().contains(""at least 1"") || toLowerCase().contains(""rỗng"")",,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.000s,PASSED
+after = id,,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.011s,PASSED
+assert after == before,,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.001s,PASSED
+"println(TC-RSV2-02 PASS: empty plotIds rejected, message=$json.message)",,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.000s,PASSED
+,,,,,,,
+Test Cases/TC-RSVM-01_Reapprove_Approved_Request,,PA04 automated API test,PA04,21-08-2026 20:49:46,21-08-2026 20:49:46,0.214s,PASSED
+"token = ApiTestHelper.login(""admin@cemetery.vn"")",,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.110s,PASSED
+"beforeResponse = ApiTestHelper.send(""GET"", ""/admin/reservations/1"", null, token)",,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.021s,PASSED
+"verifyResponseStatusCode(beforeResponse, 200)",,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.003s,PASSED
+before = ApiTestHelper.json(beforeResponse),,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.001s,PASSED
+"assert status == ""approved""",,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.001s,PASSED
+"response = ApiTestHelper.send(""PATCH"", ""/admin/reservations/1/approve"", [""adminNote"":""PA04 reapprove negative test""], token)",,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.025s,PASSED
+"verifyResponseStatusCode(response, 400)",,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.001s,PASSED
+json = ApiTestHelper.json(response),,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.001s,PASSED
+assert success == false,,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.000s,PASSED
+"assert toLowerCase().contains(""pending"")",,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.001s,PASSED
+"after = ApiTestHelper.json(ApiTestHelper.send(""GET"", ""/admin/reservations/1"", null, token))",,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.026s,PASSED
+"assert status == ""approved""",,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.000s,PASSED
+"println(TC-RSVM-01 PASS: reservationId=1 remains approved, message=$json.message)",,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.000s,PASSED
+,,,,,,,
+Test Cases/TC-RSVM-02_View_Other_Customer_Reservation,,PA04 automated API test,PA04,21-08-2026 20:49:46,21-08-2026 20:49:46,0.168s,PASSED
+"token = ApiTestHelper.login(""khachhang2@gmail.com"")",,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.119s,PASSED
+"response = ApiTestHelper.send(""GET"", ""/my/reservations/1"", null, token)",,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.015s,PASSED
+"verifyResponseStatusCode(response, 404)",,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.001s,PASSED
+json = ApiTestHelper.json(response),,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.000s,PASSED
+assert success == false,,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.001s,PASSED
+assert data == null,,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.000s,PASSED
+"assert error == ""NOT_FOUND""",,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.000s,PASSED
+"println(TC-RSVM-02 PASS: customer2 cannot view reservationId=1, message=$json.message)",,,,21-08-2026 20:49:46,21-08-2026 20:49:46,0.001s,PASSED
+,,,,,,,
+Test Cases/TC-FAM-01_Invite_Nonexistent_User,,PA04 automated API test,PA04,21-08-2026 20:49:46,21-08-2026 20:49:47,0.181s,PASSED
+"token = ApiTestHelper.login(""khachhang1@gmail.com"")",,,,21-08-2026 20:49:46,21-08-2026 20:49:47,0.120s,PASSED
+missingEmail = missing_$System.currentTimeMillis()@example.test,,,,21-08-2026 20:49:47,21-08-2026 20:49:47,0.000s,PASSED
+"response = ApiTestHelper.send(""POST"", ""/families/999999/invitations"", [""inviteeEmail"":missingEmail], token)",,,,21-08-2026 20:49:47,21-08-2026 20:49:47,0.029s,PASSED
+"verifyResponseStatusCode(response, 404)",,,,21-08-2026 20:49:47,21-08-2026 20:49:47,0.001s,PASSED
+json = ApiTestHelper.json(response),,,,21-08-2026 20:49:47,21-08-2026 20:49:47,0.000s,PASSED
+assert success == false,,,,21-08-2026 20:49:47,21-08-2026 20:49:47,0.001s,PASSED
+assert data == null,,,,21-08-2026 20:49:47,21-08-2026 20:49:47,0.000s,PASSED
+"assert error == ""NOT_FOUND""",,,,21-08-2026 20:49:47,21-08-2026 20:49:47,0.000s,PASSED
+"assert toLowerCase().contains(""người dùng"") || toLowerCase().contains(""user"")",,,,21-08-2026 20:49:47,21-08-2026 20:49:47,0.001s,PASSED
+"println(TC-FAM-01 PASS: email=$missingEmail rejected, message=$json.message)",,,,21-08-2026 20:49:47,21-08-2026 20:49:47,0.001s,PASSED
+,,,,,,,
+Test Cases/TC-FAM-02_Biography_Too_Long,,PA04 automated API test,PA04,21-08-2026 20:49:47,21-08-2026 20:49:47,0.208s,PASSED
+"token = ApiTestHelper.login(""khachhang1@gmail.com"")",,,,21-08-2026 20:49:47,21-08-2026 20:49:47,0.109s,PASSED
+"beforeResponse = ApiTestHelper.send(""GET"", ""/deceased/1"", null, token)",,,,21-08-2026 20:49:47,21-08-2026 20:49:47,0.029s,PASSED
+"verifyResponseStatusCode(beforeResponse, 200)",,,,21-08-2026 20:49:47,21-08-2026 20:49:47,0.001s,PASSED
+before = ApiTestHelper.json(beforeResponse),,,,21-08-2026 20:49:47,21-08-2026 20:49:47,0.000s,PASSED
+originalBiography = (before.biography) ? before.biography : before.data?.biography,,,,21-08-2026 20:49:47,21-08-2026 20:49:47,0.001s,PASSED
+"tooLongBiography = ""A"" * 10001",,,,21-08-2026 20:49:47,21-08-2026 20:49:47,0.002s,PASSED
+"response = ApiTestHelper.send(""PATCH"", ""/deceased/1"", [""biography"":tooLongBiography], token)",,,,21-08-2026 20:49:47,21-08-2026 20:49:47,0.023s,PASSED
+"verifyResponseStatusCode(response, 400)",,,,21-08-2026 20:49:47,21-08-2026 20:49:47,0.002s,PASSED
+json = ApiTestHelper.json(response),,,,21-08-2026 20:49:47,21-08-2026 20:49:47,0.000s,PASSED
+assert success == false,,,,21-08-2026 20:49:47,21-08-2026 20:49:47,0.001s,PASSED
+"assert message.contains(""10000"") || toLowerCase().contains(""longer"")",,,,21-08-2026 20:49:47,21-08-2026 20:49:47,0.000s,PASSED
+"after = ApiTestHelper.json(ApiTestHelper.send(""GET"", ""/deceased/1"", null, token))",,,,21-08-2026 20:49:47,21-08-2026 20:49:47,0.012s,PASSED
+afterBiography = (after.biography) ? after.biography : after.data?.biography,,,,21-08-2026 20:49:47,21-08-2026 20:49:47,0.000s,PASSED
+assert afterBiography == originalBiography,,,,21-08-2026 20:49:47,21-08-2026 20:49:47,0.001s,PASSED
+"println(TC-FAM-02 PASS: 10001-character biography rejected, message=$json.message)",,,,21-08-2026 20:49:47,21-08-2026 20:49:47,0.000s,PASSED

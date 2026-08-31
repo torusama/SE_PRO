@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TestCaseEntity>
+   <description>PA04 automated API test</description>
+   <name>TC-RSV1-01_Unavailable_Plot</name>
+   <tag>PA04</tag>
+   <comment></comment>
+   <recordOption>OTHER</recordOption>
+   <testCaseGuid>8c555555-5555-4555-8555-555555555555</testCaseGuid>
+</TestCaseEntity>

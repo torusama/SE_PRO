@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TestCaseEntity>
+   <description>PA04 automated API test</description>
+   <name>TC-PLOTM-01_NonAdmin_Create_Plot_Forbidden</name>
+   <tag>PA04</tag>
+   <comment></comment>
+   <recordOption>OTHER</recordOption>
+   <testCaseGuid>8c333333-3333-4333-8333-333333333333</testCaseGuid>
+</TestCaseEntity>

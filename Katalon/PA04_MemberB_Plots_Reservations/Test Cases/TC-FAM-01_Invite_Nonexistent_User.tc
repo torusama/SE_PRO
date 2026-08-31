@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TestCaseEntity>
+   <description>PA04 automated API test</description>
+   <name>TC-FAM-01_Invite_Nonexistent_User</name>
+   <tag>PA04</tag>
+   <comment></comment>
+   <recordOption>OTHER</recordOption>
+   <testCaseGuid>8cbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb</testCaseGuid>
+</TestCaseEntity>

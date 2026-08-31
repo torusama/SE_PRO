@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TestCaseEntity>
+   <description></description>
+   <name>TC-PLOT-01_Browse_Public_Plot_List</name>
+   <tag></tag>
+   <comment></comment>
+   <recordOption>OTHER</recordOption>
+   <testCaseGuid>52f47bbb-a210-4c04-90b4-cb3217152f90</testCaseGuid>
+</TestCaseEntity>
