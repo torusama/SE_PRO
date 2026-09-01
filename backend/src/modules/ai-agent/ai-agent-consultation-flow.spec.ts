@@ -77,20 +77,28 @@ describe('AiAgentOrchestrator consultation continuity', () => {
     ).toMatchObject({ numberOfPlots: 3, needAdjacent: true });
   });
 
-  it('continues plot consultation for a colloquial follow-up', () => {
+  it('carries the active request ledger when the LLM marks a colloquial follow-up as continuation', () => {
     const service = createService() as any;
-    const result = service.contextualizeClarificationReply(
-      'oki z gợi ý dùm i',
+    const result = service.restoreRequirementsForContinuation(
+      {
+        intent: 'recommend_plots',
+        action: 'rank_plot_options',
+        contextMode: 'continue',
+        needsClarification: false,
+        clarificationQuestion: '',
+        directResponse: '',
+        requirements: { recommendationCount: 3 },
+      },
       [
         { id: 1, role: 'user', content: 'lô baby' },
         {
           id: 2,
           role: 'assistant',
           content: 'Mình có thể tìm lô theo dữ liệu đang có.',
+          intent: 'clarification',
+          extractedData: { budgetMax: 200_000_000, numberOfPlots: 1 },
         },
       ],
-      { budgetMax: 200_000_000 },
-      'general_question',
     );
     expect(result.intent).toBe('recommend_plots');
     expect(result.requirements).toMatchObject({
@@ -122,7 +130,7 @@ describe('AiAgentOrchestrator consultation continuity', () => {
     });
   });
 
-  it('does not let a weak planner collapse a plot request into memory chatter', () => {
+  it('does not manufacture plot-tool permission when the LLM keeps action=none', () => {
     const service = createService() as any;
     const plan = service.reconcilePlannerWithTrustedContext(
       {
@@ -131,15 +139,16 @@ describe('AiAgentOrchestrator consultation continuity', () => {
         contextMode: 'continue',
         needsClarification: false,
         clarificationQuestion: '',
-        directResponse: 'Mình vẫn nhớ các ưu tiên của bạn.',
+        directResponse:
+          'Mình đã ghi nhận các ưu tiên; theo yêu cầu của bạn, mình chưa tìm lô lúc này.',
         requirements: { budgetMax: 200_000_000 },
       },
-      'gợi ý vài lô cho tui',
+      'ghi nhận giúp tui, chưa cần tìm lô',
       'recommend_plots',
     );
-    expect(plan.action).toBe('rank_plot_options');
+    expect(plan.action).toBe('none');
     expect(plan.requirements.numberOfPlots).toBe(1);
-    expect(plan.directResponse).toBe('');
+    expect(plan.directResponse).toContain('chưa tìm lô');
   });
 
   it('does not dump saved-memory summaries as a generic outage fallback', async () => {

@@ -2,7 +2,7 @@ export function foldKnowledgeText(content: string) {
   return content
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
-    .replace(/đ/g, 'd')
+    .replace(/[đĐ]/g, 'd')
     .toLowerCase()
     .replace(/[^a-z0-9%\s]/g, ' ')
     .replace(/\s+/g, ' ')
@@ -31,6 +31,15 @@ export function isRuntimeOperationalClaim(content: string) {
       folded,
     ) ||
     /\b(?:mien phi|free)\b.{0,60}\b(?:dich vu|service|ve sinh|cham soc)\b/.test(
+      folded,
+    ) ||
+    /\b(?:dat|doi|sua|cap nhat|thay|ap dung)\b.{0,50}\b(?:gia|price)\b/.test(
+      folded,
+    ) ||
+    /\b(?:gia|price)\b.{0,60}\b(?:tat ca|toan bo|moi)\s+(?:cac\s+)?(?:lo|plot|dich vu|service)\b/.test(
+      folded,
+    ) ||
+    /\b(?:dat|doi|sua|cap nhat|thay)\b.{0,50}\b(?:trang thai|status)\b.{0,80}\b(?:lo|plot|don|order|giao dich|transaction)\b/.test(
       folded,
     ) ||
     /\b(?:role|quyen|phan quyen|admin|jwt|timeout|api key|cau hinh)\b/.test(

@@ -6,6 +6,7 @@ import {
   extractSemanticStructuredFacts,
   extractPendingServiceRequestedDate,
   extractRequestedRecommendationCount,
+  buildInvalidExplicitDateTimeResponse,
   resolvePendingBookingReply,
 } from './ai-agent-orchestrator.service';
 import { AgentPendingAction } from './types/agent-response.types';
@@ -67,15 +68,31 @@ describe('pending service date resolution', () => {
   });
 });
 
+describe('explicit date/time validation', () => {
+  it('rejects an impossible standalone appointment clock', () => {
+    expect(buildInvalidExplicitDateTimeResponse('đặt lúc 25:00')).toContain(
+      '25:00 không hợp lệ',
+    );
+  });
+
+  it('reports both an impossible date and clock in one natural request', () => {
+    const response = buildInvalidExplicitDateTimeResponse(
+      'đặt lịch xem vào 31/02 lúc 25 giờ',
+    );
+    expect(response).toContain('31/02 không tồn tại');
+    expect(response).toContain('25 giờ không hợp lệ');
+  });
+});
+
 describe('AI Agent semantic-mode hard facts', () => {
   it('does not let a negotiated amount become a hard budget just because it has a currency unit', () => {
     const message = 'Lô A-02-005 mắc quá, 5 triệu bán không?';
     const deterministic = extractDeterministicRequirements(message);
 
     expect(deterministic.budgetMax).toBe(5_000_000); // legacy outage parser may still see it
-    expect(
-      extractSemanticStructuredFacts(message, deterministic),
-    ).toEqual({ selectedPlotCode: 'A-02-005' });
+    expect(extractSemanticStructuredFacts(message, deterministic)).toEqual({
+      selectedPlotCode: 'A-02-005',
+    });
   });
 
   it('keeps an explicitly labelled budget range as deterministic numeric facts', () => {
@@ -92,13 +109,9 @@ describe('AI Agent semantic-mode hard facts', () => {
     const deterministic = extractDeterministicRequirements(message);
     const facts = extractSemanticStructuredFacts(message, deterministic);
 
-    expect(deterministic).toMatchObject({
-      recommendationCount: 3,
-      preferredDirection: 'Đông',
-      plotType: 'family',
-      needAdjacent: true,
-      preferNearEntrance: true,
-    });
+    // The legacy extractor may expose compatibility hints, but none of these
+    // semantic roles may become a hard fact before the planner understands the
+    // complete sentence.
     expect(facts).toEqual({});
   });
 
@@ -107,6 +120,19 @@ describe('AI Agent semantic-mode hard facts', () => {
     const deterministic = extractDeterministicRequirements(message);
     expect(extractSemanticStructuredFacts(message, deterministic)).toEqual({
       selectedPlotCode: 'A-01-004',
+    });
+  });
+
+  it('preserves an explicit mistyped near-entrance preference and unverifiable wishes', () => {
+    const message = 'tui muốn chọn lô hợp lý, tui thích aganf cổng thoáng mát';
+    const deterministic = extractDeterministicRequirements(message);
+
+    expect(deterministic.preferNearEntrance).toBe(true);
+    expect(
+      extractSemanticStructuredFacts(message, deterministic),
+    ).toMatchObject({
+      preferNearEntrance: true,
+      qualitativePreferences: ['thoáng mát'],
     });
   });
 });
@@ -146,6 +172,46 @@ describe('AI Agent deterministic requirement extraction', () => {
     ).toMatchObject({
       birthYear: 1952,
       gender: undefined,
+    });
+  });
+
+  it('keeps the latest explicitly corrected birth year', () => {
+    const requirements = extractDeterministicRequirements(
+      't sinh năm 2000, à nhầm 2001, nữ',
+    );
+    expect(requirements).toMatchObject({ birthYear: 2001, gender: 'female' });
+    expect(
+      extractSemanticStructuredFacts(
+        't sinh năm 2000, à nhầm 2001, nữ',
+        requirements,
+      ),
+    ).toMatchObject({
+      birthYear: 2001,
+    });
+  });
+
+  it('keeps an explicit acquisition quantity as a trusted structured fact', () => {
+    const message = 'nhà tui cần 2 lô nằm sát nhau; cho tui 3 phương án';
+    const requirements = extractDeterministicRequirements(message);
+    expect(extractSemanticStructuredFacts(message, requirements)).toMatchObject(
+      {
+        numberOfPlots: 2,
+        needAdjacent: true,
+      },
+    );
+  });
+
+  it.each([
+    ['tui nữ, sinh 12/03/1999 tầm 7 giờ sáng', '07:00'],
+    ['nam sinh 04/05/1988 khoảng 7 giờ tối', '19:00'],
+  ])('keeps a natural-language birth clock from "%s"', (message, birthTime) => {
+    const deterministic = extractDeterministicRequirements(message);
+
+    expect(deterministic).toMatchObject({ birthTime });
+    expect(
+      extractSemanticStructuredFacts(message, deterministic),
+    ).toMatchObject({
+      birthTime,
     });
   });
 
@@ -232,6 +298,91 @@ describe('AI Agent deterministic requirement extraction', () => {
     ).toMatchObject({
       serviceQuery: 'Thắp hương',
     });
+  });
+});
+
+describe('clarification requirement continuity', () => {
+  it('treats a short reply as one filled slot instead of resetting plot criteria', () => {
+    const orchestrator = Object.create(
+      AiAgentOrchestratorService.prototype,
+    ) as unknown as {
+      restoreRequirementsForContinuation: (
+        plan: AgentPlan,
+        history: unknown[],
+      ) => AgentPlan;
+    };
+    const plan: AgentPlan = {
+      intent: 'bazi_suggestion',
+      action: 'suggest_bazi_direction',
+      contextMode: 'continue',
+      needsClarification: false,
+      clarificationQuestion: '',
+      requirements: {
+        gender: 'male',
+        consultationGoal: 'bazi_then_plots',
+      },
+    };
+    const result = orchestrator.restoreRequirementsForContinuation(plan, [
+      {
+        role: 'assistant',
+        intent: 'clarification',
+        extractedData: {
+          birthDate: '2006-03-02',
+          birthTime: '13:45',
+          preferNearEntrance: true,
+          qualitativePreferences: ['thoáng mát'],
+        },
+      },
+    ]);
+
+    expect(result.requirements).toMatchObject({
+      birthDate: '2006-03-02',
+      birthTime: '13:45',
+      gender: 'male',
+      consultationGoal: 'bazi_then_plots',
+      preferNearEntrance: true,
+      qualitativePreferences: ['thoáng mát'],
+    });
+  });
+
+  it('keeps the active request ledger for a reasoning follow-up after recommendations', () => {
+    const orchestrator = Object.create(
+      AiAgentOrchestratorService.prototype,
+    ) as unknown as {
+      restoreRequirementsForContinuation: (
+        plan: AgentPlan,
+        history: unknown[],
+      ) => AgentPlan;
+    };
+    const plan: AgentPlan = {
+      intent: 'general_question',
+      action: 'none',
+      contextMode: 'continue',
+      needsClarification: false,
+      clarificationQuestion: '',
+      directResponse: 'H-02-005 phù hợp nhất.',
+      requirements: {},
+    };
+
+    const result = orchestrator.restoreRequirementsForContinuation(plan, [
+      {
+        role: 'assistant',
+        intent: 'recommend_plots',
+        extractedData: {
+          preferredDirection: 'Nam',
+          preferNearEntrance: true,
+          qualitativePreferences: ['thoáng mát'],
+          excludePlotIds: [1, 2],
+        },
+      },
+    ]);
+
+    expect(result.requirements).toMatchObject({
+      preferredDirection: 'Nam',
+      preferNearEntrance: true,
+      qualitativePreferences: ['thoáng mát'],
+    });
+    expect(result.requirements).not.toHaveProperty('excludePlotIds');
   });
 });
 
@@ -332,6 +483,157 @@ describe('AI Agent regression routing helpers', () => {
     AiAgentOrchestratorService.prototype,
   ) as any;
 
+  it('rejects a wrong year pillar inside a compound Bazi recommendation result', () => {
+    const toolOutput = {
+      recommendations: [],
+      baziSuggestion: { yearPillar: 'Kỷ Mão' },
+    };
+
+    expect(
+      orchestrator.isUsableBaziComposedResponse(
+        'Bạn sinh năm 1999, tuổi Canh Thìn.',
+        { birthYear: 1999 },
+        toolOutput,
+      ),
+    ).toBe(false);
+    expect(
+      orchestrator.isUsableBaziComposedResponse(
+        'Bạn sinh năm 1999, tuổi Kỷ Mão.',
+        { birthYear: 1999 },
+        toolOutput,
+      ),
+    ).toBe(true);
+  });
+
+  it('requires a complete Bát Trạch narrative for a standalone analysis', () => {
+    const toolOutput = {
+      yearPillar: 'Bính Tuất',
+      napAmName: 'Ốc Thượng Thổ',
+      cungMenh: 'Chấn',
+      goodDirections: [
+        { direction: 'Nam', star: 'Sinh Khí' },
+        { direction: 'Bắc', star: 'Thiên Y' },
+      ],
+      badDirections: [
+        { direction: 'Tây', star: 'Tuyệt Mệnh' },
+        { direction: 'Tây Bắc', star: 'Ngũ Quỷ' },
+      ],
+    };
+    expect(
+      orchestrator.isUsableBaziComposedResponse(
+        'Bạn sinh năm 2006, tuổi Bính Tuất, ưu tiên hướng Nam.',
+        { birthYear: 2006 },
+        toolOutput,
+        true,
+      ),
+    ).toBe(false);
+
+    const detailed = `Bạn sinh năm 2006, tuổi Bính Tuất. Nạp Âm Ốc Thượng Thổ và Cung Mệnh Chấn là hai lớp tham khảo khác nhau trong phép Bát Trạch. Hướng Nam mang sao Sinh Khí, thường được diễn giải theo sức sống và sự phát triển; hướng Bắc mang sao Thiên Y, nhấn vào sự nâng đỡ. Hướng Tây thuộc Tuyệt Mệnh và hướng Tây Bắc thuộc Ngũ Quỷ là các nhãn văn hóa nên hạn chế, không phải dự báo chắc chắn. Ngũ Hành chỉ là lớp giải thích phụ và không được dùng để phủ định bảng hướng Bát Trạch. Khi chọn lô thực tế vẫn cần đối chiếu giá, diện tích, khu vực, lối tiếp cận và tình trạng còn trống từ dữ liệu xác thực. Đây là nội dung tham khảo văn hóa, không phải kết luận khoa học. Giới hạn của phép tính hiện tại là chưa lập đủ Tứ Trụ năm, tháng, ngày, giờ và không thay thế tư vấn chuyên gia. ${'Phần giải thích này trình bày từng lớp dữ liệu để gia đình cân nhắc thận trọng và tránh biến một hướng tham khảo thành bảo đảm tốt xấu. '.repeat(2)}`;
+    expect(
+      orchestrator.isUsableBaziComposedResponse(
+        detailed,
+        { birthYear: 2006 },
+        toolOutput,
+        true,
+      ),
+    ).toBe(true);
+  });
+
+  it('asks for budget after Bát Trạch instead of browsing arbitrary plots', () => {
+    const bazi = { preferredDirections: ['Nam'] };
+    expect(
+      orchestrator.buildBaziPlotDiscoveryQuestion(
+        {
+          birthDate: '2006-03-02',
+          gender: 'male',
+          consultationGoal: 'bazi_then_plots',
+        },
+        bazi,
+        'nam sinh 2/3/2006, chọn lô hợp hướng giúp mình',
+      ),
+    ).toContain('ngân sách');
+    expect(
+      orchestrator.buildBaziPlotDiscoveryQuestion(
+        {
+          birthDate: '2006-03-02',
+          gender: 'male',
+          consultationGoal: 'bazi_then_plots',
+          budgetMax: 100_000_000,
+          numberOfPlots: 1,
+        },
+        bazi,
+        'ngân sách 100 triệu, một lô hợp hướng',
+      ),
+    ).toBe('');
+    expect(
+      orchestrator.buildBaziPlotDiscoveryQuestion(
+        {
+          birthDate: '2006-03-02',
+          gender: 'male',
+          consultationGoal: 'bazi_then_plots',
+          budgetMax: 100_000_000,
+          numberOfPlots: 1,
+        },
+        bazi,
+        'ngân sách 100 triệu, một lô hợp hướng',
+        true,
+      ),
+    ).toContain('xác nhận');
+  });
+
+  it('rebuilds a plot-choice follow-up without inventing budget or access differences', () => {
+    const shared = {
+      plots: [],
+      score: 1,
+      plotCost: 23_000_000,
+      serviceCost: 0,
+      estimatedTotal: 23_000_000,
+      currency: 'VND',
+      zoneName: 'Khu F',
+      directions: ['Tây'],
+      totalAreaSqm: 2.4,
+      isAdjacent: false,
+      reasons: [],
+      tradeOffs: [],
+      analysisSummary: '',
+      highlightPlotIds: [],
+      accessSummary: 'Khoảng tiếp cận trung bình tới Cổng chính',
+      entranceDistanceMapUnits: null,
+    };
+    const history = [
+      {
+        role: 'assistant',
+        extractedData: { budgetMax: 250_000_000 },
+        metadata: {
+          recommendations: [
+            {
+              ...shared,
+              optionId: 'A',
+              plotIds: [1],
+              plotCodes: ['F-01-006'],
+            },
+            {
+              ...shared,
+              optionId: 'B',
+              plotIds: [2],
+              plotCodes: ['F-02-001'],
+            },
+          ],
+        },
+      },
+    ];
+
+    const answer = orchestrator.buildGroundedPlotDecisionFollowUp(
+      history,
+      'Chọn F-01-006 vì gần cổng hơn; F-02-001 kém hơn.',
+    );
+
+    expect(answer).toContain('F-01-006');
+    expect(answer).toContain('nằm trong ngân sách 250.000.000 VND');
+    expect(answer).toContain('không chứng minh F-01-006 có lợi thế vị trí hơn');
+    expect(answer).not.toContain('vượt ngân sách');
+  });
+
   it('routes a specific service booking directly to the booking flow', () => {
     expect(orchestrator.detectIntent('Mình muốn đặt dịch vụ Thắp hương.')).toBe(
       'service_booking',
@@ -404,7 +706,97 @@ describe('AI Agent regression routing helpers', () => {
     expect(orchestrator.detectIntent(message)).toBe('bazi_suggestion');
   });
 
-  it('requires an explicit birth-time answer even when date and gender arrive together', () => {
+  it('applies prior Bát Tự facts only after the LLM directs a plot continuation', () => {
+    const history = [
+      {
+        role: 'assistant',
+        intent: 'bazi_suggestion',
+        content: 'Các hướng phù hợp đã được phân tích.',
+        extractedData: {
+          birthDate: '1999-03-12',
+          gender: 'female',
+        },
+        metadata: {
+          baziSuggestion: {
+            preferredDirections: ['Đông', 'Đông Nam'],
+            yearPillar: 'Kỷ Mão',
+            element: 'Thổ',
+            cungMenh: 'Cấn',
+          },
+        },
+      },
+    ];
+    const directed = orchestrator.applyPlannerDirectedContinuation(
+      {
+        intent: 'recommend_plots',
+        action: 'browse_available_plots',
+        contextMode: 'continue',
+        needsClarification: false,
+        clarificationQuestion: '',
+        directResponse: '',
+        requirements: { consultationGoal: 'bazi_then_plots' },
+      },
+      history,
+    );
+
+    expect(directed).toMatchObject({
+      intent: 'bazi_suggestion',
+      action: 'suggest_bazi_direction',
+      requirements: {
+        consultationGoal: 'bazi_then_plots',
+        birthDate: '1999-03-12',
+        gender: 'female',
+      },
+    });
+    expect(
+      orchestrator.applyPlannerDirectedContinuation(
+        {
+          ...directed,
+          intent: 'general_question',
+          action: 'none',
+          requirements: {},
+        },
+        history,
+      ).requirements,
+    ).toEqual({});
+  });
+
+  it('exposes compact structured Bát Tự state to the next semantic planner turn', () => {
+    const state = orchestrator.buildRecentStructuredConversationState([
+      {
+        role: 'assistant',
+        intent: 'bazi_suggestion',
+        content: 'Đã phân tích Bát Trạch.',
+        extractedData: {
+          birthYear: 1952,
+          gender: 'male',
+          consultationGoal: 'bazi_then_plots',
+          pendingAction: { kind: 'plot_request', plotIds: [99] },
+        },
+        metadata: {
+          baziSuggestion: {
+            preferredDirections: ['Bắc'],
+            yearPillar: 'Nhâm Thìn',
+            element: 'Thủy',
+            cungMenh: 'Chấn',
+          },
+        },
+      },
+    ]);
+
+    expect(state[0]).toMatchObject({
+      intent: 'bazi_suggestion',
+      requirements: {
+        birthYear: 1952,
+        gender: 'male',
+        consultationGoal: 'bazi_then_plots',
+      },
+      baziResult: { preferredDirections: ['Bắc'] },
+    });
+    expect(state[0].requirements).not.toHaveProperty('pendingAction');
+  });
+
+  it('does not require optional birth time when date and gender already suffice', () => {
     const intake = orchestrator.buildBaziIntakeTurn({
       message: 'Mình sinh ngày 12/03/1999, nữ, nên chôn ở lô nào?',
       intent: 'bazi_suggestion',
@@ -420,10 +812,7 @@ describe('AI Agent regression routing helpers', () => {
       customerProfile: null,
     });
 
-    expect(intake).toMatchObject({
-      assistantMessage: expect.stringContaining('giờ sinh'),
-      requirements: { consultationGoal: 'bazi_then_plots' },
-    });
+    expect(intake).toBeNull();
   });
 
   it('turns natural consultation feedback into an admin-review proposal', () => {
@@ -576,45 +965,26 @@ describe('AI Agent regression routing helpers', () => {
     expect(requirements.consultationGoal).toBeUndefined();
   });
 
-  it('accepts a bare birth-time reply inside an active Bazi turn', () => {
-    const result = orchestrator.contextualizeClarificationReply(
-      '11h35p',
-      [
-        { role: 'user', content: 'Tư vấn Bát Tự cho tui' },
-        { role: 'assistant', content: 'Bạn cho mình thêm giờ sinh nếu biết.' },
-      ],
-      { birthDate: '2006-01-16', gender: 'male' },
-      'general_question',
-      true,
-    );
-    expect(result).toMatchObject({
-      intent: 'bazi_suggestion',
-      requirements: { birthTime: '11:35' },
+  it('extracts a bare clock while leaving its conversational role to the planner', () => {
+    expect(extractDeterministicRequirements('11h35p')).toMatchObject({
+      birthTime: '11:35',
     });
   });
 
-  it('rotates previously shown plots when the customer asks for another recommendation', () => {
-    const result = orchestrator.contextualizeClarificationReply(
-      'Gợi ý cho mình thêm vài lô đi',
-      [
-        {
-          role: 'assistant',
-          content: 'Mình có ba phương án phù hợp.',
-          metadata: {
-            recommendations: [
-              { plotIds: [5], plotCodes: ['A-02-005'] },
-              { plotIds: [1], plotCodes: ['A-02-001'] },
-              { plotIds: [3], plotCodes: ['A-02-003'] },
-            ],
-          },
+  it('collects previously shown plot ids after the planner requests fresh options', () => {
+    const ids = orchestrator.getPreviouslyRecommendedPlotIds([
+      {
+        role: 'assistant',
+        content: 'Mình có ba phương án phù hợp.',
+        metadata: {
+          recommendations: [
+            { plotIds: [5], plotCodes: ['A-02-005'] },
+            { plotIds: [1], plotCodes: ['A-02-001'] },
+            { plotIds: [3], plotCodes: ['A-02-003'] },
+          ],
         },
-      ],
-      {},
-      'recommend_plots',
-      false,
-    );
-    expect(result.requirements.excludePlotIds).toEqual(
-      expect.arrayContaining([1, 3, 5]),
-    );
+      },
+    ]);
+    expect(ids).toEqual(expect.arrayContaining([1, 3, 5]));
   });
 });

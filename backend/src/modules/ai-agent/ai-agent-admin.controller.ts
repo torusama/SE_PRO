@@ -119,7 +119,10 @@ export class AiAgentAdminController {
     return {
       success: true,
       message: 'AI knowledge proposals retrieved',
-      data: await this.knowledge.listKnowledgeForReview(query.status),
+      data: await this.knowledge.listKnowledgeForReview(
+        query.status,
+        query.sourceRole,
+      ),
     };
   }
 

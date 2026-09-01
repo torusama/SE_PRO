@@ -412,9 +412,13 @@ Quy tắc:
         temperature: 0,
         maxTokens: 500,
         routingKey: `conversation-memory:${conversationId}`,
-        timeoutMs: 1_800,
-        totalTimeoutMs: 3_500,
+        timeoutMs: 5_000,
+        totalTimeoutMs: 6_500,
         preferredProviderId: 'openai-primary',
+        // The configured 120B secondary has repeatedly timed out. This remains
+        // best-effort and non-blocking, but uses the healthy fast provider so
+        // semantic summaries are actually refreshed.
+        strictPreferredProvider: true,
       },
     );
     const raw = response.choices[0]?.message?.content?.trim();

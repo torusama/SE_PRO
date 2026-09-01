@@ -182,6 +182,13 @@ export class AgentToolRegistryService {
               typeof args.preferNearEntrance === 'boolean'
                 ? args.preferNearEntrance
                 : undefined,
+            qualitativePreferences: Array.isArray(args.qualitativePreferences)
+              ? args.qualitativePreferences
+                  .filter((item): item is string => typeof item === 'string')
+                  .map((item) => item.trim())
+                  .filter(Boolean)
+                  .slice(0, 6)
+              : undefined,
             excludePlotIds: this.optionalIntegerArray(
               args.excludePlotIds,
               'excludePlotIds',
@@ -287,6 +294,13 @@ export class AgentToolRegistryService {
         typeof args.preferNearEntrance === 'boolean'
           ? args.preferNearEntrance
           : undefined,
+      qualitativePreferences: Array.isArray(args.qualitativePreferences)
+        ? args.qualitativePreferences
+            .filter((item): item is string => typeof item === 'string')
+            .map((item) => item.trim())
+            .filter(Boolean)
+            .slice(0, 6)
+        : undefined,
       excludePlotIds: this.optionalIntegerArray(
         args.excludePlotIds,
         'excludePlotIds',

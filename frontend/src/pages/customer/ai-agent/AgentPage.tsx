@@ -60,8 +60,12 @@ export interface SuggestedPrompt {
 }
 
 export function getContextualPrompts(
-  lastMessage?: ChatMessage,
+  source?: ChatMessage | ChatMessage[],
 ): SuggestedPrompt[] {
+  const conversation = Array.isArray(source) ? source : source ? [source] : [];
+  const lastMessage = [...conversation]
+    .reverse()
+    .find((message) => message.role === "assistant");
   if (!lastMessage || lastMessage.role !== "assistant") {
     return [
       {
@@ -79,37 +83,71 @@ export function getContextualPrompts(
     ];
   }
 
+  const isAllowedPrompt = (item: SuggestedPrompt) =>
+    item.category &&
+    item.text &&
+    !/(?:tham|thăm)\s*quan|xem\s+thực\s+tế|(?:đến|tới)\s+hoa\s+viên/i.test(
+      `${item.category} ${item.text}`,
+    );
+  // The backend quick replies are built from the authoritative current state
+  // (including exact plot codes, pending workflows and missing intake data).
+  // They are therefore a better source for the floating prompt tray than a
+  // generic local catalogue or an optional free-form LLM suggestion.
+  const mappedQuickReplies = (lastMessage.response?.quickReplies ?? [])
+    .map((item) => ({
+      id: String(item?.id ?? ""),
+      category: String(item?.label ?? "").trim(),
+      text: String(item?.message ?? "").trim(),
+    }))
+    .filter(isAllowedPrompt);
+  const contextualQuickReplies = mappedQuickReplies
+    .filter((item) => !item.id.startsWith("help-"))
+    .map(({ category, text }) => ({ category, text }))
+    .slice(0, 3);
+  const genericHelpReplies = mappedQuickReplies
+    .filter((item) => item.id.startsWith("help-"))
+    .map(({ category, text }) => ({ category, text }))
+    .slice(0, 3);
   const backendFollowUps = (lastMessage.response?.suggestedFollowUps ?? [])
     .map((item) => ({
       category: String(item?.category ?? "").trim(),
       text: String(item?.text ?? "").trim(),
     }))
-    .filter(
-      (item) =>
-        item.category &&
-        item.text &&
-        !/(?:tham|thăm)\s*quan|xem\s+thực\s+tế|(?:đến|tới)\s+hoa\s+viên/i.test(
-          `${item.category} ${item.text}`,
-        ),
-    )
+    .filter(isAllowedPrompt)
     .slice(0, 3);
 
   const response = lastMessage.response;
   const content = lastMessage.content || "";
   const prompts: SuggestedPrompt[] = [];
+  const isGreetingTurn =
+    response?.intent === "general_question" &&
+    /(?:xin\s+)?chào|trợ\s+lý.*hỗ\s+trợ|mình\s+có\s+thể\s+hỗ\s+trợ/iu.test(
+      content,
+    );
 
   if (response?.recommendations && response.recommendations.length > 0) {
+    const codes = response.recommendations
+      .flatMap((option) => option.plotCodes)
+      .filter(Boolean)
+      .slice(0, 4);
+    const codeList = codes.join(", ");
     prompts.push({
       category: "So sánh chi tiết",
-      text: "So sánh điểm khác biệt giữa các lô vừa gợi ý.",
+      text: codeList
+        ? `So sánh điểm khác biệt giữa các lô ${codeList} theo tiêu chí hiện tại của mình.`
+        : "So sánh điểm khác biệt giữa các lô vừa gợi ý theo tiêu chí hiện tại của mình.",
     });
     prompts.push({
-      category: "Chi phí & Đặt cọc",
-      text: "Tư vấn chi tiết tổng chi phí và quy trình mua lô.",
+      category: "Phân tích lô ưu tiên",
+      text: codes[0]
+        ? `Phân tích kỹ vì sao lô ${codes[0]} được xếp trước các lô còn lại.`
+        : "Phân tích kỹ vì sao phương án đầu được ưu tiên.",
     });
     prompts.push({
-      category: "Xem sơ đồ",
-      text: "Cho mình xem vị trí chi tiết các lô này trên bản đồ.",
+      category: "Phương án khác",
+      text: codeList
+        ? `Tìm các lô khác theo tiêu chí hiện tại và không lặp lại ${codeList}.`
+        : "Tìm các lô khác theo tiêu chí hiện tại và không lặp lại các lô vừa xem.",
     });
   } else if (response?.baziSuggestion) {
     prompts.push({
@@ -171,7 +209,13 @@ export function getContextualPrompts(
   }
 
   const unique = new Map<string, SuggestedPrompt>();
-  for (const item of [...backendFollowUps, ...prompts]) {
+  for (const item of [
+    ...contextualQuickReplies,
+    ...backendFollowUps,
+    ...(isGreetingTurn ? genericHelpReplies : []),
+    ...prompts,
+    ...genericHelpReplies,
+  ]) {
     const key = item.text.toLocaleLowerCase("vi");
     if (!unique.has(key)) unique.set(key, item);
   }
@@ -392,7 +436,7 @@ export default function AgentPage() {
   const lastAssistantMessage = [...messages]
     .reverse()
     .find((m) => m.role === "assistant");
-  const suggestedPrompts = getContextualPrompts(lastAssistantMessage);
+  const suggestedPrompts = getContextualPrompts(messages);
 
   const canPersistConversations = Boolean(
     token && (role === "customer" || role === "admin"),

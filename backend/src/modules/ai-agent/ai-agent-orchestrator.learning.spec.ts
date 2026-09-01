@@ -215,9 +215,7 @@ function setup(
         }
         if (name === 'get_plot_details') {
           const plotCode =
-            typeof args?.plotCode === 'string'
-              ? args.plotCode
-              : 'A-01-001';
+            typeof args?.plotCode === 'string' ? args.plotCode : 'A-01-001';
           return {
             found: true,
             plot: {
@@ -334,10 +332,571 @@ function setup(
     decisionComparisonAi,
     recommendations,
     customerProposals,
+    persistedMessages,
   };
 }
 
 describe('AiAgentOrchestratorService application-level learning', () => {
+  it('asks permission before saved preferences can influence plot advice', async () => {
+    const { service, knowledge, nvidia, tools, config } = setup();
+    config.get.mockImplementation((key: string) => {
+      if (key === 'ai.maxHistoryMessages') return 20;
+      if (key === 'ai.fallbackRuleBased') return true;
+      if (key === 'ai.llmWritesConversationalTurns') return true;
+      return undefined;
+    });
+    knowledge.getActiveUserPreferences.mockReturnValue([
+      {
+        memoryKey: 'maximum_budget',
+        content: 'Ngân sách tối đa là 400.000.000 VND.',
+      },
+      {
+        memoryKey: 'preferred_plot_location',
+        content: 'Ưu tiên lô gần cổng.',
+      },
+    ]);
+    nvidia.chat.mockReset().mockResolvedValueOnce({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              intent: 'recommend_plots',
+              action: 'browse_available_plots',
+              contextMode: 'replace',
+              needsClarification: false,
+              clarificationQuestion: '',
+              directResponse: '',
+            }),
+          },
+        },
+      ],
+    });
+
+    const result = await service.chat(
+      {
+        sessionId: 'SES-PREFERENCE-CONSENT',
+        message: 'Gợi ý cho mình vài lô phù hợp nhé.',
+      },
+      { id: 7, role: 'customer' },
+    );
+
+    expect(tools.execute).not.toHaveBeenCalled();
+    expect(result.assistantMessage).toContain('chưa dùng chúng để lọc');
+    expect(result.quickReplies).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: 'Dùng sở thích đã lưu' }),
+        expect.objectContaining({ label: 'Không dùng lần này' }),
+      ]),
+    );
+    const plannerPrompt = nvidia.chat.mock.calls[0][0][0].content;
+    expect(plannerPrompt).not.toContain('<PERSISTENT_USER_PREFERENCES>');
+    expect(plannerPrompt).not.toContain('Ưu tiên lô gần cổng');
+    expect(plannerPrompt).toContain('<VERIFIED_GLOBAL_KNOWLEDGE>');
+    expect(plannerPrompt).toContain('"savedPreferences": []');
+  });
+
+  it('rejects a saved-like criterion copied by the planner before consent', async () => {
+    const { service, knowledge, nvidia, tools, config } = setup();
+    config.get.mockImplementation((key: string) => {
+      if (key === 'ai.maxHistoryMessages') return 20;
+      if (key === 'ai.fallbackRuleBased') return true;
+      if (key === 'ai.llmWritesConversationalTurns') return true;
+      return undefined;
+    });
+    knowledge.getActiveUserPreferences.mockReturnValue([
+      {
+        memoryKey: 'maximum_budget',
+        content: 'Ngân sách tối đa là 400.000.000 VND.',
+      },
+    ]);
+    nvidia.chat.mockReset().mockResolvedValueOnce({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              intent: 'recommend_plots',
+              action: 'rank_plot_options',
+              contextMode: 'replace',
+              needsClarification: false,
+              clarificationQuestion: '',
+              directResponse: '',
+              budgetMax: 400_000_000,
+              numberOfPlots: 1,
+              preferNearEntrance: true,
+            }),
+          },
+        },
+      ],
+    });
+
+    const result = await service.chat(
+      {
+        sessionId: 'SES-PREFERENCE-CONSENT-COPIED',
+        message: 'Gợi ý cho mình một lô gần cổng.',
+      },
+      { id: 7, role: 'customer' },
+    );
+
+    expect(tools.execute).not.toHaveBeenCalled();
+    expect(result.assistantMessage).toContain('Bạn có đồng ý cho mình áp dụng');
+    expect(result.requirements).not.toHaveProperty('budgetMax');
+    expect(result.requirements).toMatchObject({ preferNearEntrance: true });
+  });
+
+  it('resumes the pending plot request with saved preferences only after consent', async () => {
+    const { service, knowledge, nvidia, tools, config } = setup();
+    config.get.mockImplementation((key: string) => {
+      if (key === 'ai.maxHistoryMessages') return 20;
+      if (key === 'ai.fallbackRuleBased') return true;
+      if (key === 'ai.llmWritesConversationalTurns') return true;
+      return undefined;
+    });
+    knowledge.getActiveUserPreferences.mockReturnValue([
+      {
+        memoryKey: 'maximum_budget',
+        content: 'Ngân sách tối đa là 400.000.000 VND.',
+      },
+      {
+        memoryKey: 'preferred_plot_location',
+        content: 'Ưu tiên lô gần cổng.',
+      },
+    ]);
+    nvidia.chat
+      .mockReset()
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                intent: 'recommend_plots',
+                action: 'browse_available_plots',
+                contextMode: 'replace',
+                needsClarification: false,
+                clarificationQuestion: '',
+                directResponse: '',
+              }),
+            },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                intent: 'recommend_plots',
+                action: 'rank_plot_options',
+                contextMode: 'continue',
+                needsClarification: false,
+                clarificationQuestion: '',
+                directResponse: '',
+                budgetMax: 400_000_000,
+                numberOfPlots: 2,
+                needAdjacent: true,
+                preferNearEntrance: true,
+              }),
+            },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content:
+                '### Phương án 1 — A-01-001, A-01-002\nHai lô liền kề này có tổng giá 300.000.000 VND, phù hợp ngân sách và ưu tiên gần cổng đã được bạn cho phép dùng trong lượt tư vấn này.',
+            },
+          },
+        ],
+      });
+
+    await service.chat(
+      {
+        sessionId: 'SES-PREFERENCE-CONSENT-GRANT',
+        message: 'Gợi ý cho mình vài lô phù hợp nhé.',
+      },
+      { id: 7, role: 'customer' },
+    );
+    const result = await service.chat(
+      {
+        sessionId: 'SES-PREFERENCE-CONSENT-GRANT',
+        message:
+          'Đồng ý, hãy dùng các thông tin và sở thích đã lưu cho lượt tư vấn này.',
+      },
+      { id: 7, role: 'customer' },
+    );
+
+    expect(tools.execute).toHaveBeenCalledWith(
+      'rank_plot_options',
+      expect.objectContaining({
+        budgetMax: 400_000_000,
+        preferNearEntrance: true,
+      }),
+      expect.any(Object),
+    );
+    expect(result.recommendations).toHaveLength(1);
+    const consentedPlannerPrompt = nvidia.chat.mock.calls[1][0][0].content;
+    expect(consentedPlannerPrompt).toContain('<PERSISTENT_USER_PREFERENCES>');
+    expect(consentedPlannerPrompt).toContain('Ưu tiên lô gần cổng');
+    expect(consentedPlannerPrompt).toContain(
+      '"savedPreferenceUseAuthorized": true',
+    );
+  });
+
+  it('keeps granted consent through the remaining intake turns only', async () => {
+    const {
+      service,
+      knowledge,
+      nvidia,
+      tools,
+      config,
+      database,
+      persistedMessages,
+    } = setup();
+    config.get.mockImplementation((key: string) => {
+      if (key === 'ai.maxHistoryMessages') return 20;
+      if (key === 'ai.fallbackRuleBased') return true;
+      if (key === 'ai.llmWritesConversationalTurns') return true;
+      return undefined;
+    });
+    knowledge.getActiveUserPreferences.mockReturnValue([
+      {
+        memoryKey: 'maximum_budget',
+        content: 'Ngân sách tối đa là 400.000.000 VND.',
+      },
+    ]);
+    database.query.mockImplementation((sql: string) =>
+      sql.includes('FROM ai_messages') ? [...persistedMessages].reverse() : [],
+    );
+    const plannerResponse = (plan: Record<string, unknown>) => ({
+      choices: [{ message: { content: JSON.stringify(plan) } }],
+    });
+    nvidia.chat
+      .mockReset()
+      .mockResolvedValueOnce(
+        plannerResponse({
+          intent: 'recommend_plots',
+          action: 'browse_available_plots',
+          contextMode: 'replace',
+          needsClarification: false,
+          clarificationQuestion: '',
+          directResponse: '',
+        }),
+      )
+      .mockResolvedValueOnce(
+        plannerResponse({
+          intent: 'recommend_plots',
+          action: 'rank_plot_options',
+          contextMode: 'continue',
+          needsClarification: false,
+          clarificationQuestion: '',
+          directResponse: '',
+          budgetMax: 400_000_000,
+        }),
+      )
+      .mockResolvedValueOnce(
+        plannerResponse({
+          intent: 'recommend_plots',
+          action: 'rank_plot_options',
+          contextMode: 'continue',
+          needsClarification: false,
+          clarificationQuestion: '',
+          directResponse: '',
+          budgetMax: 400_000_000,
+          numberOfPlots: 1,
+          preferNearEntrance: true,
+        }),
+      )
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content:
+                '### Phương án 1 — A-01-001, A-01-002\nPhương án có tổng giá 300.000.000 VND và vị trí thuộc nhóm gần cổng theo dữ liệu đã xác minh.',
+            },
+          },
+        ],
+      });
+
+    await service.chat(
+      {
+        sessionId: 'SES-PREFERENCE-CONSENT-MULTI-TURN',
+        message: 'Gợi ý cho mình vài lô phù hợp nhé.',
+      },
+      { id: 7, role: 'customer' },
+    );
+    const intake = await service.chat(
+      {
+        sessionId: 'SES-PREFERENCE-CONSENT-MULTI-TURN',
+        message:
+          'Đồng ý, hãy dùng các thông tin và sở thích đã lưu cho lượt tư vấn này.',
+      },
+      { id: 7, role: 'customer' },
+    );
+    expect(intake.assistantMessage).toContain('Mình đã có ngân sách');
+    expect(tools.execute).not.toHaveBeenCalled();
+
+    const result = await service.chat(
+      {
+        sessionId: 'SES-PREFERENCE-CONSENT-MULTI-TURN',
+        message: 'Mình cần 1 lô, ưu tiên gần cổng.',
+      },
+      { id: 7, role: 'customer' },
+    );
+
+    expect(tools.execute).toHaveBeenCalledWith(
+      'rank_plot_options',
+      expect.objectContaining({
+        budgetMax: 400_000_000,
+        preferNearEntrance: true,
+      }),
+      expect.any(Object),
+    );
+    expect(result.recommendations).toHaveLength(1);
+    expect(nvidia.chat.mock.calls[2][0][0].content).toContain(
+      '"savedPreferenceUseAuthorized": true',
+    );
+
+    nvidia.chat.mockResolvedValueOnce(
+      plannerResponse({
+        intent: 'recommend_plots',
+        action: 'browse_available_plots',
+        contextMode: 'replace',
+        needsClarification: false,
+        clarificationQuestion: '',
+        directResponse: '',
+      }),
+    );
+    const nextConsultation = await service.chat(
+      {
+        sessionId: 'SES-PREFERENCE-CONSENT-MULTI-TURN',
+        message: 'Bắt đầu đợt mới, gợi ý vài lô khác cho mình.',
+      },
+      { id: 7, role: 'customer' },
+    );
+    expect(tools.execute).toHaveBeenCalledTimes(1);
+    expect(nextConsultation.assistantMessage).toContain(
+      'Bạn có đồng ý cho mình áp dụng',
+    );
+  });
+
+  it('continues without saved preferences when the customer declines', async () => {
+    const { service, knowledge, nvidia, tools, config } = setup();
+    config.get.mockImplementation((key: string) => {
+      if (key === 'ai.maxHistoryMessages') return 20;
+      if (key === 'ai.fallbackRuleBased') return true;
+      if (key === 'ai.llmWritesConversationalTurns') return true;
+      return undefined;
+    });
+    knowledge.getActiveUserPreferences.mockReturnValue([
+      {
+        memoryKey: 'maximum_budget',
+        content: 'Ngân sách tối đa là 400.000.000 VND.',
+      },
+    ]);
+    nvidia.chat
+      .mockReset()
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                intent: 'recommend_plots',
+                action: 'browse_available_plots',
+                contextMode: 'replace',
+                needsClarification: false,
+                clarificationQuestion: '',
+                directResponse: '',
+              }),
+            },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                intent: 'recommend_plots',
+                action: 'browse_available_plots',
+                contextMode: 'continue',
+                needsClarification: false,
+                clarificationQuestion: '',
+                directResponse: '',
+              }),
+            },
+          },
+        ],
+      });
+
+    await service.chat(
+      {
+        sessionId: 'SES-PREFERENCE-CONSENT-DECLINE',
+        message: 'Gợi ý cho mình vài lô phù hợp nhé.',
+      },
+      { id: 7, role: 'customer' },
+    );
+    const result = await service.chat(
+      {
+        sessionId: 'SES-PREFERENCE-CONSENT-DECLINE',
+        message:
+          'Không dùng thông tin hay sở thích đã lưu trong lượt tư vấn này; hãy hỏi mình các tiêu chí mới.',
+      },
+      { id: 7, role: 'customer' },
+    );
+
+    expect(tools.execute).not.toHaveBeenCalled();
+    expect(result.assistantMessage).toContain('ngân sách dự kiến');
+    expect(result.assistantMessage).not.toContain(
+      'Bạn có đồng ý cho mình áp dụng',
+    );
+    const declinedPlannerPrompt = nvidia.chat.mock.calls[1][0][0].content;
+    expect(declinedPlannerPrompt).not.toContain('Ngân sách tối đa là');
+    expect(declinedPlannerPrompt).toContain('"savedPreferences": []');
+  });
+
+  it('keeps the same consent gate in deterministic fallback mode', async () => {
+    const { service, knowledge, nvidia, tools, config } = setup();
+    config.get.mockImplementation((key: string) => {
+      if (key === 'ai.maxHistoryMessages') return 20;
+      if (key === 'ai.fallbackRuleBased') return true;
+      if (key === 'ai.llmWritesConversationalTurns') return false;
+      return undefined;
+    });
+    nvidia.isConfigured.mockReturnValue(false);
+    knowledge.getActiveUserPreferences.mockReturnValue([
+      {
+        memoryKey: 'preferred_plot_location',
+        content: 'Ưu tiên lô gần cổng.',
+      },
+    ]);
+
+    const result = await service.chat(
+      {
+        sessionId: 'SES-PREFERENCE-CONSENT-FALLBACK',
+        message: 'Gợi ý cho mình vài lô phù hợp nhé.',
+      },
+      { id: 7, role: 'customer' },
+    );
+
+    expect(nvidia.chat).not.toHaveBeenCalled();
+    expect(tools.execute).not.toHaveBeenCalled();
+    expect(result.assistantMessage).toContain('Bạn có đồng ý cho mình áp dụng');
+    expect(result.quickReplies).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: 'Dùng sở thích đã lưu' }),
+        expect.objectContaining({ label: 'Không dùng lần này' }),
+      ]),
+    );
+  });
+
+  it('does not run keyword-derived tools when no semantic LLM directive is available', async () => {
+    const { service, nvidia, config, tools } = setup();
+    config.get.mockImplementation((key: string) => {
+      if (key === 'ai.maxHistoryMessages') return 20;
+      if (key === 'ai.fallbackRuleBased') return true;
+      if (key === 'ai.llmWritesConversationalTurns') return true;
+      return undefined;
+    });
+    nvidia.chat
+      .mockReset()
+      .mockRejectedValue(new Error('all models timed out'));
+
+    const result = await service.chat(
+      {
+        sessionId: 'SES-STRICT-LLM-GATE',
+        message: 'Vậy tui chọn lô đất nào?',
+      },
+      { id: 7, role: 'customer' },
+    );
+
+    expect(tools.execute).not.toHaveBeenCalled();
+    expect(result.metadata).toMatchObject({
+      fallbackUsed: true,
+      fallbackReason: 'LLM_DECISION_UNAVAILABLE',
+      llmModel: 'local-safety-gate',
+    });
+    expect(result.assistantMessage).toContain('chưa cho thao tác');
+  });
+
+  it('does not silently enable keyword routing when LLM-first mode has no configured provider', async () => {
+    const { service, nvidia, config, tools } = setup();
+    config.get.mockImplementation((key: string) => {
+      if (key === 'ai.maxHistoryMessages') return 20;
+      if (key === 'ai.fallbackRuleBased') return true;
+      if (key === 'ai.llmWritesConversationalTurns') return true;
+      return undefined;
+    });
+    nvidia.isConfigured.mockReturnValue(false);
+
+    const result = await service.chat(
+      {
+        sessionId: 'SES-STRICT-NO-PROVIDER',
+        message: 'Tìm giúp tui hai lô liền kề dưới 200 triệu.',
+      },
+      { id: 7, role: 'customer' },
+    );
+
+    expect(nvidia.chat).not.toHaveBeenCalled();
+    expect(tools.execute).not.toHaveBeenCalled();
+    expect(result.metadata).toMatchObject({
+      fallbackUsed: true,
+      fallbackReason: 'LLM_NOT_CONFIGURED',
+      llmModel: 'local-safety-gate',
+    });
+  });
+
+  it('does not replace failed deep LLM analysis with a deterministic recommendation template', async () => {
+    const { service, nvidia, config, tools } = setup();
+    config.get.mockImplementation((key: string) => {
+      if (key === 'ai.maxHistoryMessages') return 20;
+      if (key === 'ai.fallbackRuleBased') return true;
+      if (key === 'ai.llmWritesConversationalTurns') return true;
+      return undefined;
+    });
+    nvidia.chat
+      .mockReset()
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                intent: 'recommend_plots',
+                action: 'rank_plot_options',
+                contextMode: 'continue',
+                needsClarification: false,
+                clarificationQuestion: '',
+                directResponse: '',
+                budgetMax: 100_000_000,
+                numberOfPlots: 1,
+              }),
+            },
+          },
+        ],
+      })
+      .mockRejectedValueOnce(new Error('deep model returned no final text'));
+
+    const result = await service.chat(
+      {
+        sessionId: 'SES-DEEP-FINAL-GATE',
+        message: 'Phân tích kỹ và chọn giúp tui lô tốt nhất dưới 100 triệu.',
+      },
+      { id: 7, role: 'customer' },
+    );
+
+    expect(tools.execute).toHaveBeenCalledWith(
+      'rank_plot_options',
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(result.metadata).toMatchObject({
+      fallbackUsed: true,
+      fallbackReason: 'LLM_DIRECTED_ACTION_FAILED',
+      llmModel: 'local-safety-gate',
+    });
+    expect(result.assistantMessage).not.toContain('Phương án mình ưu tiên');
+  });
+
   it('lets the production LLM decide that meaningless input needs clarification', async () => {
     const { service, nvidia, config } = setup();
     config.get.mockImplementation((key: string) => {
@@ -1113,7 +1672,7 @@ Mình ưu tiên B-01-001 vì phương án này vẫn nằm trong ngân sách và
     expect(result.assistantMessage).not.toContain('mô hình AI');
   });
 
-  it('analyzes Bát Tự first and then searches plots with the derived direction when details are sufficient', async () => {
+  it('presents Bát Trạch fully before asking to continue into plots even when criteria are sufficient', async () => {
     const { service, nvidia, config, tools, recommendations } = setup();
     config.get.mockImplementation((key: string) => {
       if (key === 'ai.maxHistoryMessages') return 20;
@@ -1204,19 +1763,97 @@ Mình ưu tiên B-01-001 vì phương án này vẫn nằm trong ngân sách và
       }),
       expect.anything(),
     );
-    expect(recommendations.recommend).toHaveBeenCalledWith(
-      expect.objectContaining({
-        budgetMax: 100_000_000,
-        preferredDirection: 'Đông',
-      }),
+    expect(recommendations.recommend).not.toHaveBeenCalled();
+    expect(recommendations.browseAvailablePlots).not.toHaveBeenCalled();
+    expect(result.intent).toBe('bazi_suggestion');
+    expect(result.baziSuggestion).toEqual(bazi);
+    expect(result.recommendations).toHaveLength(0);
+    expect(result.assistantMessage).toContain('Nạp Âm');
+    expect(result.assistantMessage).toContain('Bạn xác nhận');
+  });
+
+  it('finishes detailed Bát Trạch and asks for budget before searching plots', async () => {
+    const { service, nvidia, config, tools, recommendations } = setup();
+    config.get.mockImplementation((key: string) => {
+      if (key === 'ai.maxHistoryMessages') return 20;
+      if (key === 'ai.fallbackRuleBased') return true;
+      if (key === 'ai.llmWritesConversationalTurns') return true;
+      return undefined;
+    });
+    const bazi = {
+      preferredDirections: ['Nam', 'Bắc'],
+      alternativeDirections: [],
+      explanation: 'Ưu tiên hướng Nam theo dữ liệu cung mệnh.',
+      disclaimer: 'Chỉ dùng để tham khảo văn hóa.',
+      heavenlyStem: 'Bính',
+      earthlyBranch: 'Tuất',
+      yearPillar: 'Bính Tuất',
+      element: 'Thổ',
+      napAmElement: 'Thổ',
+      napAmName: 'Ốc Thượng Thổ',
+      napAmMeaning: 'Đất nóc nhà.',
+      cungMenh: 'Chấn',
+      tuMenh: 'Đông tứ mệnh',
+      birthHourBranch: 'Mùi',
+      goodDirections: [
+        { direction: 'Nam', star: 'Sinh Khí', meaning: 'Sức sống' },
+        { direction: 'Bắc', star: 'Thiên Y', meaning: 'Nâng đỡ' },
+      ],
+      badDirections: [
+        { direction: 'Tây', star: 'Tuyệt Mệnh', meaning: 'Nên hạn chế' },
+      ],
+      elementRelations: {
+        supporting: 'Hỏa sinh Thổ',
+        weakening: 'Mộc khắc Thổ',
+      },
+      detailedAnalysis: 'Hướng Nam là tín hiệu tham khảo chính.',
+    };
+    tools.execute.mockImplementation((name: string) =>
+      name === 'suggest_bazi_direction' ? bazi : recommendation,
+    );
+    nvidia.chat.mockReset().mockResolvedValueOnce({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              intent: 'bazi_suggestion',
+              action: 'suggest_bazi_direction',
+              contextMode: 'continue',
+              needsClarification: false,
+              clarificationQuestion: '',
+              directResponse: '',
+              birthDate: '2006-03-02',
+              birthTime: '14:00',
+              gender: 'male',
+              consultationGoal: 'bazi_then_plots',
+              numberOfPlots: 1,
+            }),
+          },
+        },
+      ],
+    });
+
+    const result = await service.chat(
+      {
+        sessionId: 'SES-BAZI-ASK-BUDGET',
+        message:
+          'Nam sinh 2/3/2006 lúc 14 giờ, coi Bát Tự rồi chọn lô hợp hướng giúp mình',
+      },
+      { id: 7, role: 'customer' },
+    );
+
+    expect(tools.execute).toHaveBeenCalledWith(
+      'suggest_bazi_direction',
+      expect.anything(),
       expect.anything(),
     );
-    expect(recommendations.recommend).toHaveBeenCalledTimes(2);
-    expect(result.intent).toBe('recommend_plots');
+    expect(recommendations.recommend).not.toHaveBeenCalled();
+    expect(recommendations.browseAvailablePlots).not.toHaveBeenCalled();
+    expect(result.intent).toBe('bazi_suggestion');
+    expect(result.recommendations).toHaveLength(0);
     expect(result.baziSuggestion).toEqual(bazi);
-    expect(result.recommendations).toHaveLength(1);
-    expect(result.assistantMessage).toContain('Nạp Âm');
-    expect(result.assistantMessage).toContain('A-01-001');
+    expect(result.assistantMessage).toContain('Các hướng nên ưu tiên');
+    expect(result.assistantMessage).toContain('ngân sách tối đa');
   });
 
   it('keeps planner validation structural instead of re-deciding semantic intent with keywords', () => {
@@ -1294,7 +1931,24 @@ Mình ưu tiên B-01-001 vì phương án này vẫn nằm trong ngân sách và
     ) => Promise<Array<{ category: string; text: string }>>;
 
     await expect(
-      generate('Tư vấn lô đất', 'Có ba phương án phù hợp.'),
+      generate('Tư vấn lô đất', 'Có ba phương án phù hợp.', {
+        intent: 'recommend_plots',
+        requirements: {
+          budgetMax: 150_000_000,
+          preferredDirection: 'Nam',
+        },
+        recommendationCodes: ['D-02-002', 'D-02-003', 'D-02-004'],
+        serviceNames: [],
+        baziPreferredDirections: [],
+        quickReplies: [
+          {
+            id: 'analyze-current',
+            label: 'Phân tích các lô này',
+            message:
+              'Phân tích kỹ D-02-002, D-02-003 và D-02-004 theo tiêu chí hiện tại.',
+          },
+        ],
+      }),
     ).resolves.toHaveLength(3);
     expect(nvidia.chat.mock.calls[0][3]).toEqual(
       expect.objectContaining({
@@ -1303,6 +1957,11 @@ Mình ưu tiên B-01-001 vì phương án này vẫn nằm trong ngân sách và
         timeoutMs: 1_500,
         totalTimeoutMs: 1_800,
       }),
+    );
+    expect(nvidia.chat.mock.calls[0][0][1].content).toContain('D-02-002');
+    expect(nvidia.chat.mock.calls[0][0][1].content).toContain('150000000');
+    expect(nvidia.chat.mock.calls[0][0][1].content).toContain(
+      'availableNextActions',
     );
   });
 
@@ -1415,6 +2074,34 @@ Mình ưu tiên B-01-001 vì phương án này vẫn nằm trong ngân sách và
         'Tìm 2 phương án lô phù hợp ngân sách 300 triệu',
       ),
     ).toBeNull();
+  });
+
+  it('asks for decision criteria before executing a vague plot recommendation', async () => {
+    const { service, tools } = setup();
+
+    const result = await service.chat(
+      {
+        sessionId: 'SES-PLOT-INTAKE',
+        message: 'Gợi ý cho mình vài lô phù hợp nhé.',
+      },
+      { id: 7, role: 'customer' },
+    );
+
+    expect(result.intent).toBe('clarification');
+    expect(result.recommendations).toEqual([]);
+    expect(result.assistantMessage).toContain('ngân sách dự kiến');
+    expect(result.assistantMessage).toContain('ưu tiên quan trọng nhất');
+    expect(result.quickReplies).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: 'Ưu tiên gần cổng' }),
+        expect.objectContaining({ label: 'Để AI chọn và so sánh' }),
+      ]),
+    );
+    expect(
+      tools.execute.mock.calls.some(([name]) =>
+        /plot_options|available_plots/.test(String(name)),
+      ),
+    ).toBe(false);
   });
 
   it('does not greet again when an ambiguous noun appears mid-conversation', async () => {
@@ -2091,13 +2778,16 @@ Mình ưu tiên B-01-001 vì phương án này vẫn nằm trong ngân sách và
     expect(result.recommendations).toHaveLength(1);
     expect(result.assistantMessage).toContain('Mình đã ghi nhớ');
     const plannerSystemPrompt = nvidia.chat.mock.calls[0][0][0].content;
-    expect(plannerSystemPrompt).toContain('<PERSISTENT_USER_PREFERENCES>');
+    // The latest message itself contains every requested criterion. Older saved
+    // preferences stay hidden unless the customer separately authorizes them.
+    expect(plannerSystemPrompt).not.toContain('<PERSISTENT_USER_PREFERENCES>');
+    expect(plannerSystemPrompt).toContain('"savedPreferences": []');
     expect(nvidia.chat.mock.calls[0][3]).toEqual(
       expect.objectContaining({
         preferredProviderId: 'openai-primary',
         enableThinking: false,
         timeoutMs: 10_000,
-        totalTimeoutMs: 22_000,
+        totalTimeoutMs: 26_000,
       }),
     );
   });
@@ -2314,6 +3004,63 @@ Mình ưu tiên B-01-001 vì phương án này vẫn nằm trong ngân sách và
     expect(formatter.describeRecommendations(noneRemaining)).toContain(
       'không lặp lại lô cũ',
     );
+  });
+
+  it('rejects recommendation prose that introduces only one of three returned plots', () => {
+    const { service } = setup();
+    const validator = service as unknown as {
+      isUsableRecommendationContent: (
+        content: string,
+        result: RecommendationResult,
+      ) => boolean;
+    };
+    const threePlots: RecommendationResult = {
+      ...recommendation,
+      requirements: { budgetMax: 150_000_000, numberOfPlots: 1 },
+      recommendations: ['A-01-001', 'B-01-002', 'D-02-003'].map(
+        (plotCode, index) => ({
+          ...recommendation.recommendations[0],
+          optionId: `OPT-00${index + 1}`,
+          plotIds: [index + 1],
+          plotCodes: [plotCode],
+        }),
+      ),
+    };
+    const onlyFirst = `${'Mình đã cân nhắc kỹ nhu cầu hiện tại của gia đình. '.repeat(5)} Mình ưu tiên A-01-001 và cần kiểm tra vị trí trên bản đồ.`;
+    const allThree = `### Phương án 1 — A-01-001\nMình ưu tiên A-01-001 theo tiêu chí hiện tại.\n\n### Phương án 2 — B-01-002\nB-01-002 là lựa chọn thay thế có điểm đánh đổi riêng.\n\n### Phương án 3 — D-02-003\nD-02-003 cần kiểm tra vị trí trước khi quyết định.`;
+
+    expect(validator.isUsableRecommendationContent(onlyFirst, threePlots)).toBe(
+      false,
+    );
+    expect(validator.isUsableRecommendationContent(allThree, threePlots)).toBe(
+      true,
+    );
+  });
+
+  it('introduces every returned option in its own grounded section', () => {
+    const { service } = setup();
+    const formatter = service as unknown as {
+      describeRecommendations: (result: RecommendationResult) => string;
+    };
+    const threePlots: RecommendationResult = {
+      ...recommendation,
+      requirements: { budgetMax: 150_000_000, numberOfPlots: 1 },
+      recommendations: ['A-01-001', 'B-01-002', 'D-02-003'].map(
+        (plotCode, index) => ({
+          ...recommendation.recommendations[0],
+          optionId: `OPT-00${index + 1}`,
+          plotIds: [index + 1],
+          plotCodes: [plotCode],
+          zoneName: `Khu ${plotCode[0]}`,
+        }),
+      ),
+    };
+
+    const answer = formatter.describeRecommendations(threePlots);
+
+    expect(answer).toContain('### Phương án 1 — A-01-001');
+    expect(answer).toContain('### Phương án 2 — B-01-002');
+    expect(answer).toContain('### Phương án 3 — D-02-003');
   });
 
   it('uses the selected comparison table as LLM evidence instead of a fixed frontend verdict', async () => {

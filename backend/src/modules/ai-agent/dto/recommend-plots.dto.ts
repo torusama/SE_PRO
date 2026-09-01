@@ -78,6 +78,12 @@ export class RecommendPlotsDto {
 
   @IsOptional()
   @IsArray()
+  @IsString({ each: true })
+  @MaxLength(80, { each: true })
+  qualitativePreferences?: string[];
+
+  @IsOptional()
+  @IsArray()
   @Type(() => Number)
   @IsInt({ each: true })
   @Min(1, { each: true })

@@ -217,6 +217,39 @@ describe('OpenAiService', () => {
     expect(body.chat_template_kwargs).toEqual({ enable_thinking: false });
   });
 
+  it('uses reasoning_effort without Nemotron template kwargs for GPT-OSS', async () => {
+    jest.spyOn(configService, 'get').mockImplementation((key: string) => {
+      if (key === 'ai.openai.apiKeys') return 'key-1';
+      if (key === 'ai.enableLlm') return true;
+      if (key === 'ai.openai.baseUrl')
+        return 'https://integrate.api.nvidia.com/v1';
+      if (key === 'ai.openai.model') return 'openai/gpt-oss-120b';
+      return undefined;
+    });
+    const mockFetch = global.fetch as jest.Mock;
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        choices: [{ message: { role: 'assistant', content: 'Kết luận.' } }],
+      }),
+    });
+
+    await service.chat([{ role: 'user', content: 'Phân tích sâu' }], [], 'auto', {
+      enableThinking: true,
+      reasoningEffort: 'high',
+      maxTokens: 3200,
+    });
+
+    const body = JSON.parse(String(mockFetch.mock.calls[0][1].body));
+    expect(body).toMatchObject({
+      model: 'openai/gpt-oss-120b',
+      max_tokens: 3200,
+      reasoning_effort: 'high',
+    });
+    expect(body).not.toHaveProperty('chat_template_kwargs');
+  });
+
   it('does not divide the first request timeout across every key in a large pool', async () => {
     jest.useFakeTimers();
     try {

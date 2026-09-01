@@ -3,6 +3,7 @@ import {
   AGENT_PLANNER_TOOL,
   AGENT_PLANNER_TOOL_NAME,
   parseAgentPlan,
+  parseAgentPlanFromContent,
   recommendationDiscoveryQuestion,
 } from './agent-planner';
 
@@ -51,6 +52,27 @@ describe('agent planner', () => {
         }),
       ),
     ).toThrow(BadRequestException);
+  });
+
+  it('extracts the final valid directive without accepting reasoning text as a plan', () => {
+    const plan = parseAgentPlanFromContent(`
+      <think>I should inspect several possibilities before choosing.</think>
+      Final directive:
+      {"intent":"bazi_suggestion","action":"suggest_bazi_direction","contextMode":"continue","needsClarification":false,"clarificationQuestion":"","directResponse":"","birthDate":"1999-03-12","gender":"female","consultationGoal":"bazi_then_plots"}
+    `);
+
+    expect(plan).toMatchObject({
+      intent: 'bazi_suggestion',
+      action: 'suggest_bazi_direction',
+      requirements: {
+        birthDate: '1999-03-12',
+        gender: 'female',
+        consultationGoal: 'bazi_then_plots',
+      },
+    });
+    expect(
+      parseAgentPlanFromContent('reasoning only, no final object'),
+    ).toBeNull();
   });
 
   it('uses the dedicated forced planner tool name', () => {
@@ -160,7 +182,8 @@ describe('agent planner', () => {
           {
             category: 'conversation',
             title: 'Corrected intent',
-            content: 'Do not resume an older goal when the current goal changed.',
+            content:
+              'Do not resume an older goal when the current goal changed.',
             memoryType: 'conversation_correction',
             requestedScope: 'global',
             reason: 'Prevent repeating a contextual misunderstanding.',
@@ -368,6 +391,55 @@ describe('agent planner', () => {
     expect(recommendationDiscoveryQuestion(plan, 'giới thiệu đi bé')).toContain(
       'ngân sách',
     );
+    expect(
+      recommendationDiscoveryQuestion(
+        plan,
+        'Gợi ý cho mình vài lô phù hợp nhé.',
+      ),
+    ).toContain('ưu tiên quan trọng nhất');
+  });
+
+  it('continues once budget and one meaningful selection preference are known', () => {
+    const plan = parseAgentPlan(
+      JSON.stringify({
+        intent: 'recommend_plots',
+        action: 'rank_plot_options',
+        contextMode: 'continue',
+        needsClarification: false,
+        clarificationQuestion: '',
+        budgetMax: 150_000_000,
+        numberOfPlots: 1,
+        preferNearEntrance: true,
+      }),
+    );
+
+    expect(
+      recommendationDiscoveryQuestion(
+        plan,
+        'Mình cần 1 lô, ngân sách 150 triệu và ưu tiên gần cổng.',
+      ),
+    ).toBe('');
+  });
+
+  it('does not ask repeatedly when the customer explicitly has no fixed budget', () => {
+    const plan = parseAgentPlan(
+      JSON.stringify({
+        intent: 'recommend_plots',
+        action: 'browse_available_plots',
+        contextMode: 'continue',
+        needsClarification: false,
+        clarificationQuestion: '',
+        numberOfPlots: 1,
+        preferNearEntrance: true,
+      }),
+    );
+
+    expect(
+      recommendationDiscoveryQuestion(
+        plan,
+        'Mình cần 1 lô gần cổng và chưa chốt ngân sách.',
+      ),
+    ).toBe('');
   });
 
   it('allows immediate browsing when the customer explicitly delegates', () => {
@@ -525,4 +597,21 @@ describe('agent planner', () => {
     ]);
   });
 
+  it('drops a model-invented zodiac placeholder', () => {
+    const plan = parseAgentPlan(
+      JSON.stringify({
+        intent: 'bazi_suggestion',
+        action: 'suggest_bazi_direction',
+        contextMode: 'continue',
+        needsClarification: false,
+        clarificationQuestion: '',
+        directResponse: '',
+        birthYear: 2001,
+        gender: 'female',
+        zodiacSign: '??',
+      }),
+    );
+
+    expect(plan.requirements.zodiacSign).toBeUndefined();
+  });
 });

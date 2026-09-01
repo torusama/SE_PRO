@@ -40,6 +40,7 @@ describe('AiAgentAdminController knowledge review', () => {
 
     expect(knowledge.listKnowledgeForReview).toHaveBeenCalledWith(
       'quarantined',
+      undefined,
     );
     expect(knowledge.getKnowledgeForReview).toHaveBeenCalledWith(73);
   });

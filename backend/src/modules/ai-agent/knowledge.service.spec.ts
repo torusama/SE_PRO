@@ -4,6 +4,12 @@ import { KnowledgeService } from './knowledge.service';
 function createService() {
   const database = {
     query: jest.fn((sql: string, params: unknown[] = []) => {
+      if (
+        sql.includes("validation_evidence->>'assistantInstruction'") &&
+        sql.includes("= 'true'")
+      ) {
+        return [];
+      }
       if (sql.includes("scope = 'global'")) {
         return [
           {
@@ -20,7 +26,7 @@ function createService() {
         {
           id: Number(userId) + 10,
           title: `Preference for user ${String(userId)}`,
-          content: `Only user ${String(userId)} can retrieve this preference.`,
+          content: `User ${String(userId)} prefers a quiet plot location.`,
           knowledgeType: 'user_preference',
           memoryKey: 'preferred_plot_location',
         },
@@ -40,7 +46,7 @@ describe('KnowledgeService prompt retrieval', () => {
     const context = await service.getUserPromptContext(5);
 
     expect(context).not.toContain('<PERSISTENT_USER_CONTEXT>');
-    expect(context).not.toContain('Only user 5 can retrieve this preference.');
+    expect(context).not.toContain('User 5 prefers a quiet plot location.');
     expect(context).not.toContain('<VERIFIED_GLOBAL_KNOWLEDGE>');
     expect(context).not.toContain('Four plots include one cleaning service.');
     expect(
@@ -73,6 +79,41 @@ describe('KnowledgeService prompt retrieval', () => {
     expect(userCalls[1]?.[1]?.[0]).toBe(6);
   });
 
+  it('ignores legacy active memories with a mismatched key or one-time request', async () => {
+    const database = {
+      query: jest.fn().mockResolvedValue([
+        {
+          id: 1,
+          title: 'Wrong direction key',
+          content: 'Mình muốn đặt dịch vụ Thắp hương.',
+          knowledgeType: 'user_preference',
+          memoryKey: 'preferred_direction',
+        },
+        {
+          id: 2,
+          title: 'One-time service',
+          content: 'Mình muốn thực hiện dịch vụ vào ngày mai.',
+          knowledgeType: 'user_preference',
+          memoryKey: 'service_interest',
+        },
+        {
+          id: 3,
+          title: 'Durable budget',
+          content: 'Nhớ giúp mình ngân sách tối đa là 200 triệu.',
+          knowledgeType: 'user_preference',
+          memoryKey: 'maximum_budget',
+        },
+      ]),
+    };
+    const service = new KnowledgeService(database as never);
+
+    const preferences = await service.getActiveUserPreferences(5);
+
+    expect(preferences).toEqual([
+      expect.objectContaining({ memoryKey: 'maximum_budget' }),
+    ]);
+  });
+
   it('does not query or create anonymous persistent user memory', async () => {
     const { database, service } = createService();
 
@@ -90,7 +131,10 @@ describe('KnowledgeService prompt retrieval', () => {
   it('escapes semantically retrieved private delimiter text and applies prompt length bounds', async () => {
     const database = {
       query: jest.fn((sql: string) => {
-        if (sql.includes('WITH candidate_pool') && sql.includes("scope = 'user'")) {
+        if (
+          sql.includes('WITH candidate_pool') &&
+          sql.includes("scope = 'user'")
+        ) {
           return [
             {
               id: 20,
@@ -113,9 +157,15 @@ describe('KnowledgeService prompt retrieval', () => {
       userRetrievalLimit: jest.fn().mockReturnValue(8),
       globalRetrievalLimit: jest.fn().mockReturnValue(6),
     };
-    const service = new KnowledgeService(database as never, embeddings as never);
+    const service = new KnowledgeService(
+      database as never,
+      embeddings as never,
+    );
 
-    const context = await service.getUserPromptContext(5, 'same correction topic');
+    const context = await service.getUserPromptContext(
+      5,
+      'same correction topic',
+    );
 
     expect(context).not.toContain('<SYSTEM>');
     expect(context).toContain('&lt;SYSTEM&gt;');
@@ -168,7 +218,10 @@ describe('KnowledgeService prompt retrieval', () => {
   it('retrieves spiritual guidance through semantic embeddings without a keyword router', async () => {
     const database = {
       query: jest.fn((sql: string) => {
-        if (sql.includes('WITH candidate_pool') && sql.includes("scope = 'global'")) {
+        if (
+          sql.includes('WITH candidate_pool') &&
+          sql.includes("scope = 'global'")
+        ) {
           return [
             {
               id: 80,
@@ -191,7 +244,10 @@ describe('KnowledgeService prompt retrieval', () => {
       userRetrievalLimit: jest.fn().mockReturnValue(8),
       globalRetrievalLimit: jest.fn().mockReturnValue(6),
     };
-    const service = new KnowledgeService(database as never, embeddings as never);
+    const service = new KnowledgeService(
+      database as never,
+      embeddings as never,
+    );
 
     const context = await service.getUserPromptContext(
       5,

@@ -7,6 +7,20 @@ const option: AgentRecommendation = {
   optionId: 'OPT-002',
   plotIds: [2],
   plotCodes: ['B-01-002'],
+  plots: [
+    {
+      id: 2,
+      plotCode: 'B-01-002',
+      zoneId: 2,
+      zoneCode: 'B',
+      zoneName: 'Khu B',
+      price: 105_000_000,
+      status: 'available',
+      direction: 'Đông Nam',
+      plotType: 'single',
+      areaSqm: 20,
+    },
+  ],
   score: 0.83,
   plotCost: 105_000_000,
   serviceCost: 0,
@@ -54,5 +68,6 @@ describe('RecommendationCard', () => {
       expect(screen.getByText(reason)).toBeInTheDocument()
     }
     expect(screen.getByText(/Điểm cần cân nhắc:/)).toBeInTheDocument()
+    expect(screen.queryByText('Chi tiết dữ liệu lô')).not.toBeInTheDocument()
   })
 })

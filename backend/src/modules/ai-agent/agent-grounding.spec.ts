@@ -2,9 +2,14 @@ import {
   ensureRecommendationParagraphs,
   isConsultativeRecommendationNarrative,
   isGroundedRecommendationNarrative,
+  normalizeGroundedMoneyScale,
+  sanitizeUnsupportedPlotInferences,
   selectRecommendationsFromNarrative,
 } from './agent-grounding';
-import { RecommendationResult } from './types/agent-response.types';
+import {
+  RecommendationOption,
+  RecommendationResult,
+} from './types/agent-response.types';
 
 const result = {
   requirements: { budgetMax: 100_000_000, numberOfPlots: 1 },
@@ -69,6 +74,69 @@ describe('agent recommendation grounding', () => {
         result,
       ),
     ).toBe(false);
+    expect(
+      isGroundedRecommendationNarrative(
+        'A-01-001 rộng hơn nên phù hợp cho việc bố trí mộ và vật phẩm kèm.',
+        result,
+      ),
+    ).toBe(false);
+  });
+
+  it('rejects a monetary scale invented by the response composer', () => {
+    const pricedResult = {
+      ...result,
+      recommendations: [
+        {
+          ...result.recommendations[0],
+          plotCost: 29_000_000,
+          estimatedTotal: 29_000_000,
+        },
+      ],
+    } as RecommendationResult;
+
+    expect(
+      isGroundedRecommendationNarrative(
+        'Lô A-01-001 có tổng giá 29.000.000 VND.',
+        pricedResult,
+      ),
+    ).toBe(true);
+    expect(
+      isGroundedRecommendationNarrative(
+        'Lô A-01-001 có tổng giá 29.000 VND.',
+        pricedResult,
+      ),
+    ).toBe(false);
+    expect(
+      normalizeGroundedMoneyScale(
+        'Lô A-01-001 có tổng giá 29.000 VND.',
+        pricedResult,
+      ),
+    ).toContain('29.000.000 VND');
+  });
+});
+
+describe('plot follow-up grounding guard', () => {
+  it('removes unsupported capacity, storage, landscaping and ambience claims', () => {
+    const answer = `Bạn nên chọn **lô H-02-001**.
+- **Diện tích lớn hơn**: 3 m², giúp bạn có không gian linh hoạt hơn cho việc bố trí và bảo quản.
+- **Khu vực**: Khu H – Mộ đơn thường có môi trường yên tĩnh, cây xanh và không bị đông đúc như khu F.
+- H-02-001 vẫn nằm trong ngân sách.`;
+
+    const sanitized = sanitizeUnsupportedPlotInferences(answer);
+
+    expect(sanitized).toContain('H-02-001');
+    expect(sanitized).toContain('3 m²');
+    expect(sanitized).toContain('vẫn nằm trong ngân sách');
+    expect(sanitized).not.toMatch(
+      /bố trí|bảo quản|yên tĩnh|cây xanh|đông đúc/iu,
+    );
+  });
+
+  it('keeps an explicit statement that an ambience quality is unverified', () => {
+    const answer =
+      'Với lô A-01-001, hiện chưa có dữ liệu xác minh khu này yên tĩnh hay gần cây xanh.';
+
+    expect(sanitizeUnsupportedPlotInferences(answer)).toBe(answer);
   });
 });
 
@@ -173,6 +241,58 @@ describe('LLM recommendation candidate selection', () => {
     );
 
     expect(selected?.recommendations[0].optionId).toBe('OPT-VIP');
+  });
+
+  it('selects an adjacent group by the complete heading instead of one shared plot code', () => {
+    const groupedResult: RecommendationResult = {
+      ...result,
+      recommendations: [
+        {
+          optionId: 'PAIR-A',
+          plotIds: [10, 11],
+          plotCodes: ['H-02-004', 'H-01-004'],
+        },
+        {
+          optionId: 'PAIR-B',
+          plotIds: [11, 12],
+          plotCodes: ['H-01-004', 'H-01-003'],
+        },
+      ] as RecommendationOption[],
+    };
+
+    const selected = selectRecommendationsFromNarrative(
+      '### Phương án 1 — H-02-004 / H-01-004\nPhân tích.',
+      groupedResult,
+      1,
+    );
+
+    expect(selected?.recommendations[0].optionId).toBe('PAIR-A');
+  });
+
+  it('rejects an ambiguous adjacent-group heading that names only a shared code', () => {
+    const groupedResult: RecommendationResult = {
+      ...result,
+      recommendations: [
+        {
+          optionId: 'PAIR-A',
+          plotIds: [10, 11],
+          plotCodes: ['H-02-004', 'H-01-004'],
+        },
+        {
+          optionId: 'PAIR-B',
+          plotIds: [11, 12],
+          plotCodes: ['H-01-004', 'H-01-003'],
+        },
+      ] as RecommendationOption[],
+    };
+
+    expect(
+      selectRecommendationsFromNarrative(
+        '### Phương án 1 — H-01-004\nPhân tích.',
+        groupedResult,
+        1,
+      ),
+    ).toBeNull();
   });
 });
 

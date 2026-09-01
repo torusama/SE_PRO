@@ -115,8 +115,23 @@ export class OpenAiService {
       this.positiveConfig(`${this.configPrefix}.maxAttempts`, 10),
     );
 
+    const model = this.model;
+    const normalizedModel = model.toLowerCase();
+    const isGptOss = normalizedModel.includes('gpt-oss');
+    const supportsReasoningEffort =
+      isGptOss || /(^|\/)(o[1-9]|gpt-5(?:[.-]|$))/.test(normalizedModel);
+    const supportsThinkingTemplate = normalizedModel.includes('nemotron-3');
+    const reasoningEffort = supportsReasoningEffort
+      ? (options.reasoningEffort ??
+        (isGptOss && options.enableThinking !== undefined
+          ? options.enableThinking
+            ? 'high'
+            : 'low'
+          : undefined))
+      : undefined;
+
     const body = {
-      model: this.model,
+      model,
       messages,
       temperature:
         options.temperature ??
@@ -126,11 +141,14 @@ export class OpenAiService {
         options.maxTokens ??
         this.config.get<number>(`${this.configPrefix}.maxTokens`) ??
         2048,
+      // GPT-OSS exposes `reasoning_effort`; `enable_thinking` belongs to the
+      // Nemotron-3 chat template and can make other NVIDIA endpoints reject
+      // an otherwise valid request.
       chat_template_kwargs:
-        options.enableThinking === undefined
+        !supportsThinkingTemplate || options.enableThinking === undefined
           ? undefined
           : { enable_thinking: options.enableThinking },
-      reasoning_effort: options.reasoningEffort,
+      reasoning_effort: reasoningEffort,
       tools: tools.length > 0 ? tools : undefined,
       tool_choice: tools.length > 0 ? toolChoice : undefined,
     };

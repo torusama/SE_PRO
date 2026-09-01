@@ -361,6 +361,7 @@ python -m pytest -q
 - [Backend README](./backend/README.md)
 - [Backend API Documentation](./backend/API_DOCUMENTATION.md)
 - [AI Agent Technical Specification](./AI_AGENT_CODEX_README.md)
+- [AI Agent Live Conversation Test & Fix Report](./AI_AGENT_LIVE_TEST_README.md)
 - [AI Agent v17 Test Guide](./backend/AI_AGENT_V17_TEST_GUIDE.md)
 - [AI Agent v18 Test Guide](./backend/AI_AGENT_V18_TEST_GUIDE.md)
 - [Run Backend Locally (Vietnamese)](./HUONG_DAN_CHAY_BACKEND_LOCAL.md)

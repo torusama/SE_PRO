@@ -10,6 +10,12 @@ export interface NvidiaToolCall {
 export interface NvidiaMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
   content: string | null;
+  /**
+   * Some OpenAI-compatible reasoning models return their private scratch work
+   * separately. It is telemetry/debug context only and must never be exposed as
+   * the customer-facing answer or accepted as an executable plan.
+   */
+  reasoning_content?: string | null;
   tool_call_id?: string;
   tool_calls?: NvidiaToolCall[];
 }

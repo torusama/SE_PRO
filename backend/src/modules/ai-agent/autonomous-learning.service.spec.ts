@@ -19,60 +19,64 @@ function setup(options: FakeOptions = {}) {
         sql: string,
         _params?: unknown[],
       ): { rows: Record<string, unknown>[] } => {
-      if (sql.includes('SELECT content') && sql.includes('FROM ai_messages')) {
-        return {
-          rows:
-            options.source === null
-              ? []
-              : [
-                  {
-                    content:
-                      options.source ??
-                      'Please remember that I prefer plots near the entrance.',
-                  },
-                ],
-        };
-      }
-      if (
-        sql.includes('FROM ai_learning_signals') &&
-        sql.includes('SELECT signal_id')
-      ) {
+        if (
+          sql.includes('SELECT content') &&
+          sql.includes('FROM ai_messages')
+        ) {
+          return {
+            rows:
+              options.source === null
+                ? []
+                : [
+                    {
+                      content:
+                        options.source ??
+                        'Please remember that I prefer plots near the entrance.',
+                    },
+                  ],
+          };
+        }
+        if (
+          sql.includes('FROM ai_learning_signals') &&
+          sql.includes('SELECT signal_id')
+        ) {
+          return { rows: [] };
+        }
+        if (sql.includes('FROM ai_recommendation_runs')) {
+          return { rows: options.run ? [options.run] : [] };
+        }
+        if (
+          sql.includes('content_hash = $3') &&
+          sql.includes('FROM ai_knowledge_entries')
+        ) {
+          return {
+            rows: options.duplicateId ? [{ id: options.duplicateId }] : [],
+          };
+        }
+        if (
+          sql.includes('FROM ai_knowledge_entries') &&
+          sql.includes('ORDER BY updated_at DESC')
+        ) {
+          return { rows: options.current ? [options.current] : [] };
+        }
+        if (
+          sql.includes('FROM ai_knowledge_entries') &&
+          sql.includes('ORDER BY effective_from DESC')
+        ) {
+          return { rows: options.current ? [options.current] : [] };
+        }
+        if (sql.includes('INSERT INTO ai_knowledge_entries')) {
+          return { rows: [{ id: options.insertedId ?? 100 }] };
+        }
+        if (sql.includes('INSERT INTO ai_learning_signals')) {
+          return { rows: [{ id: options.signalId ?? 200 }] };
+        }
+        if (sql.includes('MAX(version_number)')) {
+          return { rows: [{ versionNumber: 1 }] };
+        }
         return { rows: [] };
-      }
-      if (sql.includes('FROM ai_recommendation_runs')) {
-        return { rows: options.run ? [options.run] : [] };
-      }
-      if (
-        sql.includes('content_hash = $3') &&
-        sql.includes('FROM ai_knowledge_entries')
-      ) {
-        return {
-          rows: options.duplicateId ? [{ id: options.duplicateId }] : [],
-        };
-      }
-      if (
-        sql.includes('FROM ai_knowledge_entries') &&
-        sql.includes('ORDER BY updated_at DESC')
-      ) {
-        return { rows: options.current ? [options.current] : [] };
-      }
-      if (
-        sql.includes('FROM ai_knowledge_entries') &&
-        sql.includes('ORDER BY effective_from DESC')
-      ) {
-        return { rows: options.current ? [options.current] : [] };
-      }
-      if (sql.includes('INSERT INTO ai_knowledge_entries')) {
-        return { rows: [{ id: options.insertedId ?? 100 }] };
-      }
-      if (sql.includes('INSERT INTO ai_learning_signals')) {
-        return { rows: [{ id: options.signalId ?? 200 }] };
-      }
-      if (sql.includes('MAX(version_number)')) {
-        return { rows: [{ versionNumber: 1 }] };
-      }
-      return { rows: [] };
-    }),
+      },
+    ),
   };
   const database = {
     transaction: jest.fn(
@@ -215,6 +219,43 @@ describe('AutonomousLearningService', () => {
     );
     expect(String(insert?.[0])).toContain("'conversation_correction'");
     expect(String(insert?.[0])).toContain("'user'");
+  });
+
+  it('rejects a planner proposal whose memory key contradicts its content', async () => {
+    const { client, service } = setup({
+      source: 'Mình muốn đặt dịch vụ Thắp hương.',
+    });
+
+    const result = await service.processProposal(
+      preference({
+        content: 'Mình muốn đặt dịch vụ Thắp hương.',
+        memoryKey: 'preferred_direction',
+      }),
+      context(),
+    );
+
+    expect(result.status).toBe('rejected');
+    expect(
+      client.query.mock.calls.some(([sql]) =>
+        String(sql).includes('INSERT INTO ai_knowledge_entries'),
+      ),
+    ).toBe(false);
+  });
+
+  it('rejects a one-time transaction as durable user memory', async () => {
+    const { service } = setup({
+      source: 'Mình muốn thực hiện dịch vụ vào ngày mai.',
+    });
+
+    const result = await service.processProposal(
+      preference({
+        content: 'Mình muốn thực hiện dịch vụ vào ngày mai.',
+        memoryKey: 'service_interest',
+      }),
+      context(),
+    );
+
+    expect(result.status).toBe('rejected');
   });
 
   it('keeps the same preference separate for two users', async () => {

@@ -230,4 +230,39 @@ describe('MultiProviderLlmService', () => {
     expect(secondaryChat).not.toHaveBeenCalled();
     expect(nvidiaChat).not.toHaveBeenCalled();
   });
+
+  it('reserves a fair timeout share so the third model can still return final text', async () => {
+    jest.useFakeTimers();
+    try {
+      const response: NvidiaChatResponse = {
+        choices: [{ message: { role: 'assistant', content: '120B final' } }],
+      };
+      jest.spyOn(openAiPrimary, 'isConfigured').mockReturnValue(true);
+      jest.spyOn(openAiSecondary, 'isConfigured').mockReturnValue(true);
+      jest.spyOn(nvidiaService, 'isConfigured').mockReturnValue(true);
+      const timeoutFailure = (...args: any[]) =>
+        new Promise<never>((_resolve, reject) => {
+          const timeoutMs = Number(args[3]?.timeoutMs ?? 0);
+          setTimeout(() => reject(new Error('provider timeout')), timeoutMs);
+        });
+      jest.spyOn(openAiPrimary, 'chat').mockImplementation(timeoutFailure);
+      jest.spyOn(nvidiaService, 'chat').mockImplementation(timeoutFailure);
+      const secondary = jest
+        .spyOn(openAiSecondary, 'chat')
+        .mockResolvedValue(response);
+
+      const result = service.chat([], [], 'auto', {
+        timeoutMs: 9_000,
+        totalTimeoutMs: 9_000,
+      });
+      await jest.advanceTimersByTimeAsync(3_000);
+      expect(nvidiaService.chat).toHaveBeenCalledTimes(1);
+      await jest.advanceTimersByTimeAsync(3_000);
+      await expect(result).resolves.toEqual(response);
+      expect(secondary).toHaveBeenCalledTimes(1);
+      expect(secondary.mock.calls[0][3]?.timeoutMs).toBeGreaterThanOrEqual(2_900);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });
