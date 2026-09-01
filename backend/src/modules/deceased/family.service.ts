@@ -45,6 +45,19 @@ export class FamilyService {
       [userId],
     );
   }
+  /** Danh sách thành viên đang hoạt động của nhóm — dùng để chọn người
+   * nhận khi cấp quyền truy cập, thay vì phải tự gõ mã người dùng. */
+  async members(user: AuthUser, familyId: number) {
+    await this.access.assertFamilyManager(user, familyId);
+    return this.database.query(
+      `SELECT fm.user_id AS "userId", u.full_name AS "fullName", u.email,
+              fm.membership_role AS role
+       FROM family_memberships fm JOIN users u ON u.user_id=fm.user_id
+       WHERE fm.family_id=$1 AND fm.is_active=TRUE
+       ORDER BY fm.membership_role='manager' DESC, u.full_name`,
+      [familyId],
+    );
+  }
   async addPlot(user: AuthUser, familyId: number, plotId: number) {
     return this.database.transaction(async (client) => {
       await this.access.assertFamilyManager(user, familyId, client);
@@ -97,7 +110,8 @@ export class FamilyService {
        WHERE LOWER(email)=LOWER($1) AND is_active=TRUE AND is_deleted=FALSE`,
       [inviteeEmail.trim()],
     );
-    if (!invitee) throw new NotFoundException('Không tìm thấy người dùng với email này');
+    if (!invitee)
+      throw new NotFoundException('Không tìm thấy người dùng với email này');
     const inviteeId = invitee.id;
     if (user.id === inviteeId)
       throw new BadRequestException('Không thể tự mời chính mình');

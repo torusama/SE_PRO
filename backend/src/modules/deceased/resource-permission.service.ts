@@ -32,25 +32,23 @@ export class ResourcePermissionService {
         )
       ).rows[0];
       if (!member) throw new NotFoundException('Không tìm thấy thành viên');
-      const plotId = await this.resolvePlot(
-        dto.resourceType,
-        dto.resourceId,
-        client,
-      );
-      await this.access.assertPlotOwner(user, plotId, client);
-      if (!this.actionMatches(dto.resourceType, dto.action))
-        throw new ConflictException('Action không phù hợp với tài nguyên');
+      // Chỉ hỗ trợ chia sẻ hồ sơ tưởng niệm — dùng chung logic xác định
+      // quyền sở hữu với phần còn lại của module (đúng cho cả hồ sơ gắn lô
+      // trong nghĩa trang lẫn hồ sơ "ngoài nghĩa trang").
+      const profile = (
+        await client.query(
+          `SELECT plot_id, is_external_plot, created_by FROM deceased_profiles
+           WHERE deceased_profile_id=$1 AND is_deleted=FALSE FOR UPDATE`,
+          [dto.resourceId],
+        )
+      ).rows[0];
+      if (!profile) throw new NotFoundException('Không tìm thấy hồ sơ');
+      await this.access.assertProfileOwner(user, profile, client);
       try {
         const result = await client.query(
           `INSERT INTO resource_permissions(membership_id,resource_type,resource_id,action,granted_by)
-       VALUES($1,$2,$3,$4,$5) RETURNING permission_id AS id`,
-          [
-            member.membership_id,
-            dto.resourceType,
-            dto.resourceId,
-            dto.action,
-            user.id,
-          ],
+       VALUES($1,'deceased_profile',$2,$3,$4) RETURNING permission_id AS id`,
+          [member.membership_id, dto.resourceId, dto.action, user.id],
         );
         await this.audit(
           client,
@@ -81,12 +79,25 @@ export class ResourcePermissionService {
         )
       ).rows[0];
       if (!row) throw new NotFoundException('Không tìm thấy quyền');
-      const plotId = await this.resolvePlot(
-        row.resource_type,
-        row.resource_id,
-        client,
-      );
-      await this.access.assertPlotOwner(user, plotId, client);
+      if (row.resource_type === 'deceased_profile') {
+        const profile = (
+          await client.query(
+            `SELECT plot_id, is_external_plot, created_by FROM deceased_profiles WHERE deceased_profile_id=$1`,
+            [row.resource_id],
+          )
+        ).rows[0];
+        if (!profile) throw new NotFoundException('Không tìm thấy hồ sơ');
+        await this.access.assertProfileOwner(user, profile, client);
+      } else {
+        // Dữ liệu cũ (trước khi thu gọn chỉ còn chia sẻ hồ sơ tưởng niệm) —
+        // vẫn giữ đường xác thực cũ để không chặn việc thu hồi các quyền cũ.
+        const plotId = await this.resolvePlot(
+          row.resource_type,
+          row.resource_id,
+          client,
+        );
+        await this.access.assertPlotOwner(user, plotId, client);
+      }
       if (!row.revoked_at)
         await client.query(
           `UPDATE resource_permissions SET revoked_at=NOW(),revoked_by=$2 WHERE permission_id=$1`,
@@ -130,14 +141,6 @@ export class ResourcePermissionService {
     ).rows[0];
     if (!row) throw new NotFoundException('Không tìm thấy tài nguyên');
     return Number(row.plot_id);
-  }
-  private actionMatches(type: string, action: string) {
-    return (
-      (type === 'deceased_profile' &&
-        ['view_profile', 'order_service'].includes(action)) ||
-      (type === 'plot' && ['view_plot', 'order_service'].includes(action)) ||
-      (type === 'service_order' && action === 'view_service_history')
-    );
   }
   private audit(
     client: import('pg').PoolClient,

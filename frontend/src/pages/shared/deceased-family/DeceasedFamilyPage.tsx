@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { HelpCircle } from "lucide-react";
+import { HelpCircle, Search } from "lucide-react";
 import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
@@ -78,6 +78,12 @@ type Permission = {
   resourceId: number;
   action: string;
 };
+type Member = {
+  userId: number;
+  fullName?: string;
+  email?: string;
+  role: string;
+};
 type OwnedPlot = { plotId: number; plotCode: string; zoneName?: string };
 type Contract = {
   status: string;
@@ -116,13 +122,6 @@ const statusLabel = (value: string) =>
     member: "Thành viên",
   })[value] ?? "Đang cập nhật";
 
-const resourceLabel = (value: string) =>
-  ({
-    deceased_profile: "Hồ sơ tưởng niệm",
-    plot: "Lô đất",
-    service_order: "Đơn dịch vụ",
-  })[value] ?? "Tài nguyên";
-
 const actionLabel = (value: string) =>
   ({
     view_profile: "Xem hồ sơ",
@@ -130,6 +129,18 @@ const actionLabel = (value: string) =>
     view_service_history: "Xem lịch sử dịch vụ",
     order_service: "Đặt dịch vụ",
   })[value] ?? "Quyền truy cập";
+
+/** Chuẩn hoá chuỗi để so khớp tìm kiếm gần đúng: bỏ dấu tiếng Việt (kể cả
+ * "đ"/"Đ"), hạ chữ thường, gộp khoảng trắng thừa. Dùng cho ô tìm kiếm hồ sơ
+ * theo tên — người dùng gõ sai hoa/thường hoặc thiếu dấu vẫn tìm ra. */
+const normalizeSearchText = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/gi, "d")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, " ");
 
 const formatDate = (value?: string) => {
   if (!value) return "Chưa cập nhật";
@@ -180,34 +191,45 @@ export default function DeceasedFamilyPage() {
   const [families, setFamilies] = useState<Family[]>([]);
   const [invites, setInvites] = useState<Invitation[]>([]);
   const [permissions, setPermissions] = useState<Permission[]>([]);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [familyProfiles, setFamilyProfiles] = useState<Profile[]>([]);
   const [ownedPlots, setOwnedPlots] = useState<OwnedPlot[]>([]);
   const [familyId, setFamilyId] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const [toasts, setToasts] = useState<
+    { id: number; text: string; kind: "ok" | "error" }[]
+  >([]);
+  const toastIdRef = useRef(0);
   const [guideOpen, setGuideOpen] = useState(false);
   const { promptFor, dialog: promptDialog } = usePromptDialog();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
+
+  const pushToast = useCallback((text: string, kind: "ok" | "error") => {
+    const id = ++toastIdRef.current;
+    setToasts((prev) => [...prev, { id, text, kind }]);
+    window.setTimeout(() => {
+      setToasts((prev) => prev.filter((toast) => toast.id !== id));
+    }, 5000);
+  }, []);
 
   const run = async (
     operation: () => Promise<void>,
     successMessage: string,
   ) => {
     setBusy(true);
-    setError("");
-    setMessage("");
     try {
       await operation();
-      setMessage(successMessage);
+      pushToast(successMessage, "ok");
     } catch (operationError) {
-      setError(errorText(operationError));
+      pushToast(errorText(operationError), "error");
     } finally {
       setBusy(false);
     }
   };
 
   const load = useCallback(async () => {
-    setError("");
+    setLoadError("");
     try {
       const [response, contractsResponse] = await Promise.all([
         api.get(admin ? "/admin/deceased" : "/deceased"),
@@ -254,8 +276,8 @@ export default function DeceasedFamilyPage() {
         setFamilies(unwrap<Family[]>(familyResponse));
         setInvites(unwrap<Invitation[]>(inviteResponse));
       }
-    } catch (loadError) {
-      setError(errorText(loadError));
+    } catch (fetchError) {
+      setLoadError(errorText(fetchError));
     }
   }, [admin]);
 
@@ -274,12 +296,25 @@ export default function DeceasedFamilyPage() {
   const selectFamily = async (id: number) => {
     setFamilyId(id);
     try {
-      setPermissions(
-        unwrap<Permission[]>(await api.get(`/families/${id}/permissions`)),
+      const [permissionsResponse, membersResponse, profilesResponse] =
+        await Promise.all([
+          api.get(`/families/${id}/permissions`),
+          api.get(`/families/${id}/members`),
+          api.get("/deceased", { params: { familyId: id, pageSize: 100 } }),
+        ]);
+      setPermissions(unwrap<Permission[]>(permissionsResponse));
+      setMembers(unwrap<Member[]>(membersResponse));
+      const profilesData = unwrap<{ items?: Profile[] } | Profile[]>(
+        profilesResponse,
+      );
+      setFamilyProfiles(
+        Array.isArray(profilesData) ? profilesData : (profilesData.items ?? []),
       );
     } catch (selectError) {
-      setError(errorText(selectError));
+      setLoadError(errorText(selectError));
       setPermissions([]);
+      setMembers([]);
+      setFamilyProfiles([]);
     }
   };
 
@@ -367,8 +402,7 @@ export default function DeceasedFamilyPage() {
           )}
         </section>
 
-        {error && <div className="df-alert error">{error}</div>}
-        {message && <div className="df-alert ok">{message}</div>}
+        {loadError && <div className="df-alert error">{loadError}</div>}
 
         {admin ? (
           <section className="df-admin-layout">
@@ -490,7 +524,7 @@ export default function DeceasedFamilyPage() {
               <SectionHeading
                 eyebrow="Cùng nhau gìn giữ"
                 title="Chia sẻ với gia đình"
-                description="Tạo nhóm, mời người thân và chỉ cấp đúng quyền cần thiết cho từng hồ sơ hoặc dịch vụ."
+                description="Tạo nhóm, mời người thân và chỉ cấp đúng quyền xem hồ sơ tưởng niệm cần thiết cho từng người."
               />
               <div className="df-family-layout">
                 <FamilyList
@@ -510,6 +544,8 @@ export default function DeceasedFamilyPage() {
                   familyId={familyId}
                   ownedPlots={ownedPlots}
                   permissions={permissions}
+                  members={members}
+                  familyProfiles={familyProfiles}
                   busy={busy}
                   run={run}
                   reload={async () => {
@@ -530,6 +566,24 @@ export default function DeceasedFamilyPage() {
       </div>
       {promptDialog}
       {confirmDialog}
+      {toasts.length > 0 && (
+        <div className="df-toast-stack" role="status" aria-live="polite">
+          {toasts.map((toast) => (
+            <div key={toast.id} className={`df-toast df-toast-${toast.kind}`}>
+              <span>{toast.text}</span>
+              <button
+                aria-label="Đóng thông báo"
+                onClick={() =>
+                  setToasts((prev) => prev.filter((t) => t.id !== toast.id))
+                }
+                type="button"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </main>
   );
 }
@@ -665,6 +719,7 @@ function CreateProfileForm({
   // an táng ở một nơi KHÔNG thuộc lô đất nào của nghĩa trang này.
   const EXTERNAL_PLOT_VALUE = "external";
   const [plotSelection, setPlotSelection] = useState("");
+  const [plotTouched, setPlotTouched] = useState(false);
   const isExternalPlot = plotSelection === EXTERNAL_PLOT_VALUE;
 
   function resetDateFields() {
@@ -681,6 +736,10 @@ function CreateProfileForm({
       className="df-panel df-form df-create-profile"
       onSubmit={(event) => {
         event.preventDefault();
+        if (!plotSelection) {
+          setPlotTouched(true);
+          return;
+        }
         const data = new FormData(event.currentTarget);
         const form = event.currentTarget;
         const fullName = String(data.get("fullName") || "").trim();
@@ -718,6 +777,7 @@ function CreateProfileForm({
             resetDateFields();
             setCalendarMode("solar");
             setPlotSelection("");
+            setPlotTouched(false);
             await reload();
 
             if (aDay && aMonth && created?.id) {
@@ -756,28 +816,25 @@ function CreateProfileForm({
         <p>Điền thông tin nền tảng; bạn có thể bổ sung nội dung sau.</p>
       </div>
       <div className="df-form-grid">
-        <label className="df-field">
-          <span>Lô phần mộ</span>
-          <select
-            name="plotId"
-            required
-            value={plotSelection}
-            onChange={(event) => setPlotSelection(event.target.value)}
-          >
-            <option value="" disabled>
-              Chọn lô phần mộ
-            </option>
-            {ownedPlots.map((plot) => (
-              <option key={plot.plotId} value={plot.plotId}>
-                {plot.plotCode}
-                {plot.zoneName ? ` · ${plot.zoneName}` : ""}
-              </option>
-            ))}
-            <option value={EXTERNAL_PLOT_VALUE}>
-              Lô đất ngoài nghĩa trang
-            </option>
-          </select>
-        </label>
+        <SingleSelectDropdown
+          legend="Lô phần mộ"
+          options={[
+            ...ownedPlots.map((plot) => ({
+              value: String(plot.plotId),
+              label: `${plot.plotCode}${plot.zoneName ? ` · ${plot.zoneName}` : ""}`,
+            })),
+            { value: EXTERNAL_PLOT_VALUE, label: "Lô đất ngoài nghĩa trang" },
+          ]}
+          value={plotSelection}
+          onChange={(next) => {
+            setPlotSelection(next);
+            setPlotTouched(true);
+          }}
+          placeholder="Chọn lô phần mộ"
+          searchPlaceholder="Tìm theo mã lô..."
+          invalid={plotTouched && !plotSelection}
+          errorMessage="Vui lòng chọn lô phần mộ."
+        />
         <Field name="fullName" label="Họ và tên" />
         <Field name="hometown" label="Quê quán" optional />
         {isExternalPlot && (
@@ -1015,8 +1072,16 @@ function ProfileList({
 }) {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [search, setSearch] = useState("");
   const toggleProfile = (id: number) =>
     setExpandedId((current) => (current === id ? null : id));
+
+  const normalizedSearch = normalizeSearchText(search);
+  const filteredProfiles = normalizedSearch
+    ? profiles.filter((profile) =>
+        normalizeSearchText(profile.fullName).includes(normalizedSearch),
+      )
+    : profiles;
 
   return (
     <section className="df-panel df-profile-panel">
@@ -1030,6 +1095,19 @@ function ProfileList({
         <span className="df-count">{profiles.length}</span>
       </div>
 
+      {profiles.length > 0 && (
+        <div className="df-profile-search">
+          <Search size={14} strokeWidth={2.2} aria-hidden="true" />
+          <input
+            type="text"
+            placeholder="Tìm hồ sơ theo tên..."
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            aria-label="Tìm hồ sơ theo tên"
+          />
+        </div>
+      )}
+
       {profiles.length === 0 ? (
         <div className="df-empty-state">
           <span className="df-empty-mark" aria-hidden="true" />
@@ -1040,9 +1118,13 @@ function ProfileList({
               : "Bắt đầu bằng việc thêm thông tin của một người thân ở biểu mẫu bên cạnh."}
           </p>
         </div>
+      ) : filteredProfiles.length === 0 ? (
+        <p className="df-quiet-empty">
+          Không tìm thấy hồ sơ nào khớp với "{search.trim()}".
+        </p>
       ) : (
         <div className="df-profile-list">
-          {profiles.map((profile) => (
+          {filteredProfiles.map((profile) => (
             <article
               aria-expanded={expandedId === profile.id}
               className={`df-profile-item ${expandedId === profile.id ? "expanded" : ""}`}
@@ -1427,6 +1509,8 @@ function FamilyPanel({
   familyId,
   ownedPlots,
   permissions,
+  members,
+  familyProfiles,
   busy,
   run,
   reload,
@@ -1434,10 +1518,20 @@ function FamilyPanel({
   familyId: number | null;
   ownedPlots: OwnedPlot[];
   permissions: Permission[];
+  members: Member[];
+  familyProfiles: Profile[];
   busy: boolean;
   run: (operation: () => Promise<void>, message: string) => Promise<void>;
   reload: () => Promise<void>;
 }) {
+  const { confirm, dialog } = useConfirmDialog();
+  const [selectedPlotIds, setSelectedPlotIds] = useState<string[]>([]);
+  const [inviteEmailDraft, setInviteEmailDraft] = useState("");
+  const [inviteEmailList, setInviteEmailList] = useState<string[]>([]);
+  const [grantMemberIds, setGrantMemberIds] = useState<string[]>([]);
+  const [grantProfileIds, setGrantProfileIds] = useState<string[]>([]);
+  const [grantActions, setGrantActions] = useState<string[]>(["view_profile"]);
+
   if (!familyId) {
     return (
       <section className="df-panel df-family-placeholder">
@@ -1451,11 +1545,14 @@ function FamilyPanel({
     );
   }
 
-  const post = (path: string, data: object, successMessage: string) =>
-    run(async () => {
-      await api.post(path, data);
-      await reload();
-    }, successMessage);
+  const memberLabel = (userId: number) => {
+    const found = members.find((member) => member.userId === userId);
+    return found?.fullName?.trim() || found?.email || `Thành viên ${userId}`;
+  };
+  const profileLabel = (resourceId: number) => {
+    const found = familyProfiles.find((profile) => profile.id === resourceId);
+    return found?.fullName || `Hồ sơ #${resourceId}`;
+  };
 
   return (
     <section className="df-panel df-family-manage">
@@ -1470,35 +1567,60 @@ function FamilyPanel({
       <div className="df-tool-grid">
         <details className="df-tool" open>
           <summary>Liên kết lô đất</summary>
-          <p>Đưa một lô thuộc sở hữu hợp lệ vào không gian chung.</p>
+          <p>Đưa một hoặc nhiều lô thuộc sở hữu hợp lệ vào không gian chung.</p>
           <form
             className="df-compact-form"
             onSubmit={(event) => {
               event.preventDefault();
-              const data = new FormData(event.currentTarget);
-              void post(
-                `/families/${familyId}/plots`,
-                { plotId: Number(data.get("plotId")) },
-                "Đã thêm lô vào nhóm.",
-              );
+              if (selectedPlotIds.length === 0) return;
+              const count = selectedPlotIds.length;
+              void (async () => {
+                const confirmed = await confirm({
+                  title: "Thêm lô vào nhóm",
+                  message: `Thêm ${count} lô đã chọn vào không gian chung của nhóm?`,
+                  confirmLabel: "Thêm",
+                  cancelLabel: "Huỷ",
+                  variant: "info",
+                });
+                if (!confirmed) return;
+                await run(async () => {
+                  const results = await Promise.allSettled(
+                    selectedPlotIds.map((plotId) =>
+                      api.post(`/families/${familyId}/plots`, {
+                        plotId: Number(plotId),
+                      }),
+                    ),
+                  );
+                  setSelectedPlotIds([]);
+                  await reload();
+                  const failed = results.filter(
+                    (item) => item.status === "rejected",
+                  ).length;
+                  if (failed)
+                    throw new Error(
+                      `${failed}/${results.length} lô không thêm được (có thể đã có trong nhóm).`,
+                    );
+                }, `Đã thêm ${count} lô vào nhóm.`);
+              })();
             }}
           >
-            <label className="df-field">
-              <span>Mã số lô</span>
-              <select name="plotId" required defaultValue="">
-                <option value="" disabled>
-                  Chọn lô đang sở hữu
-                </option>
-                {ownedPlots.map((plot) => (
-                  <option key={plot.plotId} value={plot.plotId}>
-                    {plot.plotCode}
-                    {plot.zoneName ? ` · ${plot.zoneName}` : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button disabled={busy || ownedPlots.length === 0} type="submit">
-              Thêm lô
+            <MultiSelectDropdown
+              legend="Mã số lô"
+              options={ownedPlots.map((plot) => ({
+                value: String(plot.plotId),
+                label: `${plot.plotCode}${plot.zoneName ? ` · ${plot.zoneName}` : ""}`,
+              }))}
+              selected={selectedPlotIds}
+              onChange={setSelectedPlotIds}
+              emptyLabel="Bạn chưa có lô đủ điều kiện."
+              placeholder="Chọn lô đất..."
+              searchPlaceholder="Tìm theo mã lô..."
+            />
+            <button
+              disabled={busy || selectedPlotIds.length === 0}
+              type="submit"
+            >
+              Thêm lô đã chọn
             </button>
           </form>
         </details>
@@ -1506,64 +1628,217 @@ function FamilyPanel({
           <summary>Mời thành viên</summary>
           <p>
             Gửi lời mời đến tài khoản người thân bằng địa chỉ email đã đăng ký.
-          </p>
-          <CompactForm
-            button="Gửi lời mời"
-            fields={[["email", "Email người dùng", "email"]]}
-            onSubmit={(data) =>
-              post(
-                `/families/${familyId}/invitations`,
-                { inviteeEmail: String(data.get("email") ?? "").trim() },
-                "Đã gửi lời mời.",
-              )
-            }
-          />
-        </details>
-        <details className="df-tool">
-          <summary>Cấp quyền truy cập</summary>
-          <p>
-            Chỉ định chính xác nội dung một thành viên được phép xem hoặc thao
-            tác.
+            Có thể mời nhiều người cùng lúc — mỗi email một dòng hoặc cách nhau
+            bằng dấu phẩy.
           </p>
           <form
             className="df-compact-form"
             onSubmit={(event) => {
               event.preventDefault();
-              const data = new FormData(event.currentTarget);
-              void post(
-                `/families/${familyId}/permissions`,
-                {
-                  memberUserId: Number(data.get("userId")),
-                  resourceType: data.get("resourceType"),
-                  resourceId: Number(data.get("resourceId")),
-                  action: data.get("action"),
-                },
-                "Đã cấp quyền cho thành viên.",
-              );
+              const emails = inviteEmailList;
+              if (emails.length === 0) return;
+              void (async () => {
+                const confirmed = await confirm({
+                  title: "Gửi lời mời",
+                  message: `Gửi lời mời tham gia nhóm tới ${emails.length} email đã nhập?`,
+                  confirmLabel: "Gửi",
+                  cancelLabel: "Huỷ",
+                  variant: "info",
+                });
+                if (!confirmed) return;
+                await run(async () => {
+                  const results = await Promise.allSettled(
+                    emails.map((email) =>
+                      api.post(`/families/${familyId}/invitations`, {
+                        inviteeEmail: email,
+                      }),
+                    ),
+                  );
+                  setInviteEmailList([]);
+                  await reload();
+                  const failed = results.filter(
+                    (item) => item.status === "rejected",
+                  ).length;
+                  if (failed)
+                    throw new Error(
+                      `${failed}/${results.length} lời mời không gửi được (email không hợp lệ hoặc đã là thành viên).`,
+                    );
+                }, `Đã gửi ${emails.length} lời mời.`);
+              })();
             }}
           >
-            <Field name="userId" label="Mã người dùng" type="number" />
             <label className="df-field">
-              <span>Loại nội dung</span>
-              <select name="resourceType">
-                <option value="deceased_profile">Hồ sơ tưởng niệm</option>
-                <option value="plot">Lô đất</option>
-                <option value="service_order">Đơn dịch vụ</option>
-              </select>
+              <span>Email người dùng</span>
+              <div className="df-chip-input">
+                <input
+                  type="email"
+                  placeholder="vidu@email.com"
+                  value={inviteEmailDraft}
+                  onChange={(event) => setInviteEmailDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      const value = inviteEmailDraft.trim();
+                      if (!value) return;
+                      setInviteEmailList((list) =>
+                        list.includes(value) ? list : [...list, value],
+                      );
+                      setInviteEmailDraft("");
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  disabled={!inviteEmailDraft.trim()}
+                  onClick={() => {
+                    const value = inviteEmailDraft.trim();
+                    if (!value) return;
+                    setInviteEmailList((list) =>
+                      list.includes(value) ? list : [...list, value],
+                    );
+                    setInviteEmailDraft("");
+                  }}
+                >
+                  Thêm
+                </button>
+              </div>
+              {inviteEmailList.length > 0 && (
+                <div className="df-msd-chips">
+                  {inviteEmailList.map((email) => (
+                    <span key={email} className="df-msd-chip">
+                      {email}
+                      <button
+                        type="button"
+                        aria-label={`Bỏ ${email}`}
+                        onClick={() =>
+                          setInviteEmailList((list) =>
+                            list.filter((item) => item !== email),
+                          )
+                        }
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
             </label>
-            <Field name="resourceId" label="Mã nội dung" type="number" />
-            <label className="df-field">
-              <span>Quyền được cấp</span>
-              <select name="action">
-                <option value="view_profile">Xem hồ sơ</option>
-                <option value="view_plot">Xem thông tin lô</option>
-                <option value="view_service_history">
-                  Xem lịch sử dịch vụ
-                </option>
-                <option value="order_service">Đặt dịch vụ</option>
-              </select>
-            </label>
-            <button disabled={busy} type="submit">
+            <button
+              disabled={busy || inviteEmailList.length === 0}
+              type="submit"
+            >
+              Gửi lời mời
+              {inviteEmailList.length > 0 ? ` (${inviteEmailList.length})` : ""}
+            </button>
+          </form>
+        </details>
+        <details className="df-tool">
+          <summary>Cấp quyền truy cập</summary>
+          <p>
+            Chọn thành viên và (các) hồ sơ tưởng niệm muốn chia sẻ — có thể chọn
+            nhiều cùng lúc, mỗi lượt cấp vẫn được lưu thành một quyền riêng cho
+            từng người để dễ thu hồi sau này.
+          </p>
+          <form
+            className="df-compact-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (
+                grantMemberIds.length === 0 ||
+                grantProfileIds.length === 0 ||
+                grantActions.length === 0
+              )
+                return;
+              const total =
+                grantMemberIds.length *
+                grantProfileIds.length *
+                grantActions.length;
+              void (async () => {
+                const confirmed = await confirm({
+                  title: "Cấp quyền truy cập",
+                  message: `Cấp quyền xem cho ${grantMemberIds.length} thành viên trên ${grantProfileIds.length} hồ sơ đã chọn (tổng ${total} quyền)?`,
+                  confirmLabel: "Cấp quyền",
+                  cancelLabel: "Huỷ",
+                  variant: "info",
+                });
+                if (!confirmed) return;
+                await run(async () => {
+                  const combos: Array<{
+                    memberUserId: number;
+                    resourceId: number;
+                    action: string;
+                  }> = [];
+                  for (const memberId of grantMemberIds)
+                    for (const profileId of grantProfileIds)
+                      for (const action of grantActions)
+                        combos.push({
+                          memberUserId: Number(memberId),
+                          resourceId: Number(profileId),
+                          action,
+                        });
+                  const results = await Promise.allSettled(
+                    combos.map((body) =>
+                      api.post(`/families/${familyId}/permissions`, body),
+                    ),
+                  );
+                  setGrantMemberIds([]);
+                  setGrantProfileIds([]);
+                  await reload();
+                  const failed = results.filter(
+                    (item) => item.status === "rejected",
+                  ).length;
+                  if (failed)
+                    throw new Error(
+                      `${failed}/${results.length} quyền không cấp được (có thể đã được cấp trước đó).`,
+                    );
+                }, `Đã cấp ${total} quyền truy cập.`);
+              })();
+            }}
+          >
+            <MultiSelectDropdown
+              legend="Thành viên"
+              options={members.map((member) => ({
+                value: String(member.userId),
+                label:
+                  member.fullName?.trim() ||
+                  member.email ||
+                  `#${member.userId}`,
+              }))}
+              selected={grantMemberIds}
+              onChange={setGrantMemberIds}
+              emptyLabel="Nhóm chưa có thành viên nào khác."
+              placeholder="Chọn thành viên..."
+              searchPlaceholder="Tìm theo tên hoặc email..."
+            />
+            <MultiSelectDropdown
+              legend="Hồ sơ tưởng niệm"
+              options={familyProfiles.map((profile) => ({
+                value: String(profile.id),
+                label: profile.fullName,
+              }))}
+              selected={grantProfileIds}
+              onChange={setGrantProfileIds}
+              emptyLabel="Nhóm chưa có hồ sơ tưởng niệm nào."
+              placeholder="Chọn hồ sơ tưởng niệm..."
+              searchPlaceholder="Tìm theo tên..."
+            />
+            <CheckboxGroup
+              legend="Quyền được cấp"
+              options={GRANTABLE_ACTIONS}
+              selected={grantActions}
+              onChange={setGrantActions}
+            />
+            <button
+              disabled={
+                busy ||
+                members.length === 0 ||
+                familyProfiles.length === 0 ||
+                grantMemberIds.length === 0 ||
+                grantProfileIds.length === 0 ||
+                grantActions.length === 0
+              }
+              type="submit"
+            >
               Cấp quyền
             </button>
           </form>
@@ -1584,22 +1859,31 @@ function FamilyPanel({
             {permissions.map((permission) => (
               <article key={permission.id}>
                 <div>
-                  <strong>Thành viên {permission.userId}</strong>
+                  <strong>{memberLabel(permission.userId)}</strong>
                   <span>
                     {actionLabel(permission.action)} ·{" "}
-                    {resourceLabel(permission.resourceType)}{" "}
-                    {permission.resourceId}
+                    {profileLabel(permission.resourceId)}
                   </span>
                 </div>
                 <button
                   className="df-text-danger"
                   onClick={() =>
-                    void run(async () => {
-                      await api.delete(
-                        `/families/${familyId}/permissions/${permission.id}`,
-                      );
-                      await reload();
-                    }, "Đã thu hồi quyền truy cập.")
+                    void (async () => {
+                      const confirmed = await confirm({
+                        title: "Thu hồi quyền truy cập",
+                        message: `Thu hồi quyền "${actionLabel(permission.action)}" của ${memberLabel(permission.userId)} trên hồ sơ "${profileLabel(permission.resourceId)}"?`,
+                        confirmLabel: "Thu hồi",
+                        cancelLabel: "Huỷ",
+                        variant: "danger",
+                      });
+                      if (!confirmed) return;
+                      await run(async () => {
+                        await api.delete(
+                          `/families/${familyId}/permissions/${permission.id}`,
+                        );
+                        await reload();
+                      }, "Đã thu hồi quyền truy cập.");
+                    })()
                   }
                   type="button"
                 >
@@ -1616,11 +1900,21 @@ function FamilyPanel({
           className="df-secondary-button"
           disabled={busy}
           onClick={() =>
-            void post(
-              `/families/${familyId}/disable`,
-              {},
-              "Đã tạm dừng nhóm và thu hồi các quyền đang có.",
-            )
+            void (async () => {
+              const confirmed = await confirm({
+                title: "Tạm dừng nhóm",
+                message:
+                  "Tạm dừng nhóm sẽ thu hồi toàn bộ quyền truy cập đang có của các thành viên. Bạn có chắc chắn?",
+                confirmLabel: "Tạm dừng",
+                cancelLabel: "Huỷ",
+                variant: "danger",
+              });
+              if (!confirmed) return;
+              await run(async () => {
+                await api.post(`/families/${familyId}/disable`, {});
+                await reload();
+              }, "Đã tạm dừng nhóm và thu hồi các quyền đang có.");
+            })()
           }
           type="button"
         >
@@ -1629,43 +1923,340 @@ function FamilyPanel({
         <button
           disabled={busy}
           onClick={() =>
-            void post(
-              `/families/${familyId}/enable`,
-              {},
-              "Đã kích hoạt lại nhóm; các quyền cũ không tự khôi phục.",
-            )
+            void run(async () => {
+              await api.post(`/families/${familyId}/enable`, {});
+              await reload();
+            }, "Đã kích hoạt lại nhóm; các quyền cũ không tự khôi phục.")
           }
           type="button"
         >
           Kích hoạt nhóm
         </button>
       </div>
+      {dialog}
     </section>
   );
 }
 
-function CompactForm({
-  fields,
-  button,
-  onSubmit,
+const GRANTABLE_ACTIONS = [{ value: "view_profile", label: "Xem hồ sơ" }];
+
+function SingleSelectDropdown({
+  legend,
+  options,
+  value,
+  onChange,
+  emptyLabel,
+  placeholder = "Chọn...",
+  searchPlaceholder = "Tìm kiếm...",
+  invalid,
+  errorMessage,
 }: {
-  fields: string[][];
-  button: string;
-  onSubmit: (data: FormData) => Promise<void>;
+  legend: string;
+  options: { value: string; label: string }[];
+  value: string;
+  onChange: (next: string) => void;
+  emptyLabel?: string;
+  placeholder?: string;
+  searchPlaceholder?: string;
+  invalid?: boolean;
+  errorMessage?: string;
 }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onPointerDown = (event: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!open) setQuery("");
+  }, [open]);
+
+  const filtered = query.trim()
+    ? options.filter((option) =>
+        option.label.toLowerCase().includes(query.trim().toLowerCase()),
+      )
+    : options;
+
+  const selectedOption = options.find((option) => option.value === value);
+
   return (
-    <form
-      className="df-compact-form"
-      onSubmit={(event) => {
-        event.preventDefault();
-        void onSubmit(new FormData(event.currentTarget));
-      }}
-    >
-      {fields.map(([name, label, type]) => (
-        <Field key={name} name={name} label={label} type={type} />
-      ))}
-      <button type="submit">{button}</button>
-    </form>
+    <div className="df-field df-msd" ref={rootRef}>
+      <span>{legend}</span>
+      {options.length === 0 ? (
+        <p className="df-quiet-empty">
+          {emptyLabel ?? "Không có lựa chọn nào."}
+        </p>
+      ) : (
+        <>
+          <button
+            type="button"
+            className={`df-msd-trigger${invalid ? " is-invalid" : ""}`}
+            aria-expanded={open}
+            onClick={() => setOpen((v) => !v)}
+          >
+            <span className="df-msd-trigger-text">
+              {selectedOption ? selectedOption.label : placeholder}
+            </span>
+            <span className="df-msd-caret" aria-hidden="true" />
+          </button>
+          {open && (
+            <div className="df-msd-panel">
+              {options.length > 6 && (
+                <input
+                  type="text"
+                  className="df-msd-search"
+                  placeholder={searchPlaceholder}
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  autoFocus
+                />
+              )}
+              <div className="df-msd-list">
+                {filtered.length === 0 ? (
+                  <p className="df-quiet-empty">Không tìm thấy kết quả.</p>
+                ) : (
+                  filtered.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={`df-msd-option df-msd-option-single${
+                        option.value === value ? " is-selected" : ""
+                      }`}
+                      onClick={() => {
+                        onChange(option.value);
+                        setOpen(false);
+                      }}
+                    >
+                      <span>{option.label}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+          {invalid && errorMessage && (
+            <p className="df-msd-error">{errorMessage}</p>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function MultiSelectDropdown({
+  legend,
+  options,
+  selected,
+  onChange,
+  emptyLabel,
+  placeholder = "Chọn...",
+  searchPlaceholder = "Tìm kiếm...",
+}: {
+  legend: string;
+  options: { value: string; label: string }[];
+  selected: string[];
+  onChange: (next: string[]) => void;
+  emptyLabel?: string;
+  placeholder?: string;
+  searchPlaceholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) setQuery("");
+  }, [open]);
+
+  const toggle = (value: string) => {
+    onChange(
+      selected.includes(value)
+        ? selected.filter((item) => item !== value)
+        : [...selected, value],
+    );
+  };
+
+  const filtered = query.trim()
+    ? options.filter((option) =>
+        option.label.toLowerCase().includes(query.trim().toLowerCase()),
+      )
+    : options;
+
+  const selectedOptions = selected
+    .map((value) => options.find((option) => option.value === value))
+    .filter((option): option is { value: string; label: string } =>
+      Boolean(option),
+    );
+
+  return (
+    <div className="df-field df-msd" ref={rootRef}>
+      <span>{legend}</span>
+      {options.length === 0 ? (
+        <p className="df-quiet-empty">
+          {emptyLabel ?? "Không có lựa chọn nào."}
+        </p>
+      ) : (
+        <>
+          <button
+            type="button"
+            className="df-msd-trigger"
+            aria-expanded={open}
+            onClick={() => setOpen((value) => !value)}
+          >
+            <span className="df-msd-trigger-text">
+              {selected.length === 0
+                ? placeholder
+                : `Đã chọn ${selected.length}/${options.length}`}
+            </span>
+            <span className="df-msd-caret" aria-hidden="true" />
+          </button>
+          {open && (
+            <div className="df-msd-panel">
+              {options.length > 6 && (
+                <input
+                  type="text"
+                  className="df-msd-search"
+                  placeholder={searchPlaceholder}
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  autoFocus
+                />
+              )}
+              <div className="df-msd-actions">
+                <button
+                  type="button"
+                  onClick={() =>
+                    onChange(
+                      Array.from(
+                        new Set([
+                          ...selected,
+                          ...filtered.map((option) => option.value),
+                        ]),
+                      ),
+                    )
+                  }
+                >
+                  Chọn tất cả
+                </button>
+                <button type="button" onClick={() => onChange([])}>
+                  Bỏ chọn hết
+                </button>
+              </div>
+              <div className="df-msd-list">
+                {filtered.length === 0 ? (
+                  <p className="df-quiet-empty">Không tìm thấy kết quả.</p>
+                ) : (
+                  filtered.map((option) => (
+                    <label key={option.value} className="df-msd-option">
+                      <input
+                        type="checkbox"
+                        checked={selected.includes(option.value)}
+                        onChange={() => toggle(option.value)}
+                      />
+                      <span>{option.label}</span>
+                    </label>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+          {selectedOptions.length > 0 && (
+            <div className="df-msd-chips">
+              {selectedOptions.map((option) => (
+                <span key={option.value} className="df-msd-chip">
+                  {option.label}
+                  <button
+                    type="button"
+                    aria-label={`Bỏ chọn ${option.label}`}
+                    onClick={() => toggle(option.value)}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function CheckboxGroup({
+  legend,
+  options,
+  selected,
+  onChange,
+  emptyLabel,
+}: {
+  legend: string;
+  options: { value: string; label: string }[];
+  selected: string[];
+  onChange: (next: string[]) => void;
+  emptyLabel?: string;
+}) {
+  const toggle = (value: string) => {
+    onChange(
+      selected.includes(value)
+        ? selected.filter((item) => item !== value)
+        : [...selected, value],
+    );
+  };
+  return (
+    <div className="df-field df-checkbox-field">
+      <span>{legend}</span>
+      {options.length === 0 ? (
+        <p className="df-quiet-empty">
+          {emptyLabel ?? "Không có lựa chọn nào."}
+        </p>
+      ) : (
+        <div className="df-checkbox-list">
+          {options.map((option) => (
+            <label key={option.value} className="df-checkbox-option">
+              <input
+                type="checkbox"
+                checked={selected.includes(option.value)}
+                onChange={() => toggle(option.value)}
+              />
+              <span>{option.label}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

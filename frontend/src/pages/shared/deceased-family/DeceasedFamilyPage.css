@@ -48,7 +48,7 @@
 .df-shell {
   position: relative;
   z-index: 1;
-  width: min(1320px, 100%);
+  width: min(1520px, 100%);
   margin: 0 auto;
   padding: 30px clamp(22px, 4vw, 52px) 72px;
 }
@@ -268,6 +268,74 @@
   background: rgba(0, 229, 196, 0.07);
 }
 
+.df-toast-stack {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(340px, calc(100vw - 36px));
+}
+
+.df-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(6px);
+  animation: df-toast-in 0.2s ease;
+}
+
+.df-toast span {
+  flex: 1;
+}
+
+.df-toast button {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  opacity: 0.6;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.df-toast button:hover {
+  opacity: 1;
+}
+
+.df-toast-ok {
+  border-color: var(--df-line-strong);
+  color: var(--df-teal-soft);
+  background: rgba(6, 20, 24, 0.94);
+}
+
+.df-toast-error {
+  border-color: rgba(240, 107, 107, 0.35);
+  color: #ffaaa2;
+  background: rgba(30, 10, 12, 0.94);
+}
+
+@keyframes df-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .df-section + .df-section {
   margin-top: 68px;
 }
@@ -302,7 +370,7 @@
 .df-profile-layout,
 .df-admin-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(340px, 430px);
+  grid-template-columns: minmax(0, 1fr) minmax(380px, 500px);
   gap: 18px;
   align-items: stretch;
 }
@@ -380,6 +448,45 @@
   padding: 25px;
 }
 
+.df-profile-search {
+  position: relative;
+  margin-bottom: 14px;
+}
+
+.df-profile-search svg {
+  position: absolute;
+  top: 50%;
+  left: 13px;
+  width: 14px;
+  height: 14px;
+  transform: translateY(-50%);
+  color: var(--df-muted);
+  pointer-events: none;
+}
+
+.df-profile-panel .df-profile-search input {
+  width: 100%;
+  min-height: 0;
+  border: 1px solid var(--df-line);
+  border-radius: 8px;
+  padding: 9px 11px 9px 40px;
+  color: #dce7e9;
+  background: rgba(3, 9, 18, 0.6);
+  font:
+    500 11px/1.4 "Be Vietnam Pro",
+    Inter,
+    sans-serif;
+}
+
+.df-profile-search input::placeholder {
+  color: var(--df-muted);
+}
+
+.df-profile-search input:focus {
+  border-color: var(--df-line-strong);
+  outline: none;
+}
+
 .df-empty-state,
 .df-family-placeholder {
   display: flex;
@@ -442,6 +549,28 @@
 .df-profile-list {
   display: grid;
   gap: 10px;
+  max-height: 620px;
+  padding-right: 8px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(10, 255, 212, 0.45) transparent;
+}
+
+.df-profile-list::-webkit-scrollbar {
+  width: 5px;
+}
+
+.df-profile-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.df-profile-list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(10, 255, 212, 0.45);
+}
+
+.df-profile-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(10, 255, 212, 0.7);
 }
 
 .df-profile-item {
@@ -614,13 +743,14 @@
 .df-form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 13px;
+  gap: 14px 22px;
 }
 
 .df-field {
   display: grid;
   gap: 7px;
-  margin-bottom: 14px;
+  margin-bottom: 18px;
+  min-width: 0;
 }
 
 .df-form-grid .df-field {
@@ -660,6 +790,16 @@
 .df-page select {
   min-height: 41px;
   padding: 0 11px;
+}
+
+/* Checkbox không được ăn theo rule width:100%/min-height ở trên — nếu không
+   nó bị kéo giãn to bằng cả hàng (bể frontend ở danh sách chọn nhiều lô). */
+.df-page input[type="checkbox"] {
+  width: auto;
+  min-height: 0;
+  padding: 0;
+  border: none;
+  background: none;
 }
 
 .df-page textarea {
@@ -859,7 +999,7 @@
 }
 
 .df-tool {
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid var(--df-line);
   border-radius: 9px;
   background: rgba(3, 9, 18, 0.4);
@@ -903,9 +1043,8 @@
 
 .df-compact-form {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
-  align-items: end;
+  grid-template-columns: 1fr;
+  gap: 10px;
   padding: 0 13px 13px;
 }
 
@@ -913,12 +1052,360 @@
   margin: 0;
 }
 
-.df-tool:nth-child(3) .df-compact-form {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.df-compact-form textarea {
+  width: 100%;
+  border: 1px solid var(--df-line);
+  border-radius: 8px;
+  padding: 9px 11px;
+  color: #dce7e9;
+  background: rgba(3, 9, 18, 0.72);
+  font:
+    500 11px/1.45 "Be Vietnam Pro",
+    Inter,
+    sans-serif;
+  resize: vertical;
 }
 
-.df-tool:nth-child(3) .df-compact-form > button {
-  grid-column: 1 / -1;
+.df-compact-form > button {
+  justify-self: start;
+}
+
+.df-checkbox-field .df-quiet-empty {
+  margin: 0;
+}
+
+.df-checkbox-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: 150px;
+  overflow-y: auto;
+  padding: 2px;
+}
+
+.df-checkbox-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 11px;
+  border: 1px solid var(--df-line);
+  border-radius: 8px;
+  color: var(--df-text-soft);
+  font-size: 10.5px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.df-checkbox-option:has(input:checked) {
+  border-color: rgba(0, 229, 196, 0.55);
+  background: rgba(0, 229, 196, 0.1);
+  color: #cdfff5;
+}
+
+.df-checkbox-option input {
+  flex: 0 0 15px;
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--df-teal);
+}
+
+.df-checkbox-option span {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
+/* Multi-select dropdown (searchable, glass panel) */
+.df-msd {
+  position: relative;
+  min-width: 0;
+}
+
+.df-msd-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--df-line);
+  border-radius: 8px;
+  color: var(--df-text-soft);
+  background: rgba(3, 9, 18, 0.72);
+  font:
+    500 11px/1.45 "Be Vietnam Pro",
+    Inter,
+    sans-serif;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.df-msd-trigger:hover {
+  border-color: var(--df-line-strong);
+}
+
+.df-msd-trigger[aria-expanded="true"] {
+  border-color: var(--df-line-strong);
+  background: rgba(0, 229, 196, 0.07);
+  color: #dce7e9;
+}
+
+.df-msd-trigger-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.df-msd-caret {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid var(--df-muted);
+  border-bottom: 1.5px solid var(--df-muted);
+  transform: rotate(45deg) translateY(-3px);
+  transition:
+    transform 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.df-msd-trigger[aria-expanded="true"] .df-msd-caret {
+  border-color: var(--df-teal-soft);
+  transform: rotate(-135deg) translateY(1px);
+}
+
+.df-msd-panel {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  min-width: 240px;
+  padding: 10px;
+  border: 1px solid var(--df-line-strong);
+  border-radius: 10px;
+  background: rgba(6, 13, 25, 0.82);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.5);
+}
+
+.df-msd-search {
+  width: 100%;
+  border: 1px solid var(--df-line);
+  border-radius: 7px;
+  padding: 8px 10px;
+  color: #dce7e9;
+  background: rgba(3, 9, 18, 0.6);
+  font:
+    500 11px/1.4 "Be Vietnam Pro",
+    Inter,
+    sans-serif;
+}
+
+.df-msd-search::placeholder {
+  color: var(--df-muted);
+}
+
+.df-msd-search:focus {
+  border-color: var(--df-line-strong);
+  outline: none;
+}
+
+.df-msd-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.df-msd-actions button {
+  padding: 5px 10px;
+  border: 1px solid var(--df-line);
+  border-radius: 999px;
+  color: var(--df-text-soft);
+  background: transparent;
+  font-size: 9px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.df-msd-actions button:hover {
+  border-color: var(--df-line-strong);
+  color: #cdfff5;
+}
+
+.df-msd-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 230px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.df-msd-option {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 9px;
+  border-radius: 7px;
+  color: var(--df-text-soft);
+  font-size: 10.5px;
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+
+.df-msd-option:hover {
+  background: rgba(0, 229, 196, 0.06);
+  color: #dce7e9;
+}
+
+.df-msd-option:has(input:checked),
+.df-msd-option.is-selected {
+  background: rgba(0, 229, 196, 0.1);
+  color: #cdfff5;
+}
+
+.df-msd-option input {
+  flex: 0 0 15px;
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--df-teal);
+}
+
+.df-msd-option span {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
+/* Biến thể df-msd dùng cho chọn 1 lựa chọn duy nhất (option là <button>,
+   không có checkbox) — dùng chung khung/kiểu dáng với dropdown chọn nhiều. */
+.df-msd-option-single {
+  display: block;
+  width: 100%;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+}
+
+.df-msd-trigger.is-invalid {
+  border-color: rgba(255, 107, 107, 0.6);
+}
+
+.df-msd-error {
+  margin: 4px 0 0;
+  color: #ff9c9c;
+  font-size: 9.5px;
+}
+
+.df-msd-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.df-msd-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px 5px 10px;
+  border: 1px solid rgba(0, 229, 196, 0.3);
+  border-radius: 999px;
+  color: #cdfff5;
+  background: rgba(0, 229, 196, 0.08);
+  font-size: 9.5px;
+}
+
+.df-msd-chip button {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  min-height: 0;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  color: #cdfff5;
+  background: rgba(0, 229, 196, 0.18);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.df-msd-chip button:hover {
+  background: rgba(0, 229, 196, 0.32);
+}
+
+/* Chip-style input (used for adding invite emails one at a time) */
+.df-chip-input {
+  display: flex;
+  gap: 6px;
+}
+
+.df-chip-input input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--df-line);
+  border-radius: 8px;
+  padding: 9px 11px;
+  color: #dce7e9;
+  background: rgba(3, 9, 18, 0.72);
+  font:
+    500 11px/1.45 "Be Vietnam Pro",
+    Inter,
+    sans-serif;
+}
+
+.df-chip-input input::placeholder {
+  color: var(--df-muted);
+}
+
+.df-chip-input input:focus {
+  border-color: var(--df-line-strong);
+  outline: none;
+}
+
+.df-chip-input button {
+  flex: 0 0 auto;
+  padding: 0 14px;
+  border: 1px solid var(--df-line-strong);
+  border-radius: 8px;
+  color: #cdfff5;
+  background: rgba(0, 229, 196, 0.1);
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.df-chip-input button:hover:not(:disabled) {
+  background: rgba(0, 229, 196, 0.2);
+}
+
+.df-chip-input button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .df-permission-section {
@@ -1100,8 +1587,7 @@
     margin-bottom: 36px;
   }
 
-  .df-form-grid,
-  .df-tool:nth-child(3) .df-compact-form {
+  .df-form-grid {
     grid-template-columns: 1fr;
   }
 
