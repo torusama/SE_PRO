@@ -339,12 +339,18 @@ export class PlotRecommendationService {
         index,
         score: Math.max(
           ...normalizedQueries.map((query) =>
-            this.serviceSemanticNameScore(service.name, service.description, query),
+            this.serviceSemanticNameScore(
+              service.name,
+              service.description,
+              query,
+            ),
           ),
         ),
       }))
       .filter((item) => item.score > 0)
-      .sort((left, right) => right.score - left.score || left.index - right.index);
+      .sort(
+        (left, right) => right.score - left.score || left.index - right.index,
+      );
 
     return scored.slice(0, boundedLimit).map((item) => item.service);
   }
@@ -366,20 +372,33 @@ export class PlotRecommendationService {
     description: string | null,
     normalizedQuery: string,
   ) {
-    // “dịch vụ” is catalogue boilerplate. Counting those two words caused
-    // queries about grave care to falsely match “Dịch vụ mai táng”.
+    // "dịch vụ" is catalogue boilerplate. Counting those two words caused
+    // queries about grave care to falsely match "Dịch vụ mai táng".
     const stopwords = new Set(['dich', 'vu']);
+    // Generic umbrella terms that, when they form the ENTIRE query, mean
+    // "show me the full catalogue" rather than a specific service filter.
+    const umbrellaWords = new Set(['cham', 'soc', 'hien', 'co', 'cac']);
     const nameTokens = this.normalizeServiceText(name)
       .split(/\s+/)
       .filter((token) => token.length >= 2 && !stopwords.has(token));
     if (!nameTokens.length) return 0;
 
-    const queryTokens = new Set(
-      normalizedQuery
-        .split(/\s+/)
-        .filter((token) => token.length >= 2 && !stopwords.has(token)),
+    const expandedQuery = normalizedQuery
+      .replace(/\blau don\b/g, 'don dep mo')
+      .replace(/\bve sinh mo\b/g, 'don dep mo');
+    const allQueryTokens = expandedQuery
+      .split(/\s+/)
+      .filter((token) => token.length >= 2 && !stopwords.has(token));
+    // If after removing generic umbrella words no substantive tokens remain,
+    // this is a catalogue-browsing request, not a specific service filter.
+    const substantiveTokens = allQueryTokens.filter(
+      (token) => !umbrellaWords.has(token),
     );
-    const nameOverlap = nameTokens.filter((token) => queryTokens.has(token)).length;
+    if (!substantiveTokens.length) return 0;
+    const queryTokens = new Set(allQueryTokens);
+    const nameOverlap = nameTokens.filter((token) =>
+      queryTokens.has(token),
+    ).length;
     const requiredOverlap = Math.max(1, Math.ceil(nameTokens.length * 0.4));
     if (nameOverlap >= requiredOverlap) {
       return 100 + nameOverlap * 10 - nameTokens.length;
@@ -827,20 +846,70 @@ export class PlotRecommendationService {
 
       const uniqueReasons = [...new Set(reasons)];
       const uniqueTradeOffs = [...new Set(tradeOffs)];
-      const position =
-        index === 0
-          ? 'Đây là phương án được ưu tiên đầu tiên'
-          : `Đây là phương án thay thế số ${index + 1}`;
-      const fitSummary = uniqueReasons.slice(0, 3).join('; ');
       const tradeOffSummary =
         uniqueTradeOffs[0] ??
         'cần kiểm tra trực tiếp vị trí, hướng và kích thước trên bản đồ trước khi gửi yêu cầu';
+      const directionKey = [...option.directions]
+        .map((direction) => direction.toLocaleLowerCase('vi-VN'))
+        .sort()
+        .join('|');
+      const equivalentOptions = options.filter((candidate) => {
+        if (candidate.optionId === option.optionId) return false;
+        const candidateDirectionKey = [...candidate.directions]
+          .map((direction) => direction.toLocaleLowerCase('vi-VN'))
+          .sort()
+          .join('|');
+        return (
+          candidate.plotCost === option.plotCost &&
+          candidate.totalAreaSqm === option.totalAreaSqm &&
+          candidate.zoneName === option.zoneName &&
+          candidateDirectionKey === directionKey &&
+          candidate.accessSummary === option.accessSummary
+        );
+      });
+      const positions = option.plots
+        .map((plot) => {
+          const parts = [
+            plot.rowNumber ? `hàng ${plot.rowNumber}` : '',
+            plot.columnNumber ? `cột ${plot.columnNumber}` : '',
+          ].filter(Boolean);
+          return parts.length ? `${plot.plotCode}: ${parts.join(', ')}` : '';
+        })
+        .filter(Boolean);
+      const distinctStrengths: string[] = [];
+      if (options.length > 1) {
+        if (
+          option.plotCost === cheapest &&
+          options.filter((candidate) => candidate.plotCost === cheapest)
+            .length === 1
+        ) {
+          distinctStrengths.push('có tổng giá thấp nhất');
+        }
+        if (
+          option.totalAreaSqm === largestArea &&
+          options.filter((candidate) => candidate.totalAreaSqm === largestArea)
+            .length === 1
+        ) {
+          distinctStrengths.push('có tổng diện tích lớn nhất');
+        }
+        if (
+          option.accessSummary &&
+          options.some(
+            (candidate) => candidate.accessSummary !== option.accessSummary,
+          )
+        ) {
+          distinctStrengths.push(option.accessSummary.toLowerCase());
+        }
+      }
+      const analysisSummary = equivalentOptions.length
+        ? `Các dữ liệu quyết định chính hiện tương đương với ${equivalentOptions.map((candidate) => candidate.plotCodes.join(', ')).join('; ')} về giá, diện tích, khu vực, hướng và khả năng tiếp cận. ${positions.length ? `Khác biệt xác thực của phương án này là vị trí ${positions.join('; ')} trên sơ đồ nội khu.` : 'Chưa có thêm dữ liệu xác thực tạo ra khác biệt quyết định; nên xem các vị trí trên bản đồ trước khi xếp hạng.'} Điểm cần cân nhắc: ${tradeOffSummary}.`
+        : `Điểm phân biệt của phương án ${index + 1}: ${distinctStrengths.join('; ') || uniqueReasons.slice(0, 3).join('; ')}${positions.length ? `; vị trí ${positions.join('; ')} trên sơ đồ nội khu` : ''}. Điểm cần cân nhắc: ${tradeOffSummary}.`;
 
       return {
         ...option,
         reasons: uniqueReasons,
         tradeOffs: uniqueTradeOffs,
-        analysisSummary: `${position} vì ${fitSummary}. Điểm cần cân nhắc: ${tradeOffSummary}.`,
+        analysisSummary,
       };
     });
   }
@@ -911,7 +980,8 @@ export class PlotRecommendationService {
             ? 1
             : 0;
         const zoneNovelty = selected.some(
-          (item) => item.zoneName.toLowerCase() === candidate.zoneName.toLowerCase(),
+          (item) =>
+            item.zoneName.toLowerCase() === candidate.zoneName.toLowerCase(),
         )
           ? 0
           : 1;

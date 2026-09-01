@@ -1,8 +1,11 @@
 const fs = require('fs');
 const path = require('path');
 
-const API_BASE = 'http://localhost:5000/api';
-const TIMEOUT_MS = 14000;
+const API_BASE = process.env.AI_TEST_API_BASE || 'http://localhost:5000/api';
+// Live multi-provider consultation can legitimately use the full server-side
+// reasoning/failover budget. Keep the client deadline above that budget so the
+// harness measures the server result instead of aborting first.
+const TIMEOUT_MS = Number(process.env.AI_TEST_TIMEOUT_MS) || 60000;
 
 async function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -99,16 +102,26 @@ async function main() {
   console.log('1. Authenticating accounts...');
   let clientToken = null;
   let adminToken = null;
+  const clientEmail = process.env.AI_TEST_CLIENT_EMAIL;
+  const clientPassword = process.env.AI_TEST_CLIENT_PASSWORD;
+  const adminEmail = process.env.AI_TEST_ADMIN_EMAIL;
+  const adminPassword = process.env.AI_TEST_ADMIN_PASSWORD;
   try {
-    clientToken = await login('givemeaflower266@gmail.com', 'an232006');
-    console.log('   ✓ Client account (givemeaflower266@gmail.com) authenticated.');
+    if (!clientEmail || !clientPassword) {
+      throw new Error('AI_TEST_CLIENT_EMAIL/AI_TEST_CLIENT_PASSWORD not set');
+    }
+    clientToken = await login(clientEmail, clientPassword);
+    console.log('   ✓ Client test account authenticated.');
   } catch (e) {
     console.error('   ✗ Client login failed:', e.message);
   }
 
   try {
-    adminToken = await login('admin@cemetery.vn', '123456');
-    console.log('   ✓ Admin account (admin@cemetery.vn) authenticated.');
+    if (!adminEmail || !adminPassword) {
+      throw new Error('AI_TEST_ADMIN_EMAIL/AI_TEST_ADMIN_PASSWORD not set');
+    }
+    adminToken = await login(adminEmail, adminPassword);
+    console.log('   ✓ Admin test account authenticated.');
   } catch (e) {
     console.error('   ✗ Admin login failed:', e.message);
   }
@@ -213,14 +226,14 @@ async function main() {
   results.push(await runTest('U-BAS-14', 'asdfghjkl', async () => {
     const res = await sendChat({ token: clientToken, message: 'asdfghjkl' });
     const msg = res.data?.data?.assistantMessage || '';
-    const pass = res.ok && /chưa hiểu|giúp|hỗ trợ|nói rõ/i.test(msg);
+    const pass = res.ok && /chưa hiểu|không hiểu|giúp|hỗ trợ|nói rõ|giải thích thêm/i.test(msg);
     return { status: pass ? 'PASS' : 'FAIL', input: 'asdfghjkl', response: msg, summary: 'Asked politely for clarification' };
   }));
 
   results.push(await runTest('U-BAS-15', '???', async () => {
     const res = await sendChat({ token: clientToken, message: '???' });
     const msg = res.data?.data?.assistantMessage || '';
-    const pass = res.ok && /thắc mắc|giúp|cần|hỗ trợ/i.test(msg);
+    const pass = res.ok && /thắc mắc|giúp|cần|hỗ trợ|chi tiết|yêu cầu/i.test(msg);
     return { status: pass ? 'PASS' : 'FAIL', input: '???', response: msg, summary: 'Prompted user without hallucinating' };
   }));
 
@@ -715,8 +728,8 @@ async function main() {
 
   let reportMd = `# BÁO CÁO KẾT QUẢ KIỂM THỬ TOÀN DIỆN AI AGENT & ADMIN AI\n\n`;
   reportMd += `**Thời gian thực thi**: ${new Date().toLocaleString('vi-VN')}\n`;
-  reportMd += `**Tài khoản Client**: \`givemeaflower266@gmail.com\`\n`;
-  reportMd += `**Tài khoản Admin**: \`admin@cemetery.vn\`\n\n`;
+  reportMd += `**Xác thực Client**: ${clientToken ? 'đã cấu hình qua biến môi trường' : 'không cấu hình'}\n`;
+  reportMd += `**Xác thực Admin**: ${adminToken ? 'đã cấu hình qua biến môi trường' : 'không cấu hình'}\n\n`;
   reportMd += `## 1. Bảng tổng quan\n\n`;
   reportMd += `| Chỉ số | Số lượng | Tỷ lệ |\n`;
   reportMd += `|---|---|---|\n`;

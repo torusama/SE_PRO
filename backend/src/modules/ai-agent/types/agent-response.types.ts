@@ -135,6 +135,8 @@ export interface AgentRequirements {
   maxAreaSqm?: number;
   needAdjacent?: boolean;
   preferNearEntrance?: boolean;
+  /** User wishes that inventory cannot currently verify as hard filters. */
+  qualitativePreferences?: string[];
   /** Session-local plots to omit when the customer asks for different options. */
   excludePlotIds?: number[];
   birthDate?: string;

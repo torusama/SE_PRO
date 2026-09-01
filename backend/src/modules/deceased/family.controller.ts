@@ -46,6 +46,12 @@ export class FamilyController {
   ) {
     return this.families.plots(u, +id);
   }
+  @Get('families/:id/members') members(
+    @CurrentUser() u: AuthUser,
+    @Param('id') id: string,
+  ) {
+    return this.families.members(u, +id);
+  }
   @Post('families/:id/plots') addPlot(
     @CurrentUser() u: AuthUser,
     @Param('id') id: string,

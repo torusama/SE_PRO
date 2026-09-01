@@ -12,6 +12,7 @@ import { PLOT_PENDING_LOCK_MINUTES } from '../reservations/reservation-policy.co
 import { isRuntimeOperationalClaim } from './knowledge-safety.util';
 import { ManageKnowledgeDto } from './dto/manage-knowledge.dto';
 import { MultiProviderLlmService } from './multi-provider-llm.service';
+import { isSafeActiveUserMemory } from './user-memory-safety';
 
 interface PromptKnowledgeRow {
   id: number;
@@ -86,7 +87,8 @@ export class KnowledgeService {
     try {
       const userLimit = this.embeddings?.userRetrievalLimit() ?? 8;
       const globalLimit = this.embeddings?.globalRetrievalLimit() ?? 6;
-      const instructionContext = await this.getAssistantInstructionPromptContext();
+      const instructionContext =
+        await this.getAssistantInstructionPromptContext();
       let userRows: PromptKnowledgeRow[] = [];
       let globalRows: PromptKnowledgeRow[] = [];
 
@@ -138,7 +140,10 @@ export class KnowledgeService {
           // lexical fallback; user preferences still arrive separately through
           // getActiveUserPreferences(), so omit private RAG rows when semantic
           // relevance cannot be established.
-          globalRows = await this.lexicalGlobalKnowledge(queryText, globalLimit);
+          globalRows = await this.lexicalGlobalKnowledge(
+            queryText,
+            globalLimit,
+          );
           userRows = [];
         }
       } else {
@@ -395,7 +400,14 @@ export class KnowledgeService {
 
   async getActiveUserPreferences(userId: number, limit = 20) {
     const safeLimit = Math.max(1, Math.min(Math.floor(limit), 50));
-    return this.recentUserMemory(userId, safeLimit);
+    const rows = await this.recentUserMemory(
+      userId,
+      Math.min(safeLimit * 3, 50),
+    );
+    // Old rows may predate the strict memory contract. Ignore incompatible or
+    // one-off transactional values at read time without destructively deleting
+    // the user's audit/history records.
+    return rows.filter(isSafeActiveUserMemory).slice(0, safeLimit);
   }
 
   /** Clears customer-owned AI preferences and private conversation-correction lessons. Business records,
@@ -446,6 +458,14 @@ export class KnowledgeService {
       }
 
       const correctedContent = this.normalize(feedback.corrected_content);
+      // Keep the known-wrong original answer in feedback/audit only. Copying it
+      // into a prompt-facing title would reactivate untrusted wording.
+      const title = `Hiệu chỉnh phản hồi #${feedbackId}`;
+      if (isRuntimeOperationalClaim(correctedContent)) {
+        throw new BadRequestException(
+          'This correction attempts to change runtime operational behavior. Prices, discounts, statuses, permissions and transaction rules must be changed in the authoritative backend workflow.',
+        );
+      }
       const knowledgeKey = `verified-correction-${feedbackId}`;
       const memoryKey = `information_correction:${feedbackId}`;
       const contentHash = createHash('sha256')
@@ -468,9 +488,6 @@ export class KnowledgeService {
         [knowledgeKey],
       );
       const oldEntry = oldResult.rows[0] ?? null;
-      const title = (
-        feedback.original_content || `Correction ${feedbackId}`
-      ).slice(0, 200);
       const validationReason =
         feedback.reason || 'Approved by an authenticated administrator';
       const entryResult = await client.query<{ id: number }>(
@@ -622,10 +639,7 @@ export class KnowledgeService {
     return applied;
   }
 
-  async createAdminKnowledge(
-    adminId: number,
-    dto: ManageKnowledgeDto,
-  ) {
+  async createAdminKnowledge(adminId: number, dto: ManageKnowledgeDto) {
     const title = this.normalize(dto.title);
     const content = dto.content.trim().replace(/\r\n/g, '\n');
     const category = this.normalize(dto.category).toLowerCase();
@@ -645,17 +659,21 @@ export class KnowledgeService {
     // whether an ordinary admin-authored KB row is actually a cross-turn
     // conversational/behavior instruction. No keyword/category switch is
     // required from the frontend.
-    const instructionClassification = await this.classifyAdminAssistantInstruction({
-      title,
-      content,
-      category,
-      knowledgeType: dto.knowledgeType,
-    });
-    const assistantInstruction = instructionClassification.isInstruction === true;
+    const instructionClassification =
+      await this.classifyAdminAssistantInstruction({
+        title,
+        content,
+        category,
+        knowledgeType: dto.knowledgeType,
+      });
+    const assistantInstruction =
+      instructionClassification.isInstruction === true;
 
     const knowledgeKey = `admin-manual-${Date.now()}-${randomUUID().slice(0, 8)}`;
     const contentHash = createHash('sha256')
-      .update(`${dto.knowledgeType}|${category}|${title}|${content}`.toLowerCase())
+      .update(
+        `${dto.knowledgeType}|${category}|${title}|${content}`.toLowerCase(),
+      )
       .digest('hex');
 
     const created = await this.database.transaction(async (client) => {
@@ -753,12 +771,13 @@ export class KnowledgeService {
       );
     }
 
-    const instructionClassification = await this.classifyAdminAssistantInstruction({
-      title,
-      content,
-      category,
-      knowledgeType: dto.knowledgeType,
-    });
+    const instructionClassification =
+      await this.classifyAdminAssistantInstruction({
+        title,
+        content,
+        category,
+        knowledgeType: dto.knowledgeType,
+      });
 
     const updated = await this.database.transaction(async (client) => {
       const currentResult = await client.query<{
@@ -810,7 +829,9 @@ export class KnowledgeService {
         isActive: current.is_active,
       };
       const contentHash = createHash('sha256')
-        .update(`${dto.knowledgeType}|${category}|${title}|${content}`.toLowerCase())
+        .update(
+          `${dto.knowledgeType}|${category}|${title}|${content}`.toLowerCase(),
+        )
         .digest('hex');
 
       await client.query(
@@ -850,7 +871,10 @@ export class KnowledgeService {
         [id],
       );
       const versionNumber = Number(versionResult.rows[0]?.version ?? 1);
-      const versionName = `kb-${id}-v${versionNumber}-${Date.now()}`.slice(0, 50);
+      const versionName = `kb-${id}-v${versionNumber}-${Date.now()}`.slice(
+        0,
+        50,
+      );
       const newSnapshot = {
         category,
         title,
@@ -949,7 +973,10 @@ export class KnowledgeService {
         [id],
       );
       const versionNumber = Number(versionResult.rows[0]?.version ?? 1);
-      const versionName = `kb-${id}-v${versionNumber}-${Date.now()}`.slice(0, 50);
+      const versionName = `kb-${id}-v${versionNumber}-${Date.now()}`.slice(
+        0,
+        50,
+      );
       const reason = 'Quản trị viên đã xóa tri thức khỏi kho dùng chung.';
 
       await client.query(
@@ -996,7 +1023,7 @@ export class KnowledgeService {
     });
   }
 
-  listKnowledgeForReview(status = 'quarantined') {
+  listKnowledgeForReview(status = 'quarantined', sourceRole?: string) {
     const supported = [
       'all',
       'quarantined',
@@ -1006,6 +1033,12 @@ export class KnowledgeService {
     ];
     if (!supported.includes(status)) {
       throw new BadRequestException('Unsupported knowledge status filter');
+    }
+    if (
+      sourceRole !== undefined &&
+      !['customer', 'admin', 'system'].includes(sourceRole)
+    ) {
+      throw new BadRequestException('Unsupported knowledge source-role filter');
     }
     return this.database.query(
       `SELECT knowledge_entry_id AS "knowledgeEntryId", category, title, content,
@@ -1019,9 +1052,10 @@ export class KnowledgeService {
        FROM ai_knowledge_entries
        WHERE scope = 'global'
          AND ($1 = 'all' OR validation_status = $1)
+         AND ($2::text IS NULL OR source_role = $2)
        ORDER BY updated_at DESC
        LIMIT 200`,
-      [status],
+      [status, sourceRole ?? null],
     );
   }
 
@@ -1057,10 +1091,11 @@ export class KnowledgeService {
         knowledge_type: string;
         memory_key: string | null;
         validation_status: string;
+        validation_evidence: Record<string, unknown> | null;
         is_active: boolean;
       }>(
         `SELECT knowledge_entry_id, category, title, content, knowledge_type,
-                memory_key, validation_status, is_active
+                memory_key, validation_status, validation_evidence, is_active
          FROM ai_knowledge_entries
          WHERE knowledge_entry_id = $1 AND scope = 'global'
          FOR UPDATE`,
@@ -1089,7 +1124,10 @@ export class KnowledgeService {
         isActive: current.is_active,
       };
 
-      if (action === 'approve' && isRuntimeOperationalClaim(current.content)) {
+      if (
+        action === 'approve' &&
+        isRuntimeOperationalClaim(`${current.title}\n${current.content}`)
+      ) {
         throw new BadRequestException(
           'This proposal attempts to change runtime operational behavior. Chat knowledge approval cannot modify purchase-request timing, prices/discounts, roles, permissions, or other backend rules.',
         );
@@ -1135,6 +1173,7 @@ export class KnowledgeService {
           action === 'approve',
           reason,
           JSON.stringify({
+            ...(current.validation_evidence ?? {}),
             manuallyReviewed: true,
             reviewerUserId: adminId,
             reviewAction: action,

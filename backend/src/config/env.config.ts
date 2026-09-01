@@ -131,9 +131,11 @@ export const envConfig = () => ({
         process.env.OPENAI_SECONDARY_API_BASE_URL ??
         'https://api.openai.com/v1',
       model: process.env.OPENAI_SECONDARY_MODEL ?? 'gpt-4o',
-      timeoutMs: Number(process.env.OPENAI_SECONDARY_TIMEOUT_MS) || 7000,
+      // Large reasoning models need enough time to finish the final channel;
+      // short limits often return reasoning_content with an empty content field.
+      timeoutMs: Number(process.env.OPENAI_SECONDARY_TIMEOUT_MS) || 16000,
       totalTimeoutMs:
-        Number(process.env.OPENAI_SECONDARY_TOTAL_TIMEOUT_MS) || 12000,
+        Number(process.env.OPENAI_SECONDARY_TOTAL_TIMEOUT_MS) || 24000,
       maxAttempts: Number(process.env.OPENAI_SECONDARY_MAX_ATTEMPTS) || 10,
       keyCooldownMs:
         Number(process.env.OPENAI_SECONDARY_KEY_COOLDOWN_MS) || 60000,

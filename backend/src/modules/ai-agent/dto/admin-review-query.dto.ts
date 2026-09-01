@@ -2,8 +2,8 @@ import { IsIn, IsOptional } from 'class-validator';
 
 export class AdminFeedbackReviewQueryDto {
   @IsOptional()
-  @IsIn(['pending', 'approved', 'rejected'])
-  status?: 'pending' | 'approved' | 'rejected';
+  @IsIn(['pending', 'validating', 'approved', 'rejected', 'applied'])
+  status?: 'pending' | 'validating' | 'approved' | 'rejected' | 'applied';
 }
 
 export class AdminKnowledgeReviewQueryDto {

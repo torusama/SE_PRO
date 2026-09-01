@@ -159,10 +159,62 @@ describe('PlotRecommendationService', () => {
 
     expect(result.recommendations).toHaveLength(2);
     expect(result.recommendations[0].plotIds).toEqual([1]);
-    expect(result.recommendations.map((option) => option.plotIds[0])).toContain(3);
+    expect(result.recommendations.map((option) => option.plotIds[0])).toContain(
+      3,
+    );
     expect(
-      new Set(result.recommendations.flatMap((option) => option.directions)).size,
+      new Set(result.recommendations.flatMap((option) => option.directions))
+        .size,
     ).toBeGreaterThan(1);
+  });
+
+  it('explains equivalent plots honestly and identifies their distinct map positions', async () => {
+    const equivalentPlots = [1, 2, 3].map((index) => ({
+      ...plots[0],
+      id: index,
+      plotCode: `D-02-00${index}`,
+      zoneName: 'Khu D - Bình dân',
+      price: 19_000_000,
+      plotType: 'single',
+      areaSqm: 3,
+      direction: 'Nam',
+      rowNumber: '2',
+      columnNumber: String(index),
+      mapX: 200,
+      mapY: 200,
+    }));
+    const database = {
+      query: jest
+        .fn()
+        .mockResolvedValueOnce(equivalentPlots)
+        .mockResolvedValueOnce([]),
+    };
+    const service = new PlotRecommendationService(
+      database as unknown as DatabaseService,
+      new PlotAdjacencyService(),
+      new BaziRuleService(),
+    );
+
+    const result = await service.browseAvailablePlots({
+      numberOfPlots: 1,
+      recommendationCount: 3,
+    });
+
+    expect(result.recommendations).toHaveLength(3);
+    expect(
+      result.recommendations.every((option) =>
+        option.analysisSummary.includes('hiện tương đương'),
+      ),
+    ).toBe(true);
+    const summaryByCode = new Map(
+      result.recommendations.map((option) => [
+        option.plotCodes[0],
+        option.analysisSummary,
+      ]),
+    );
+    expect(summaryByCode.get('D-02-001')).toContain('cột 1');
+    expect(summaryByCode.get('D-02-002')).toContain('cột 2');
+    expect(summaryByCode.get('D-02-003')).toContain('cột 3');
   });
 
   it('returns exactly the number of alternatives explicitly requested', async () => {
@@ -345,5 +397,4 @@ describe('PlotRecommendationService', () => {
     );
     expect(services.map((item) => item.name)).not.toContain('Dịch vụ mai táng');
   });
-
 });

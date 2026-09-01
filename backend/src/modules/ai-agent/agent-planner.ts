@@ -131,6 +131,12 @@ export const AGENT_PLANNER_TOOL = {
           description:
             'True only when the customer semantically prioritizes proximity to an entrance/gate. Do not convert generic ease-of-travel wording into this field unless gate proximity is actually intended. Preserve only while the same consultation remains active.',
         },
+        qualitativePreferences: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'Clear customer wishes such as airy/cool, quiet, green or landscape quality that current inventory may not verify. Preserve them for an explicit limitation; never convert them into a hard zone/direction fact.',
+        },
         birthDate: {
           type: 'string',
           description:
@@ -429,6 +435,28 @@ function optionalString(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
+function validVietnameseZodiacSign(value: unknown) {
+  const candidate = optionalString(value);
+  if (!candidate) return undefined;
+  return [
+    'Tý',
+    'Sửu',
+    'Dần',
+    'Mão',
+    'Thìn',
+    'Tỵ',
+    'Ngọ',
+    'Mùi',
+    'Thân',
+    'Dậu',
+    'Tuất',
+    'Hợi',
+  ].find(
+    (sign) =>
+      sign.toLocaleLowerCase('vi-VN') === candidate.toLocaleLowerCase('vi-VN'),
+  );
+}
+
 function boundedProposalString(
   value: unknown,
   maxLength: number,
@@ -528,7 +556,10 @@ function parseMemoryProposals(value: unknown): MemoryProposal[] | undefined {
       effectiveTo: boundedProposalString(record.effectiveTo, 50),
       selectedOptionId: boundedProposalString(record.selectedOptionId, 100),
       rejectedOptionId: boundedProposalString(record.rejectedOptionId, 100),
-      recommendationRunId: boundedProposalString(record.recommendationRunId, 100),
+      recommendationRunId: boundedProposalString(
+        record.recommendationRunId,
+        100,
+      ),
       targetPlotCode: boundedProposalString(record.targetPlotCode, 80),
       proposedPrice:
         proposedPrice !== undefined && Number.isFinite(proposedPrice)
@@ -537,6 +568,65 @@ function parseMemoryProposals(value: unknown): MemoryProposal[] | undefined {
     });
   }
   return proposals.length ? proposals : undefined;
+}
+
+/**
+ * Reasoning-oriented OpenAI-compatible models do not always obey the
+ * "JSON-only" instruction perfectly. They may wrap the final object in a code
+ * fence or place a short note before it. Extract balanced top-level objects and
+ * accept only one that passes the complete planner contract; never treat free
+ * text or a JSON-looking reasoning fragment as an executable directive.
+ */
+export function parseAgentPlanFromContent(raw: string): AgentPlan | null {
+  const content = (raw ?? '')
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
+  const candidates: string[] = [];
+  let start = -1;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = 0; index < content.length; index += 1) {
+    const char = content[index];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+    if (char === '{') {
+      if (depth === 0) start = index;
+      depth += 1;
+      continue;
+    }
+    if (char === '}' && depth > 0) {
+      depth -= 1;
+      if (depth === 0 && start >= 0) {
+        candidates.push(content.slice(start, index + 1));
+        start = -1;
+      }
+    }
+  }
+
+  for (const candidate of candidates.reverse()) {
+    try {
+      return parseAgentPlan(candidate);
+    } catch {
+      // Keep looking for the final contract-compliant object.
+    }
+  }
+  return null;
 }
 
 export function parseAgentPlan(raw: string): AgentPlan {
@@ -601,6 +691,16 @@ export function parseAgentPlan(raw: string): AgentPlan {
       typeof parsed.preferNearEntrance === 'boolean'
         ? parsed.preferNearEntrance
         : undefined,
+    qualitativePreferences: Array.isArray(parsed.qualitativePreferences)
+      ? [
+          ...new Set(
+            parsed.qualitativePreferences
+              .filter((item): item is string => typeof item === 'string')
+              .map((item) => item.trim())
+              .filter(Boolean),
+          ),
+        ].slice(0, 6)
+      : undefined,
     birthDate: optionalString(parsed.birthDate),
     birthYear:
       optionalPositiveNumber(parsed.birthYear) !== undefined &&
@@ -616,7 +716,7 @@ export function parseAgentPlan(raw: string): AgentPlan {
       parsed.gender === 'other'
         ? parsed.gender
         : undefined,
-    zodiacSign: optionalString(parsed.zodiacSign),
+    zodiacSign: validVietnameseZodiacSign(parsed.zodiacSign),
     consultationGoal:
       parsed.consultationGoal === 'bazi_then_plots'
         ? 'bazi_then_plots'
@@ -759,15 +859,36 @@ export function recommendationDiscoveryQuestion(
     return '';
   }
   const explicitlyDelegated =
-    /(?:chọn|lấy|giới thiệu)\s+đại|lô\s+nào\s+cũng\s+được|bất\s+kỳ|không\s+cần\s+hỏi|tùy\s+(?:bạn|mình)|cứ\s+(?:chọn|tìm)|any plot|any option|whatever|up to you/i.test(
+    /(?:chọn|lấy|giới thiệu)\s+đại|chọn\s+giúp|lô\s+nào\s+cũng\s+được|bất\s+kỳ|không\s+cần\s+hỏi|tùy\s+(?:bạn|mình)|cứ\s+(?:chọn|tìm)|bạn\s+cứ\s+chọn|để\s+ai\s+chọn|any plot|any option|whatever|up to you/i.test(
       userMessage,
     );
   if (explicitlyDelegated) return '';
 
   const isEn = isEnglishText(userMessage);
-  const missingBudget = !plan.requirements.budgetMax;
-  const missingCount = !plan.requirements.numberOfPlots;
-  if (plan.requirements.plotType === 'family' && missingCount) {
+  const explicitlyHasNoBudgetYet =
+    /(?:chưa|không)\s+(?:chốt|xác định|rõ|có)\s+(?:được\s+)?(?:mức\s+)?ngân\s+sách|ngân\s+sách\s+(?:chưa\s+chốt|không\s+giới\s+hạn)|no\s+(?:fixed\s+)?budget/i.test(
+      userMessage,
+    );
+  const missingBudget =
+    !plan.requirements.budgetMax && !explicitlyHasNoBudgetYet;
+  const hasAcquisitionPreference = Boolean(
+    (plan.requirements.numberOfPlots ?? 0) > 1 ||
+    plan.requirements.needAdjacent === true ||
+    plan.requirements.plotType,
+  );
+  const hasSelectionPreference = Boolean(
+    plan.requirements.preferredZone ||
+    plan.requirements.preferredDirection ||
+    plan.requirements.minAreaSqm ||
+    plan.requirements.maxAreaSqm ||
+    plan.requirements.preferNearEntrance === true ||
+    plan.requirements.qualitativePreferences?.length,
+  );
+
+  if (
+    plan.requirements.plotType === 'family' &&
+    !plan.requirements.numberOfPlots
+  ) {
     if (isEn) {
       return missingBudget
         ? 'For family plots, what is your approximate budget, and would you prefer a dedicated family plot or a group of adjacent plots?'
@@ -777,20 +898,22 @@ export function recommendationDiscoveryQuestion(
       ? 'Với nhu cầu dòng tộc/gia đình, bạn dự trù tổng ngân sách khoảng bao nhiêu và muốn một lô gia đình chuyên dụng hay một nhóm bao nhiêu lô liền kề?'
       : 'Bạn muốn một lô gia đình chuyên dụng hay một nhóm bao nhiêu lô liền kề cho gia đình/dòng tộc?';
   }
-  if (missingBudget && missingCount) {
+
+  if (missingBudget && !hasSelectionPreference && !hasAcquisitionPreference) {
     return isEn
-      ? 'To help me recommend the best options, could you share your approximate budget and whether you need 1 plot or multiple adjacent plots?'
-      : 'Để mình giới thiệu đúng nhu cầu hơn, bạn dự trù tổng ngân sách khoảng bao nhiêu và gia đình cần 1 lô hay nhiều lô liền kề?';
+      ? 'Before I recommend plots, what is your approximate budget, do you need one plot or adjacent plots, and which matters most: zone, direction, area, or entrance access?'
+      : 'Để mình chọn lô đúng nhu cầu thay vì đưa ra các phương án chung chung, bạn cho mình biết ngân sách dự kiến, gia đình cần 1 lô hay nhiều lô liền kề, và ưu tiên quan trọng nhất là khu vực, hướng, diện tích hay gần cổng nhé?';
   }
   if (missingBudget) {
     return isEn
-      ? 'Could you share your maximum budget so I can filter the most suitable plots for you?'
-      : 'Bạn dự trù tổng ngân sách tối đa khoảng bao nhiêu để mình lọc chính xác hơn?';
+      ? 'What is your approximate maximum budget so I can filter these preferences accurately?'
+      : 'Mình đã ghi nhận ưu tiên của bạn. Bạn dự trù tổng ngân sách tối đa khoảng bao nhiêu để mình lọc chính xác hơn?';
   }
-  if (missingCount) {
+
+  if (!hasSelectionPreference && !hasAcquisitionPreference) {
     return isEn
-      ? 'Do you need 1 plot or multiple adjacent plots?'
-      : 'Gia đình mình cần 1 lô hay nhiều lô liền kề để mình chọn đúng phương án?';
+      ? 'I have the budget. Do you need one plot or adjacent plots, and which factor should decide the shortlist: zone, direction, area, or entrance access?'
+      : 'Mình đã có ngân sách. Gia đình cần 1 lô hay nhiều lô liền kề, và muốn ưu tiên khu vực, hướng, diện tích hay vị trí gần cổng để mình chọn đúng phương án?';
   }
   return '';
 }

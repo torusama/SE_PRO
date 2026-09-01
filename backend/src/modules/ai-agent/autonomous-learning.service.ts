@@ -11,6 +11,10 @@ import {
 } from './tools/agent-tool.types';
 import { KnowledgeEmbeddingService } from './knowledge-embedding.service';
 import { isRuntimeOperationalClaim } from './knowledge-safety.util';
+import {
+  hasDurableUserMemoryEvidence,
+  isUserMemoryContentCompatible,
+} from './user-memory-safety';
 
 interface NormalizedProposal extends MemoryProposal {
   category: string;
@@ -161,7 +165,13 @@ export class AutonomousLearningService {
         proposal.requestedScope !== 'user' ||
         !memoryKey ||
         !USER_MEMORY_KEY_SET.has(memoryKey) ||
-        !this.isSafePreference(proposal.content)
+        !this.isSafePreference(proposal.content) ||
+        !isUserMemoryContentCompatible(memoryKey, proposal.content) ||
+        !hasDurableUserMemoryEvidence(
+          memoryKey,
+          sourceMessage,
+          proposal.content,
+        )
       ) {
         return {
           status: 'rejected',
@@ -346,7 +356,8 @@ export class AutonomousLearningService {
       if (!sourceMessage) {
         return {
           status: 'rejected',
-          message: 'A stored source message is required for a conversation correction.',
+          message:
+            'A stored source message is required for a conversation correction.',
         };
       }
 
@@ -446,7 +457,8 @@ export class AutonomousLearningService {
 
       return {
         status: 'saved_user_memory',
-        message: 'The private conversation correction was saved for future context.',
+        message:
+          'The private conversation correction was saved for future context.',
         knowledgeEntryId: entryId,
       };
     });
@@ -941,6 +953,7 @@ export class AutonomousLearningService {
     if (
       ![
         'user_preference',
+        'conversation_correction',
         'business_rule',
         'faq',
         'information_correction',
@@ -966,10 +979,7 @@ export class AutonomousLearningService {
       effectiveTo: this.optionalText(proposal.effectiveTo, 50),
       selectedOptionId: this.optionalText(proposal.selectedOptionId, 100),
       rejectedOptionId: this.optionalText(proposal.rejectedOptionId, 100),
-      recommendationRunId: this.optionalText(
-        proposal.recommendationRunId,
-        100,
-      ),
+      recommendationRunId: this.optionalText(proposal.recommendationRunId, 100),
     };
   }
 

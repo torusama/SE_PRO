@@ -79,9 +79,9 @@ export class MultiProviderLlmService {
   }
 
   get model(): string {
-    if (this.openAiSecondary.isConfigured()) return this.openAiSecondary.model;
     if (this.openAiPrimary.isConfigured()) return this.openAiPrimary.model;
     if (this.nvidia.isConfigured()) return this.nvidia.model;
+    if (this.openAiSecondary.isConfigured()) return this.openAiSecondary.model;
     return 'none';
   }
 
@@ -167,16 +167,34 @@ export class MultiProviderLlmService {
       const remainingBudgetMs = deadline - Date.now();
       if (remainingBudgetMs <= 0) break;
 
-      const hasBackup = i + 1 < ordered.length;
-      const reserveForBackup =
-        hasBackup && remainingBudgetMs > 3_000
-          ? Math.min(1_500, remainingBudgetMs - 1_000)
-          : 0;
-      const currentBudget = Math.max(
+      // Divide the remaining wall-clock budget fairly across every route that
+      // has not yet run. Previously only 1.5s was reserved in total, so two slow
+      // providers could consume nearly the whole deadline and leave the 120B
+      // fallback with about one second—far too little to emit final text.
+      const remainingProviders = ordered.length - i;
+      const fairShareMs = Math.max(
         1_000,
-        remainingBudgetMs - reserveForBackup,
+        Math.floor(remainingBudgetMs / remainingProviders),
       );
-      const attemptTimeoutMs = Math.min(providerTimeoutMs, currentBudget);
+      const isExplicitlyPreferredFirstAttempt =
+        i === 0 && options.preferredProviderId === provider.id;
+      const backupCount = remainingProviders - 1;
+      // A preferred reasoning model is intentionally allowed a larger first
+      // slice while every backup still keeps a meaningful reserve. Equal
+      // splitting gave GPT-OSS 120B only ~15s of a 44s route, repeatedly
+      // aborting it before final text even though the total budget was ample.
+      const reservePerBackupMs = Math.min(
+        8_000,
+        Math.floor(remainingBudgetMs / (remainingProviders + 1)),
+      );
+      const preferredShareMs = Math.max(
+        1_000,
+        remainingBudgetMs - backupCount * reservePerBackupMs,
+      );
+      const attemptTimeoutMs = Math.min(
+        providerTimeoutMs,
+        isExplicitlyPreferredFirstAttempt ? preferredShareMs : fairShareMs,
+      );
 
       const attemptStartedAt = Date.now();
       try {
