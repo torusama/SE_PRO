@@ -194,9 +194,11 @@ const money = new Intl.NumberFormat("vi-VN", {
 });
 function formatDate(value?: string | null) {
   if (!value) return "—";
-  return new Intl.DateTimeFormat("vi-VN", { dateStyle: "medium" }).format(
-    new Date(value),
-  );
+  return new Intl.DateTimeFormat("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(new Date(value));
 }
 
 // Số ngày tối thiểu phải đặt trước so với ngày mong muốn thực hiện dịch vụ.

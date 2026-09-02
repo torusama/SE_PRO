@@ -162,8 +162,12 @@ function formatTime(value: string) {
   const diffDays = Math.floor(diffHours / 24);
   if (diffDays < 7) return `${diffDays} ngày trước`;
   return new Intl.DateTimeFormat("vi-VN", {
-    dateStyle: "short",
-    timeStyle: "short",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
   }).format(date);
 }
 
@@ -878,8 +882,12 @@ export default function NotificationManagementPage() {
                       <dt>Thời gian hẹn</dt>
                       <dd>
                         {new Intl.DateTimeFormat("vi-VN", {
-                          dateStyle: "short",
-                          timeStyle: "short",
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          hourCycle: "h23",
                         }).format(new Date(detail.data.scheduledAt))}
                       </dd>
                     </div>
@@ -978,7 +986,7 @@ export default function NotificationManagementPage() {
                     <p>{row.message}</p>
                     <small>
                       {row.recipientName ?? "Khách hàng"} ·{" "}
-                      {new Date(row.createdAt).toLocaleString("vi-VN")}
+                      {formatTime(row.createdAt)}
                     </small>
                   </article>
                 ))

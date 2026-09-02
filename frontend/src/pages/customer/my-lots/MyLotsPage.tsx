@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useSearchParams } from "react-router-dom";
-import { CalendarDays, Clock3, MapPin, UserRound } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, Clock3, MapPin, UserRound } from "lucide-react";
 import { api } from "@/lib/api";
 import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
 import NavyStarfield from "@/components/decor/NavyStarfield";
@@ -186,22 +186,240 @@ const money = new Intl.NumberFormat("vi-VN", {
   maximumFractionDigits: 0,
 });
 
+const DATE_FORMATTER = new Intl.DateTimeFormat("vi-VN", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+});
+
+const DATE_TIME_FORMATTER = new Intl.DateTimeFormat("vi-VN", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
 function formatDate(value?: string | null) {
   if (!value) return "Chưa cập nhật";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Chưa cập nhật";
-
-  return new Intl.DateTimeFormat("vi-VN", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(date);
+  return DATE_TIME_FORMATTER.format(date);
 }
 
 function formatAppointmentDate(value?: string | null) {
   if (!value) return "Chưa cập nhật";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Chưa cập nhật";
-  return new Intl.DateTimeFormat("vi-VN", { dateStyle: "short" }).format(date);
+  return DATE_FORMATTER.format(date);
+}
+
+function formatDateKey(date: Date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+function parseDateKey(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function formatDateKeyLabel(value: string) {
+  return DATE_FORMATTER.format(parseDateKey(value));
+}
+
+function AppointmentDateTimePicker({
+  value,
+  min,
+  max,
+  onChange,
+}: {
+  value: string;
+  min: string;
+  max: string;
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const selectedDate = value?.slice(0, 10) || "";
+  const selectedTime = value?.slice(11, 16) || min.slice(11, 16) || "09:00";
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const base = parseDateKey(selectedDate || min.slice(0, 10));
+    return new Date(base.getFullYear(), base.getMonth(), 1);
+  });
+
+  useEffect(() => {
+    const next = parseDateKey(selectedDate || min.slice(0, 10));
+    setCalendarMonth((current) => {
+      if (current.getFullYear() === next.getFullYear() && current.getMonth() === next.getMonth()) {
+        return current;
+      }
+      return new Date(next.getFullYear(), next.getMonth(), 1);
+    });
+  }, [selectedDate]);
+
+  const minDate = min.slice(0, 10);
+  const maxDate = max.slice(0, 10);
+  const minTime = min.slice(11, 16);
+  const maxTime = max.slice(11, 16);
+
+  const firstDay = new Date(
+    calendarMonth.getFullYear(),
+    calendarMonth.getMonth(),
+    1,
+  );
+  const mondayIndex = (firstDay.getDay() + 6) % 7;
+  const daysInMonth = new Date(
+    calendarMonth.getFullYear(),
+    calendarMonth.getMonth() + 1,
+    0,
+  ).getDate();
+  const calendarCells = Array.from({ length: Math.ceil((mondayIndex + daysInMonth) / 7) * 7 }, (_, index) => {
+    const dayNumber = index - mondayIndex + 1;
+    if (dayNumber < 1 || dayNumber > daysInMonth) return null;
+    return new Date(
+      calendarMonth.getFullYear(),
+      calendarMonth.getMonth(),
+      dayNumber,
+    );
+  });
+
+  const monthLabel = new Intl.DateTimeFormat("vi-VN", {
+    month: "long",
+    year: "numeric",
+  }).format(calendarMonth);
+
+  function isDateDisabled(date: Date) {
+    const key = formatDateKey(date);
+    return key < minDate || key > maxDate;
+  }
+
+  function chooseDate(date: Date) {
+    const nextDate = formatDateKey(date);
+    if (isDateDisabled(date)) return;
+
+    const lowerBound = nextDate === minDate ? minTime : "00:00";
+    const upperBound = nextDate === maxDate ? maxTime : "23:59";
+    let nextTime = selectedTime;
+    if (nextTime < lowerBound) nextTime = lowerBound;
+    if (nextTime > upperBound) nextTime = upperBound;
+
+    onChange(`${nextDate}T${nextTime}`);
+    setOpen(false);
+  }
+
+  function chooseTime(nextTime: string) {
+    if (!selectedDate) return;
+    const lowerBound = selectedDate === minDate ? minTime : "00:00";
+    const upperBound = selectedDate === maxDate ? maxTime : "23:59";
+    const safeTime = nextTime < lowerBound ? lowerBound : nextTime > upperBound ? upperBound : nextTime;
+    onChange(`${selectedDate}T${safeTime}`);
+  }
+
+  function moveMonth(delta: number) {
+    const next = new Date(
+      calendarMonth.getFullYear(),
+      calendarMonth.getMonth() + delta,
+      1,
+    );
+    const minMonth = new Date(Number(minDate.slice(0, 4)), Number(minDate.slice(5, 7)) - 1, 1);
+    const maxMonth = new Date(Number(maxDate.slice(0, 4)), Number(maxDate.slice(5, 7)) - 1, 1);
+    if (next < minMonth || next > maxMonth) return;
+    setCalendarMonth(next);
+  }
+
+  return (
+    <div className="lots-datetime-picker">
+      <div className="lots-datetime-fields">
+        <div className="lots-datetime-field-wrap">
+          <span>Ngày gặp mặt</span>
+          <button
+            type="button"
+            className={`lots-date-trigger${open ? " is-open" : ""}`}
+            onClick={() => setOpen((current) => !current)}
+            aria-expanded={open}
+            aria-haspopup="dialog"
+          >
+            <CalendarDays size={17} strokeWidth={1.8} aria-hidden="true" />
+            <strong>{selectedDate ? formatDateKeyLabel(selectedDate) : "Chọn ngày gặp mặt"}</strong>
+          </button>
+          {open ? (
+            <div className="lots-calendar-popover" role="dialog" aria-label="Chọn ngày gặp mặt">
+              <div className="lots-calendar-head">
+                <strong>{monthLabel}</strong>
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => moveMonth(-1)}
+                    aria-label="Tháng trước"
+                    disabled={
+                      calendarMonth.getTime() <=
+                      new Date(Number(minDate.slice(0, 4)), Number(minDate.slice(5, 7)) - 1, 1).getTime()
+                    }
+                  >
+                    <ChevronLeft size={17} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveMonth(1)}
+                    aria-label="Tháng sau"
+                    disabled={
+                      calendarMonth.getTime() >=
+                      new Date(Number(maxDate.slice(0, 4)), Number(maxDate.slice(5, 7)) - 1, 1).getTime()
+                    }
+                  >
+                    <ChevronRight size={17} />
+                  </button>
+                </div>
+              </div>
+              <div className="lots-calendar-weekdays">
+                {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map((day) => <span key={day}>{day}</span>)}
+              </div>
+              <div className="lots-calendar-grid">
+                {calendarCells.map((date, index) =>
+                  date ? (
+                    <button
+                      key={formatDateKey(date)}
+                      type="button"
+                      className={`${formatDateKey(date) === selectedDate ? "is-selected " : ""}${formatDateKey(date) === minDate || formatDateKey(date) === maxDate ? "is-bound " : ""}`.trim()}
+                      disabled={isDateDisabled(date)}
+                      onClick={() => chooseDate(date)}
+                    >
+                      {date.getDate()}
+                    </button>
+                  ) : (
+                    <span key={`empty-${index}`} aria-hidden="true" />
+                  ),
+                )}
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="lots-datetime-field-wrap">
+          <span>Giờ gặp mặt</span>
+          <label className="lots-time-field">
+            <Clock3 size={17} strokeWidth={1.8} aria-hidden="true" />
+            <input
+              type="time"
+              value={selectedDate ? selectedTime : ""}
+              min={selectedDate === minDate ? minTime : undefined}
+              max={selectedDate === maxDate ? maxTime : undefined}
+              step="60"
+              onChange={(event) => chooseTime(event.target.value)}
+              aria-label="Giờ gặp mặt"
+            />
+          </label>
+        </div>
+      </div>
+      <small className="lots-datetime-helper">
+        Có thể chọn từ <strong>{formatDateKeyLabel(minDate)} {minTime}</strong> đến <strong>{formatDateKeyLabel(maxDate)} {maxTime}</strong>.
+      </small>
+    </div>
+  );
 }
 
 function toVietnamDateTimeInput(value: string) {
@@ -955,36 +1173,7 @@ export default function MyLotsPage() {
                       </div>
                     </div>
 
-                    {cancellation ? (
-                      <div
-                        className={`lots-cancellation-summary is-${cancellation.status}`}
-                      >
-                        <div className="lots-cancellation-summary-header">
-                          <div className="lots-cancellation-summary-title">
-                            <strong>Trạng thái yêu cầu hủy:</strong>
-                            <StatusPill status={cancellation.status} />
-                          </div>
-                          <small>
-                            Gửi lúc {formatDate(cancellation.requestedAt)}
-                          </small>
-                        </div>
-                        <p className="lots-cancellation-summary-reason">
-                          <span>Lý do:</span> {cancellation.reason}
-                        </p>
-                        {cancellation.adminNote ? (
-                          <p className="lots-cancellation-summary-admin">
-                            <span>Phản hồi từ admin:</span>{" "}
-                            {cancellation.adminNote}
-                          </p>
-                        ) : null}
-                        {cancellation.status === "pending" ? (
-                          <small className="lots-cancellation-summary-help">
-                            Admin đang xem xét yêu cầu hủy. Các bước lịch hẹn và
-                            hợp đồng tạm thời được khóa lại.
-                          </small>
-                        ) : null}
-                      </div>
-                    ) : null}
+                    {cancellation ? <CancellationSummary cancellation={cancellation} /> : null}
 
                     {appointment && !cancellationBlocksWorkflow ? (
                       <div className="lots-next-step lots-appointment-card">
@@ -1058,36 +1247,19 @@ export default function MyLotsPage() {
 
                           {appointment.customerStatus === "pending" ? (
                             <>
-                              <label className="lots-appointment-picker">
-                                <span>Ngày và giờ</span>
-                                <input
-                                  type="datetime-local"
-                                  step="60"
+                              <div className="lots-appointment-picker">
+                                <AppointmentDateTimePicker
+                                  value={selectedAppointmentTimes[appointment.id] ?? ""}
                                   min={appointmentTimeBounds(appointment).min}
                                   max={appointmentTimeBounds(appointment).max}
-                                  value={
-                                    selectedAppointmentTimes[appointment.id] ??
-                                    ""
-                                  }
-                                  onChange={(event) =>
+                                  onChange={(nextValue) =>
                                     setSelectedAppointmentTimes((current) => ({
                                       ...current,
-                                      [appointment.id]: event.target.value,
+                                      [appointment.id]: nextValue,
                                     }))
                                   }
                                 />
-                                <small>
-                                  Có thể chọn trong khoảng{" "}
-                                  {formatAppointmentDate(
-                                    appointment.scheduledAt,
-                                  )}{" "}
-                                  –{" "}
-                                  {formatAppointmentDate(
-                                    appointment.scheduledEndAt,
-                                  )}
-                                  .
-                                </small>
-                              </label>
+                              </div>
                               <div className="lots-appointment-actions">
                                 <button
                                   type="button"
@@ -1332,34 +1504,23 @@ export default function MyLotsPage() {
 
                           {appointment.customerStatus === "pending" ? (
                             <>
-                              <label className="lots-appointment-picker">
-                                <span>Ngày và giờ</span>
-                                <input
-                                  type="datetime-local"
-                                  step="60"
+                              <div className="lots-appointment-picker">
+                                <AppointmentDateTimePicker
+                                  value={
+                                    selectedTransferAppointmentTimes[transfer.id] ?? ""
+                                  }
                                   min={minTime}
                                   max={rangeEnd}
-                                  value={
-                                    selectedTransferAppointmentTimes[
-                                      transfer.id
-                                    ] ?? ""
-                                  }
-                                  onChange={(event) =>
+                                  onChange={(nextValue) =>
                                     setSelectedTransferAppointmentTimes(
                                       (current) => ({
                                         ...current,
-                                        [transfer.id]: event.target.value,
+                                        [transfer.id]: nextValue,
                                       }),
                                     )
                                   }
                                 />
-                                <small>
-                                  Có thể chọn trong khoảng{" "}
-                                  {formatAppointmentDate(appointment.rangeStart)}{" "}
-                                  –{" "}
-                                  {formatAppointmentDate(appointment.rangeEnd)}.
-                                </small>
-                              </label>
+                              </div>
                               <div className="lots-appointment-actions">
                                 <button
                                   type="button"
@@ -1774,6 +1935,53 @@ function LoadingList({ columns = 1 }: { columns?: 1 | 2 }) {
   );
 }
 
+function CancellationSummary({
+  cancellation,
+}: {
+  cancellation: NonNullable<Reservation["cancellation"]>;
+}) {
+  return (
+    <section
+      className={`lots-cancellation-panel is-${cancellation.status}`}
+      aria-label="Chi tiết yêu cầu hủy"
+    >
+      <div className="lots-cancellation-panel-accent" aria-hidden="true" />
+      <div className="lots-cancellation-panel-content">
+        <div className="lots-cancellation-panel-head">
+          <div>
+            <span className="lots-cancellation-panel-eyebrow">Yêu cầu hủy</span>
+            <h4>Trạng thái yêu cầu hủy</h4>
+          </div>
+          <StatusPill status={cancellation.status} />
+        </div>
+
+        <div className="lots-cancellation-panel-grid">
+          <div className="lots-cancellation-meta">
+            <span>Gửi lúc</span>
+            <strong>{formatDate(cancellation.requestedAt)}</strong>
+          </div>
+          <div className="lots-cancellation-reason">
+            <span>Lý do</span>
+            <p>{cancellation.reason}</p>
+          </div>
+          {cancellation.adminNote ? (
+            <div className="lots-cancellation-reason">
+              <span>Phản hồi từ admin</span>
+              <p>{cancellation.adminNote}</p>
+            </div>
+          ) : null}
+        </div>
+
+        {cancellation.status === "pending" ? (
+          <div className="lots-cancellation-panel-help">
+            Admin đang xem xét yêu cầu hủy. Lịch hẹn và các bước tiếp theo tạm thời được khóa.
+          </div>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
 const pageStyles = `
   .lots-appointment-card {
     display: grid;
@@ -1889,39 +2097,243 @@ const pageStyles = `
   }
 
   .lots-appointment-picker {
+    margin-top: 20px;
+  }
+
+  .lots-datetime-picker {
     display: grid;
-    gap: 8px;
-    margin-top: 18px;
+    gap: 12px;
   }
 
-  .lots-appointment-picker input {
+  .lots-datetime-fields {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(160px, 0.85fr);
+    gap: 14px;
+    align-items: start;
+  }
+
+  .lots-datetime-field-wrap {
+    position: relative;
+    display: grid;
+    gap: 7px;
+    min-width: 0;
+  }
+
+  .lots-datetime-field-wrap > span {
+    color: #7f9890;
+    font-size: 10px;
+    font-weight: 750;
+    letter-spacing: 0.075em;
+    text-transform: uppercase;
+  }
+
+  .lots-date-trigger,
+  .lots-time-field {
     width: 100%;
-    min-height: 44px;
-    border: 1px solid rgba(105, 199, 173, 0.24);
-    border-radius: 9px;
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid rgba(105, 199, 173, 0.22);
+    border-radius: 11px;
     outline: none;
-    background: rgba(255, 255, 255, 0.045);
-    color: #f0f7f5;
-    padding: 10px 12px;
-    font: inherit;
+    background: linear-gradient(145deg, rgba(74, 162, 141, 0.12), rgba(20, 48, 68, 0.22));
+    color: #edf8f4;
+    padding: 10px 13px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+  }
+
+  .lots-date-trigger:hover,
+  .lots-time-field:hover {
+    transform: translateY(-1px);
+    border-color: rgba(105, 224, 197, 0.48);
+    background: linear-gradient(145deg, rgba(74, 162, 141, 0.18), rgba(20, 55, 75, 0.28));
+  }
+
+  .lots-date-trigger:focus-visible,
+  .lots-time-field:focus-within,
+  .lots-date-trigger.is-open {
+    border-color: rgba(105, 224, 197, 0.62);
+    box-shadow: 0 0 0 3px rgba(39, 202, 173, 0.1), 0 10px 26px rgba(0, 0, 0, 0.15);
+  }
+
+  .lots-date-trigger svg,
+  .lots-time-field svg {
+    flex: 0 0 auto;
+    color: #59cbb2;
+  }
+
+  .lots-date-trigger strong {
+    min-width: 0;
+    color: #eff9f6;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.3;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.015em;
+  }
+
+  .lots-time-field input {
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    outline: none;
+    background: transparent;
+    color: #eff9f6;
+    padding: 0;
+    font: 700 14px/1.3 "Be Vietnam Pro", "Inter", system-ui, sans-serif;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.025em;
     color-scheme: dark;
-    transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
   }
 
-  .lots-appointment-picker input:hover {
-    border-color: rgba(105, 199, 173, 0.42);
-    background: rgba(255, 255, 255, 0.06);
+  .lots-time-field input::-webkit-calendar-picker-indicator {
+    opacity: 0.7;
+    filter: none;
   }
 
-  .lots-appointment-picker input:focus {
-    border-color: rgba(0, 229, 196, 0.52);
-    box-shadow: 0 0 0 3px rgba(0, 229, 196, 0.08);
+  .lots-calendar-popover {
+    position: absolute;
+    z-index: 30;
+    top: calc(100% + 9px);
+    left: 0;
+    width: min(330px, 90vw);
+    padding: 14px;
+    border: 1px solid rgba(105, 199, 173, 0.22);
+    border-radius: 14px;
+    background: linear-gradient(165deg, rgba(15, 38, 52, 0.98), rgba(5, 19, 31, 0.98));
+    box-shadow: 0 20px 55px rgba(0, 0, 0, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(16px);
+    animation: lots-calendar-pop 150ms ease-out;
   }
 
-  .lots-appointment-picker small {
-    color: #758b84;
+  @keyframes lots-calendar-pop {
+    from { opacity: 0; transform: translateY(-4px) scale(0.985); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .lots-calendar-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .lots-calendar-head > strong {
+    color: #dff7f0;
+    font-size: 13px;
+    font-weight: 750;
+    text-transform: capitalize;
+  }
+
+  .lots-calendar-head > div {
+    display: flex;
+    gap: 5px;
+  }
+
+  .lots-calendar-head button {
+    width: 31px;
+    height: 31px;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(105, 199, 173, 0.15);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.035);
+    color: #9ec7bb;
+    cursor: pointer;
+    transition: background 150ms ease, border-color 150ms ease, color 150ms ease, transform 150ms ease;
+  }
+
+  .lots-calendar-head button:hover:not(:disabled) {
+    transform: translateY(-1px);
+    border-color: rgba(105, 199, 173, 0.38);
+    background: rgba(105, 199, 173, 0.09);
+    color: #e7fbf5;
+  }
+
+  .lots-calendar-head button:disabled {
+    opacity: 0.28;
+    cursor: default;
+  }
+
+  .lots-calendar-weekdays,
+  .lots-calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 5px;
+  }
+
+  .lots-calendar-weekdays {
+    margin-bottom: 5px;
+  }
+
+  .lots-calendar-weekdays span {
+    padding: 4px 0;
+    color: #6f8b83;
+    font-size: 9px;
+    font-weight: 750;
+    text-align: center;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .lots-calendar-grid button,
+  .lots-calendar-grid > span {
+    min-height: 35px;
+    display: grid;
+    place-items: center;
+    border-radius: 8px;
+    font-family: "Be Vietnam Pro", "Inter", system-ui, sans-serif;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .lots-calendar-grid button {
+    border: 1px solid transparent;
+    background: transparent;
+    color: #cfe4df;
+    cursor: pointer;
+    transition: background 130ms ease, color 130ms ease, transform 130ms ease, border-color 130ms ease;
+  }
+
+  .lots-calendar-grid button:hover:not(:disabled) {
+    transform: translateY(-1px);
+    border-color: rgba(105, 224, 197, 0.24);
+    background: rgba(105, 199, 173, 0.1);
+    color: #f4fffc;
+  }
+
+  .lots-calendar-grid button.is-selected {
+    border-color: rgba(95, 229, 199, 0.68);
+    background: linear-gradient(145deg, rgba(61, 192, 164, 0.34), rgba(32, 114, 101, 0.36));
+    color: #ffffff;
+    box-shadow: 0 5px 15px rgba(28, 192, 164, 0.12);
+  }
+
+  .lots-calendar-grid button.is-bound:not(.is-selected) {
+    border-color: rgba(105, 199, 173, 0.14);
+    background: rgba(105, 199, 173, 0.04);
+  }
+
+  .lots-calendar-grid button:disabled {
+    color: #50625e;
+    cursor: default;
+  }
+
+  .lots-datetime-helper {
+    display: block;
+    color: #748c85;
     font-size: 11px;
-    line-height: 1.5;
+    line-height: 1.55;
+  }
+
+  .lots-datetime-helper strong {
+    color: #9ccdc0;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
   }
 
   .lots-selected-time {
@@ -3134,6 +3546,130 @@ const pageStyles = `
     }
   }
 
+
+  .lots-cancellation-panel {
+    position: relative;
+    display: block;
+    margin: 0 18px 18px;
+    overflow: hidden;
+    border: 1px solid rgba(230, 185, 92, 0.18);
+    border-radius: 13px;
+    background: linear-gradient(150deg, rgba(35, 39, 49, 0.72), rgba(13, 24, 33, 0.82));
+  }
+
+  .lots-cancellation-panel-accent {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 3px;
+    background: linear-gradient(180deg, #d8b563, #9c7440);
+  }
+
+  .lots-cancellation-panel.is-approved {
+    border-color: rgba(105, 199, 173, 0.2);
+    background: linear-gradient(150deg, rgba(18, 46, 45, 0.54), rgba(10, 24, 30, 0.82));
+  }
+
+  .lots-cancellation-panel.is-approved .lots-cancellation-panel-accent {
+    background: linear-gradient(180deg, #69c7ad, #2d8a78);
+  }
+
+  .lots-cancellation-panel.is-rejected {
+    border-color: rgba(232, 136, 136, 0.2);
+    background: linear-gradient(150deg, rgba(55, 27, 34, 0.5), rgba(22, 16, 23, 0.82));
+  }
+
+  .lots-cancellation-panel.is-rejected .lots-cancellation-panel-accent {
+    background: linear-gradient(180deg, #e88888, #9f4f5e);
+  }
+
+  .lots-cancellation-panel-content {
+    padding: 16px 18px 17px 21px;
+    font-family: "Be Vietnam Pro", "Inter", system-ui, sans-serif;
+  }
+
+  .lots-cancellation-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+  }
+
+  .lots-cancellation-panel-head > div {
+    display: grid;
+    gap: 3px;
+  }
+
+  .lots-cancellation-panel-eyebrow,
+  .lots-cancellation-meta > span,
+  .lots-cancellation-reason > span {
+    color: #84968f;
+    font-size: 10px;
+    font-weight: 750;
+    letter-spacing: 0.075em;
+    text-transform: uppercase;
+  }
+
+  .lots-cancellation-panel-head h4 {
+    margin: 0;
+    color: #edf5f2;
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  .lots-cancellation-panel-grid {
+    display: grid;
+    grid-template-columns: minmax(140px, 0.45fr) minmax(0, 1fr) minmax(0, 1fr);
+    gap: 12px;
+    margin-top: 14px;
+  }
+
+  .lots-cancellation-meta,
+  .lots-cancellation-reason {
+    min-width: 0;
+    padding: 10px 12px;
+    border: 1px solid rgba(96, 130, 189, 0.11);
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.025);
+  }
+
+  .lots-cancellation-meta {
+    display: grid;
+    align-content: start;
+    gap: 5px;
+  }
+
+  .lots-cancellation-meta strong {
+    color: #dbe8e4;
+    font-size: 12px;
+    font-weight: 650;
+    line-height: 1.45;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .lots-cancellation-reason p {
+    margin: 5px 0 0;
+    color: #cad8d4;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.55;
+    overflow-wrap: anywhere;
+  }
+
+  .lots-cancellation-panel-help {
+    margin-top: 11px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: rgba(230, 185, 92, 0.06);
+    color: #a89978;
+    font-size: 11px;
+    line-height: 1.55;
+  }
+
+  .lots-cancellation-panel.is-approved .lots-cancellation-panel-help {
+    background: rgba(105, 199, 173, 0.05);
+    color: #83b8aa;
+  }
+
   @media (max-width: 900px) {
     .lots-appointment-card {
       grid-template-columns: 1fr;
@@ -3142,6 +3678,14 @@ const pageStyles = `
     .lots-appointment-booking {
       border-top: 1px solid rgba(96, 130, 189, 0.11);
       border-left: 0;
+    }
+
+    .lots-datetime-fields {
+      grid-template-columns: 1fr;
+    }
+
+    .lots-cancellation-panel-grid {
+      grid-template-columns: 1fr;
     }
   }
 

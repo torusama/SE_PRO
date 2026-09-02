@@ -102,8 +102,15 @@ function formatDate(value?: string | null, withTime = false) {
   return new Intl.DateTimeFormat(
     "vi-VN",
     withTime
-      ? { dateStyle: "medium", timeStyle: "short" }
-      : { dateStyle: "medium" },
+      ? {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          hourCycle: "h23",
+        }
+      : { day: "2-digit", month: "2-digit", year: "numeric" },
   ).format(new Date(value));
 }
 

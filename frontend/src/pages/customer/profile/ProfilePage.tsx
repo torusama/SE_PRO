@@ -145,7 +145,11 @@ function isDobValid(value: string): boolean {
 
 function formatDate(d: string | null | undefined) {
   if (!d) return "—";
-  return new Date(d).toLocaleDateString("vi-VN");
+  return new Date(d).toLocaleDateString("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
 }
 
 function formatRelativeTime(dateStr: string | null): string {

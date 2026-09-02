@@ -137,15 +137,21 @@ const money = new Intl.NumberFormat("vi-VN", {
 const dateTime = (value?: string) =>
   value
     ? new Intl.DateTimeFormat("vi-VN", {
-        dateStyle: "short",
-        timeStyle: "short",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
       }).format(new Date(value))
     : "—";
 const dateOnly = (value?: string) =>
   value
-    ? new Intl.DateTimeFormat("vi-VN", { dateStyle: "short" }).format(
-        new Date(value),
-      )
+    ? new Intl.DateTimeFormat("vi-VN", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      }).format(new Date(value))
     : "—";
 const statusLabels: Record<string, string> = {
   draft: "Nháp",
