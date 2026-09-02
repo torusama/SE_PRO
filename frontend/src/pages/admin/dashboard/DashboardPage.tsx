@@ -3,7 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { ROUTES } from "@/constants/routes";
 import { api } from "@/lib/api";
 import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
+import { actionLabel, entityLabel } from "@/lib/adminAuditLabels";
 import "../AdminCorePages.css";
+import { DashboardKpiCards } from "@/components/admin/dashboard/DashboardKpiCards";
 
 type Summary = {
   totalPlots: number;
@@ -65,7 +67,15 @@ export default function DashboardPage() {
   }, [loadData]);
 
   useRealtimeRefresh(
-    ["dashboard", "audit", "plots", "reservations", "contracts", "services", "transfers"],
+    [
+      "dashboard",
+      "audit",
+      "plots",
+      "reservations",
+      "contracts",
+      "services",
+      "transfers",
+    ],
     () => loadData(true),
   );
 
@@ -81,7 +91,9 @@ export default function DashboardPage() {
   );
 
   if (loading) {
-    return <div className="admin-core-state">Đang tải dữ liệu tổng quan...</div>;
+    return (
+      <div className="admin-core-state">Đang tải dữ liệu tổng quan...</div>
+    );
   }
 
   const maxRevenue = Math.max(
@@ -95,12 +107,20 @@ export default function DashboardPage() {
         <div>
           <h1>Tổng quan vận hành</h1>
           <p className="admin-page-description">
-            Theo dõi lô đất, hợp đồng, yêu cầu và khoản thanh toán trong hệ thống.
+            Theo dõi lô đất, hợp đồng, yêu cầu và khoản thanh toán trong hệ
+            thống.
           </p>
         </div>
       </header>
 
       {error && <div className="admin-core-alert">{error}</div>}
+
+      <DashboardKpiCards
+        totalPlots={summary?.totalPlots ?? 0}
+        pendingRequests={summary?.pendingRequests ?? 0}
+        totalContracts={summary?.totalContracts ?? 0}
+        totalPaid={`${money.format(summary?.totalPaid ?? 0)} đ`}
+      />
 
       <div className="admin-core-split">
         <section className="admin-core-panel">
@@ -113,7 +133,10 @@ export default function DashboardPage() {
           {!revenue.length ? (
             <p className="admin-core-empty">Chưa có dữ liệu doanh thu.</p>
           ) : (
-            <div className="admin-revenue-chart" aria-label="Doanh thu theo tháng">
+            <div
+              className="admin-revenue-chart"
+              aria-label="Doanh thu theo tháng"
+            >
               {revenue.slice(-6).map((item) => (
                 <div className="admin-revenue-chart__item" key={item.period}>
                   <div className="admin-revenue-chart__track">
@@ -177,9 +200,17 @@ export default function DashboardPage() {
                 {activity.map((item) => (
                   <tr key={item.id}>
                     <td>{new Date(item.createdAt).toLocaleString("vi-VN")}</td>
-                    <td>{item.action}</td>
-                    <td>{item.entityType}</td>
-                    <td>{item.actorName}</td>
+                    <td>
+                      <strong className="admin-activity-action">
+                        {actionLabel(item.action)}
+                      </strong>
+                    </td>
+                    <td>
+                      <span className="admin-activity-entity">
+                        {entityLabel(item.entityType)}
+                      </span>
+                    </td>
+                    <td>{item.actorName || "Quản trị viên"}</td>
                   </tr>
                 ))}
               </tbody>

@@ -10,134 +10,158 @@
 //   GET   /admin/reminders?type=&upcomingDays=&search=   -> AdminReminder[]
 //   POST  /admin/reminders/:id/notify-now                -> gửi nhắc ngay
 // Nếu backend đặt tên khác, chỉ cần sửa 2 dòng gọi api bên dưới.
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { api } from '@/lib/api'
-import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
-import './ReminderManagementPage.css'
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { api } from "@/lib/api";
+import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
+import "./ReminderManagementPage.css";
 
-type ReminderType = 'death_anniversary' | 'memorial' | 'maintenance' | 'other'
+type ReminderType = "death_anniversary" | "memorial" | "maintenance" | "other";
 
 interface AdminReminder {
-  id: number
-  title: string
-  reminderType: ReminderType
-  isRecurring: boolean
-  notifyDaysBefore: number
-  isActive: boolean
-  nextDate: string | null
-  daysUntil: number | null
-  customerName: string
-  customerPhone?: string | null
-  plotCode?: string | null
-  zoneName?: string | null
-  lastNotifiedAt?: string | null
+  id: number;
+  title: string;
+  reminderType: ReminderType;
+  isRecurring: boolean;
+  notifyDaysBefore: number;
+  isActive: boolean;
+  nextDate: string | null;
+  daysUntil: number | null;
+  customerName: string;
+  customerPhone?: string | null;
+  plotCode?: string | null;
+  zoneName?: string | null;
+  lastNotifiedAt?: string | null;
 }
 
 const TYPE_META: Record<ReminderType, { label: string }> = {
-  death_anniversary: { label: 'Ngày giỗ' },
-  memorial: { label: 'Tưởng niệm' },
-  maintenance: { label: 'Chăm sóc mộ' },
-  other: { label: 'Khác' },
-}
+  death_anniversary: { label: "Ngày giỗ" },
+  memorial: { label: "Tưởng niệm" },
+  maintenance: { label: "Chăm sóc mộ" },
+  other: { label: "Khác" },
+};
 
-const TYPE_FILTERS: { value: ReminderType | 'all'; label: string }[] = [
-  { value: 'all', label: 'Tất cả loại' },
-  { value: 'death_anniversary', label: 'Ngày giỗ' },
-  { value: 'memorial', label: 'Tưởng niệm' },
-  { value: 'maintenance', label: 'Chăm sóc mộ' },
-  { value: 'other', label: 'Khác' },
-]
+const TYPE_FILTERS: { value: ReminderType | "all"; label: string }[] = [
+  { value: "all", label: "Tất cả loại" },
+  { value: "death_anniversary", label: "Ngày giỗ" },
+  { value: "memorial", label: "Tưởng niệm" },
+  { value: "maintenance", label: "Chăm sóc mộ" },
+  { value: "other", label: "Khác" },
+];
 
 function getErrorMessage(error: unknown) {
-  if (typeof error === 'object' && error !== null && 'response' in error) {
-    const response = (error as { response?: { data?: { message?: string } } }).response
-    if (response?.data?.message) return response.data.message
+  if (typeof error === "object" && error !== null && "response" in error) {
+    const response = (error as { response?: { data?: { message?: string } } })
+      .response;
+    if (response?.data?.message) return response.data.message;
   }
-  return 'Không tải được danh sách nhắc lịch. Vui lòng thử lại.'
+  return "Không tải được danh sách nhắc lịch. Vui lòng thử lại.";
 }
 
 function formatDate(value?: string | null) {
-  if (!value) return '—'
-  return new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(value))
+  if (!value) return "—";
+  return new Intl.DateTimeFormat("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(new Date(value));
 }
 
 function dayBadge(r: AdminReminder) {
-  if (r.daysUntil === null) return { cls: 'past', text: 'Không lặp lại' }
-  if (r.daysUntil === 0) return { cls: 'today', text: 'Hôm nay' }
-  if (r.daysUntil <= r.notifyDaysBefore) return { cls: 'soon', text: `Còn ${r.daysUntil} ngày` }
-  return { cls: 'far', text: `Còn ${r.daysUntil} ngày` }
+  if (r.daysUntil === null) return { cls: "past", text: "Không lặp lại" };
+  if (r.daysUntil === 0) return { cls: "today", text: "Hôm nay" };
+  if (r.daysUntil <= r.notifyDaysBefore)
+    return { cls: "soon", text: `Còn ${r.daysUntil} ngày` };
+  return { cls: "far", text: `Còn ${r.daysUntil} ngày` };
 }
 
 export default function ReminderManagementPage() {
-  const [reminders, setReminders] = useState<AdminReminder[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const [reminders, setReminders] = useState<AdminReminder[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const [search, setSearch] = useState('')
-  const [typeFilter, setTypeFilter] = useState<ReminderType | 'all'>('all')
-  const [rangeFilter, setRangeFilter] = useState<'all' | 7 | 30>('all')
+  const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState<ReminderType | "all">("all");
+  const [rangeFilter, setRangeFilter] = useState<"all" | 7 | 30>("all");
 
-  const [notifyingId, setNotifyingId] = useState<number | null>(null)
-  const [toast, setToast] = useState('')
+  const [notifyingId, setNotifyingId] = useState<number | null>(null);
+  const [toast, setToast] = useState("");
 
   const load = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true)
-    setError('')
+    if (!silent) setLoading(true);
+    setError("");
     try {
-      const res = await api.get<{ success: boolean; data: { items: AdminReminder[] } }>('/admin/reminders', {
+      const res = await api.get<{
+        success: boolean;
+        data: { items: AdminReminder[] };
+      }>("/admin/reminders", {
         params: { page: 1, pageSize: 100 },
-      })
-      setReminders(res.data.data?.items ?? [])
+      });
+      setReminders(res.data.data?.items ?? []);
     } catch (err) {
-      setError(getErrorMessage(err))
+      setError(getErrorMessage(err));
     } finally {
-      if (!silent) setLoading(false)
+      if (!silent) setLoading(false);
     }
-  }, [])
+  }, []);
 
   useEffect(() => {
-    queueMicrotask(() => void load())
-  }, [load])
+    queueMicrotask(() => void load());
+  }, [load]);
 
-  useRealtimeRefresh(['reminders'], () => load(true))
+  useRealtimeRefresh(["reminders"], () => load(true));
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
+    const q = search.trim().toLowerCase();
     return reminders
-      .filter((r) => (typeFilter === 'all' ? true : r.reminderType === typeFilter))
-      .filter((r) => (rangeFilter === 'all' ? true : r.daysUntil !== null && r.daysUntil >= 0 && r.daysUntil <= rangeFilter))
       .filter((r) =>
-        !q ||
-        r.title.toLowerCase().includes(q) ||
-        r.customerName.toLowerCase().includes(q) ||
-        (r.plotCode ?? '').toLowerCase().includes(q),
+        typeFilter === "all" ? true : r.reminderType === typeFilter,
+      )
+      .filter((r) =>
+        rangeFilter === "all"
+          ? true
+          : r.daysUntil !== null &&
+            r.daysUntil >= 0 &&
+            r.daysUntil <= rangeFilter,
+      )
+      .filter(
+        (r) =>
+          !q ||
+          r.title.toLowerCase().includes(q) ||
+          r.customerName.toLowerCase().includes(q) ||
+          (r.plotCode ?? "").toLowerCase().includes(q),
       )
       .sort((a, b) => {
-        if (a.daysUntil === null) return 1
-        if (b.daysUntil === null) return -1
-        return a.daysUntil - b.daysUntil
-      })
-  }, [reminders, search, typeFilter, rangeFilter])
+        if (a.daysUntil === null) return 1;
+        if (b.daysUntil === null) return -1;
+        return a.daysUntil - b.daysUntil;
+      });
+  }, [reminders, search, typeFilter, rangeFilter]);
 
   const stats = useMemo(() => {
-    const active = reminders.filter((r) => r.isActive)
-    const within7 = active.filter((r) => r.daysUntil !== null && r.daysUntil >= 0 && r.daysUntil <= 7).length
-    const within30 = active.filter((r) => r.daysUntil !== null && r.daysUntil >= 0 && r.daysUntil <= 30).length
-    const deathAnniv = active.filter((r) => r.reminderType === 'death_anniversary').length
-    return { total: reminders.length, within7, within30, deathAnniv }
-  }, [reminders])
+    const active = reminders.filter((r) => r.isActive);
+    const within7 = active.filter(
+      (r) => r.daysUntil !== null && r.daysUntil >= 0 && r.daysUntil <= 7,
+    ).length;
+    const within30 = active.filter(
+      (r) => r.daysUntil !== null && r.daysUntil >= 0 && r.daysUntil <= 30,
+    ).length;
+    const deathAnniv = active.filter(
+      (r) => r.reminderType === "death_anniversary",
+    ).length;
+    return { total: reminders.length, within7, within30, deathAnniv };
+  }, [reminders]);
 
   async function notifyNow(id: number) {
-    setNotifyingId(id)
-    setToast('')
+    setNotifyingId(id);
+    setToast("");
     try {
-      await api.post(`/admin/reminders/${id}/notify-now`)
-      setToast('Đã gửi nhắc nhở tới khách hàng.')
-      await load()
+      await api.post(`/admin/reminders/${id}/notify-now`);
+      setToast("Đã gửi nhắc nhở tới khách hàng.");
+      await load();
     } catch (err) {
-      setToast(getErrorMessage(err))
+      setToast(getErrorMessage(err));
     } finally {
-      setNotifyingId(null)
+      setNotifyingId(null);
     }
   }
 
@@ -146,9 +170,10 @@ export default function ReminderManagementPage() {
       <header className="reminder-admin-header">
         <div>
           <p>QUẢN LÝ NHẮC LỊCH</p>
-          <h1>Nhắc Lịch Ngày Giỗ &amp; Sự Kiện</h1>
+          <h1>Nhắc lịch & chăm sóc</h1>
           <span className="reminder-admin-desc">
-            Theo dõi toàn bộ nhắc lịch của khách hàng để chủ động chuẩn bị dịch vụ và liên hệ đúng lúc.
+            Theo dõi các ngày quan trọng của khách hàng, ưu tiên những lịch sắp
+            đến và chủ động gửi nhắc khi cần.
           </span>
         </div>
       </header>
@@ -172,19 +197,35 @@ export default function ReminderManagementPage() {
         </div>
       </section>
 
-      <section className="reminder-toolbar">
+      <section className="reminder-toolbar" aria-label="Bộ lọc nhắc lịch">
         <input
           className="reminder-search"
           placeholder="Tìm theo tên khách hàng, sự kiện hoặc mã lô..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value as ReminderType | 'all')}>
+        <select
+          value={typeFilter}
+          onChange={(e) =>
+            setTypeFilter(e.target.value as ReminderType | "all")
+          }
+        >
           {TYPE_FILTERS.map((t) => (
-            <option key={t.value} value={t.value}>{t.label}</option>
+            <option key={t.value} value={t.value}>
+              {t.label}
+            </option>
           ))}
         </select>
-        <select value={rangeFilter} onChange={(e) => setRangeFilter(e.target.value === 'all' ? 'all' : (Number(e.target.value) as 7 | 30))}>
+        <select
+          value={rangeFilter}
+          onChange={(e) =>
+            setRangeFilter(
+              e.target.value === "all"
+                ? "all"
+                : (Number(e.target.value) as 7 | 30),
+            )
+          }
+        >
           <option value="all">Mọi thời điểm</option>
           <option value={7}>Trong 7 ngày tới</option>
           <option value={30}>Trong 30 ngày tới</option>
@@ -197,61 +238,96 @@ export default function ReminderManagementPage() {
       {loading ? (
         <div className="reminder-empty">Đang tải danh sách nhắc lịch...</div>
       ) : filtered.length === 0 ? (
-        <div className="reminder-empty">Không có nhắc lịch nào khớp bộ lọc hiện tại.</div>
+        <div className="reminder-empty">
+          Không có nhắc lịch nào khớp bộ lọc hiện tại.
+        </div>
       ) : (
         <section className="reminder-table-wrap">
-          <table className="reminder-table">
-            <thead>
-              <tr>
-                <th>Khách hàng</th>
-                <th>Sự kiện</th>
-                <th>Loại</th>
-                <th>Lô phần mộ</th>
-                <th>Ngày tới</th>
-                <th>Trạng thái</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((r) => {
-                const meta = TYPE_META[r.reminderType]
-                const badge = dayBadge(r)
-                return (
-                  <tr key={r.id} className={r.isActive ? '' : 'inactive-row'}>
-                    <td>
-                      <div className="cell-primary">{r.customerName}</div>
-                      {r.customerPhone && <div className="cell-secondary">{r.customerPhone}</div>}
-                    </td>
-                    <td>
-                      <div className="cell-primary">{r.title}</div>
-                      <div className="cell-secondary">{r.isRecurring ? 'Hàng năm' : 'Một lần'}</div>
-                    </td>
-                    <td><span className="type-pill">{meta.label}</span></td>
-                    <td>{r.plotCode ? `${r.plotCode}${r.zoneName ? ` · ${r.zoneName}` : ''}` : '—'}</td>
-                    <td>
-                      <div className="cell-primary">{formatDate(r.nextDate)}</div>
-                      <span className={`day-badge ${badge.cls}`}>{badge.text}</span>
-                    </td>
-                    <td>
-                      <span className={`status-pill ${r.isActive ? 'on' : 'off'}`}>{r.isActive ? 'Đang bật' : 'Đã tắt'}</span>
-                    </td>
-                    <td>
-                      <button
-                        className="notify-btn"
-                        disabled={!r.isActive || notifyingId === r.id}
-                        onClick={() => void notifyNow(r.id)}
-                        title="Gửi nhắc nhở ngay tới khách hàng"
-                      >
-                        {notifyingId === r.id ? 'Đang gửi...' : 'Gửi nhắc ngay'}
-                      </button>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+          <div className="reminder-table-heading">
+            <div>
+              <strong>Danh sách nhắc lịch</strong>
+              <span>{filtered.length} lịch đang hiển thị</span>
+            </div>
+            <span className="reminder-table-heading__hint">
+              Ưu tiên lịch gần nhất
+            </span>
+          </div>
+          <div className="reminder-table-scroll">
+            <table className="reminder-table">
+              <thead>
+                <tr>
+                  <th>Khách hàng</th>
+                  <th>Sự kiện</th>
+                  <th>Loại</th>
+                  <th>Lô phần mộ</th>
+                  <th>Ngày tới</th>
+                  <th>Trạng thái</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((r) => {
+                  const meta = TYPE_META[r.reminderType];
+                  const badge = dayBadge(r);
+                  return (
+                    <tr key={r.id} className={r.isActive ? "" : "inactive-row"}>
+                      <td>
+                        <div className="cell-primary">{r.customerName}</div>
+                        {r.customerPhone && (
+                          <div className="cell-secondary">
+                            {r.customerPhone}
+                          </div>
+                        )}
+                      </td>
+                      <td>
+                        <div className="cell-primary">{r.title}</div>
+                        <div className="cell-secondary">
+                          {r.isRecurring ? "Hàng năm" : "Một lần"}
+                        </div>
+                      </td>
+                      <td>
+                        <span className="type-pill">{meta.label}</span>
+                      </td>
+                      <td>
+                        {r.plotCode
+                          ? `${r.plotCode}${r.zoneName ? ` · ${r.zoneName}` : ""}`
+                          : "—"}
+                      </td>
+                      <td>
+                        <div className="cell-primary">
+                          {formatDate(r.nextDate)}
+                        </div>
+                        <span className={`day-badge ${badge.cls}`}>
+                          {badge.text}
+                        </span>
+                      </td>
+                      <td>
+                        <span
+                          className={`status-pill ${r.isActive ? "on" : "off"}`}
+                        >
+                          {r.isActive ? "Đang bật" : "Đã tắt"}
+                        </span>
+                      </td>
+                      <td>
+                        <button
+                          className="notify-btn"
+                          disabled={!r.isActive || notifyingId === r.id}
+                          onClick={() => void notifyNow(r.id)}
+                          title="Gửi nhắc nhở ngay tới khách hàng"
+                        >
+                          {notifyingId === r.id
+                            ? "Đang gửi..."
+                            : "Gửi nhắc ngay"}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </section>
       )}
     </div>
-  )
+  );
 }

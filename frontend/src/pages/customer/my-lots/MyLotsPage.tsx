@@ -1,12 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-} from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   CalendarDays,
@@ -265,9 +257,6 @@ function AppointmentDateTimePicker({
   onChange: (value: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [popoverStyle, setPopoverStyle] = useState<CSSProperties>({});
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const popoverRef = useRef<HTMLDivElement>(null);
   const selectedDate = value?.slice(0, 10) || "";
   const selectedTime = value?.slice(11, 16) || min.slice(11, 16) || "09:00";
   const [calendarMonth, setCalendarMonth] = useState(() => {
@@ -287,51 +276,6 @@ function AppointmentDateTimePicker({
       return new Date(next.getFullYear(), next.getMonth(), 1);
     });
   }, [selectedDate]);
-
-  // Lịch được render qua portal + position:fixed để không bị khung cha
-  // (overflow:hidden) cắt mất, tương tự cách làm ở trang Lịch rảnh.
-  const updatePosition = useCallback(() => {
-    const trigger = triggerRef.current;
-    if (!trigger) return;
-    const rect = trigger.getBoundingClientRect();
-    const width = Math.min(330, window.innerWidth - 24);
-    const gap = 9;
-    const estimatedHeight = 380;
-    const spaceBelow = window.innerHeight - rect.bottom - gap;
-    const placeAbove =
-      spaceBelow < estimatedHeight && rect.top > estimatedHeight + gap;
-    const top = placeAbove
-      ? Math.max(12, rect.top - estimatedHeight - gap)
-      : rect.bottom + gap;
-    const left = Math.min(
-      Math.max(12, rect.left),
-      window.innerWidth - width - 12,
-    );
-    setPopoverStyle({ position: "fixed", top, left, width, zIndex: 100000 });
-  }, []);
-
-  useEffect(() => {
-    if (!open) return;
-    updatePosition();
-    const onResizeOrScroll = () => updatePosition();
-    window.addEventListener("resize", onResizeOrScroll);
-    window.addEventListener("scroll", onResizeOrScroll, true);
-    return () => {
-      window.removeEventListener("resize", onResizeOrScroll);
-      window.removeEventListener("scroll", onResizeOrScroll, true);
-    };
-  }, [open, updatePosition]);
-
-  useEffect(() => {
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target as Node;
-      if (triggerRef.current?.contains(target)) return;
-      if (popoverRef.current?.contains(target)) return;
-      setOpen(false);
-    };
-    document.addEventListener("pointerdown", handlePointerDown);
-    return () => document.removeEventListener("pointerdown", handlePointerDown);
-  }, []);
 
   const minDate = min.slice(0, 10);
   const maxDate = max.slice(0, 10);
@@ -419,84 +363,12 @@ function AppointmentDateTimePicker({
     setCalendarMonth(next);
   }
 
-  const calendarPopover = open
-    ? createPortal(
-        <div
-          ref={popoverRef}
-          className="lots-calendar-popover"
-          style={popoverStyle}
-          role="dialog"
-          aria-label="Chọn ngày gặp mặt"
-        >
-          <div className="lots-calendar-head">
-            <strong>{monthLabel}</strong>
-            <div>
-              <button
-                type="button"
-                onClick={() => moveMonth(-1)}
-                aria-label="Tháng trước"
-                disabled={
-                  calendarMonth.getTime() <=
-                  new Date(
-                    Number(minDate.slice(0, 4)),
-                    Number(minDate.slice(5, 7)) - 1,
-                    1,
-                  ).getTime()
-                }
-              >
-                <ChevronLeft size={17} />
-              </button>
-              <button
-                type="button"
-                onClick={() => moveMonth(1)}
-                aria-label="Tháng sau"
-                disabled={
-                  calendarMonth.getTime() >=
-                  new Date(
-                    Number(maxDate.slice(0, 4)),
-                    Number(maxDate.slice(5, 7)) - 1,
-                    1,
-                  ).getTime()
-                }
-              >
-                <ChevronRight size={17} />
-              </button>
-            </div>
-          </div>
-          <div className="lots-calendar-weekdays">
-            {["T2", "T3", "T4", "T5", "T6", "T7", "CN"].map((day) => (
-              <span key={day}>{day}</span>
-            ))}
-          </div>
-          <div className="lots-calendar-grid">
-            {calendarCells.map((date, index) =>
-              date ? (
-                <button
-                  key={formatDateKey(date)}
-                  type="button"
-                  className={`${formatDateKey(date) === selectedDate ? "is-selected " : ""}${formatDateKey(date) === minDate || formatDateKey(date) === maxDate ? "is-bound " : ""}`.trim()}
-                  disabled={isDateDisabled(date)}
-                  onClick={() => chooseDate(date)}
-                >
-                  {date.getDate()}
-                </button>
-              ) : (
-                <span key={`empty-${index}`} aria-hidden="true" />
-              ),
-            )}
-          </div>
-        </div>,
-        document.body,
-      )
-    : null;
-
   return (
     <div className="lots-datetime-picker">
       <div className="lots-datetime-fields">
         <div className="lots-datetime-field-wrap">
           <span>Ngày gặp mặt</span>
           <button
-            ref={triggerRef}
             type="button"
             className={`lots-date-trigger${open ? " is-open" : ""}`}
             onClick={() => setOpen((current) => !current)}
@@ -510,7 +382,71 @@ function AppointmentDateTimePicker({
                 : "Chọn ngày gặp mặt"}
             </strong>
           </button>
-          {calendarPopover}
+          {open ? (
+            <div
+              className="lots-calendar-popover"
+              role="dialog"
+              aria-label="Chọn ngày gặp mặt"
+            >
+              <div className="lots-calendar-head">
+                <strong>{monthLabel}</strong>
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => moveMonth(-1)}
+                    aria-label="Tháng trước"
+                    disabled={
+                      calendarMonth.getTime() <=
+                      new Date(
+                        Number(minDate.slice(0, 4)),
+                        Number(minDate.slice(5, 7)) - 1,
+                        1,
+                      ).getTime()
+                    }
+                  >
+                    <ChevronLeft size={17} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveMonth(1)}
+                    aria-label="Tháng sau"
+                    disabled={
+                      calendarMonth.getTime() >=
+                      new Date(
+                        Number(maxDate.slice(0, 4)),
+                        Number(maxDate.slice(5, 7)) - 1,
+                        1,
+                      ).getTime()
+                    }
+                  >
+                    <ChevronRight size={17} />
+                  </button>
+                </div>
+              </div>
+              <div className="lots-calendar-weekdays">
+                {["T2", "T3", "T4", "T5", "T6", "T7", "CN"].map((day) => (
+                  <span key={day}>{day}</span>
+                ))}
+              </div>
+              <div className="lots-calendar-grid">
+                {calendarCells.map((date, index) =>
+                  date ? (
+                    <button
+                      key={formatDateKey(date)}
+                      type="button"
+                      className={`${formatDateKey(date) === selectedDate ? "is-selected " : ""}${formatDateKey(date) === minDate || formatDateKey(date) === maxDate ? "is-bound " : ""}`.trim()}
+                      disabled={isDateDisabled(date)}
+                      onClick={() => chooseDate(date)}
+                    >
+                      {date.getDate()}
+                    </button>
+                  ) : (
+                    <span key={`empty-${index}`} aria-hidden="true" />
+                  ),
+                )}
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <div className="lots-datetime-field-wrap">
@@ -965,8 +901,17 @@ export default function MyLotsPage() {
       "(prefers-reduced-motion: reduce)",
     ).matches;
 
+    // Dùng thuộc tính DOM thuần (data-revealed) thay vì className/classList.
+    // Lý do: className của các thẻ này được React tính lại từ template string
+    // mỗi lần re-render (ví dụ khi dữ liệu được làm mới ngầm sau một thông báo
+    // realtime). Nếu dùng classList.add("is-visible") như trước, class đó sẽ
+    // bị React GHI ĐÈ mất ngay khi component re-render vì nó không nằm trong
+    // chuỗi className do JSX tạo ra — khiến thẻ đã hiện ra bỗng dưng biến mất
+    // (opacity về 0) dù vẫn còn trong DOM. Thuộc tính đặt trực tiếp bằng
+    // setAttribute không nằm trong props JSX nên React sẽ không đụng tới nó
+    // khi re-render, nhờ vậy trạng thái "đã hiện" luôn được giữ nguyên.
     if (reduceMotion || !("IntersectionObserver" in window)) {
-      nodes.forEach((node) => node.classList.add("is-visible"));
+      nodes.forEach((node) => node.setAttribute("data-revealed", "true"));
       return;
     }
 
@@ -974,14 +919,19 @@ export default function MyLotsPage() {
       (entries) => {
         entries.forEach((entry) => {
           if (!entry.isIntersecting) return;
-          entry.target.classList.add("is-visible");
+          entry.target.setAttribute("data-revealed", "true");
           observer.unobserve(entry.target);
         });
       },
       { threshold: 0.12, rootMargin: "0px 0px -28px" },
     );
 
-    nodes.forEach((node) => observer.observe(node));
+    nodes.forEach((node) => {
+      // Nếu thẻ đã từng hiện ra trước đó (từ một lần render trước), giữ
+      // nguyên trạng thái hiện, không cần quan sát lại từ đầu.
+      if (node.getAttribute("data-revealed") === "true") return;
+      observer.observe(node);
+    });
     return () => observer.disconnect();
   }, [loading, reservations.length, contracts.length, serviceOrders.length]);
 
@@ -3518,7 +3468,7 @@ const pageStyles = `
       transform 560ms cubic-bezier(0.22, 1, 0.36, 1) var(--reveal-delay, 0ms);
   }
 
-  [data-lots-reveal].is-visible {
+  [data-lots-reveal][data-revealed="true"] {
     opacity: 1;
     transform: translateY(0);
   }
