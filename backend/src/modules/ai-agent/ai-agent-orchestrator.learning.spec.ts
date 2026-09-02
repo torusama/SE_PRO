@@ -2717,6 +2717,63 @@ Mình ưu tiên B-01-001 vì phương án này vẫn nằm trong ngân sách và
     expect(nvidia.chat).not.toHaveBeenCalled();
   });
 
+  it.each([
+    't\u1ef1 t\u01b0 v\u1ea5n cho t \u0111i',
+    'tu tu van cho t di',
+    'B\u1ea1n c\u1ee9 t\u1ef1 t\u01b0 v\u1ea5n r\u1ed3i ch\u1ecdn gi\u00fap m\u00ecnh',
+    'T\u00f4i \u0111ang t\u1ef1 tu t\u1eadp',
+  ])('does not classify ordinary Vietnamese delegation as self-harm: %s', (message) => {
+    const { service } = setup();
+    const safetyClassifier = service as unknown as {
+      buildImmediateSafetyTurn: (value: string) => unknown;
+    };
+
+    expect(safetyClassifier.buildImmediateSafetyTurn(message)).toBeNull();
+  });
+
+  it('routes self-directed consultation wording through semantic planning instead of the crisis response', async () => {
+    const { service, nvidia, config } = setup();
+    config.get.mockImplementation((key: string) => {
+      if (key === 'ai.maxHistoryMessages') return 20;
+      if (key === 'ai.fallbackRuleBased') return true;
+      if (key === 'ai.llmWritesConversationalTurns') return true;
+      return undefined;
+    });
+    nvidia.chat.mockReset().mockResolvedValueOnce({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              intent: 'general_question',
+              action: 'none',
+              contextMode: 'continue',
+              needsClarification: false,
+              clarificationQuestion: '',
+              directResponse:
+                '\u0110\u01b0\u1ee3c, m\u00ecnh s\u1ebd ch\u1ee7 \u0111\u1ed9ng t\u01b0 v\u1ea5n d\u1ef1a tr\u00ean th\u00f4ng tin \u0111ang c\u00f3 v\u00e0 h\u1ecfi th\u00eam khi thi\u1ebfu d\u1eef ki\u1ec7n quan tr\u1ecdng.',
+            }),
+          },
+        },
+      ],
+    });
+
+    const result = await service.chat(
+      {
+        sessionId: 'SES-SELF-CONSULT',
+        message: 't\u1ef1 t\u01b0 v\u1ea5n cho t \u0111i',
+      },
+      { id: 7, role: 'customer' },
+    );
+
+    expect(result.assistantMessage).toContain('ch\u1ee7 \u0111\u1ed9ng t\u01b0 v\u1ea5n');
+    expect(result.assistantMessage).not.toContain('d\u1ecbch v\u1ee5 kh\u1ea9n c\u1ea5p');
+    expect(result.metadata.llmModel).not.toBe('local-safety-response');
+    expect(nvidia.chat).toHaveBeenCalledTimes(1);
+    expect(nvidia.chat.mock.calls[0][0][0].content).toContain(
+      't\u1ef1 t\u01b0 v\u1ea5n',
+    );
+  });
+
   it('still returns the generated answer when message persistence fails', async () => {
     const { service } = setup(false, true);
 

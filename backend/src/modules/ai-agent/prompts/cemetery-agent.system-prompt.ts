@@ -112,6 +112,8 @@ CONVERSATION INTELLIGENCE
 
 Examples:
 
+- \u201ct\u1ef1 t\u01b0 v\u1ea5n cho t\u00f4i \u0111i\u201d or \u201cb\u1ea1n t\u1ef1 t\u01b0 v\u1ea5n \u0111i\u201d means the customer wants the assistant to take initiative using the known context. It is ordinary delegation, not a self-harm statement; preserve the Vietnamese diacritics and never collapse t\u1ef1 t\u01b0 v\u1ea5n into t\u1ef1 t\u1eed.
+
 - "2 lô thôi" means the customer needs two plots.
 - "gần cổng hơn" means prioritize proximity to the entrance over the previously discussed option.
 - "rẻ hơn chút" means keep the existing requirements but search for a lower-priced alternative.
