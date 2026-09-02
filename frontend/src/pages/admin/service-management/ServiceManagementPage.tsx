@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import type { CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import DemoPaymentPanel from "@/components/payment/DemoPaymentPanel";
@@ -164,6 +166,45 @@ export default function ServiceManagementPage() {
     if (!requestedOrderId) return;
     void openDetail(requestedOrderId);
   }, [requestedOrderId]);
+
+  useEffect(() => {
+    // Khoá cuộn trang nền khi popup chi tiết đang mở, để lớp mờ (backdrop-filter)
+    // của service-drawer-layer luôn phủ đúng toàn bộ khung nhìn, không bị lệch
+    // do trang phía sau cuộn ngang/dọc hoặc đổi kích thước thanh cuộn.
+    if (!selected && !detailLoading) return;
+    const { overflow, paddingRight } = document.body.style;
+    const scrollbarWidth =
+      window.innerWidth - document.documentElement.clientWidth;
+    document.body.style.overflow = "hidden";
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+    }
+    return () => {
+      document.body.style.overflow = overflow;
+      document.body.style.paddingRight = paddingRight;
+    };
+  }, [selected, detailLoading]);
+
+  const [headerHeight, setHeaderHeight] = useState(78);
+
+  useEffect(() => {
+    // Đo chiều cao thật của topbar thay vì đóng cứng 78px: topbar có thể
+    // cao hơn 78px tuỳ độ phân giải/zoom (vd. xuống dòng ở màn hình hẹp),
+    // nếu không đo lại sẽ để lộ khe hở chưa được làm mờ ngay dưới topbar.
+    if (!selected && !detailLoading) return;
+    const headerEl = document.querySelector(".admin-header");
+    if (!headerEl) return;
+    const update = () =>
+      setHeaderHeight(headerEl.getBoundingClientRect().height);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(headerEl);
+    window.addEventListener("resize", update);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, [selected, detailLoading]);
 
   async function openDetail(orderId: number) {
     setDetailLoading(true);
@@ -346,33 +387,40 @@ export default function ServiceManagementPage() {
         )}
       </section>
 
-      {(selected || detailLoading) && (
-        <div
-          className="service-drawer-layer"
-          role="presentation"
-          onMouseDown={() => !detailLoading && setSelected(null)}
-        >
-          <aside
-            key={selected ? `${selected.id}-${selected.status}` : "loading"}
-            className="service-drawer"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Chi tiết đơn dịch vụ"
-            onMouseDown={(event) => event.stopPropagation()}
+      {(selected || detailLoading) &&
+        createPortal(
+          <div
+            className="admin-theme service-drawer-layer"
+            role="presentation"
+            style={
+              {
+                "--service-header-height": `${headerHeight}px`,
+              } as CSSProperties
+            }
+            onMouseDown={() => !detailLoading && setSelected(null)}
           >
-            {detailLoading && !selected ? (
-              <div className="service-empty">Đang tải chi tiết...</div>
-            ) : selected ? (
-              <OrderDetail
-                order={selected}
-                assignees={assignees}
-                onClose={() => setSelected(null)}
-                onSaved={(message) => void refreshSelected(message)}
-              />
-            ) : null}
-          </aside>
-        </div>
-      )}
+            <aside
+              key={selected ? `${selected.id}-${selected.status}` : "loading"}
+              className="service-drawer"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Chi tiết đơn dịch vụ"
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              {detailLoading && !selected ? (
+                <div className="service-empty">Đang tải chi tiết...</div>
+              ) : selected ? (
+                <OrderDetail
+                  order={selected}
+                  assignees={assignees}
+                  onClose={() => setSelected(null)}
+                  onSaved={(message) => void refreshSelected(message)}
+                />
+              ) : null}
+            </aside>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

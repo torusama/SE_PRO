@@ -242,7 +242,9 @@ export class CemeteryServicesService {
         throw new BadRequestException('Đơn dịch vụ này đã được hủy trước đó');
       }
       if (current.status === 'completed') {
-        throw new BadRequestException('Dịch vụ đã hoàn thành nên không thể hủy');
+        throw new BadRequestException(
+          'Dịch vụ đã hoàn thành nên không thể hủy',
+        );
       }
       if (current.status === 'in_progress') {
         throw new BadRequestException(
@@ -597,7 +599,10 @@ export class CemeteryServicesService {
     return this.one(id);
   }
 
-  private async sendCompletionEmail(orderId: number, files: Express.Multer.File[]) {
+  private async sendCompletionEmail(
+    orderId: number,
+    files: Express.Multer.File[],
+  ) {
     try {
       const order = await this.database.queryOne<{
         email: string | null;
@@ -616,7 +621,12 @@ export class CemeteryServicesService {
 
       const attachments = files.map((file) => ({
         filename: file.filename,
-        path: join(process.cwd(), 'uploads', 'service-completions', file.filename),
+        path: join(
+          process.cwd(),
+          'uploads',
+          'service-completions',
+          file.filename,
+        ),
       }));
 
       await this.emailService.sendServiceOrderCompletionEmail(order.email, {
@@ -653,7 +663,9 @@ export class CemeteryServicesService {
       if (current.user_id !== userId) {
         throw new ForbiddenException('Bạn không có quyền thao tác đơn này');
       }
-      if (!['submitted', 'pending_confirm', 'confirmed'].includes(current.status)) {
+      if (
+        !['submitted', 'pending_confirm', 'confirmed'].includes(current.status)
+      ) {
         throw new BadRequestException(
           'Đơn dịch vụ hiện chưa ở trạng thái cho phép thanh toán',
         );
@@ -801,25 +813,31 @@ export class CemeteryServicesService {
       );
       const current = currentResult.rows[0];
       if (!current) throw new NotFoundException('Không tìm thấy đơn dịch vụ');
-      if (current.payment_status !== 'awaiting_confirmation') {
-        throw new BadRequestException(
-          'Chỉ có thể xác nhận khi khách hàng đã báo thanh toán',
-        );
+      if (current.payment_status === 'paid') {
+        throw new BadRequestException('Đơn này đã được xác nhận thanh toán');
       }
+      // Luồng demo: admin có thể xác nhận thanh toán trực tiếp (nút tượng
+      // trưng), không bắt buộc khách hàng phải bấm "Tôi đã thanh toán" trước.
 
       const nextStatus: ServiceOrderStatus =
         current.status === 'confirmed'
           ? 'in_progress'
-          : current.status === 'submitted' || current.status === 'pending_confirm'
+          : current.status === 'submitted' ||
+              current.status === 'pending_confirm'
             ? 'confirmed'
             : current.status;
 
+      const paymentCode =
+        current.payment_code ??
+        `VPV${String(id).padStart(5, '0')}${randomUUID().slice(0, 4).toUpperCase()}`;
+
       await client.query(
         `UPDATE service_orders
-         SET payment_status = 'paid', payment_confirmed_at = NOW(),
+         SET payment_status = 'paid', payment_code = $4,
+             paid_at = COALESCE(paid_at, NOW()), payment_confirmed_at = NOW(),
              payment_confirmed_by = $2, status = $3, updated_at = NOW()
          WHERE order_id = $1`,
-        [id, adminId, nextStatus],
+        [id, adminId, nextStatus, paymentCode],
       );
 
       await client.query(
