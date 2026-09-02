@@ -432,7 +432,7 @@ export default function HomePage() {
               <div className="stat-label">Lô đất quản lý</div>
             </div>
             <div className="stat-card" data-reveal>
-              <div className="stat-num">14</div>
+              <div className="stat-num">18</div>
               <div className="stat-label">Chức năng hệ thống</div>
             </div>
             <div className="stat-card" data-reveal>
@@ -463,8 +463,8 @@ export default function HomePage() {
             </h2>
             <p className="home-section-lead" data-reveal>
               Xem toàn bộ nghĩa trang qua sơ đồ trực quan. Mỗi lô đất hiển thị
-              trạng thái rõ ràng — còn trống, đang giao dịch, hay đã bán — chỉ với
-              một cái nhìn.
+              trạng thái rõ ràng — còn trống, đang giao dịch, hay đã bán — chỉ
+              với một cái nhìn.
             </p>
             <div
               className="map-section__legend"
@@ -1851,8 +1851,8 @@ export default function HomePage() {
               <div className="feature-num">01</div>
               <div className="feature-name">Xem bản đồ & Mua lô</div>
               <div className="feature-desc">
-                Xem sơ đồ nghĩa trang, gửi yêu cầu mua một hoặc nhiều lô
-                liền kề cho gia đình, dòng họ.
+                Xem sơ đồ nghĩa trang, gửi yêu cầu mua một hoặc nhiều lô liền kề
+                cho gia đình, dòng họ.
               </div>
             </div>
             <div
