@@ -1,6 +1,21 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
+import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
-import { CalendarDays, ChevronLeft, ChevronRight, Clock3, MapPin, UserRound } from "lucide-react";
+import {
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
+  MapPin,
+  UserRound,
+} from "lucide-react";
 import { api } from "@/lib/api";
 import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
 import NavyStarfield from "@/components/decor/NavyStarfield";
@@ -67,7 +82,13 @@ interface TransferRequestAppointment {
 interface TransferRequestItem {
   id: number;
   transferType: "sale" | "inheritance" | "gift" | string;
-  status: "pending" | "approved" | "rejected" | "cancelled" | "completed" | string;
+  status:
+    | "pending"
+    | "approved"
+    | "rejected"
+    | "cancelled"
+    | "completed"
+    | string;
   recipientName: string;
   recipientIdCard?: string;
   recipientPhone?: string;
@@ -244,6 +265,9 @@ function AppointmentDateTimePicker({
   onChange: (value: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [popoverStyle, setPopoverStyle] = useState<CSSProperties>({});
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
   const selectedDate = value?.slice(0, 10) || "";
   const selectedTime = value?.slice(11, 16) || min.slice(11, 16) || "09:00";
   const [calendarMonth, setCalendarMonth] = useState(() => {
@@ -254,12 +278,60 @@ function AppointmentDateTimePicker({
   useEffect(() => {
     const next = parseDateKey(selectedDate || min.slice(0, 10));
     setCalendarMonth((current) => {
-      if (current.getFullYear() === next.getFullYear() && current.getMonth() === next.getMonth()) {
+      if (
+        current.getFullYear() === next.getFullYear() &&
+        current.getMonth() === next.getMonth()
+      ) {
         return current;
       }
       return new Date(next.getFullYear(), next.getMonth(), 1);
     });
   }, [selectedDate]);
+
+  // Lịch được render qua portal + position:fixed để không bị khung cha
+  // (overflow:hidden) cắt mất, tương tự cách làm ở trang Lịch rảnh.
+  const updatePosition = useCallback(() => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    const width = Math.min(330, window.innerWidth - 24);
+    const gap = 9;
+    const estimatedHeight = 380;
+    const spaceBelow = window.innerHeight - rect.bottom - gap;
+    const placeAbove =
+      spaceBelow < estimatedHeight && rect.top > estimatedHeight + gap;
+    const top = placeAbove
+      ? Math.max(12, rect.top - estimatedHeight - gap)
+      : rect.bottom + gap;
+    const left = Math.min(
+      Math.max(12, rect.left),
+      window.innerWidth - width - 12,
+    );
+    setPopoverStyle({ position: "fixed", top, left, width, zIndex: 100000 });
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    updatePosition();
+    const onResizeOrScroll = () => updatePosition();
+    window.addEventListener("resize", onResizeOrScroll);
+    window.addEventListener("scroll", onResizeOrScroll, true);
+    return () => {
+      window.removeEventListener("resize", onResizeOrScroll);
+      window.removeEventListener("scroll", onResizeOrScroll, true);
+    };
+  }, [open, updatePosition]);
+
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (triggerRef.current?.contains(target)) return;
+      if (popoverRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, []);
 
   const minDate = min.slice(0, 10);
   const maxDate = max.slice(0, 10);
@@ -277,15 +349,18 @@ function AppointmentDateTimePicker({
     calendarMonth.getMonth() + 1,
     0,
   ).getDate();
-  const calendarCells = Array.from({ length: Math.ceil((mondayIndex + daysInMonth) / 7) * 7 }, (_, index) => {
-    const dayNumber = index - mondayIndex + 1;
-    if (dayNumber < 1 || dayNumber > daysInMonth) return null;
-    return new Date(
-      calendarMonth.getFullYear(),
-      calendarMonth.getMonth(),
-      dayNumber,
-    );
-  });
+  const calendarCells = Array.from(
+    { length: Math.ceil((mondayIndex + daysInMonth) / 7) * 7 },
+    (_, index) => {
+      const dayNumber = index - mondayIndex + 1;
+      if (dayNumber < 1 || dayNumber > daysInMonth) return null;
+      return new Date(
+        calendarMonth.getFullYear(),
+        calendarMonth.getMonth(),
+        dayNumber,
+      );
+    },
+  );
 
   const monthLabel = new Intl.DateTimeFormat("vi-VN", {
     month: "long",
@@ -315,7 +390,12 @@ function AppointmentDateTimePicker({
     if (!selectedDate) return;
     const lowerBound = selectedDate === minDate ? minTime : "00:00";
     const upperBound = selectedDate === maxDate ? maxTime : "23:59";
-    const safeTime = nextTime < lowerBound ? lowerBound : nextTime > upperBound ? upperBound : nextTime;
+    const safeTime =
+      nextTime < lowerBound
+        ? lowerBound
+        : nextTime > upperBound
+          ? upperBound
+          : nextTime;
     onChange(`${selectedDate}T${safeTime}`);
   }
 
@@ -325,11 +405,90 @@ function AppointmentDateTimePicker({
       calendarMonth.getMonth() + delta,
       1,
     );
-    const minMonth = new Date(Number(minDate.slice(0, 4)), Number(minDate.slice(5, 7)) - 1, 1);
-    const maxMonth = new Date(Number(maxDate.slice(0, 4)), Number(maxDate.slice(5, 7)) - 1, 1);
+    const minMonth = new Date(
+      Number(minDate.slice(0, 4)),
+      Number(minDate.slice(5, 7)) - 1,
+      1,
+    );
+    const maxMonth = new Date(
+      Number(maxDate.slice(0, 4)),
+      Number(maxDate.slice(5, 7)) - 1,
+      1,
+    );
     if (next < minMonth || next > maxMonth) return;
     setCalendarMonth(next);
   }
+
+  const calendarPopover = open
+    ? createPortal(
+        <div
+          ref={popoverRef}
+          className="lots-calendar-popover"
+          style={popoverStyle}
+          role="dialog"
+          aria-label="Chọn ngày gặp mặt"
+        >
+          <div className="lots-calendar-head">
+            <strong>{monthLabel}</strong>
+            <div>
+              <button
+                type="button"
+                onClick={() => moveMonth(-1)}
+                aria-label="Tháng trước"
+                disabled={
+                  calendarMonth.getTime() <=
+                  new Date(
+                    Number(minDate.slice(0, 4)),
+                    Number(minDate.slice(5, 7)) - 1,
+                    1,
+                  ).getTime()
+                }
+              >
+                <ChevronLeft size={17} />
+              </button>
+              <button
+                type="button"
+                onClick={() => moveMonth(1)}
+                aria-label="Tháng sau"
+                disabled={
+                  calendarMonth.getTime() >=
+                  new Date(
+                    Number(maxDate.slice(0, 4)),
+                    Number(maxDate.slice(5, 7)) - 1,
+                    1,
+                  ).getTime()
+                }
+              >
+                <ChevronRight size={17} />
+              </button>
+            </div>
+          </div>
+          <div className="lots-calendar-weekdays">
+            {["T2", "T3", "T4", "T5", "T6", "T7", "CN"].map((day) => (
+              <span key={day}>{day}</span>
+            ))}
+          </div>
+          <div className="lots-calendar-grid">
+            {calendarCells.map((date, index) =>
+              date ? (
+                <button
+                  key={formatDateKey(date)}
+                  type="button"
+                  className={`${formatDateKey(date) === selectedDate ? "is-selected " : ""}${formatDateKey(date) === minDate || formatDateKey(date) === maxDate ? "is-bound " : ""}`.trim()}
+                  disabled={isDateDisabled(date)}
+                  onClick={() => chooseDate(date)}
+                >
+                  {date.getDate()}
+                </button>
+              ) : (
+                <span key={`empty-${index}`} aria-hidden="true" />
+              ),
+            )}
+          </div>
+        </div>,
+        document.body,
+      )
+    : null;
 
   return (
     <div className="lots-datetime-picker">
@@ -337,6 +496,7 @@ function AppointmentDateTimePicker({
         <div className="lots-datetime-field-wrap">
           <span>Ngày gặp mặt</span>
           <button
+            ref={triggerRef}
             type="button"
             className={`lots-date-trigger${open ? " is-open" : ""}`}
             onClick={() => setOpen((current) => !current)}
@@ -344,59 +504,13 @@ function AppointmentDateTimePicker({
             aria-haspopup="dialog"
           >
             <CalendarDays size={17} strokeWidth={1.8} aria-hidden="true" />
-            <strong>{selectedDate ? formatDateKeyLabel(selectedDate) : "Chọn ngày gặp mặt"}</strong>
+            <strong>
+              {selectedDate
+                ? formatDateKeyLabel(selectedDate)
+                : "Chọn ngày gặp mặt"}
+            </strong>
           </button>
-          {open ? (
-            <div className="lots-calendar-popover" role="dialog" aria-label="Chọn ngày gặp mặt">
-              <div className="lots-calendar-head">
-                <strong>{monthLabel}</strong>
-                <div>
-                  <button
-                    type="button"
-                    onClick={() => moveMonth(-1)}
-                    aria-label="Tháng trước"
-                    disabled={
-                      calendarMonth.getTime() <=
-                      new Date(Number(minDate.slice(0, 4)), Number(minDate.slice(5, 7)) - 1, 1).getTime()
-                    }
-                  >
-                    <ChevronLeft size={17} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => moveMonth(1)}
-                    aria-label="Tháng sau"
-                    disabled={
-                      calendarMonth.getTime() >=
-                      new Date(Number(maxDate.slice(0, 4)), Number(maxDate.slice(5, 7)) - 1, 1).getTime()
-                    }
-                  >
-                    <ChevronRight size={17} />
-                  </button>
-                </div>
-              </div>
-              <div className="lots-calendar-weekdays">
-                {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map((day) => <span key={day}>{day}</span>)}
-              </div>
-              <div className="lots-calendar-grid">
-                {calendarCells.map((date, index) =>
-                  date ? (
-                    <button
-                      key={formatDateKey(date)}
-                      type="button"
-                      className={`${formatDateKey(date) === selectedDate ? "is-selected " : ""}${formatDateKey(date) === minDate || formatDateKey(date) === maxDate ? "is-bound " : ""}`.trim()}
-                      disabled={isDateDisabled(date)}
-                      onClick={() => chooseDate(date)}
-                    >
-                      {date.getDate()}
-                    </button>
-                  ) : (
-                    <span key={`empty-${index}`} aria-hidden="true" />
-                  ),
-                )}
-              </div>
-            </div>
-          ) : null}
+          {calendarPopover}
         </div>
 
         <div className="lots-datetime-field-wrap">
@@ -416,7 +530,15 @@ function AppointmentDateTimePicker({
         </div>
       </div>
       <small className="lots-datetime-helper">
-        Có thể chọn từ <strong>{formatDateKeyLabel(minDate)} {minTime}</strong> đến <strong>{formatDateKeyLabel(maxDate)} {maxTime}</strong>.
+        Có thể chọn từ{" "}
+        <strong>
+          {formatDateKeyLabel(minDate)} {minTime}
+        </strong>{" "}
+        đến{" "}
+        <strong>
+          {formatDateKeyLabel(maxDate)} {maxTime}
+        </strong>
+        .
       </small>
     </div>
   );
@@ -506,7 +628,9 @@ export default function MyLotsPage() {
   const targetRequestId = Number(searchParams.get("request")) || null;
   const targetTransferId = Number(searchParams.get("transfer")) || null;
   const [reservations, setReservations] = useState<Reservation[]>([]);
-  const [transferRequests, setTransferRequests] = useState<TransferRequestItem[]>([]);
+  const [transferRequests, setTransferRequests] = useState<
+    TransferRequestItem[]
+  >([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [serviceOrders, setServiceOrders] = useState<ServiceOrder[]>([]);
@@ -522,10 +646,13 @@ export default function MyLotsPage() {
   const [respondingTransferId, setRespondingTransferId] = useState<
     number | null
   >(null);
-  const [selectedTransferAppointmentTimes, setSelectedTransferAppointmentTimes] = useState<
-    Record<number, string>
-  >({});
-  const [cancellingTransferId, setCancellingTransferId] = useState<number | null>(null);
+  const [
+    selectedTransferAppointmentTimes,
+    setSelectedTransferAppointmentTimes,
+  ] = useState<Record<number, string>>({});
+  const [cancellingTransferId, setCancellingTransferId] = useState<
+    number | null
+  >(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [successMessage, setSuccessMessage] = useState("");
   const [cancelTarget, setCancelTarget] = useState<Reservation | null>(null);
@@ -653,14 +780,19 @@ export default function MyLotsPage() {
     setError("");
 
     try {
-      const [reservationRes, transferRes, appointmentRes, contractRes, serviceRes] =
-        await Promise.all([
-          api.get<ApiResponse<Reservation[]>>("/my/reservations"),
-          api.get<ApiResponse<TransferRequestItem[]>>("/my/transfer-requests"),
-          api.get<ApiResponse<Appointment[]>>("/my/appointments"),
-          api.get<ApiResponse<Contract[]>>("/my/contracts"),
-          api.get<ApiResponse<ServiceOrder[]>>("/my/service-orders"),
-        ]);
+      const [
+        reservationRes,
+        transferRes,
+        appointmentRes,
+        contractRes,
+        serviceRes,
+      ] = await Promise.all([
+        api.get<ApiResponse<Reservation[]>>("/my/reservations"),
+        api.get<ApiResponse<TransferRequestItem[]>>("/my/transfer-requests"),
+        api.get<ApiResponse<Appointment[]>>("/my/appointments"),
+        api.get<ApiResponse<Contract[]>>("/my/contracts"),
+        api.get<ApiResponse<ServiceOrder[]>>("/my/service-orders"),
+      ]);
 
       const baseReservations = (reservationRes.data.data ?? []).filter(
         (request) => request.type === "purchase",
@@ -785,9 +917,14 @@ export default function MyLotsPage() {
     setRespondingTransferId(transfer.id);
     setError("");
     try {
-      await api.post(`/my/transfer-requests/${transfer.id}/confirm-appointment`, {
-        selectedAt: selectedAt ? new Date(selectedAt).toISOString() : undefined,
-      });
+      await api.post(
+        `/my/transfer-requests/${transfer.id}/confirm-appointment`,
+        {
+          selectedAt: selectedAt
+            ? new Date(selectedAt).toISOString()
+            : undefined,
+        },
+      );
       setSuccessMessage(
         "Bạn đã xác nhận lịch hẹn ký hợp đồng chuyển nhượng thành công.",
       );
@@ -1076,9 +1213,7 @@ export default function MyLotsPage() {
                         id: request.cancellationId,
                         status: request.cancellationStatus,
                         reason: "Thông tin chi tiết đang được đồng bộ.",
-                        isImmediate: Boolean(
-                          request.cancellationIsImmediate,
-                        ),
+                        isImmediate: Boolean(request.cancellationIsImmediate),
                         requestedAt: "",
                       }
                     : null);
@@ -1088,15 +1223,19 @@ export default function MyLotsPage() {
                     request.status === "cancelled");
                 const cancellationMode =
                   request.cancellationMode ??
-                  (request.status === "approved" ? "admin_review" : "immediate");
+                  (request.status === "approved"
+                    ? "admin_review"
+                    : "immediate");
                 const canCancel =
                   request.canCancel ??
                   (["draft", "submitted", "pending", "approved"].includes(
                     request.status,
                   ) &&
                     cancellation?.status !== "pending" &&
-                    !(cancellation?.status === "approved" &&
-                      request.status === "cancelled"));
+                    !(
+                      cancellation?.status === "approved" &&
+                      request.status === "cancelled"
+                    ));
                 const plotText =
                   (request.plotCodes ?? []).join(", ") ||
                   `${request.plotCount ?? 0} lô`;
@@ -1173,7 +1312,9 @@ export default function MyLotsPage() {
                       </div>
                     </div>
 
-                    {cancellation ? <CancellationSummary cancellation={cancellation} /> : null}
+                    {cancellation ? (
+                      <CancellationSummary cancellation={cancellation} />
+                    ) : null}
 
                     {appointment && !cancellationBlocksWorkflow ? (
                       <div className="lots-next-step lots-appointment-card">
@@ -1249,7 +1390,10 @@ export default function MyLotsPage() {
                             <>
                               <div className="lots-appointment-picker">
                                 <AppointmentDateTimePicker
-                                  value={selectedAppointmentTimes[appointment.id] ?? ""}
+                                  value={
+                                    selectedAppointmentTimes[appointment.id] ??
+                                    ""
+                                  }
                                   min={appointmentTimeBounds(appointment).min}
                                   max={appointmentTimeBounds(appointment).max}
                                   onChange={(nextValue) =>
@@ -1388,7 +1532,9 @@ export default function MyLotsPage() {
                             label="Giá trị giao dịch"
                             value={
                               transfer.transactionAmount
-                                ? money.format(Number(transfer.transactionAmount))
+                                ? money.format(
+                                    Number(transfer.transactionAmount),
+                                  )
                                 : "Không ghi nhận"
                             }
                             emphasize={Boolean(transfer.transactionAmount)}
@@ -1507,7 +1653,9 @@ export default function MyLotsPage() {
                               <div className="lots-appointment-picker">
                                 <AppointmentDateTimePicker
                                   value={
-                                    selectedTransferAppointmentTimes[transfer.id] ?? ""
+                                    selectedTransferAppointmentTimes[
+                                      transfer.id
+                                    ] ?? ""
                                   }
                                   min={minTime}
                                   max={rangeEnd}
@@ -1551,8 +1699,8 @@ export default function MyLotsPage() {
                           <span>Bước tiếp theo</span>
                           <strong>Đang chờ tạo lịch hẹn chuyển nhượng</strong>
                           <p>
-                            Nhân viên sẽ cập nhật khoảng ngày ký hợp đồng
-                            chuyển nhượng cho yêu cầu này.
+                            Nhân viên sẽ cập nhật khoảng ngày ký hợp đồng chuyển
+                            nhượng cho yêu cầu này.
                           </p>
                         </div>
                       </div>
@@ -1974,7 +2122,8 @@ function CancellationSummary({
 
         {cancellation.status === "pending" ? (
           <div className="lots-cancellation-panel-help">
-            Admin đang xem xét yêu cầu hủy. Lịch hẹn và các bước tiếp theo tạm thời được khóa.
+            Admin đang xem xét yêu cầu hủy. Lịch hẹn và các bước tiếp theo tạm
+            thời được khóa.
           </div>
         ) : null}
       </div>

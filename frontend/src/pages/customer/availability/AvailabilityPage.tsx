@@ -281,9 +281,6 @@ function TimeSelector({
   onChange: (value: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [draftHour, setDraftHour] = useState(9);
-  const [draftMinute, setDraftMinute] = useState(0);
-  const [draftPeriod, setDraftPeriod] = useState<"AM" | "PM">("AM");
   const [popoverStyle, setPopoverStyle] = useState<CSSProperties>({});
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -301,7 +298,7 @@ function TimeSelector({
     const rect = trigger.getBoundingClientRect();
     const width = Math.min(390, Math.max(330, rect.width + 40));
     const gap = 10;
-    const estimatedHeight = 395;
+    const estimatedHeight = 330;
     const spaceBelow = window.innerHeight - rect.bottom - gap;
     const placeAbove =
       spaceBelow < estimatedHeight && rect.top > estimatedHeight + gap;
@@ -315,12 +312,24 @@ function TimeSelector({
     setPopoverStyle({ position: "fixed", top, left, width, zIndex: 100001 });
   }, []);
 
-  const openPicker = () => {
-    setDraftHour(currentHour12);
-    setDraftMinute(Math.min(55, Math.max(0, Math.round(validMinute / 5) * 5)));
-    setDraftPeriod(currentPeriod);
-    setOpen(true);
-  };
+  // Mỗi lựa chọn (giờ / phút / buổi) được áp dụng và lưu ngay lập tức vào `value`
+  // thật (không còn state "nháp" riêng), giống hệt cách ô chọn ngày hoạt động.
+  // Nhờ vậy sẽ không còn chuyện chọn ô này làm mất lựa chọn ở ô kia nữa.
+  function applyHour(hour12: number) {
+    let next24 = hour12 % 12;
+    if (currentPeriod === "PM") next24 += 12;
+    onChange(`${pad2(next24)}:${pad2(validMinute)}`);
+  }
+
+  function applyMinute(minute: number) {
+    onChange(`${pad2(validHour24)}:${pad2(minute)}`);
+  }
+
+  function applyPeriod(period: "AM" | "PM") {
+    let next24 = currentHour12 % 12;
+    if (period === "PM") next24 += 12;
+    onChange(`${pad2(next24)}:${pad2(validMinute)}`);
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -345,13 +354,6 @@ function TimeSelector({
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, []);
 
-  const commit = () => {
-    let nextHour24 = draftHour % 12;
-    if (draftPeriod === "PM") nextHour24 += 12;
-    onChange(`${pad2(nextHour24)}:${pad2(draftMinute)}`);
-    setOpen(false);
-  };
-
   const timePopover = open
     ? createPortal(
         <div
@@ -365,8 +367,8 @@ function TimeSelector({
             <div>
               <strong>{label}</strong>
               <span>
-                {pad2(draftHour)}:{pad2(draftMinute)}{" "}
-                {draftPeriod === "AM" ? "SA" : "CH"}
+                {pad2(currentHour12)}:{pad2(validMinute)}{" "}
+                {currentPeriod === "AM" ? "SA" : "CH"}
               </span>
             </div>
             <button
@@ -385,8 +387,8 @@ function TimeSelector({
                   <button
                     key={hour}
                     type="button"
-                    className={draftHour === hour ? "selected" : ""}
-                    onClick={() => setDraftHour(hour)}
+                    className={currentHour12 === hour ? "selected" : ""}
+                    onClick={() => applyHour(hour)}
                   >
                     {pad2(hour)}
                   </button>
@@ -400,8 +402,8 @@ function TimeSelector({
                   <button
                     key={mins}
                     type="button"
-                    className={draftMinute === mins ? "selected" : ""}
-                    onClick={() => setDraftMinute(mins)}
+                    className={validMinute === mins ? "selected" : ""}
+                    onClick={() => applyMinute(mins)}
                   >
                     {pad2(mins)}
                   </button>
@@ -415,8 +417,8 @@ function TimeSelector({
                   <button
                     key={period}
                     type="button"
-                    className={draftPeriod === period ? "selected" : ""}
-                    onClick={() => setDraftPeriod(period)}
+                    className={currentPeriod === period ? "selected" : ""}
+                    onClick={() => applyPeriod(period)}
                   >
                     {period === "AM" ? "SA" : "CH"}
                   </button>
@@ -425,10 +427,11 @@ function TimeSelector({
             </div>
           </div>
           <div className="availability-time-popover-footer">
-            <button type="button" onClick={() => setOpen(false)}>
-              Hủy
-            </button>
-            <button type="button" className="confirm" onClick={commit}>
+            <button
+              type="button"
+              className="confirm"
+              onClick={() => setOpen(false)}
+            >
               Xong
             </button>
           </div>
@@ -444,7 +447,7 @@ function TimeSelector({
         ref={triggerRef}
         type="button"
         className="availability-time-trigger"
-        onClick={openPicker}
+        onClick={() => setOpen((current) => !current)}
         aria-expanded={open}
         aria-haspopup="dialog"
       >
