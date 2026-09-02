@@ -7268,11 +7268,32 @@ ${JSON.stringify(options)}
   private buildImmediateSafetyTurn(
     message: string,
   ): DeterministicSocialTurn | null {
+    // Keep Vietnamese diacritics for the high-confidence crisis phrase itself.
+    // Accent folding turns the harmless phrase tu-tu-van into tu tu van, whose
+    // first two tokens previously triggered this gate before semantic planning.
+    const normalized = message
+      .normalize('NFC')
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
     const folded = this.foldForMemory(message);
-    const selfHarmSignal =
-      /\b(?:tu tu|muon chet|muon tu tu|khong muon song|khong con muon song|ket thuc cuoc doi|tu lam hai ban than|lam hai ban than|suicide|kill myself|end my life|self harm)\b/.test(
+
+    const explicitAccentedSuicide =
+      /(?:^|\s)t\u1ef1\s+t\u1eed(?=$|\s)/u.test(normalized);
+    const ambiguousFoldedConstruction =
+      /(?:^|\s)tu\s+tu\s+(?:van|tap|luyen)(?=$|\s)/.test(folded);
+    const explicitUnaccentedSuicide =
+      /(?:^|\s)tu\s+tu(?=$|\s)/.test(normalized) &&
+      !ambiguousFoldedConstruction;
+    const otherExplicitSelfHarmSignal =
+      /\b(?:muon chet|khong muon song|khong con muon song|ket thuc cuoc doi|tu lam hai ban than|lam hai ban than|suicide|kill myself|end my life|self harm)\b/.test(
         folded,
       );
+    const selfHarmSignal =
+      explicitAccentedSuicide ||
+      explicitUnaccentedSuicide ||
+      otherExplicitSelfHarmSignal;
     if (!selfHarmSignal) return null;
 
     return {
