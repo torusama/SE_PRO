@@ -62,7 +62,6 @@ type KnowledgeProposal = {
   effectiveTo?: string;
 };
 
-
 type KnowledgeForm = {
   title: string;
   category: string;
@@ -98,8 +97,12 @@ const formatDate = (value?: string) => {
   return Number.isNaN(date.getTime())
     ? "—"
     : new Intl.DateTimeFormat("vi-VN", {
-        dateStyle: "short",
-        timeStyle: "short",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
       }).format(date);
 };
 
@@ -224,25 +227,27 @@ const formatVnd = (value?: number | null) =>
 
 const knowledgeCategoryLabel = (value: string) => {
   const normalized = value.trim();
-  const known = ({
-    faq: "Câu hỏi thường gặp",
-    business_rule: "Quy định nghiệp vụ",
-    information_correction: "Hiệu chỉnh thông tin",
-    verified_correction: "Nội dung đã được hiệu chỉnh",
-    service: "Dịch vụ nghĩa trang",
-    maintenance: "Chăm sóc và bảo trì phần mộ",
-    ritual: "Nghi lễ và tưởng niệm",
-    plot: "Thông tin lô đất",
-    plot_location: "Vị trí và khu vực lô đất",
-    plot_status: "Trạng thái lô đất",
-    plot_ranking: "Tiêu chí lựa chọn lô",
-    process: "Quy trình nghiệp vụ",
-    purchase_process: "Quy trình mua lô",
-    spiritual_consultation: "Tư vấn phong thủy và âm trạch",
-    conversation_preference: "Sở thích hội thoại",
-    service_request_review: "Xử lý yêu cầu dịch vụ",
-    general: "Tri thức chung",
-  } as Record<string, string>)[normalized.toLowerCase()];
+  const known = (
+    {
+      faq: "Câu hỏi thường gặp",
+      business_rule: "Quy định nghiệp vụ",
+      information_correction: "Hiệu chỉnh thông tin",
+      verified_correction: "Nội dung đã được hiệu chỉnh",
+      service: "Dịch vụ nghĩa trang",
+      maintenance: "Chăm sóc và bảo trì phần mộ",
+      ritual: "Nghi lễ và tưởng niệm",
+      plot: "Thông tin lô đất",
+      plot_location: "Vị trí và khu vực lô đất",
+      plot_status: "Trạng thái lô đất",
+      plot_ranking: "Tiêu chí lựa chọn lô",
+      process: "Quy trình nghiệp vụ",
+      purchase_process: "Quy trình mua lô",
+      spiritual_consultation: "Tư vấn phong thủy và âm trạch",
+      conversation_preference: "Sở thích hội thoại",
+      service_request_review: "Xử lý yêu cầu dịch vụ",
+      general: "Tri thức chung",
+    } as Record<string, string>
+  )[normalized.toLowerCase()];
   if (known) return known;
   return /^[a-z0-9_-]+$/i.test(normalized)
     ? "Nhóm tri thức hệ thống"
@@ -262,14 +267,19 @@ const knowledgeCategoryOptions = [
 const knowledgeTypeOptions = [
   { value: "faq", label: "Thông tin để AI tham khảo khi trả lời" },
   { value: "business_rule", label: "Quy định / giới hạn nghiệp vụ" },
-  { value: "information_correction", label: "Nội dung dùng để sửa thông tin cũ" },
+  {
+    value: "information_correction",
+    label: "Nội dung dùng để sửa thông tin cũ",
+  },
 ] as const;
 
 const knowledgeSourceLabel = (item: KnowledgeProposal) => {
   const sourceType = item.sourceType?.toLowerCase();
   if (sourceType === "admin_manual") return "Quản trị viên thêm trực tiếp";
-  if (sourceType === "admin_feedback") return "Hiệu chỉnh đã được quản trị viên duyệt";
-  if (sourceType === "system_research") return "Tri thức tham khảo do hệ thống chuẩn bị";
+  if (sourceType === "admin_feedback")
+    return "Hiệu chỉnh đã được quản trị viên duyệt";
+  if (sourceType === "system_research")
+    return "Tri thức tham khảo do hệ thống chuẩn bị";
   if (sourceType === "system") return "Tri thức nền của hệ thống";
   if (item.sourceRole === "customer") return "Nội dung do khách hàng đề xuất";
   if (item.sourceRole === "admin") return "Nội dung do quản trị viên xác nhận";
@@ -318,7 +328,9 @@ export default function AgentAdminPage() {
   const [knowledgeInventory, setKnowledgeInventory] = useState<
     KnowledgeProposal[]
   >([]);
-  const [learningJournal, setLearningJournal] = useState<LearningJournalItem[]>([]);
+  const [learningJournal, setLearningJournal] = useState<LearningJournalItem[]>(
+    [],
+  );
   const [knowledgeStatus, setKnowledgeStatus] = useState("all");
   const [knowledgeSearch, setKnowledgeSearch] = useState("");
   const [knowledgeReviewNotes, setKnowledgeReviewNotes] = useState<
@@ -684,7 +696,10 @@ export default function AgentAdminPage() {
       setError("Tên bài học cần ít nhất 3 ký tự.");
       return;
     }
-    if (payload.summary.trim().length < 10 || payload.preventionRule.trim().length < 10) {
+    if (
+      payload.summary.trim().length < 10 ||
+      payload.preventionRule.trim().length < 10
+    ) {
       setError("Phần bài học và quy tắc tránh lặp lại cần ít nhất 10 ký tự.");
       return;
     }
@@ -743,7 +758,9 @@ export default function AgentAdminPage() {
     setBusy(`learning-journal-delete-${item.learningJournalId}`);
     setError(undefined);
     try {
-      await api.delete(`/admin/ai-agent/learning-journal/${item.learningJournalId}`);
+      await api.delete(
+        `/admin/ai-agent/learning-journal/${item.learningJournalId}`,
+      );
       await loadData();
     } catch (error) {
       const responseMessage =
@@ -791,8 +808,8 @@ export default function AgentAdminPage() {
           <span className="agent-admin__page-kicker">Quản trị trợ lý AI</span>
           <h1>Học tập và tri thức</h1>
           <p>
-            Một nơi để xem nhật ký AI tự học, tri thức nào đã được xác minh,
-            đề xuất nào cần quản trị xử lý và hệ thống AI đang hoạt động ra sao.
+            Một nơi để xem nhật ký AI tự học, tri thức nào đã được xác minh, đề
+            xuất nào cần quản trị xử lý và hệ thống AI đang hoạt động ra sao.
           </p>
         </div>
         <aside className="agent-admin__guardrail">
@@ -852,8 +869,8 @@ export default function AgentAdminPage() {
                 <div>
                   <h2>Đề xuất người dùng</h2>
                   <p>
-                    Kiểm duyệt câu hỏi đóng góp, hiệu chỉnh câu trả lời và xem xét
-                    các đề xuất nghiệp vụ do khách hàng gửi đến trợ lý AI.
+                    Kiểm duyệt câu hỏi đóng góp, hiệu chỉnh câu trả lời và xem
+                    xét các đề xuất nghiệp vụ do khách hàng gửi đến trợ lý AI.
                   </p>
                 </div>
                 <div className="agent-admin__section-count">
@@ -871,97 +888,97 @@ export default function AgentAdminPage() {
                   <div>
                     <h3>Câu hỏi thường gặp & tri thức chờ xác minh</h3>
                     <p>
-                      Nội dung do người dùng gửi không tự động trở thành tri thức
-                      chính thức. Chỉ nội dung được duyệt mới được trợ lý dùng để
-                      trả lời những người dùng khác.
+                      Nội dung do người dùng gửi không tự động trở thành tri
+                      thức chính thức. Chỉ nội dung được duyệt mới được trợ lý
+                      dùng để trả lời những người dùng khác.
                     </p>
                   </div>
                 </header>
 
-              <div className="agent-admin__review-queue">
-                {knowledgeProposals.map((item) => (
-                  <article
-                    className="agent-admin__knowledge-review"
-                    key={item.knowledgeEntryId}
-                  >
-                    <div className="agent-admin__knowledge-main">
-                      <div className="agent-admin__knowledge-meta">
-                        <span className="agent-admin__status status-quarantined">
-                          Chờ xác minh
-                        </span>
-                        <span>{knowledgeTypeLabel(item.knowledgeType)}</span>
-                        <span>{sourceRoleLabel(item.sourceRole)}</span>
+                <div className="agent-admin__review-queue">
+                  {knowledgeProposals.map((item) => (
+                    <article
+                      className="agent-admin__knowledge-review"
+                      key={item.knowledgeEntryId}
+                    >
+                      <div className="agent-admin__knowledge-main">
+                        <div className="agent-admin__knowledge-meta">
+                          <span className="agent-admin__status status-quarantined">
+                            Chờ xác minh
+                          </span>
+                          <span>{knowledgeTypeLabel(item.knowledgeType)}</span>
+                          <span>{sourceRoleLabel(item.sourceRole)}</span>
+                        </div>
+                        <h3>{knowledgeTitleLabel(item)}</h3>
+                        <p className="agent-admin__knowledge-category">
+                          {knowledgeCategoryLabel(item.category)}
+                        </p>
+                        <details className="agent-admin__knowledge-content">
+                          <summary>Xem nội dung khách gửi</summary>
+                          <p>{item.content}</p>
+                        </details>
+                        <p className="agent-admin__review-note">
+                          {reviewReasonLabel(item.validationReason)}
+                        </p>
+                        <label className="agent-admin__review-field">
+                          <span>Căn cứ kiểm duyệt</span>
+                          <textarea
+                            maxLength={1000}
+                            onChange={(event) =>
+                              setKnowledgeReviewNotes((current) => ({
+                                ...current,
+                                [item.knowledgeEntryId]: event.target.value,
+                              }))
+                            }
+                            placeholder="Ghi nguồn hoặc lý do để người kiểm tra sau có thể đối chiếu"
+                            rows={2}
+                            value={
+                              knowledgeReviewNotes[item.knowledgeEntryId] ?? ""
+                            }
+                          />
+                        </label>
                       </div>
-                      <h3>{knowledgeTitleLabel(item)}</h3>
-                      <p className="agent-admin__knowledge-category">
-                        {knowledgeCategoryLabel(item.category)}
-                      </p>
-                      <details className="agent-admin__knowledge-content">
-                        <summary>Xem nội dung khách gửi</summary>
-                        <p>{item.content}</p>
-                      </details>
-                      <p className="agent-admin__review-note">
-                        {reviewReasonLabel(item.validationReason)}
-                      </p>
-                      <label className="agent-admin__review-field">
-                        <span>Căn cứ kiểm duyệt</span>
-                        <textarea
-                          maxLength={1000}
-                          onChange={(event) =>
-                            setKnowledgeReviewNotes((current) => ({
-                              ...current,
-                              [item.knowledgeEntryId]: event.target.value,
-                            }))
-                          }
-                          placeholder="Ghi nguồn hoặc lý do để người kiểm tra sau có thể đối chiếu"
-                          rows={2}
-                          value={
-                            knowledgeReviewNotes[item.knowledgeEntryId] ?? ""
-                          }
-                        />
-                      </label>
-                    </div>
-                    <div className="agent-admin__knowledge-actions">
-                      <time>{formatDate(item.createdAt)}</time>
-                      <div className="agent-admin__actions">
-                        <button
-                          disabled={
-                            busy === `knowledge-${item.knowledgeEntryId}`
-                          }
-                          onClick={() => reviewKnowledge(item, "approve")}
-                          type="button"
-                        >
-                          Duyệt
-                        </button>
-                        <button
-                          className="danger"
-                          disabled={
-                            busy === `knowledge-${item.knowledgeEntryId}`
-                          }
-                          onClick={() => reviewKnowledge(item, "reject")}
-                          type="button"
-                        >
-                          Từ chối
-                        </button>
+                      <div className="agent-admin__knowledge-actions">
+                        <time>{formatDate(item.createdAt)}</time>
+                        <div className="agent-admin__actions">
+                          <button
+                            disabled={
+                              busy === `knowledge-${item.knowledgeEntryId}`
+                            }
+                            onClick={() => reviewKnowledge(item, "approve")}
+                            type="button"
+                          >
+                            Duyệt
+                          </button>
+                          <button
+                            className="danger"
+                            disabled={
+                              busy === `knowledge-${item.knowledgeEntryId}`
+                            }
+                            onClick={() => reviewKnowledge(item, "reject")}
+                            type="button"
+                          >
+                            Từ chối
+                          </button>
+                        </div>
                       </div>
+                    </article>
+                  ))}
+                  {!knowledgeProposals.length && (
+                    <div className="agent-admin__empty">
+                      Chưa có câu hỏi thường gặp hoặc đề xuất tri thức nào chờ
+                      kiểm duyệt.
                     </div>
-                  </article>
-                ))}
-                {!knowledgeProposals.length && (
-                  <div className="agent-admin__empty">
-                    Chưa có câu hỏi thường gặp hoặc đề xuất tri thức nào chờ
-                    kiểm duyệt.
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
               </section>
 
               <section className="agent-admin__subsection">
                 <header>
                   <h3>Hiệu chỉnh câu trả lời cần xử lý</h3>
                   <p>
-                    Các phản hồi cần được đối chiếu trước khi duyệt. Chỉ bật
-                    “áp dụng hiệu chỉnh” khi nội dung sửa đã được xác minh.
+                    Các phản hồi cần được đối chiếu trước khi duyệt. Chỉ bật “áp
+                    dụng hiệu chỉnh” khi nội dung sửa đã được xác minh.
                   </p>
                 </header>
                 <div className="agent-admin__list">
@@ -1040,9 +1057,10 @@ export default function AgentAdminPage() {
                   <div>
                     <h3>Đề xuất cần quản trị xử lý</h3>
                     <p>
-                      Thương lượng giá, góp ý website, dịch vụ, lô đất, chính sách
-                      và khiếu nại được tách khỏi kho tri thức. Trợ lý chỉ ghi nhận
-                      và chuyển tiếp; quyền quyết định vẫn thuộc quản trị viên.
+                      Thương lượng giá, góp ý website, dịch vụ, lô đất, chính
+                      sách và khiếu nại được tách khỏi kho tri thức. Trợ lý chỉ
+                      ghi nhận và chuyển tiếp; quyền quyết định vẫn thuộc quản
+                      trị viên.
                     </p>
                   </div>
                 </header>
@@ -1057,8 +1075,12 @@ export default function AgentAdminPage() {
                           <span className="agent-admin__status status-quarantined">
                             Chờ quản trị xử lý
                           </span>
-                          <span>{customerProposalTypeLabel(item.proposalType)}</span>
-                          {item.userId ? <span>Khách hàng #{item.userId}</span> : null}
+                          <span>
+                            {customerProposalTypeLabel(item.proposalType)}
+                          </span>
+                          {item.userId ? (
+                            <span>Khách hàng #{item.userId}</span>
+                          ) : null}
                         </div>
                         <h3>{item.subject}</h3>
                         <p className="agent-admin__knowledge-category">
@@ -1079,9 +1101,10 @@ export default function AgentAdminPage() {
                           </details>
                         )}
                         <p className="agent-admin__review-note">
-                          Tiếp nhận tại đây chỉ xác nhận quản trị viên đã nhận đề
-                          xuất. Hệ thống không tự thay giá, quy định, website hoặc
-                          cho phép AI sử dụng nội dung này trong kho tri thức.
+                          Tiếp nhận tại đây chỉ xác nhận quản trị viên đã nhận
+                          đề xuất. Hệ thống không tự thay giá, quy định, website
+                          hoặc cho phép AI sử dụng nội dung này trong kho tri
+                          thức.
                         </p>
                         <label className="agent-admin__review-field">
                           <span>Kết quả xử lý / ghi chú quản trị</span>
@@ -1108,7 +1131,9 @@ export default function AgentAdminPage() {
                             disabled={
                               busy === `customer-proposal-${item.proposalId}`
                             }
-                            onClick={() => reviewCustomerProposal(item, "accept")}
+                            onClick={() =>
+                              reviewCustomerProposal(item, "accept")
+                            }
                             type="button"
                           >
                             Tiếp nhận
@@ -1118,7 +1143,9 @@ export default function AgentAdminPage() {
                             disabled={
                               busy === `customer-proposal-${item.proposalId}`
                             }
-                            onClick={() => reviewCustomerProposal(item, "reject")}
+                            onClick={() =>
+                              reviewCustomerProposal(item, "reject")
+                            }
                             type="button"
                           >
                             Từ chối
@@ -1143,9 +1170,9 @@ export default function AgentAdminPage() {
                 <div>
                   <h2>Kho tri thức dùng chung</h2>
                   <p>
-                    Chỉ các tri thức có trạng thái “Đang sử dụng” mới được trợ lý
-                    AI dùng khi tạo câu trả lời. Tri thức bị cách ly hoặc chưa
-                    duyệt sẽ không được đưa vào ngữ cảnh RAG.
+                    Chỉ các tri thức có trạng thái “Đang sử dụng” mới được trợ
+                    lý AI dùng khi tạo câu trả lời. Tri thức bị cách ly hoặc
+                    chưa duyệt sẽ không được đưa vào ngữ cảnh RAG.
                   </p>
                 </div>
                 <div className="agent-admin__header-actions">
@@ -1230,7 +1257,9 @@ export default function AgentAdminPage() {
                         </td>
                         <td>{sourceRoleLabel(item.sourceRole)}</td>
                         <td className="agent-admin__knowledge-time-cell">
-                          <time>{formatDate(item.updatedAt ?? item.createdAt)}</time>
+                          <time>
+                            {formatDate(item.updatedAt ?? item.createdAt)}
+                          </time>
                           <div className="agent-admin__table-actions">
                             <button
                               className="agent-admin__action-btn"
@@ -1342,7 +1371,9 @@ export default function AgentAdminPage() {
                   </article>
                   <article>
                     <span>Nguồn nội dung</span>
-                    <strong>{knowledgeSourceLabel(knowledgeDialog.item)}</strong>
+                    <strong>
+                      {knowledgeSourceLabel(knowledgeDialog.item)}
+                    </strong>
                   </article>
                 </div>
 
@@ -1355,9 +1386,7 @@ export default function AgentAdminPage() {
                   <div>
                     <span>Căn cứ / trạng thái kiểm duyệt</span>
                     <p>
-                      {reviewReasonLabel(
-                        knowledgeDialog.item.validationReason,
-                      )}
+                      {reviewReasonLabel(knowledgeDialog.item.validationReason)}
                     </p>
                   </div>
                   <div>
@@ -1373,9 +1402,7 @@ export default function AgentAdminPage() {
 
                 <footer className="agent-admin__dialog-actions">
                   <button
-                    onClick={() =>
-                      openKnowledge(knowledgeDialog.item, "edit")
-                    }
+                    onClick={() => openKnowledge(knowledgeDialog.item, "edit")}
                     type="button"
                   >
                     Chỉnh sửa
@@ -1396,9 +1423,10 @@ export default function AgentAdminPage() {
               <div className="agent-admin__knowledge-dialog-body">
                 <p className="agent-admin__dialog-help">
                   Nội dung do quản trị viên lưu tại đây được xem là đã duyệt và
-                  sẽ được AI dùng ngay khi hệ thống tìm thấy nội dung phù hợp với câu hỏi. Những
-                  thay đổi giá, quyền hạn, thời hạn hoặc logic giao dịch phải sửa
-                  ở backend, không được dùng kho tri thức để ghi đè.
+                  sẽ được AI dùng ngay khi hệ thống tìm thấy nội dung phù hợp
+                  với câu hỏi. Những thay đổi giá, quyền hạn, thời hạn hoặc
+                  logic giao dịch phải sửa ở backend, không được dùng kho tri
+                  thức để ghi đè.
                 </p>
 
                 <div className="agent-admin__knowledge-form-grid">
@@ -1475,9 +1503,10 @@ export default function AgentAdminPage() {
                       value={knowledgeForm.content}
                     />
                     <small>
-                      {knowledgeForm.content.trim().length.toLocaleString(
-                        "vi-VN",
-                      )} / 12.000 ký tự
+                      {knowledgeForm.content
+                        .trim()
+                        .length.toLocaleString("vi-VN")}{" "}
+                      / 12.000 ký tự
                     </small>
                   </label>
                   <label className="wide">

@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import type { CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import DemoPaymentPanel from "@/components/payment/DemoPaymentPanel";
@@ -73,15 +75,6 @@ const STATUS_META: Record<OrderStatus, { label: string; tone: string }> = {
   cancelled: { label: "Đã huỷ", tone: "red" },
 };
 
-const NEXT_STATUSES: Record<OrderStatus, OrderStatus[]> = {
-  submitted: ["submitted", "pending_confirm", "confirmed", "cancelled"],
-  pending_confirm: ["pending_confirm", "confirmed", "cancelled"],
-  confirmed: ["confirmed", "in_progress", "cancelled"],
-  in_progress: ["in_progress", "cancelled"],
-  completed: ["completed"],
-  cancelled: ["cancelled"],
-};
-
 const STATUS_FILTERS: Array<{ value: "all" | OrderStatus; label: string }> = [
   { value: "all", label: "Tất cả" },
   { value: "submitted", label: "Mới gửi" },
@@ -102,8 +95,15 @@ function formatDate(value?: string | null, withTime = false) {
   return new Intl.DateTimeFormat(
     "vi-VN",
     withTime
-      ? { dateStyle: "medium", timeStyle: "short" }
-      : { dateStyle: "medium" },
+      ? {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          hourCycle: "h23",
+        }
+      : { day: "2-digit", month: "2-digit", year: "numeric" },
   ).format(new Date(value));
 }
 
@@ -166,6 +166,45 @@ export default function ServiceManagementPage() {
     if (!requestedOrderId) return;
     void openDetail(requestedOrderId);
   }, [requestedOrderId]);
+
+  useEffect(() => {
+    // Khoá cuộn trang nền khi popup chi tiết đang mở, để lớp mờ (backdrop-filter)
+    // của service-drawer-layer luôn phủ đúng toàn bộ khung nhìn, không bị lệch
+    // do trang phía sau cuộn ngang/dọc hoặc đổi kích thước thanh cuộn.
+    if (!selected && !detailLoading) return;
+    const { overflow, paddingRight } = document.body.style;
+    const scrollbarWidth =
+      window.innerWidth - document.documentElement.clientWidth;
+    document.body.style.overflow = "hidden";
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+    }
+    return () => {
+      document.body.style.overflow = overflow;
+      document.body.style.paddingRight = paddingRight;
+    };
+  }, [selected, detailLoading]);
+
+  const [headerHeight, setHeaderHeight] = useState(78);
+
+  useEffect(() => {
+    // Đo chiều cao thật của topbar thay vì đóng cứng 78px: topbar có thể
+    // cao hơn 78px tuỳ độ phân giải/zoom (vd. xuống dòng ở màn hình hẹp),
+    // nếu không đo lại sẽ để lộ khe hở chưa được làm mờ ngay dưới topbar.
+    if (!selected && !detailLoading) return;
+    const headerEl = document.querySelector(".admin-header");
+    if (!headerEl) return;
+    const update = () =>
+      setHeaderHeight(headerEl.getBoundingClientRect().height);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(headerEl);
+    window.addEventListener("resize", update);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, [selected, detailLoading]);
 
   async function openDetail(orderId: number) {
     setDetailLoading(true);
@@ -348,32 +387,40 @@ export default function ServiceManagementPage() {
         )}
       </section>
 
-      {(selected || detailLoading) && (
-        <div
-          className="service-drawer-layer"
-          role="presentation"
-          onMouseDown={() => !detailLoading && setSelected(null)}
-        >
-          <aside
-            className="service-drawer"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Chi tiết đơn dịch vụ"
-            onMouseDown={(event) => event.stopPropagation()}
+      {(selected || detailLoading) &&
+        createPortal(
+          <div
+            className="admin-theme service-drawer-layer"
+            role="presentation"
+            style={
+              {
+                "--service-header-height": `${headerHeight}px`,
+              } as CSSProperties
+            }
+            onMouseDown={() => !detailLoading && setSelected(null)}
           >
-            {detailLoading && !selected ? (
-              <div className="service-empty">Đang tải chi tiết...</div>
-            ) : selected ? (
-              <OrderDetail
-                order={selected}
-                assignees={assignees}
-                onClose={() => setSelected(null)}
-                onSaved={(message) => void refreshSelected(message)}
-              />
-            ) : null}
-          </aside>
-        </div>
-      )}
+            <aside
+              key={selected ? `${selected.id}-${selected.status}` : "loading"}
+              className="service-drawer"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Chi tiết đơn dịch vụ"
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              {detailLoading && !selected ? (
+                <div className="service-empty">Đang tải chi tiết...</div>
+              ) : selected ? (
+                <OrderDetail
+                  order={selected}
+                  assignees={assignees}
+                  onClose={() => setSelected(null)}
+                  onSaved={(message) => void refreshSelected(message)}
+                />
+              ) : null}
+            </aside>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
@@ -437,7 +484,6 @@ function OrderDetail({
   onClose: () => void;
   onSaved: (message: string) => void;
 }) {
-  const [status, setStatus] = useState(order.status);
   const [assignedTo, setAssignedTo] = useState(
     order.assignedTo ? String(order.assignedTo) : "",
   );
@@ -449,19 +495,56 @@ function OrderDetail({
   const [evidence, setEvidence] = useState<File[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [activeTab, setActiveTab] = useState<"overview" | "processing">(
+    "overview",
+  );
+  const [savedSnapshot, setSavedSnapshot] = useState(() =>
+    JSON.stringify({
+      assignedTo: order.assignedTo ? String(order.assignedTo) : "",
+      scheduledDate: order.scheduledDate?.slice(0, 10) ?? "",
+      adminNote: order.adminNote ?? "",
+    }),
+  );
+
+  const currentSnapshot = JSON.stringify({
+    assignedTo,
+    scheduledDate,
+    adminNote,
+  });
+  const isDirty = currentSnapshot !== savedSnapshot;
 
   async function save() {
+    const validation = validateProcessing({
+      currentStatus: order.status,
+      nextStatus: order.status,
+      assignedTo,
+      scheduledDate,
+      adminNote,
+      requireNextStep: false,
+    });
+    if (!validation.ok) {
+      setError(validation.message);
+      setActiveTab("processing");
+      return;
+    }
+
     setSaving(true);
     setError("");
+    setSuccess("");
     try {
       await api.patch(`/admin/service-orders/${order.id}`, {
-        status,
+        status: order.status,
         ...(assignedTo ? { assignedTo: Number(assignedTo) } : {}),
         adminNote,
         ...(scheduledDate ? { scheduledDate } : {}),
       });
+      setSavedSnapshot(currentSnapshot);
+      setSuccess(
+        "Đã lưu thay đổi. Hệ thống đã ghi lịch sử thao tác và gửi thông báo khi trạng thái thay đổi.",
+      );
       onSaved(
-        "Đã cập nhật đơn dịch vụ và gửi thông báo cho khách hàng khi cần.",
+        "Đã lưu cập nhật đơn dịch vụ và gửi thông báo cho khách hàng khi cần.",
       );
     } catch (requestError) {
       setError(getErrorMessage(requestError));
@@ -470,13 +553,95 @@ function OrderDetail({
     }
   }
 
+  async function advanceStep() {
+    if (order.status === "in_progress") {
+      setActiveTab("processing");
+      setError(
+        "Bước tiếp theo là hoàn thành dịch vụ. Hãy dùng khu vực Xác nhận hoàn thành và gửi bằng chứng.",
+      );
+      return;
+    }
+    if (order.status === "completed" || order.status === "cancelled") return;
+
+    const nextStatus = getNextStep(order.status);
+    if (!nextStatus) return;
+
+    if (order.status === "confirmed" && order.paymentStatus !== "paid") {
+      setError(
+        "Chưa thể chuyển sang Đang thực hiện: giao dịch cần được xác nhận đã thanh toán.",
+      );
+      setActiveTab("overview");
+      return;
+    }
+
+    const validation = validateProcessing({
+      currentStatus: order.status,
+      nextStatus,
+      assignedTo,
+      scheduledDate,
+      adminNote,
+      requireNextStep: true,
+    });
+    if (!validation.ok) {
+      setError(validation.message);
+      setActiveTab("processing");
+      return;
+    }
+
+    if (isDirty) {
+      setError(
+        "Bạn đã thay đổi thông tin nhưng chưa lưu. Hãy ấn “Lưu thay đổi” trước khi chuyển bước.",
+      );
+      setActiveTab("processing");
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+    setSuccess("");
+    try {
+      await api.patch(`/admin/service-orders/${order.id}`, {
+        status: nextStatus,
+        ...(assignedTo ? { assignedTo: Number(assignedTo) } : {}),
+        adminNote,
+        ...(scheduledDate ? { scheduledDate } : {}),
+      });
+      setSuccess(`Đã chuyển đơn sang bước “${STATUS_META[nextStatus].label}”.`);
+      onSaved(`Đã chuyển đơn sang bước “${STATUS_META[nextStatus].label}”.`);
+    } catch (requestError) {
+      setError(getErrorMessage(requestError));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function complete() {
+    if (order.status !== "in_progress") {
+      setError(
+        "Chỉ có thể xác nhận hoàn thành khi đơn đang ở bước Đang thực hiện.",
+      );
+      return;
+    }
+    if (isDirty) {
+      setError(
+        "Bạn đã thay đổi thông tin xử lý nhưng chưa lưu. Hãy lưu thay đổi trước khi xác nhận hoàn thành.",
+      );
+      setActiveTab("processing");
+      return;
+    }
+    if (!completionNote.trim()) {
+      setError("Vui lòng nhập Ghi chú kết quả trước khi xác nhận hoàn thành.");
+      setActiveTab("processing");
+      return;
+    }
     if (evidence.length === 0) {
       setError("Vui lòng chọn ít nhất một ảnh bằng chứng hoàn thành.");
+      setActiveTab("processing");
       return;
     }
     setSaving(true);
     setError("");
+    setSuccess("");
     try {
       const form = new FormData();
       form.append("completionNote", completionNote);
@@ -484,6 +649,9 @@ function OrderDetail({
       await api.post(`/admin/service-orders/${order.id}/completion`, form, {
         headers: { "Content-Type": "multipart/form-data" },
       });
+      setSuccess(
+        "Đã xác nhận hoàn thành, lưu bằng chứng và gửi thông báo cho khách hàng.",
+      );
       onSaved(
         "Dịch vụ đã được xác nhận hoàn thành và khách hàng đã nhận thông báo.",
       );
@@ -515,17 +683,24 @@ function OrderDetail({
 
   const canComplete = order.status === "in_progress";
   const terminal = ["completed", "cancelled"].includes(order.status);
+  const nextStatus = getNextStep(order.status);
+  const stepIndex = STATUS_STEPS.findIndex(
+    (step) => step.status === order.status,
+  );
+  const processingValidation = getProcessingRequirement(order.status);
 
   return (
     <>
       <div className="service-drawer__header">
-        <div>
-          <span>{orderCode(order.id)}</span>
-          <h2>{order.serviceName}</h2>
-          <StatusBadge
-            status={order.status}
-            paymentStatus={order.paymentStatus}
-          />
+        <div className="service-detail-heading">
+          <div>
+            <span>{orderCode(order.id)}</span>
+            <h2>{order.serviceName}</h2>
+            <StatusBadge
+              status={order.status}
+              paymentStatus={order.paymentStatus}
+            />
+          </div>
         </div>
         <button onClick={onClose} aria-label="Đóng chi tiết">
           ×
@@ -534,202 +709,448 @@ function OrderDetail({
 
       <div className="service-drawer__body">
         {error && (
-          <div className="service-alert service-alert--error">{error}</div>
+          <div className="service-alert service-alert--error" role="alert">
+            {error}
+          </div>
+        )}
+        {success && (
+          <div className="service-detail-success" role="status">
+            <span>✓</span>
+            {success}
+          </div>
         )}
 
-        <section className="detail-card detail-customer">
-          <h3>Thông tin khách hàng</h3>
-          <div className="detail-grid">
-            <Detail label="Họ tên" value={order.customerName} />
-            <Detail label="Mã lô" value={order.plotCode || "Không gắn lô"} />
-            <Detail label="Email" value={order.customerEmail || "—"} />
-            <Detail label="Số điện thoại" value={order.customerPhone || "—"} />
-          </div>
-        </section>
-
-        <section className="detail-card">
-          <h3>Thông tin yêu cầu</h3>
-          <div className="detail-grid">
-            <Detail
-              label="Ngày gửi"
-              value={formatDate(order.createdAt, true)}
-            />
-            <Detail
-              label="Ngày khách yêu cầu"
-              value={formatDate(order.requestedDate)}
-            />
-            <Detail label="Chi phí" value={money.format(order.amount)} />
-            <Detail
-              label="Ghi chú khách hàng"
-              value={order.note || "Không có ghi chú"}
-              wide
+        <section
+          className="service-progress-card"
+          aria-label="Tiến trình xử lý đơn"
+        >
+          <div className="service-progress-card__top">
+            <div>
+              <span>TIẾN TRÌNH XỬ LÝ</span>
+              <strong>
+                Bước {Math.max(stepIndex + 1, 1)} / {STATUS_STEPS.length}
+              </strong>
+            </div>
+            <StatusBadge
+              status={order.status}
+              paymentStatus={order.paymentStatus}
             />
           </div>
-        </section>
-
-        {(order.status === "confirmed" ||
-          order.paymentStatus === "awaiting_confirmation" ||
-          order.paymentStatus === "paid") && (
-          <DemoPaymentPanel
-            orderId={order.id}
-            amount={order.amount}
-            paymentStatus={order.paymentStatus ?? "unpaid"}
-            paymentCode={order.paymentCode}
-            paidAt={order.paidAt}
-            paymentConfirmedAt={order.paymentConfirmedAt}
-            variant="admin"
-            onChanged={() => {
-              onSaved(
-                "Đã xác nhận thanh toán và chuyển đơn sang trạng thái Thực hiện.",
+          <div className="service-stepper">
+            {STATUS_STEPS.map((step, index) => {
+              const done = index < stepIndex;
+              const current = index === stepIndex;
+              return (
+                <div
+                  key={step.status}
+                  className={`service-step ${done ? "is-done" : ""} ${current ? "is-current" : ""}`}
+                >
+                  <div className="service-step__node">{index + 1}</div>
+                  <strong>{step.label}</strong>
+                  <span>{step.caption}</span>
+                </div>
               );
-            }}
-          />
-        )}
+            })}
+          </div>
+          {!terminal && (
+            <div className="service-progress-action">
+              <div>
+                <strong>{processingValidation.title}</strong>
+                <span>{processingValidation.description}</span>
+              </div>
+              <button
+                className="service-primary"
+                onClick={() => void advanceStep()}
+                disabled={
+                  saving || !nextStatus || order.status === "in_progress"
+                }
+              >
+                {saving ? "Đang cập nhật…" : processingValidation.buttonLabel}
+              </button>
+            </div>
+          )}
+        </section>
 
-        {!terminal && (
-          <section className="detail-card detail-editor">
-            <h3>Xử lý đơn</h3>
-            <div className="detail-form-grid">
-              <label>
-                Trạng thái
-                <select
-                  value={status}
-                  onChange={(event) =>
-                    setStatus(event.target.value as OrderStatus)
+        <div
+          className="service-detail-tabs"
+          role="tablist"
+          aria-label="Nội dung đơn dịch vụ"
+        >
+          <button
+            role="tab"
+            aria-selected={activeTab === "overview"}
+            className={activeTab === "overview" ? "active" : ""}
+            onClick={() => setActiveTab("overview")}
+          >
+            <span>01</span>
+            Thông tin cơ bản
+          </button>
+          <button
+            role="tab"
+            aria-selected={activeTab === "processing"}
+            className={activeTab === "processing" ? "active" : ""}
+            onClick={() => setActiveTab("processing")}
+          >
+            <span>02</span>
+            Xử lý đơn & lịch sử
+            {isDirty && <em>Chưa lưu</em>}
+          </button>
+        </div>
+
+        {activeTab === "overview" ? (
+          <div className="service-tab-panel">
+            <section className="detail-card detail-customer">
+              <div className="detail-card__heading">
+                <div>
+                  <span>THÔNG TIN</span>
+                  <h3>Thông tin khách hàng</h3>
+                </div>
+              </div>
+              <div className="detail-grid">
+                <Detail label="Họ tên" value={order.customerName} />
+                <Detail
+                  label="Mã lô"
+                  value={order.plotCode || "Không gắn lô"}
+                />
+                <Detail label="Email" value={order.customerEmail || "—"} />
+                <Detail
+                  label="Số điện thoại"
+                  value={order.customerPhone || "—"}
+                />
+              </div>
+            </section>
+
+            <section className="detail-card">
+              <div className="detail-card__heading">
+                <div>
+                  <span>YÊU CẦU</span>
+                  <h3>Thông tin yêu cầu</h3>
+                </div>
+              </div>
+              <div className="detail-grid">
+                <Detail
+                  label="Ngày gửi"
+                  value={formatDate(order.createdAt, true)}
+                />
+                <Detail
+                  label="Ngày khách yêu cầu"
+                  value={formatDate(order.requestedDate)}
+                />
+                <Detail label="Chi phí" value={money.format(order.amount)} />
+                <Detail
+                  label="Ghi chú khách hàng"
+                  value={order.note || "Không có ghi chú"}
+                  wide
+                />
+              </div>
+            </section>
+
+            {(order.status === "confirmed" ||
+              order.paymentStatus === "awaiting_confirmation" ||
+              order.paymentStatus === "paid") && (
+              <DemoPaymentPanel
+                orderId={order.id}
+                amount={order.amount}
+                paymentStatus={order.paymentStatus ?? "unpaid"}
+                paymentCode={order.paymentCode}
+                paidAt={order.paidAt}
+                paymentConfirmedAt={order.paymentConfirmedAt}
+                variant="admin"
+                onChanged={() => {
+                  onSaved(
+                    "Đã cập nhật giao dịch thanh toán và gửi thông báo cho khách hàng.",
+                  );
+                }}
+              />
+            )}
+          </div>
+        ) : (
+          <div className="service-tab-panel">
+            {!terminal && (
+              <section className="detail-card detail-editor">
+                <div className="detail-card__heading">
+                  <div>
+                    <span>CẬP NHẬT</span>
+                    <h3>Xử lý đơn</h3>
+                  </div>
+                  <span
+                    className={`save-state ${isDirty ? "is-dirty" : "is-saved"}`}
+                  >
+                    {isDirty ? "Có thay đổi chưa lưu" : "Đã lưu"}
+                  </span>
+                </div>
+
+                <div className="detail-form-grid">
+                  <div className="processing-status-field">
+                    <span className="form-label">Trạng thái hiện tại</span>
+                    <strong>{STATUS_META[order.status].label}</strong>
+                    <small>
+                      Bước tiếp theo chỉ được cập nhật bằng nút trên thanh tiến
+                      trình.
+                    </small>
+                  </div>
+                  <label>
+                    <span className="form-label">
+                      Người xử lý <em>*</em>
+                    </span>
+                    <select
+                      required
+                      value={assignedTo}
+                      onChange={(event) => setAssignedTo(event.target.value)}
+                    >
+                      <option value="">Chưa phân công</option>
+                      {assignees.map((assignee) => (
+                        <option key={assignee.id} value={assignee.id}>
+                          {assignee.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span className="form-label">
+                      Lịch thực hiện <em>*</em>
+                    </span>
+                    <input
+                      type="date"
+                      required
+                      value={scheduledDate}
+                      onChange={(event) => setScheduledDate(event.target.value)}
+                    />
+                  </label>
+                  <label className="wide">
+                    <span className="form-label">
+                      Ghi chú nội bộ <em>*</em>
+                    </span>
+                    <textarea
+                      value={adminNote}
+                      onChange={(event) => setAdminNote(event.target.value)}
+                      rows={3}
+                      required
+                      maxLength={2000}
+                      placeholder="Ghi chú để đội ngũ quản trị theo dõi…"
+                    />
+                  </label>
+                </div>
+
+                <button
+                  className="service-primary"
+                  onClick={() => void save()}
+                  disabled={saving || !isDirty}
+                >
+                  {saving ? "Đang lưu…" : "Lưu thay đổi"}
+                </button>
+              </section>
+            )}
+
+            {canComplete && (
+              <section className="detail-card detail-completion">
+                <div className="detail-card__heading">
+                  <div>
+                    <span>HOÀN TẤT</span>
+                    <h3>Xác nhận hoàn thành</h3>
+                  </div>
+                </div>
+                <label>
+                  <span className="form-label">
+                    Ghi chú kết quả <em>*</em>
+                  </span>
+                  <textarea
+                    value={completionNote}
+                    onChange={(event) => setCompletionNote(event.target.value)}
+                    rows={3}
+                    required
+                    maxLength={2000}
+                    placeholder="Mô tả công việc đã thực hiện…"
+                  />
+                </label>
+                <label className="evidence-picker">
+                  <span>
+                    <strong>
+                      Chọn ảnh bằng chứng <em>*</em>
+                    </strong>
+                    Tối đa 10 ảnh JPG, PNG hoặc WEBP · 10 MB/ảnh
+                  </span>
+                  <input
+                    type="file"
+                    accept=".jpg,.jpeg,.png,.webp"
+                    multiple
+                    onChange={(event) => selectEvidence(event.target.files)}
+                  />
+                </label>
+                {evidence.length > 0 && (
+                  <p className="file-summary">
+                    Đã chọn {evidence.length} ảnh:{" "}
+                    {evidence.map((file) => file.name).join(", ")}
+                  </p>
+                )}
+                <button
+                  className="service-primary"
+                  onClick={() => void complete()}
+                  disabled={
+                    saving ||
+                    isDirty ||
+                    evidence.length === 0 ||
+                    !completionNote.trim()
                   }
                 >
-                  {NEXT_STATUSES[order.status].map((value) => (
-                    <option key={value} value={value}>
-                      {STATUS_META[value].label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Người xử lý
-                <select
-                  value={assignedTo}
-                  onChange={(event) => setAssignedTo(event.target.value)}
-                >
-                  <option value="">Chưa phân công</option>
-                  {assignees.map((assignee) => (
-                    <option key={assignee.id} value={assignee.id}>
-                      {assignee.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Lịch thực hiện
-                <input
-                  type="date"
-                  value={scheduledDate}
-                  onChange={(event) => setScheduledDate(event.target.value)}
-                />
-              </label>
-              <label className="wide">
-                Ghi chú nội bộ
-                <textarea
-                  value={adminNote}
-                  onChange={(event) => setAdminNote(event.target.value)}
-                  rows={3}
-                  maxLength={2000}
-                />
-              </label>
-            </div>
-            <button
-              className="service-primary"
-              onClick={() => void save()}
-              disabled={saving}
-            >
-              {saving ? "Đang lưu…" : "Lưu cập nhật"}
-            </button>
-          </section>
-        )}
-
-        {canComplete && (
-          <section className="detail-card detail-completion">
-            <h3>Xác nhận hoàn thành</h3>
-            <label>
-              Ghi chú kết quả
-              <textarea
-                value={completionNote}
-                onChange={(event) => setCompletionNote(event.target.value)}
-                rows={3}
-                maxLength={2000}
-                placeholder="Mô tả công việc đã thực hiện..."
-              />
-            </label>
-            <label className="evidence-picker">
-              <span>
-                <strong>Chọn ảnh bằng chứng</strong>Tối đa 10 ảnh JPG, PNG hoặc
-                WEBP · 10 MB/ảnh
-              </span>
-              <input
-                type="file"
-                accept=".jpg,.jpeg,.png,.webp"
-                multiple
-                onChange={(event) => selectEvidence(event.target.files)}
-              />
-            </label>
-            {evidence.length > 0 && (
-              <p className="file-summary">
-                Đã chọn {evidence.length} ảnh:{" "}
-                {evidence.map((file) => file.name).join(", ")}
-              </p>
+                  {saving ? "Đang xác nhận…" : "Xác nhận dịch vụ hoàn thành"}
+                </button>
+              </section>
             )}
-            <button
-              className="service-primary"
-              onClick={() => void complete()}
-              disabled={saving}
-            >
-              {saving ? "Đang xác nhận…" : "Xác nhận dịch vụ hoàn thành"}
-            </button>
-          </section>
-        )}
 
-        {order.status === "completed" && (
-          <section className="detail-card">
-            <h3>Kết quả hoàn thành</h3>
-            <p className="completion-note">
-              {order.completionNote || "Không có ghi chú hoàn thành."}
-            </p>
-            <div className="evidence-grid">
-              {(order.completionImages ?? []).map((filename) => (
-                <EvidenceImage
-                  key={filename}
-                  orderId={order.id}
-                  filename={filename}
-                />
-              ))}
-            </div>
-          </section>
-        )}
-
-        <section className="detail-card">
-          <h3>Lịch sử xử lý</h3>
-          <div className="history-list">
-            {(order.history ?? []).map((item) => (
-              <article key={item.id}>
-                <div className="history-dot" />
-                <div>
-                  <strong>{historyLabel(item)}</strong>
-                  <span>
-                    {item.changedByName || "Hệ thống"} ·{" "}
-                    {formatDate(item.createdAt, true)}
-                  </span>
-                  {item.assignedToName && (
-                    <p>Người xử lý: {item.assignedToName}</p>
-                  )}
-                  {item.note && <p>{item.note}</p>}
+            {order.status === "completed" && (
+              <section className="detail-card">
+                <div className="detail-card__heading">
+                  <div>
+                    <span>KẾT QUẢ</span>
+                    <h3>Kết quả hoàn thành</h3>
+                  </div>
                 </div>
-              </article>
-            ))}
+                <p className="completion-note">
+                  {order.completionNote || "Không có ghi chú hoàn thành."}
+                </p>
+                <div className="evidence-grid">
+                  {(order.completionImages ?? []).map((filename) => (
+                    <EvidenceImage
+                      key={filename}
+                      orderId={order.id}
+                      filename={filename}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            <section className="detail-card">
+              <div className="detail-card__heading">
+                <div>
+                  <span>LỊCH SỬ</span>
+                  <h3>Lịch sử xử lý đơn</h3>
+                </div>
+              </div>
+              <div className="history-list">
+                {(order.history ?? []).map((item) => (
+                  <article key={item.id}>
+                    <div className="history-dot" />
+                    <div>
+                      <strong>{historyLabel(item)}</strong>
+                      <span>
+                        {item.changedByName || "Hệ thống"} ·{" "}
+                        {formatDate(item.createdAt, true)}
+                      </span>
+                      {item.assignedToName && (
+                        <p>Người xử lý: {item.assignedToName}</p>
+                      )}
+                      {item.note && <p>{item.note}</p>}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
           </div>
-        </section>
+        )}
       </div>
     </>
   );
+}
+
+const STATUS_STEPS: Array<{
+  status: OrderStatus;
+  label: string;
+  caption: string;
+}> = [
+  { status: "submitted", label: "Đã gửi", caption: "Tiếp nhận" },
+  { status: "pending_confirm", label: "Chờ xác nhận", caption: "Xác nhận" },
+  { status: "confirmed", label: "Đã xác nhận", caption: "Thanh toán" },
+  { status: "in_progress", label: "Đang thực hiện", caption: "Thực hiện" },
+  { status: "completed", label: "Hoàn thành", caption: "Hoàn tất" },
+];
+
+function getNextStep(status: OrderStatus): OrderStatus | null {
+  const index = STATUS_STEPS.findIndex((step) => step.status === status);
+  if (index < 0 || index >= STATUS_STEPS.length - 1) return null;
+  return STATUS_STEPS[index + 1].status;
+}
+
+function getProcessingRequirement(status: OrderStatus) {
+  if (status === "submitted") {
+    return {
+      title: "Kiểm tra yêu cầu trước khi tiếp nhận",
+      description:
+        "Có thể chuyển sang Chờ xác nhận sau khi thông tin xử lý đã được lưu.",
+      buttonLabel: "Tiếp nhận & chuyển bước",
+    };
+  }
+  if (status === "pending_confirm") {
+    return {
+      title: "Cần phân công và chốt lịch",
+      description:
+        "Để chuyển sang Đã xác nhận, hãy chọn người xử lý và nhập lịch thực hiện.",
+      buttonLabel: "Xác nhận & chuyển bước",
+    };
+  }
+  if (status === "confirmed") {
+    return {
+      title: "Cần xác nhận thanh toán",
+      description:
+        "Đơn phải có giao dịch đã thanh toán trước khi chuyển sang Đang thực hiện.",
+      buttonLabel: "Bắt đầu thực hiện",
+    };
+  }
+  if (status === "in_progress") {
+    return {
+      title: "Đơn đang được thực hiện",
+      description:
+        "Khi hoàn tất, chuyển sang tab Xử lý đơn để nhập kết quả và tải bằng chứng.",
+      buttonLabel: "Đang thực hiện",
+    };
+  }
+  if (status === "completed") {
+    return {
+      title: "Đơn đã hoàn thành",
+      description: "Không còn bước xử lý tiếp theo.",
+      buttonLabel: "Đã hoàn thành",
+    };
+  }
+  return {
+    title: "Đơn đã huỷ",
+    description: "Đơn đã kết thúc và không thể chuyển bước.",
+    buttonLabel: "Đã huỷ",
+  };
+}
+
+function validateProcessing({
+  currentStatus,
+  nextStatus,
+  assignedTo,
+  scheduledDate,
+  adminNote,
+  requireNextStep,
+}: {
+  currentStatus: OrderStatus;
+  nextStatus: OrderStatus;
+  assignedTo: string;
+  scheduledDate: string;
+  adminNote: string;
+  requireNextStep: boolean;
+}): { ok: true } | { ok: false; message: string } {
+  if (!requireNextStep) return { ok: true };
+  const missing: string[] = [];
+  if (!assignedTo) missing.push("Người xử lý");
+  if (!scheduledDate) missing.push("Lịch thực hiện");
+  // Ghi chú nội bộ là thông tin bắt buộc để bàn giao/ghi nhận xử lý ở mỗi bước.
+  // Không đổi API: chỉ chặn chuyển bước ở giao diện nếu admin chưa nhập.
+  if (!adminNote.trim()) missing.push("Ghi chú nội bộ");
+  if (missing.length > 0) {
+    return {
+      ok: false,
+      message: `Chưa thể chuyển sang bước tiếp theo. Vui lòng điền đủ: ${missing.join(", ")}.`,
+    };
+  }
+  if (currentStatus === "confirmed" && nextStatus === "in_progress") {
+    return { ok: true };
+  }
+  return { ok: true };
 }
 
 function Detail({

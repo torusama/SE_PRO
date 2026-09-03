@@ -142,12 +142,15 @@ const normalizeSearchText = (value: string) =>
     .trim()
     .replace(/\s+/g, " ");
 
+const pad2 = (value: number) => String(value).padStart(2, "0");
+
+/** Hiển thị mọi ngày dương lịch theo chuẩn thống nhất: dd/mm/yyyy. */
 const formatDate = (value?: string) => {
   if (!value) return "Chưa cập nhật";
   const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? value
-    : new Intl.DateTimeFormat("vi-VN", { dateStyle: "long" }).format(date);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return `${pad2(date.getDate())}/${pad2(date.getMonth() + 1)}/${date.getFullYear()}`;
 };
 
 /** "Ngày sinh" — ưu tiên đọc từ birthDay/birthMonth/birthYear (dữ liệu mới,
@@ -155,9 +158,9 @@ const formatDate = (value?: string) => {
  * dateOfBirth dạng chuỗi Dương lịch cũ. */
 function formatBirth(profile: Profile): string {
   if (profile.birthDay && profile.birthMonth) {
-    const dmy = [profile.birthDay, profile.birthMonth, profile.birthYear]
-      .filter(Boolean)
-      .join("/");
+    const dmy = profile.birthYear
+      ? `${pad2(profile.birthDay)}/${pad2(profile.birthMonth)}/${profile.birthYear}`
+      : `${pad2(profile.birthDay)}/${pad2(profile.birthMonth)}`;
     return profile.dateCalendarType === "lunar"
       ? `${dmy} (Âm lịch)`
       : `${dmy} (Dương lịch)`;
@@ -170,13 +173,9 @@ function formatBirth(profile: Profile): string {
  * lùi về hiển thị dateOfDeath (ngày mất) như trước đây. */
 function formatAnniversary(profile: Profile): string {
   if (profile.anniversaryDay && profile.anniversaryMonth) {
-    const dmy = [
-      profile.anniversaryDay,
-      profile.anniversaryMonth,
-      profile.anniversaryYear,
-    ]
-      .filter(Boolean)
-      .join("/");
+    const dmy = profile.anniversaryYear
+      ? `${pad2(profile.anniversaryDay)}/${pad2(profile.anniversaryMonth)}/${profile.anniversaryYear}`
+      : `${pad2(profile.anniversaryDay)}/${pad2(profile.anniversaryMonth)}`;
     return profile.dateCalendarType === "lunar"
       ? `${dmy} (Âm lịch)`
       : `${dmy} (Dương lịch)`;
@@ -984,9 +983,9 @@ function DayMonthYearField({
       title: "Xác nhận ngày giỗ Âm lịch",
       message: (
         <>
-          Ngày giỗ {day}/{month} Âm lịch nhằm ngày:
-          <strong>{preview.toLocaleDateString("vi-VN")}</strong> Dương lịch .
-          Bạn có muốn được Nhắc lịch ngày giỗ vào ngày này ?
+          Ngày giỗ {pad2(Number(day))}/{pad2(Number(month))} Âm lịch nhằm ngày:
+          <strong>{formatDate(preview.toISOString())}</strong> Dương lịch . Bạn
+          có muốn được Nhắc lịch ngày giỗ vào ngày này ?
         </>
       ),
       confirmLabel: "Được",

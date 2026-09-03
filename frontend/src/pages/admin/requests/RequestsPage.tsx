@@ -137,15 +137,21 @@ const money = new Intl.NumberFormat("vi-VN", {
 const dateTime = (value?: string) =>
   value
     ? new Intl.DateTimeFormat("vi-VN", {
-        dateStyle: "short",
-        timeStyle: "short",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
       }).format(new Date(value))
     : "—";
 const dateOnly = (value?: string) =>
   value
-    ? new Intl.DateTimeFormat("vi-VN", { dateStyle: "short" }).format(
-        new Date(value),
-      )
+    ? new Intl.DateTimeFormat("vi-VN", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      }).format(new Date(value))
     : "—";
 const statusLabels: Record<string, string> = {
   draft: "Nháp",
@@ -1020,36 +1026,44 @@ export default function RequestsPage() {
       {view === "purchases" ? (
         <div className="request-workspace">
           <aside className="request-list">
-            {loading ? (
-              <p className="empty">Đang tải...</p>
-            ) : visibleRequests.length === 0 ? (
-              <p className="empty">Chưa có yêu cầu.</p>
-            ) : (
-              visibleRequests.map((item) => (
-                <button
-                  key={item.id}
-                  className={item.id === selectedId ? "selected" : ""}
-                  onClick={() => {
-                    setSelectedId(item.id);
-                    setDetail(undefined);
-                    setEvidenceError("");
-                    resetFeedback();
-                  }}
-                >
-                  <span>
-                    <strong>#{String(item.id).padStart(4, "0")}</strong>
-                    <em className={`status-${item.status}`}>
-                      {statusLabels[item.status]}
-                    </em>
-                  </span>
-                  <b>{item.customerName || "Khách hàng"}</b>
-                  <small>
-                    {(item.plotCodes ?? []).join(", ") || "Chưa có mã lô"} ·{" "}
-                    {money.format(Number(item.totalPrice ?? 0))}
-                  </small>
-                </button>
-              ))
-            )}
+            <div className="request-list__header">
+              <div>
+                <strong>Danh sách yêu cầu</strong>
+                <span>{visibleRequests.length} yêu cầu</span>
+              </div>
+            </div>
+            <div className="request-list__items">
+              {loading ? (
+                <p className="empty">Đang tải...</p>
+              ) : visibleRequests.length === 0 ? (
+                <p className="empty">Chưa có yêu cầu.</p>
+              ) : (
+                visibleRequests.map((item) => (
+                  <button
+                    key={item.id}
+                    className={item.id === selectedId ? "selected" : ""}
+                    onClick={() => {
+                      setSelectedId(item.id);
+                      setDetail(undefined);
+                      setEvidenceError("");
+                      resetFeedback();
+                    }}
+                  >
+                    <span>
+                      <strong>#{String(item.id).padStart(4, "0")}</strong>
+                      <em className={`status-${item.status}`}>
+                        {statusLabels[item.status]}
+                      </em>
+                    </span>
+                    <b>{item.customerName || "Khách hàng"}</b>
+                    <small>
+                      {(item.plotCodes ?? []).join(", ") || "Chưa có mã lô"} ·{" "}
+                      {money.format(Number(item.totalPrice ?? 0))}
+                    </small>
+                  </button>
+                ))
+              )}
+            </div>
           </aside>
           <main className="request-detail">
             {!current ? (
@@ -1060,11 +1074,6 @@ export default function RequestsPage() {
               </p>
             ) : (
               <>
-                <Stepper
-                  labels={labels}
-                  completed={completed}
-                  terminal={terminal}
-                />
                 <section className="request-heading">
                   <div>
                     <span>Yêu cầu #{String(current.id).padStart(4, "0")}</span>
@@ -1082,6 +1091,25 @@ export default function RequestsPage() {
                     {statusLabels[current.status]}
                   </em>
                 </section>
+                <div className="request-progress-card">
+                  <div className="request-progress-card__head">
+                    <div>
+                      <span>TIẾN TRÌNH XỬ LÝ</span>
+                      <strong>
+                        Bước {Math.min(completed + 1, labels.length)} /{" "}
+                        {labels.length}
+                      </strong>
+                    </div>
+                    <em className={`status-${current.status}`}>
+                      {statusLabels[current.status]}
+                    </em>
+                  </div>
+                  <Stepper
+                    labels={labels}
+                    completed={completed}
+                    terminal={terminal}
+                  />
+                </div>
                 {cancellationPending && (
                   <div className="workflow-alert cancellation-lock">
                     <div>

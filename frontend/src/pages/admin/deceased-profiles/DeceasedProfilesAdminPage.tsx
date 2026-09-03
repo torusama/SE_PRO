@@ -37,21 +37,32 @@ interface Profile {
 
 const date = (value?: string) =>
   value
-    ? new Intl.DateTimeFormat("vi-VN", { dateStyle: "long" }).format(
-        new Date(value),
-      )
+    ? new Intl.DateTimeFormat("vi-VN", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      }).format(new Date(value))
     : "—";
 const dateTime = (value?: string) =>
   value
     ? new Intl.DateTimeFormat("vi-VN", {
-        dateStyle: "short",
-        timeStyle: "short",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
       }).format(new Date(value))
     : "—";
 function formatBirth(profile: Profile): string {
   if (profile.birthDay && profile.birthMonth) {
     const dmy = [profile.birthDay, profile.birthMonth, profile.birthYear]
       .filter(Boolean)
+      .map((value, index) =>
+        index < 2
+          ? String(value).padStart(2, "0")
+          : String(value).padStart(4, "0"),
+      )
       .join("/");
     return `${dmy} (${profile.dateCalendarType === "lunar" ? "Âm lịch" : "Dương lịch"})`;
   }

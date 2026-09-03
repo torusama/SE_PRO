@@ -29,7 +29,9 @@ export default function ServiceScheduleCalendar({
         <CalendarDays size={18} />
         <div>
           <strong>Chưa có ngày thực hiện</strong>
-          <span>Ngày dịch vụ sẽ được hiển thị tại đây sau khi được ghi nhận.</span>
+          <span>
+            Ngày dịch vụ sẽ được hiển thị tại đây sau khi được ghi nhận.
+          </span>
         </div>
       </section>
     );
@@ -45,17 +47,32 @@ export default function ServiceScheduleCalendar({
   );
 
   return (
-    <section className="service-schedule-calendar" aria-label="Lịch thực hiện dịch vụ">
+    <section
+      className="service-schedule-calendar"
+      aria-label="Lịch thực hiện dịch vụ"
+    >
       <header>
-        <span><CalendarDays size={17} /></span>
+        <span>
+          <CalendarDays size={17} />
+        </span>
         <div>
-          <small>{scheduledDate ? "Lịch đã được sắp xếp" : "Ngày bạn đã chọn"}</small>
-          <strong>{selected.toLocaleDateString("vi-VN")}</strong>
+          <small>
+            {scheduledDate ? "Lịch đã được sắp xếp" : "Ngày bạn đã chọn"}
+          </small>
+          <strong>
+            {selected.toLocaleDateString("vi-VN", {
+              day: "2-digit",
+              month: "2-digit",
+              year: "numeric",
+            })}
+          </strong>
         </div>
       </header>
 
       <div className="service-schedule-calendar-month">
-        <strong>Tháng {month + 1}/{year}</strong>
+        <strong>
+          Tháng {month + 1}/{year}
+        </strong>
         <div className="service-schedule-calendar-weekdays">
           {["CN", "T2", "T3", "T4", "T5", "T6", "T7"].map((day) => (
             <span key={day}>{day}</span>

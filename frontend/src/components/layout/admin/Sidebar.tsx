@@ -1,4 +1,17 @@
 import { NavLink } from "react-router-dom";
+import {
+  Bell,
+  CalendarDays,
+  FileCheck2,
+  FileText,
+  GitBranch,
+  History,
+  LayoutDashboard,
+  Map,
+  ShieldCheck,
+  Sparkles,
+  UsersRound,
+} from "lucide-react";
 import { ROUTES } from "../../../constants/routes";
 import { useAdminSidebarAlerts } from "../../../hooks/useAdminSidebarAlerts";
 
@@ -6,6 +19,7 @@ type MenuItem = {
   label: string;
   to: string;
   badge?: number;
+  icon: typeof LayoutDashboard;
   /** Key into useAdminSidebarAlerts() for a live "cần xử lý ngay" count. */
   alertKey?: "notify" | "requests" | "appointments" | "deceased";
 };
@@ -19,9 +33,14 @@ const MENU: MenuGroup[] = [
   {
     section: "Tổng quan",
     items: [
-      { label: "Dashboard", to: ROUTES.ADMIN_DASHBOARD },
-      { label: "Hoạt động gần đây", to: ROUTES.ADMIN_ACTIVITY },
-      { label: "Thông báo", to: ROUTES.ADMIN_NOTIFY, alertKey: "notify" },
+      { label: "Tổng quan", to: ROUTES.ADMIN_DASHBOARD, icon: LayoutDashboard },
+      { label: "Lịch sử hoạt động", to: ROUTES.ADMIN_ACTIVITY, icon: History },
+      {
+        label: "Thông báo",
+        to: ROUTES.ADMIN_NOTIFY,
+        alertKey: "notify",
+        icon: Bell,
+      },
     ],
   },
   {
@@ -33,32 +52,49 @@ const MENU: MenuGroup[] = [
         label: "Xử lý yêu cầu",
         to: ROUTES.ADMIN_REQUESTS,
         alertKey: "requests",
+        icon: FileCheck2,
       },
-      { label: "Chuyển nhượng", to: ROUTES.ADMIN_TRANSFER },
+      { label: "Chuyển nhượng", to: ROUTES.ADMIN_TRANSFER, icon: GitBranch },
       {
         label: "Phê duyệt lịch hẹn",
         to: ROUTES.ADMIN_APPOINTMENTS,
         alertKey: "appointments",
+        icon: CalendarDays,
       },
-      { label: "Hợp đồng & Sở hữu", to: ROUTES.ADMIN_CONTRACTS },
-      { label: "Bản đồ 2D", to: ROUTES.ADMIN_MAP },
+      {
+        label: "Hợp đồng & Sở hữu",
+        to: ROUTES.ADMIN_CONTRACTS,
+        icon: ShieldCheck,
+      },
+      { label: "Bản đồ 2D", to: ROUTES.ADMIN_MAP, icon: Map },
     ],
   },
   {
     section: "Quản lý dịch vụ",
     items: [
-      { label: "Quản lý dịch vụ", to: ROUTES.ADMIN_SERVICES },
-      { label: "Nhắc lịch ngày giỗ", to: ROUTES.ADMIN_REMINDERS },
+      { label: "Quản lý dịch vụ", to: ROUTES.ADMIN_SERVICES, icon: FileText },
+      {
+        label: "Nhắc lịch & chăm sóc",
+        to: ROUTES.ADMIN_REMINDERS,
+        icon: CalendarDays,
+      },
       {
         label: "Hồ sơ người đã khuất",
         to: ROUTES.ADMIN_DECEASED,
         alertKey: "deceased",
+        icon: UsersRound,
       },
     ],
   },
   {
     section: "AI Agent",
-    items: [{ label: "Quản trị AI Agent", to: ROUTES.ADMIN_AI_AGENT }],
+    items: [
+      {
+        label: "Quản trị trợ lý AI",
+        to: ROUTES.ADMIN_AI_AGENT,
+        icon: Sparkles,
+      },
+    ],
   },
 ];
 
@@ -87,7 +123,14 @@ export default function Sidebar() {
                       `admin-nav-link${isActive ? " is-active" : ""}`
                     }
                   >
-                    <span>{item.label}</span>
+                    <span className="admin-nav-link__main">
+                      <span className="admin-nav-link__icon" aria-hidden="true">
+                        <item.icon size={17} strokeWidth={1.8} />
+                      </span>
+                      <span className="admin-nav-link__title">
+                        {item.label}
+                      </span>
+                    </span>
                     {badgeCount > 0 ? (
                       <span
                         className={`admin-nav-link__badge${

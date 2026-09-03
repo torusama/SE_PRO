@@ -20,7 +20,12 @@ export type TransferRequestStatus =
   | "cancelled"
   | "completed";
 
-export type TransferView = "sale" | "inheritance" | "gift" | "cancellations" | "direct";
+export type TransferView =
+  | "sale"
+  | "inheritance"
+  | "gift"
+  | "cancellations"
+  | "direct";
 
 interface PageData<T> {
   items: T[];
@@ -159,16 +164,22 @@ const money = new Intl.NumberFormat("vi-VN", {
 const dateTime = (value?: string | null) =>
   value
     ? new Intl.DateTimeFormat("vi-VN", {
-        dateStyle: "short",
-        timeStyle: "short",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
       }).format(new Date(value))
     : "—";
 
 const dateOnly = (value?: string | null) =>
   value
-    ? new Intl.DateTimeFormat("vi-VN", { dateStyle: "short" }).format(
-        new Date(value),
-      )
+    ? new Intl.DateTimeFormat("vi-VN", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      }).format(new Date(value))
     : "—";
 
 const statusLabels: Record<string, string> = {
@@ -402,7 +413,8 @@ function TransferReviewInfo({
           <h4>Thông tin các lô đất nhượng quyền</h4>
           <b>
             {request.plots?.length ?? 0} lô
-            {request.transferType === "sale" && request.transactionAmount != null
+            {request.transferType === "sale" &&
+            request.transactionAmount != null
               ? ` · ${money.format(Number(request.transactionAmount))}`
               : ` · ${typeLabels[request.transferType]}`}
           </b>
@@ -434,7 +446,9 @@ function TransferReviewInfo({
       {/* Customer Documents */}
       {Boolean(request.documents?.length) && (
         <section className="review-section">
-          <h4>Tài liệu khách hàng đính kèm ({request.documents?.length} tệp)</h4>
+          <h4>
+            Tài liệu khách hàng đính kèm ({request.documents?.length} tệp)
+          </h4>
           <div className="customer-doc-list">
             {(request.documents ?? []).map((doc) => (
               <div key={doc.id} className="customer-doc-item">
@@ -479,8 +493,16 @@ export default function TransferPage() {
   const requestedViewParam = searchParams.get("view") as TransferView | null;
   const requestedId = Number(searchParams.get("request")) || undefined;
 
-  const validViews: TransferView[] = ["sale", "inheritance", "gift", "cancellations", "direct"];
-  const initialView: TransferView = validViews.includes(requestedViewParam as TransferView)
+  const validViews: TransferView[] = [
+    "sale",
+    "inheritance",
+    "gift",
+    "cancellations",
+    "direct",
+  ];
+  const initialView: TransferView = validViews.includes(
+    requestedViewParam as TransferView,
+  )
     ? (requestedViewParam as TransferView)
     : "sale";
 
@@ -559,15 +581,25 @@ export default function TransferPage() {
 
   // Tab Item Filtering
   const salesRequests = useMemo(
-    () => requests.filter((item) => item.transferType === "sale" && item.status !== "cancelled"),
+    () =>
+      requests.filter(
+        (item) => item.transferType === "sale" && item.status !== "cancelled",
+      ),
     [requests],
   );
   const inheritanceRequests = useMemo(
-    () => requests.filter((item) => item.transferType === "inheritance" && item.status !== "cancelled"),
+    () =>
+      requests.filter(
+        (item) =>
+          item.transferType === "inheritance" && item.status !== "cancelled",
+      ),
     [requests],
   );
   const giftRequests = useMemo(
-    () => requests.filter((item) => item.transferType === "gift" && item.status !== "cancelled"),
+    () =>
+      requests.filter(
+        (item) => item.transferType === "gift" && item.status !== "cancelled",
+      ),
     [requests],
   );
   const cancelledRequests = useMemo(
@@ -588,7 +620,13 @@ export default function TransferPage() {
       default:
         return [];
     }
-  }, [cancelledRequests, giftRequests, inheritanceRequests, salesRequests, view]);
+  }, [
+    cancelledRequests,
+    giftRequests,
+    inheritanceRequests,
+    salesRequests,
+    view,
+  ]);
 
   // Ensure an item is selected when switching tabs or loading
   useEffect(() => {
@@ -695,7 +733,8 @@ export default function TransferPage() {
     Number(contract?.totalAmount ?? 0) === 0;
 
   const decisionDone = Boolean(
-    current && ["approved", "rejected", "cancelled", "completed"].includes(current.status),
+    current &&
+    ["approved", "rejected", "cancelled", "completed"].includes(current.status),
   );
   const appointmentDone = appointment?.customerStatus === "confirmed";
   const pdfDone = Boolean(contract?.generatedPdfAt);
@@ -871,7 +910,9 @@ export default function TransferPage() {
         contractDate: snapshot.contractDate,
       });
       await api.post(`/admin/contracts/${contract.contractId}/generated-pdf`);
-      setMessage("Đã tải PDF và ghi nhận hoàn tất bước tạo hợp đồng chuyển nhượng.");
+      setMessage(
+        "Đã tải PDF và ghi nhận hoàn tất bước tạo hợp đồng chuyển nhượng.",
+      );
       await loadRequests(true);
       if (selectedId) await loadDetail(selectedId);
     } catch (caught) {
@@ -916,9 +957,13 @@ export default function TransferPage() {
     try {
       const data = new FormData();
       files.forEach((file) => data.append("evidence", file));
-      await api.post(`/admin/contracts/${contract.contractId}/signed-evidence`, data, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      await api.post(
+        `/admin/contracts/${contract.contractId}/signed-evidence`,
+        data,
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+        },
+      );
       setFiles([]);
       setMessage(
         "Đã lưu bản hợp đồng ký offline. Hãy kiểm tra tệp rồi xác nhận để kích hoạt quyền sở hữu.",
@@ -932,7 +977,12 @@ export default function TransferPage() {
     }
   }
 
-  async function downloadEvidence(evidence: { id: number; filename: string; originalName: string; mimeType?: string }) {
+  async function downloadEvidence(evidence: {
+    id: number;
+    filename: string;
+    originalName: string;
+    mimeType?: string;
+  }) {
     if (!contract) return;
     resetFeedback();
     setBusy(`evidence-${evidence.id}`);
@@ -994,7 +1044,9 @@ export default function TransferPage() {
     setBusy("activate");
     try {
       await api.post(`/admin/transfer-requests/${current.id}/activate`);
-      setMessage("Đã kích hoạt hợp đồng và chuyển giao quyền sở hữu thành công!");
+      setMessage(
+        "Đã kích hoạt hợp đồng và chuyển giao quyền sở hữu thành công!",
+      );
       await loadRequests(true);
       if (selectedId) await loadDetail(selectedId);
     } catch (caught) {
@@ -1017,13 +1069,16 @@ export default function TransferPage() {
       </span>
       <span>
         <small>Phản hồi từ khách hàng</small>
-        {statusLabels[appointment.customerStatus ?? "pending"] || appointment.customerStatus}
+        {statusLabels[appointment.customerStatus ?? "pending"] ||
+          appointment.customerStatus}
       </span>
       {appointment.customerSelectedDate && (
         <span>
           <small>Ngày khách hàng chọn</small>
           {dateOnly(appointment.customerSelectedDate)}{" "}
-          {appointment.customerSelectedTime ? `lúc ${appointment.customerSelectedTime}` : ""}
+          {appointment.customerSelectedTime
+            ? `lúc ${appointment.customerSelectedTime}`
+            : ""}
         </span>
       )}
       {appointment.note && (
@@ -1043,7 +1098,8 @@ export default function TransferPage() {
         <div>
           <h1>Tiếp nhận & Xử lý Yêu cầu Nhượng quyền</h1>
           <p>
-            Quy trình tuần tự từ duyệt hồ sơ, lịch hẹn, hợp đồng chuyển nhượng/thừa kế/tặng cho, thanh toán và chuyển giao quyền sở hữu.
+            Quy trình tuần tự từ duyệt hồ sơ, lịch hẹn, hợp đồng chuyển
+            nhượng/thừa kế/tặng cho, thanh toán và chuyển giao quyền sở hữu.
           </p>
         </div>
       </header>
@@ -1052,7 +1108,10 @@ export default function TransferPage() {
       {message && <div className="workflow-alert success">{message}</div>}
 
       {/* 4 Main View Tabs */}
-      <nav className="request-view-tabs" aria-label="Phân loại yêu cầu nhượng quyền">
+      <nav
+        className="request-view-tabs"
+        aria-label="Phân loại yêu cầu nhượng quyền"
+      >
         <button
           type="button"
           className={view === "sale" ? "active" : ""}
@@ -1164,9 +1223,16 @@ export default function TransferPage() {
                     <span className="badge-header">
                       Yêu cầu #{String(current.id).padStart(4, "0")} · Đã hủy
                     </span>
-                    <h2>{current.customerName} ➔ {current.recipientName}</h2>
+                    <h2>
+                      {current.customerName} ➔ {current.recipientName}
+                    </h2>
                     <p>
-                      {(current.plots?.map((p) => p.code) ?? current.plotCodes ?? []).join(", ")} · {typeLabels[current.transferType]}
+                      {(
+                        current.plots?.map((p) => p.code) ??
+                        current.plotCodes ??
+                        []
+                      ).join(", ")}{" "}
+                      · {typeLabels[current.transferType]}
                     </p>
                   </div>
                   <em className="status-cancelled">Đã hủy</em>
@@ -1190,11 +1256,16 @@ export default function TransferPage() {
                       </span>
                       <span>
                         <small>Ngày xử lý / hủy</small>
-                        <strong>{dateTime(current.reviewedAt ?? current.createdAt)}</strong>
+                        <strong>
+                          {dateTime(current.reviewedAt ?? current.createdAt)}
+                        </strong>
                       </span>
                       <span>
                         <small>Ghi chú</small>
-                        <strong>{current.adminNote || "Khách hàng đã hủy yêu cầu nhượng quyền."}</strong>
+                        <strong>
+                          {current.adminNote ||
+                            "Khách hàng đã hủy yêu cầu nhượng quyền."}
+                        </strong>
                       </span>
                     </div>
                   </div>
@@ -1212,15 +1283,21 @@ export default function TransferPage() {
                 <section className="request-heading">
                   <div>
                     <span className="badge-header">
-                      Yêu cầu #{String(current.id).padStart(4, "0")} · {typeLabels[current.transferType]}
+                      Yêu cầu #{String(current.id).padStart(4, "0")} ·{" "}
+                      {typeLabels[current.transferType]}
                     </span>
                     <h2>
                       {current.customerName} ➔ {current.recipientName}
                     </h2>
                     <p>
-                      {(current.plots?.map((p) => p.code) ?? current.plotCodes ?? []).join(", ")}{" "}
+                      {(
+                        current.plots?.map((p) => p.code) ??
+                        current.plotCodes ??
+                        []
+                      ).join(", ")}{" "}
                       ·{" "}
-                      {current.transferType === "sale" && current.transactionAmount != null
+                      {current.transferType === "sale" &&
+                      current.transactionAmount != null
                         ? money.format(Number(current.transactionAmount))
                         : typeLabels[current.transferType]}
                     </p>
@@ -1236,7 +1313,9 @@ export default function TransferPage() {
                     <div className="decision-result">
                       <span>
                         <small>Kết quả xử lý</small>
-                        <strong>{statusLabels[current.status] || current.status}</strong>
+                        <strong>
+                          {statusLabels[current.status] || current.status}
+                        </strong>
                       </span>
                       <span>
                         <small>Ngày xử lý</small>
@@ -1259,7 +1338,9 @@ export default function TransferPage() {
                       <div>
                         <h3>Duyệt yêu cầu</h3>
                         <p>
-                          Kiểm tra thông tin Bên chuyển (A), Bên nhận (B), thông tin các lô đất và tài liệu chứng minh trước khi quyết định.
+                          Kiểm tra thông tin Bên chuyển (A), Bên nhận (B), thông
+                          tin các lô đất và tài liệu chứng minh trước khi quyết
+                          định.
                         </p>
                       </div>
                     </div>
@@ -1311,7 +1392,10 @@ export default function TransferPage() {
                       <span>2</span>
                       <div>
                         <h3>Lịch hẹn offline</h3>
-                        <p>Đề xuất khoảng ngày hẹn ký hợp đồng chuyển nhượng trực tiếp.</p>
+                        <p>
+                          Đề xuất khoảng ngày hẹn ký hợp đồng chuyển nhượng trực
+                          tiếp.
+                        </p>
                       </div>
                     </div>
 
@@ -1326,7 +1410,8 @@ export default function TransferPage() {
                       <>
                         {appointment?.customerStatus === "declined" && (
                           <div className="workflow-alert error">
-                            Khách hàng đã từ chối lịch trước. Hãy đề xuất khoảng thời gian mới.
+                            Khách hàng đã từ chối lịch trước. Hãy đề xuất khoảng
+                            thời gian mới.
                           </div>
                         )}
                         <div className="form-grid">
@@ -1389,7 +1474,9 @@ export default function TransferPage() {
                             disabled={Boolean(busy)}
                             onClick={() => void createAppointment()}
                           >
-                            {busy === "appointment" ? "Đang gửi..." : "Gửi lịch hẹn"}
+                            {busy === "appointment"
+                              ? "Đang gửi..."
+                              : "Gửi lịch hẹn"}
                           </button>
                         </div>
                       </>
@@ -1412,7 +1499,10 @@ export default function TransferPage() {
                             {dateTime(contract.generatedPdfAt)}
                           </span>
                         </div>
-                        <div className="step-actions" style={{ marginTop: "12px" }}>
+                        <div
+                          className="step-actions"
+                          style={{ marginTop: "12px" }}
+                        >
                           <button
                             className="secondary-button"
                             disabled={Boolean(busy)}
@@ -1431,7 +1521,8 @@ export default function TransferPage() {
                           <div>
                             <h3>Tạo PDF hợp đồng</h3>
                             <p>
-                              Rà soát nội dung hợp đồng chuyển nhượng/thừa kế/cho tặng và tải bản hợp đồng để ký offline.
+                              Rà soát nội dung hợp đồng chuyển nhượng/thừa
+                              kế/cho tặng và tải bản hợp đồng để ký offline.
                             </p>
                           </div>
                         </div>
@@ -1442,7 +1533,9 @@ export default function TransferPage() {
                             rows={4}
                             value={inheritance}
                             placeholder="Nhập điều khoản bổ sung nếu có (không bắt buộc)..."
-                            onChange={(event) => setInheritance(event.target.value)}
+                            onChange={(event) =>
+                              setInheritance(event.target.value)
+                            }
                           />
                         </label>
 
@@ -1461,7 +1554,9 @@ export default function TransferPage() {
                             disabled={Boolean(busy)}
                             onClick={() => void generatePdf()}
                           >
-                            {busy === "pdf" ? "Đang tạo PDF..." : "Tạo và tải PDF"}
+                            {busy === "pdf"
+                              ? "Đang tạo PDF..."
+                              : "Tạo và tải PDF"}
                           </button>
                         </div>
                       </section>
@@ -1505,7 +1600,8 @@ export default function TransferPage() {
                           <div>
                             <h3>Xác nhận thanh toán</h3>
                             <p>
-                              Đã nhận {money.format(contract.paidAmount ?? 0)} · Còn lại{" "}
+                              Đã nhận {money.format(contract.paidAmount ?? 0)} ·
+                              Còn lại{" "}
                               {money.format(
                                 Number(contract.totalAmount ?? 0) -
                                   Number(contract.paidAmount ?? 0),
@@ -1573,7 +1669,9 @@ export default function TransferPage() {
                             disabled={Boolean(busy)}
                             onClick={() => void recordPayment()}
                           >
-                            {busy === "payment" ? "Đang ghi nhận..." : "Ghi nhận thanh toán"}
+                            {busy === "payment"
+                              ? "Đang ghi nhận..."
+                              : "Ghi nhận thanh toán"}
                           </button>
                         </div>
                       </section>
@@ -1589,7 +1687,8 @@ export default function TransferPage() {
                           </span>
                           <span>
                             <small>Kết quả</small>
-                            Đã kích hoạt và chuyển giao quyền sở hữu cho Bên nhận ({current.recipientName})
+                            Đã kích hoạt và chuyển giao quyền sở hữu cho Bên
+                            nhận ({current.recipientName})
                           </span>
                         </div>
                       </CompletedStep>
@@ -1602,38 +1701,54 @@ export default function TransferPage() {
                           <div>
                             <h3>Hợp đồng ký & quyền sở hữu</h3>
                             <p>
-                              Bước 1 tải bản đã ký lên hệ thống. Bước 2 kiểm tra tài liệu và xác nhận kích hoạt chuyển quyền sở hữu.
+                              Bước 1 tải bản đã ký lên hệ thống. Bước 2 kiểm tra
+                              tài liệu và xác nhận kích hoạt chuyển quyền sở
+                              hữu.
                             </p>
                           </div>
                         </div>
 
                         <label>
-                          Bản hợp đồng đã ký (PDF, DOC, DOCX, JPG, PNG, WEBP; tối đa 10 tệp, 10 MB/tệp)
+                          Bản hợp đồng đã ký (PDF, DOC, DOCX, JPG, PNG, WEBP;
+                          tối đa 10 tệp, 10 MB/tệp)
                           <input
                             type="file"
                             multiple
                             accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*"
                             onChange={(event) => {
-                              const selectedFiles = Array.from(event.target.files ?? []);
+                              const selectedFiles = Array.from(
+                                event.target.files ?? [],
+                              );
                               const invalidFile = selectedFiles.find(
-                                (f) => !/\.(pdf|doc|docx|jpg|jpeg|png|webp)$/i.test(f.name),
+                                (f) =>
+                                  !/\.(pdf|doc|docx|jpg|jpeg|png|webp)$/i.test(
+                                    f.name,
+                                  ),
                               );
                               if (invalidFile) {
                                 setFiles([]);
-                                setEvidenceError(`Tệp “${invalidFile.name}” không hợp lệ.`);
+                                setEvidenceError(
+                                  `Tệp “${invalidFile.name}” không hợp lệ.`,
+                                );
                                 event.currentTarget.value = "";
                                 return;
                               }
                               if (selectedFiles.length > 10) {
                                 setFiles([]);
-                                setEvidenceError("Chỉ được tải lên tối đa 10 tệp.");
+                                setEvidenceError(
+                                  "Chỉ được tải lên tối đa 10 tệp.",
+                                );
                                 event.currentTarget.value = "";
                                 return;
                               }
-                              const oversized = selectedFiles.find((f) => f.size > 10 * 1024 * 1024);
+                              const oversized = selectedFiles.find(
+                                (f) => f.size > 10 * 1024 * 1024,
+                              );
                               if (oversized) {
                                 setFiles([]);
-                                setEvidenceError(`Tệp “${oversized.name}” vượt quá giới hạn 10 MB.`);
+                                setEvidenceError(
+                                  `Tệp “${oversized.name}” vượt quá giới hạn 10 MB.`,
+                                );
                                 event.currentTarget.value = "";
                                 return;
                               }
@@ -1643,7 +1758,13 @@ export default function TransferPage() {
                           />
                         </label>
 
-                        <p className="file-hint" style={{ fontSize: "13px", color: "var(--color-text-secondary)" }}>
+                        <p
+                          className="file-hint"
+                          style={{
+                            fontSize: "13px",
+                            color: "var(--color-text-secondary)",
+                          }}
+                        >
                           {files.length
                             ? `Đã chọn ${files.length} tệp trên máy, chưa tải lên hệ thống.`
                             : `${contract.signedEvidence?.length ?? 0} tệp đã lưu trên hệ thống.`}
@@ -1667,24 +1788,35 @@ export default function TransferPage() {
                                 onClick={() => void downloadEvidence(ev)}
                               >
                                 <span>📄 {ev.originalName}</span>
-                                <b>{busy === `evidence-${ev.id}` ? "Đang tải..." : "Tải xuống"}</b>
+                                <b>
+                                  {busy === `evidence-${ev.id}`
+                                    ? "Đang tải..."
+                                    : "Tải xuống"}
+                                </b>
                               </button>
                             ))}
                           </div>
                         )}
 
-                        <div className="step-actions" style={{ marginTop: "10px" }}>
+                        <div
+                          className="step-actions"
+                          style={{ marginTop: "10px" }}
+                        >
                           <button
                             className="secondary-button"
                             disabled={Boolean(busy) || !files.length}
                             onClick={() => void uploadEvidence()}
                           >
-                            {busy === "upload" ? "Đang tải lên..." : "Tải lên hệ thống"}
+                            {busy === "upload"
+                              ? "Đang tải lên..."
+                              : "Tải lên hệ thống"}
                           </button>
 
                           <button
                             className="primary-button"
-                            disabled={Boolean(busy) || !contract.signedEvidence?.length}
+                            disabled={
+                              Boolean(busy) || !contract.signedEvidence?.length
+                            }
                             onClick={() => void activate()}
                           >
                             {busy === "activate"
@@ -1707,7 +1839,8 @@ export default function TransferPage() {
             <h4>Chuyển nhượng trực tiếp qua Ban Quản trị</h4>
             <div style={{ padding: "16px", display: "grid", gap: "14px" }}>
               <p style={{ margin: 0, color: "var(--color-text-secondary)" }}>
-                Tìm kiếm lô đất theo khách hàng hiện tại hoặc mã lô để thực hiện chuyển quyền sở hữu trực tiếp.
+                Tìm kiếm lô đất theo khách hàng hiện tại hoặc mã lô để thực hiện
+                chuyển quyền sở hữu trực tiếp.
               </p>
               <div className="direct-search-box">
                 <select
@@ -1728,12 +1861,15 @@ export default function TransferPage() {
                   onKeyDown={async (e) => {
                     if (e.key === "Enter" && directQuery.trim().length >= 2) {
                       try {
-                        const res = await api.get<{ data: PlotResult[] | { items: PlotResult[] } }>(
-                          "/admin/transfers/search",
-                          { params: { mode: directMode, q: directQuery.trim() } },
-                        );
+                        const res = await api.get<{
+                          data: PlotResult[] | { items: PlotResult[] };
+                        }>("/admin/transfers/search", {
+                          params: { mode: directMode, q: directQuery.trim() },
+                        });
                         const data = res.data.data;
-                        setDirectResults(Array.isArray(data) ? data : data.items ?? []);
+                        setDirectResults(
+                          Array.isArray(data) ? data : (data.items ?? []),
+                        );
                       } catch {
                         // handled
                       }
@@ -1773,7 +1909,9 @@ export default function TransferPage() {
             <h4>Lịch sử chuyển nhượng gần đây</h4>
             <div style={{ padding: "16px" }}>
               {recentTransfers.length === 0 ? (
-                <p className="empty">Chưa có lịch sử giao dịch chuyển nhượng.</p>
+                <p className="empty">
+                  Chưa có lịch sử giao dịch chuyển nhượng.
+                </p>
               ) : (
                 <div className="customer-doc-list">
                   {recentTransfers.map((item) => (
@@ -1782,7 +1920,8 @@ export default function TransferPage() {
                         <span>🔄</span>
                         <strong>{item.batchCode}</strong>
                         <span>
-                          {item.previousHolderName} ➔ {item.recipientName} ({item.plotCodes.join(", ")})
+                          {item.previousHolderName} ➔ {item.recipientName} (
+                          {item.plotCodes.join(", ")})
                         </span>
                       </div>
                       <small>{dateTime(item.createdAt)}</small>
@@ -1816,7 +1955,8 @@ export default function TransferPage() {
               <div>
                 <span>Bản PDF được tạo tự động</span>
                 <h2 id="contract-preview-title">
-                  Xem trước hợp đồng chuyển nhượng {contract?.contractCode ?? ""}
+                  Xem trước hợp đồng chuyển nhượng{" "}
+                  {contract?.contractCode ?? ""}
                 </h2>
               </div>
               <button
@@ -1829,7 +1969,8 @@ export default function TransferPage() {
               </button>
             </header>
             <p>
-              Đây là nội dung hợp đồng chuyển nhượng/thừa kế/tặng cho. Đóng bản xem trước để tiếp tục chỉnh sửa hoặc tải PDF chính thức.
+              Đây là nội dung hợp đồng chuyển nhượng/thừa kế/tặng cho. Đóng bản
+              xem trước để tiếp tục chỉnh sửa hoặc tải PDF chính thức.
             </p>
             <iframe
               src={contractPreviewUrl}
