@@ -4,14 +4,12 @@ import {
   LoaderCircle,
   MessageCircle,
   Plus,
-  Send,
   Sparkles,
-  Square,
   Trash2,
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { FormEvent, KeyboardEvent, MouseEvent } from "react";
+import type { MouseEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { ROUTES } from "@/constants/routes";
 import { api } from "@/lib/api";
@@ -379,8 +377,6 @@ export default function AgentPage() {
   );
   const requestStartedAtRef = useRef(0);
   const presentationTimersRef = useRef<number[]>([]);
-  const [isInputFocused, setIsInputFocused] = useState(false);
-  const [isInputHovered, setIsInputHovered] = useState(false);
   const [isIdleAfterOneMin, setIsIdleAfterOneMin] = useState(false);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -716,7 +712,6 @@ export default function AgentPage() {
     setMapRecommendations([]);
     setActiveMapIndex(0);
     setWorkflowDirective(undefined);
-    setInput("");
     setLoading(false);
     stickToBottomRef.current = true;
     setError("");
