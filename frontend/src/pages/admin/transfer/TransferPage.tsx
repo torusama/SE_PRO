@@ -748,21 +748,21 @@ export default function TransferPage() {
   const terminal =
     current?.status === "rejected" || current?.status === "cancelled";
 
+  const workflowStages = isFreeOrZero
+    ? [decisionDone, appointmentDone, pdfDone, ownershipDone]
+    : [decisionDone, appointmentDone, pdfDone, paymentDone, ownershipDone];
+  const firstIncompleteStage = workflowStages.findIndex((done) => !done);
   const completed = terminal
     ? 1
-    : [
-        decisionDone,
-        appointmentDone,
-        pdfDone,
-        paymentDone,
-        ownershipDone,
-      ].filter(Boolean).length;
+    : firstIncompleteStage === -1
+      ? workflowStages.length
+      : firstIncompleteStage;
 
   const labels = [
     "Duyệt yêu cầu",
     "Lịch hẹn",
     "Tạo PDF",
-    "Thanh toán",
+    ...(isFreeOrZero ? [] : ["Thanh toán"]),
     "Ký & sở hữu",
   ];
 
@@ -1563,21 +1563,6 @@ export default function TransferPage() {
                     )}
 
                     {/* STEP 4: XÁC NHẬN THANH TOÁN */}
-                    {pdfDone && isFreeOrZero && (
-                      <CompletedStep title="Xác nhận thanh toán">
-                        <div className="request-summary-grid">
-                          <span>
-                            <small>Hình thức</small>
-                            {typeLabels[current.transferType]}
-                          </span>
-                          <span>
-                            <small>Trạng thái</small>
-                            Miễn phí giao dịch / Đã hoàn tất thanh toán
-                          </span>
-                        </div>
-                      </CompletedStep>
-                    )}
-
                     {pdfDone && !isFreeOrZero && paymentDone && (
                       <CompletedStep title="Xác nhận thanh toán">
                         <div className="request-summary-grid">
@@ -1678,7 +1663,7 @@ export default function TransferPage() {
                     )}
 
                     {/* STEP 5: HỢP ĐỒNG KÝ & QUYỀN SỞ HỮU */}
-                    {paymentDone && ownershipDone && (
+                    {pdfDone && paymentDone && ownershipDone && (
                       <CompletedStep title="Hợp đồng ký & quyền sở hữu">
                         <div className="request-summary-grid">
                           <span>
@@ -1694,10 +1679,10 @@ export default function TransferPage() {
                       </CompletedStep>
                     )}
 
-                    {paymentDone && !ownershipDone && (
+                    {pdfDone && paymentDone && !ownershipDone && (
                       <section className="active-step">
                         <div className="step-title">
-                          <span>5</span>
+                          <span>{isFreeOrZero ? 4 : 5}</span>
                           <div>
                             <h3>Hợp đồng ký & quyền sở hữu</h3>
                             <p>
