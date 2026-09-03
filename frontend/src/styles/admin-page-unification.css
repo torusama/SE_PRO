@@ -323,21 +323,12 @@
   font-weight: 650;
 }
 
-.admin-theme .service-drawer {
-  border-left: 1px solid var(--admin-line);
-  background: var(--admin-paper);
-  box-shadow: -12px 0 34px rgba(14, 26, 74, 0.14);
-  animation: admin-drawer-enter 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-.admin-theme .service-drawer__header > button {
-  width: auto;
-  height: auto;
-  border-radius: 0;
-  color: var(--admin-muted);
-  font-size: 10px;
-  padding: 6px 0;
-}
+/* Rule ".service-drawer" cũ (thiết kế drawer trượt từ bên phải: border-left,
+   box-shadow lệch trái, animation translateX) đã bị xoá khỏi đây — nó có độ
+   đặc thù CSS cao hơn (".admin-theme .service-drawer") nên âm thầm đè lên
+   đúng style hiện tại của ServiceManagementPage.css (thiết kế dialog nằm
+   giữa màn hình), gây ra viền/vệt sáng lệch ở cạnh popup dù sửa đúng file
+   ServiceManagementPage.css vẫn không hết. */
 
 /* Transfer workflow */
 .admin-theme .transfer-stepper span {

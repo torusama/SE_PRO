@@ -341,8 +341,15 @@
 /* ===== Service detail: structured modal + tabs + workflow guidance ===== */
 .service-drawer-layer {
   position: fixed;
+  /* Phủ toàn bộ khung nhìn (kể cả topbar), giống hệt .contract-preview-backdrop
+     bên trang "Xử lý yêu cầu". Trước đây dùng "inset: 78px 0 0" để chừa chỗ
+     cho topbar cao 78px, nhưng topbar không phải lúc nào cũng cao đúng 78px
+     (tuỳ độ phân giải/zoom/responsive), nên luôn để lộ 1 khe nhỏ chưa được
+     làm mờ ngay dưới topbar. Phủ kín từ inset:0 thì không còn ranh giới nào
+     để hở nữa, đồng thời topbar cũng bị ẩn/làm mờ khi popup mở, đúng như
+     hành vi của popup xem trước hợp đồng. */
   z-index: 1000;
-  inset: 78px 0 0;
+  inset: 0;
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -356,7 +363,7 @@
 .service-drawer {
   width: min(1120px, 100%);
   height: calc(100% - 36px);
-  max-height: calc(100vh - 114px);
+  max-height: calc(100vh - 36px);
   overflow: hidden;
   border: 1px solid rgba(221, 228, 239, 0.92);
   border-radius: 20px;
@@ -809,13 +816,13 @@
 
 @media (max-width: 820px) {
   .service-drawer-layer {
-    inset: 78px 0 0;
+    inset: 0;
     padding: 12px;
   }
 
   .service-drawer {
     height: calc(100% - 24px);
-    max-height: calc(100vh - 102px);
+    max-height: calc(100vh - 24px);
   }
 
   .service-drawer__body {

@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import type { CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
@@ -182,27 +181,6 @@ export default function ServiceManagementPage() {
     return () => {
       document.body.style.overflow = overflow;
       document.body.style.paddingRight = paddingRight;
-    };
-  }, [selected, detailLoading]);
-
-  const [headerHeight, setHeaderHeight] = useState(78);
-
-  useEffect(() => {
-    // Đo chiều cao thật của topbar thay vì đóng cứng 78px: topbar có thể
-    // cao hơn 78px tuỳ độ phân giải/zoom (vd. xuống dòng ở màn hình hẹp),
-    // nếu không đo lại sẽ để lộ khe hở chưa được làm mờ ngay dưới topbar.
-    if (!selected && !detailLoading) return;
-    const headerEl = document.querySelector(".admin-header");
-    if (!headerEl) return;
-    const update = () =>
-      setHeaderHeight(headerEl.getBoundingClientRect().height);
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(headerEl);
-    window.addEventListener("resize", update);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", update);
     };
   }, [selected, detailLoading]);
 
@@ -392,11 +370,6 @@ export default function ServiceManagementPage() {
           <div
             className="admin-theme service-drawer-layer"
             role="presentation"
-            style={
-              {
-                "--service-header-height": `${headerHeight}px`,
-              } as CSSProperties
-            }
             onMouseDown={() => !detailLoading && setSelected(null)}
           >
             <aside
