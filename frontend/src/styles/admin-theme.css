@@ -103,6 +103,15 @@
   overflow: hidden;
 }
 
+/* Modal toàn màn hình (contract-preview-backdrop) nằm sâu bên trong
+   admin-shell__lower — dù workspace bên trong được đẩy z-index cao, bản thân
+   admin-shell__lower vẫn đứng cố định ở z-index:1, thấp hơn admin-header
+   (z-index:20), nên header luôn đè lên phần trên của modal. Đẩy luôn cả khối
+   này lên cao hơn header khi modal đang mở. */
+.admin-shell__lower:has(.contract-preview-backdrop) {
+  z-index: 30;
+}
+
 @keyframes admin-aurora-drift {
   0% {
     transform: translate3d(0, 0, 0) scale(1);
@@ -128,8 +137,13 @@
 }
 
 /* Khi mở modal, workspace phải nằm trên sidebar để lớp backdrop phủ toàn bộ
-   phần nội dung phía sau. Header vẫn ở trên cùng nhờ z-index cao hơn. */
-.admin-workspace:has(.service-drawer-layer) {
+   phần nội dung phía sau. Header vẫn ở trên cùng nhờ z-index cao hơn.
+   Quy tắc này trước đây chỉ áp dụng cho ".service-drawer-layer" — modal xem
+   trước hợp đồng (".contract-preview-backdrop") dùng backdrop riêng nên chưa
+   được liệt kê ở đây, khiến sidebar bên trái không bị làm mờ khi mở modal
+   này. Thêm nó vào danh sách để mọi modal toàn màn hình đều phủ được sidebar. */
+.admin-workspace:has(.service-drawer-layer),
+.admin-workspace:has(.contract-preview-backdrop) {
   z-index: 30;
 }
 

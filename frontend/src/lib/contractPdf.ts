@@ -1,71 +1,75 @@
+// Nhúng thẳng font "Tinos" (bản mã nguồn mở, khớp kích thước với Times New
+// Roman, hỗ trợ đầy đủ dấu tiếng Việt) đi kèm trong code — theo đúng cách dự
+// án đang nhúng các font khác (be-vietnam-pro, inter, playfair-display) ở
+// index.css. Nhờ vậy font luôn hiển thị giống nhau trên MỌI máy, MỌI hệ điều
+// hành, không phụ thuộc máy người dùng có cài sẵn Times New Roman hay không
+// (rất nhiều máy — đặc biệt Linux — không có Times New Roman thật, trình
+// duyệt sẽ tự thay bằng font khác trông không giống, đây chính là lý do
+// trước đó "đổi không được").
+import '@fontsource/tinos/latin-400.css'
+import '@fontsource/tinos/latin-700.css'
+import '@fontsource/tinos/latin-400-italic.css'
+import '@fontsource/tinos/latin-700-italic.css'
+import '@fontsource/tinos/vietnamese-400.css'
+import '@fontsource/tinos/vietnamese-700.css'
+import '@fontsource/tinos/vietnamese-400-italic.css'
+import '@fontsource/tinos/vietnamese-700-italic.css'
+
 interface ContractPdfData {
-  contractCode: string;
-  contractContent?: string | null;
-  contractDate?: string | null;
+  contractCode: string
+  contractContent?: string | null
+  contractDate?: string | null
 }
 
-const GENERAL_TERMS =
-  "Hai bên đã đọc, hiểu, tự nguyện ký và chịu trách nhiệm về thông tin cung cấp. Hợp đồng được lập thành các bản có giá trị như nhau.";
+const GENERAL_TERMS = 'Hai bên đã đọc, hiểu, tự nguyện ký và chịu trách nhiệm về thông tin cung cấp. Hợp đồng được lập thành các bản có giá trị như nhau.'
 const SIGNATURE_BLOCK = `ĐẠI DIỆN BÊN A                              BÊN B
-(Ký, ghi rõ họ tên, chức vụ, đóng dấu)       (Ký, ghi rõ họ tên)`;
+(Ký, ghi rõ họ tên, chức vụ, đóng dấu)       (Ký, ghi rõ họ tên)`
 
 interface ContractDocumentPlot {
-  code: string;
-  zoneName?: string | null;
-  areaSqm?: number | null;
-  agreedPrice: number;
+  code: string
+  zoneName?: string | null
+  areaSqm?: number | null
+  agreedPrice: number
 }
 
 interface PdfDocument {
   internal: {
-    getNumberOfPages(): number;
+    getNumberOfPages(): number
     pageSize: {
-      getWidth(): number;
-      getHeight(): number;
-    };
-  };
-  setPage(page: number): void;
-  setFont(fontName: string, fontStyle: string): void;
-  setFontSize(size: number): void;
-  setTextColor(red: number, green: number, blue: number): void;
-  text(value: string, x: number, y: number, options?: { align?: string }): void;
+      getWidth(): number
+      getHeight(): number
+    }
+  }
+  setPage(page: number): void
+  setFont(fontName: string, fontStyle: string): void
+  setFontSize(size: number): void
+  setTextColor(red: number, green: number, blue: number): void
+  text(value: string, x: number, y: number, options?: { align?: string }): void
 }
 
 export const CONTRACT_PDF_RENDER_OPTIONS = {
-  image: { type: "jpeg", quality: 0.92 },
-  html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" },
+  image: { type: 'jpeg', quality: 0.92 },
+  html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
   jsPDF: {
-    unit: "mm",
-    format: "a4",
-    orientation: "portrait",
+    unit: 'mm',
+    format: 'a4',
+    orientation: 'portrait',
     compress: true,
   },
-};
+}
 
-function upgradePurchaseBase(
-  baseContent: string,
-  plots: ContractDocumentPlot[],
-) {
-  if (!plots.length) return baseContent;
-  const article1 = /ĐIỀU\s+1\s*\./iu.exec(baseContent);
-  const article3 = /ĐIỀU\s+3\s*\./iu.exec(baseContent);
-  if (!article1 || !article3 || article3.index <= article1.index)
-    return baseContent;
-  const details = plots
-    .map(
-      (plot, index) =>
-        `${index + 1}. Lô ${plot.code}${plot.zoneName ? `, ${plot.zoneName}` : ""}, diện tích ${plot.areaSqm ?? "..."} m².`,
-    )
-    .join("\n");
-  const prices = plots
-    .map(
-      (plot, index) =>
-        `${index + 1}. Lô ${plot.code}: ${Number(plot.agreedPrice).toLocaleString("vi-VN")} đồng.`,
-    )
-    .join("\n");
-  const total = plots
-    .reduce((sum, plot) => sum + Number(plot.agreedPrice), 0)
-    .toLocaleString("vi-VN");
+function upgradePurchaseBase(baseContent: string, plots: ContractDocumentPlot[]) {
+  if (!plots.length) return baseContent
+  const article1 = /ĐIỀU\s+1\s*\./iu.exec(baseContent)
+  const article3 = /ĐIỀU\s+3\s*\./iu.exec(baseContent)
+  if (!article1 || !article3 || article3.index <= article1.index) return baseContent
+  const details = plots.map((plot, index) =>
+    `${index + 1}. Lô ${plot.code}${plot.zoneName ? `, ${plot.zoneName}` : ''}, diện tích ${plot.areaSqm ?? '...'} m².`,
+  ).join('\n')
+  const prices = plots.map((plot, index) =>
+    `${index + 1}. Lô ${plot.code}: ${Number(plot.agreedPrice).toLocaleString('vi-VN')} đồng.`,
+  ).join('\n')
+  const total = plots.reduce((sum, plot) => sum + Number(plot.agreedPrice), 0).toLocaleString('vi-VN')
   const articles = `ĐIỀU 1. ĐỐI TƯỢNG HỢP ĐỒNG
 Bên A cung cấp cho Bên B quyền sử dụng các vị trí phần mộ sau theo dữ liệu hệ thống:
 ${details}
@@ -73,14 +77,10 @@ Các vị trí trên được sử dụng theo quy hoạch và quy chế quản 
 
 ĐIỀU 2. GIÁ TRỊ VÀ THANH TOÁN
 ${prices}
-Tổng giá trị hợp đồng: ${total} đồng. Thời hạn, phương thức và chứng từ thanh toán thực hiện theo thỏa thuận/phiếu thu hợp lệ của hai bên.`;
-  return [
-    baseContent.slice(0, article1.index).trim(),
-    articles,
-    baseContent.slice(article3.index).trim(),
-  ]
+Tổng giá trị hợp đồng: ${total} đồng. Thời hạn, phương thức và chứng từ thanh toán thực hiện theo thỏa thuận/phiếu thu hợp lệ của hai bên.`
+  return [baseContent.slice(0, article1.index).trim(), articles, baseContent.slice(article3.index).trim()]
     .filter(Boolean)
-    .join("\n\n");
+    .join('\n\n')
 }
 
 export function composeContractDocument(
@@ -88,287 +88,215 @@ export function composeContractDocument(
   inheritanceContent: string,
   plots: ContractDocumentPlot[] = [],
 ) {
-  const inheritance = inheritanceContent.trim();
-  const legacyFreeBase = baseContent
-    .trim()
-    .replace(/(?:\r?\n)+\s*ĐIỀU\s+6\s*\.[\s\S]*$/iu, "")
-    .trim();
-  const stableBase = upgradePurchaseBase(legacyFreeBase, plots);
-  const sections = [stableBase];
+  const inheritance = inheritanceContent.trim()
+  const legacyFreeBase = baseContent.trim().replace(/(?:\r?\n)+\s*ĐIỀU\s+6\s*\.[\s\S]*$/iu, '').trim()
+  const stableBase = upgradePurchaseBase(legacyFreeBase, plots)
+  const sections = [stableBase]
   if (inheritance) {
-    sections.push(`ĐIỀU 6. THÔNG TIN/NGUYỆN VỌNG VỀ THỪA KẾ\n${inheritance}`);
+    sections.push(`ĐIỀU 6. THÔNG TIN/NGUYỆN VỌNG VỀ THỪA KẾ\n${inheritance}`)
   }
   sections.push(
     `ĐIỀU ${inheritance ? 7 : 6}. ĐIỀU KHOẢN CHUNG\n${GENERAL_TERMS}`,
     SIGNATURE_BLOCK,
-  );
-  return sections.join("\n\n");
+  )
+  return sections.join('\n\n')
 }
 
 function appendTextElement(
   root: HTMLElement,
-  tagName: "div" | "h1" | "h2" | "p",
+  tagName: 'div' | 'h1' | 'h2' | 'p',
   text: string,
   cssText: string,
 ) {
-  const element = document.createElement(tagName);
-  element.textContent = text;
-  element.style.cssText = cssText;
-  element.style.setProperty("color", "#000000", "important");
-  element.style.setProperty("-webkit-text-fill-color", "#000000", "important");
-  element.style.setProperty("opacity", "1", "important");
-  element.style.setProperty("text-shadow", "none", "important");
-  root.appendChild(element);
-  return element;
+  const element = document.createElement(tagName)
+  element.textContent = text
+  element.style.cssText = cssText
+  // Khai báo font ngay trên từng phần tử (h1/h2/p) thay vì chỉ dựa vào việc
+  // "thừa hưởng" font-family từ thẻ cha — html2canvas đôi khi bỏ qua font kế
+  // thừa trên các thẻ tiêu đề (h1/h2), khiến "BÊN A", "BÊN B", "ĐIỀU 1..."
+  // hiển thị sai font dù đoạn văn thường vẫn đúng.
+  element.style.setProperty('font-family', CONTRACT_FONT_FAMILY, 'important')
+  element.style.setProperty('color', '#000000', 'important')
+  element.style.setProperty('-webkit-text-fill-color', '#000000', 'important')
+  element.style.setProperty('opacity', '1', 'important')
+  element.style.setProperty('text-shadow', 'none', 'important')
+  root.appendChild(element)
+  return element
 }
 
 function formatContractDate(value?: string | null) {
-  if (!value) return "Ngày ..... tháng ..... năm ........";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime()))
-    return "Ngày ..... tháng ..... năm ........";
-  return `Ngày ${String(date.getDate()).padStart(2, "0")} tháng ${String(date.getMonth() + 1).padStart(2, "0")} năm ${date.getFullYear()}`;
+  if (!value) return 'Ngày ..... tháng ..... năm ........'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'Ngày ..... tháng ..... năm ........'
+  return `Ngày ${String(date.getDate()).padStart(2, '0')} tháng ${String(date.getMonth() + 1).padStart(2, '0')} năm ${date.getFullYear()}`
 }
 
-const FIELD_LABEL_PATTERN =
-  /^(Tên|Mã số thuế|Địa chỉ|Đại diện|Chức vụ|Họ tên|CCCD\/CMND|Điện thoại)\s*:/u;
+const FIELD_LABEL_PATTERN = /^(Tên|Mã số thuế|Địa chỉ|Đại diện|Chức vụ|Họ tên|CCCD\/CMND|Điện thoại)\s*:/u
 
 function appendFieldElement(root: HTMLElement, line: string, cssText: string) {
-  const match = FIELD_LABEL_PATTERN.exec(line);
-  const element = document.createElement("p");
-  element.style.cssText = cssText;
-  element.style.setProperty("color", "#000000", "important");
-  element.style.setProperty("-webkit-text-fill-color", "#000000", "important");
-  element.style.setProperty("opacity", "1", "important");
-  element.style.setProperty("text-shadow", "none", "important");
+  const match = FIELD_LABEL_PATTERN.exec(line)
+  const element = document.createElement('p')
+  element.style.cssText = cssText
+  element.style.setProperty('font-family', CONTRACT_FONT_FAMILY, 'important')
+  element.style.setProperty('color', '#000000', 'important')
+  element.style.setProperty('-webkit-text-fill-color', '#000000', 'important')
+  element.style.setProperty('opacity', '1', 'important')
+  element.style.setProperty('text-shadow', 'none', 'important')
 
   if (match) {
-    const label = document.createElement("strong");
-    label.textContent = `${match[1]}: `;
-    label.style.fontWeight = "700";
-    element.appendChild(label);
-    element.appendChild(
-      document.createTextNode(line.slice(match[0].length).trim()),
-    );
+    const label = document.createElement('strong')
+    label.textContent = `${match[1]}: `
+    label.style.fontWeight = '700'
+    element.appendChild(label)
+    element.appendChild(document.createTextNode(line.slice(match[0].length).trim()))
   } else {
-    element.textContent = line;
+    element.textContent = line
   }
 
-  root.appendChild(element);
-  return element;
+  root.appendChild(element)
+  return element
 }
 
-// Dùng thẳng font hệ thống "Times New Roman" (không tải font ngoài qua Google
-// Fonts nữa) để văn bản luôn hiển thị đúng Times New Roman — trước đây "Tinos"
-// được nạp và xếp trước trong font-family nên trình duyệt luôn ưu tiên dùng
-// Tinos (trông giống nhưng không phải Times New Roman), đồng thời việc phải
-// tải font từ mạng ngoài có thể fail/chậm khi xuất PDF.
-const CONTRACT_FONT_FAMILY =
-  '"Times New Roman", Times, "Liberation Serif", serif';
+const CONTRACT_FONT_FAMILY = '"Tinos", "Times New Roman", Times, serif'
 
 async function waitForContractFontReady() {
-  // Times New Roman là font hệ thống, trình duyệt/renderer PDF (html2canvas)
-  // có sẵn ngay lập tức nên không cần chờ nạp font từ mạng ngoài nữa.
-  if (typeof document === "undefined" || !("fonts" in document)) return;
+  // Font đã được nhúng kèm theo code (import ở đầu file) nên không phụ thuộc
+  // mạng ngoài/CDN nữa — chỉ cần đợi trình duyệt nạp xong file font đã tải về
+  // cùng bundle trước khi html2canvas chụp ảnh, tránh bị chụp nhầm lúc chữ
+  // còn hiển thị bằng font tạm (FOUT) khiến PDF ra sai font.
+  if (typeof document === 'undefined' || !('fonts' in document)) return
   try {
-    await document.fonts.ready;
+    await Promise.all([
+      document.fonts.load('400 16px "Tinos"'),
+      document.fonts.load('700 16px "Tinos"'),
+      document.fonts.load('italic 400 16px "Tinos"'),
+      document.fonts.load('italic 700 16px "Tinos"'),
+    ])
+    await document.fonts.ready
   } catch {
     // Bỏ qua, đã có fallback serif trong CONTRACT_FONT_FAMILY.
   }
 }
 
 function appendSignatureBlock(root: HTMLElement) {
-  const signature = document.createElement("div");
-  signature.dataset.pdfSection = "signatures";
+  const signature = document.createElement('div')
+  signature.dataset.pdfSection = 'signatures'
   signature.style.cssText = [
-    "display:grid",
-    "grid-template-columns:1fr 1fr",
-    "gap:34px",
-    "margin-top:30px",
-    "min-height:150px",
-    "break-inside:avoid",
-    "page-break-inside:avoid",
-    "text-align:center",
-  ].join(";");
+    'display:grid',
+    'grid-template-columns:1fr 1fr',
+    'gap:34px',
+    'margin-top:30px',
+    'min-height:150px',
+    'break-inside:avoid',
+    'page-break-inside:avoid',
+    'text-align:center',
+  ].join(';')
 
   const parties = [
-    ["ĐẠI DIỆN BÊN A", "(Ký, ghi rõ họ tên, chức vụ và đóng dấu)"],
-    ["BÊN B", "(Ký, ghi rõ họ tên)"],
-  ];
+    ['ĐẠI DIỆN BÊN A', '(Ký, ghi rõ họ tên, chức vụ và đóng dấu)'],
+    ['BÊN B', '(Ký, ghi rõ họ tên)'],
+  ]
   parties.forEach(([title, note]) => {
-    const column = document.createElement("div");
-    appendTextElement(
-      column,
-      "p",
-      title,
-      "margin:0;font-weight:700;font-size:15px;text-align:center",
-    );
-    appendTextElement(
-      column,
-      "p",
-      note,
-      "margin:4px 0 0;font-style:italic;font-size:13px;line-height:1.35;text-align:center",
-    );
-    signature.appendChild(column);
-  });
-  root.appendChild(signature);
+    const column = document.createElement('div')
+    appendTextElement(column, 'p', title, 'margin:0;font-weight:700;font-size:15px;text-align:center')
+    appendTextElement(column, 'p', note, 'margin:4px 0 0;font-style:italic;font-size:13px;line-height:1.35;text-align:center')
+    signature.appendChild(column)
+  })
+  root.appendChild(signature)
 }
 
 export function createContractPdfElement(contract: ContractPdfData) {
-  const root = document.createElement("article");
-  root.dataset.contractPdf = "true";
+  const root = document.createElement('article')
+  root.dataset.contractPdf = 'true'
   root.style.cssText = [
-    "width:605px",
-    "box-sizing:border-box",
-    "background:#ffffff",
-    "color:#000000",
+    'width:605px',
+    'box-sizing:border-box',
+    'background:#ffffff',
+    'color:#000000',
     `font-family:${CONTRACT_FONT_FAMILY}`,
-    "font-size:15px",
-    "line-height:1.6",
-  ].join(";");
-  root.style.setProperty("color", "#000000", "important");
-  root.style.setProperty("-webkit-text-fill-color", "#000000", "important");
-  root.style.setProperty("opacity", "1", "important");
+    'font-size:15px',
+    'line-height:1.6',
+  ].join(';')
+  root.style.setProperty('color', '#000000', 'important')
+  root.style.setProperty('-webkit-text-fill-color', '#000000', 'important')
+  root.style.setProperty('opacity', '1', 'important')
 
-  const lines = (
-    contract.contractContent || "Hợp đồng chưa có nội dung điện tử."
-  )
-    .replace(/\r\n/g, "\n")
-    .split("\n");
+  const lines = (contract.contractContent || 'Hợp đồng chưa có nội dung điện tử.')
+    .replace(/\r\n/g, '\n')
+    .split('\n')
 
-  let dateAdded = false;
-  let signatureAdded = false;
+  let dateAdded = false
+  let signatureAdded = false
   for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index].trim();
-    if (!line) continue;
+    const line = lines[index].trim()
+    if (!line) continue
 
-    if (line === "CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM") {
-      appendTextElement(
-        root,
-        "p",
-        line,
-        "margin:0;text-align:center;font-size:17px;font-weight:700;line-height:1.35;letter-spacing:0.3px",
-      );
-      continue;
+    if (line === 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM') {
+      appendTextElement(root, 'p', line, 'margin:0;text-align:center;font-size:17px;font-weight:700;line-height:1.35;letter-spacing:0.3px')
+      continue
     }
-    if (line === "Độc lập - Tự do - Hạnh phúc") {
-      // Không dùng text-decoration:underline nữa vì text-underline-offset
-      // không được html2canvas hỗ trợ đáng tin cậy, khiến gạch chân bị đè sát
-      // (thậm chí đè lên) chữ. Thay vào đó vẽ đường kẻ bằng border-bottom trên
-      // một span vừa khít chữ, có padding-bottom để tạo khoảng cách rõ ràng.
-      const wrapper = appendTextElement(
-        root,
-        "p",
-        "",
-        "margin:0 0 12px;text-align:center;font-size:15px;font-weight:700;line-height:1.35",
-      );
-      const underline = document.createElement("span");
-      underline.textContent = line;
-      underline.style.cssText =
-        "display:inline-block;padding-bottom:4px;border-bottom:1.3px solid #000000";
-      wrapper.appendChild(underline);
-      appendTextElement(
-        root,
-        "p",
-        "----- o0o -----",
-        "margin:0 0 16px;text-align:center;font-size:14px;font-weight:700;letter-spacing:1px",
-      );
-      appendTextElement(
-        root,
-        "p",
-        formatContractDate(contract.contractDate),
-        "margin:0 0 20px;text-align:center;font-style:italic",
-      );
-      dateAdded = true;
-      continue;
+    if (line === 'Độc lập - Tự do - Hạnh phúc') {
+      // Bỏ hẳn đường kẻ dưới dòng này theo yêu cầu — chỉ còn chữ in đậm,
+      // không có gạch chân/đường kẻ gì thêm nữa để tránh mọi rủi ro đè chữ.
+      appendTextElement(root, 'p', line, 'margin:0 0 12px;text-align:center;font-size:15px;font-weight:700;line-height:1.35')
+      appendTextElement(root, 'p', '----- o0o -----', 'margin:0 0 16px;text-align:center;font-size:14px;font-weight:700;letter-spacing:1px')
+      appendTextElement(root, 'p', formatContractDate(contract.contractDate), 'margin:0 0 20px;text-align:center;font-style:italic')
+      dateAdded = true
+      continue
     }
     if (/^HỢP ĐỒNG\b/u.test(line)) {
       if (!dateAdded) {
-        appendTextElement(
-          root,
-          "p",
-          "----- o0o -----",
-          "margin:0 0 16px;text-align:center;font-size:14px;font-weight:700;letter-spacing:1px",
-        );
-        appendTextElement(
-          root,
-          "p",
-          formatContractDate(contract.contractDate),
-          "margin:0 0 20px;text-align:center;font-style:italic",
-        );
-        dateAdded = true;
+        appendTextElement(root, 'p', '----- o0o -----', 'margin:0 0 16px;text-align:center;font-size:14px;font-weight:700;letter-spacing:1px')
+        appendTextElement(root, 'p', formatContractDate(contract.contractDate), 'margin:0 0 20px;text-align:center;font-style:italic')
+        dateAdded = true
       }
-      appendTextElement(
-        root,
-        "h1",
-        line,
-        "margin:0 12px 4px;text-align:center;font-size:19px;line-height:1.4;font-weight:700;letter-spacing:0.3px",
-      );
-      continue;
+      appendTextElement(root, 'h1', line, 'margin:0 12px 4px;text-align:center;font-size:19px;line-height:1.4;font-weight:700;letter-spacing:0.3px')
+      continue
     }
     if (/^Số\s*:/iu.test(line)) {
-      const display = line.startsWith("(") ? line : `(${line})`;
-      appendTextElement(
-        root,
-        "p",
-        display,
-        "margin:0 0 24px;text-align:center;font-size:14.5px;font-style:italic",
-      );
-      continue;
+      const display = line.startsWith('(') ? line : `(${line})`
+      appendTextElement(root, 'p', display, 'margin:0 0 24px;text-align:center;font-size:14.5px;font-style:italic')
+      continue
     }
     if (/^ĐIỀU\s+\d+\s*\./iu.test(line)) {
-      appendTextElement(
-        root,
-        "h2",
-        line,
-        "margin:18px 0 7px;font-size:15.5px;line-height:1.4;font-weight:700;letter-spacing:0.2px;break-after:avoid;page-break-after:avoid",
-      );
-      continue;
+      appendTextElement(root, 'h2', line, 'margin:18px 0 7px;font-size:15.5px;line-height:1.4;font-weight:700;letter-spacing:0.2px;break-after:avoid;page-break-after:avoid')
+      continue
     }
     if (/^BÊN\s+[AB]\s*-/u.test(line)) {
-      appendTextElement(
-        root,
-        "h2",
-        line,
-        "margin:16px 0 8px;font-size:15px;line-height:1.4;font-weight:700;letter-spacing:0.2px;break-after:avoid;page-break-after:avoid",
-      );
-      continue;
+      appendTextElement(root, 'h2', line, 'margin:16px 0 8px;font-size:15px;line-height:1.4;font-weight:700;letter-spacing:0.2px;break-after:avoid;page-break-after:avoid')
+      continue
     }
     if (/^ĐẠI DIỆN BÊN A\b/u.test(line)) {
-      appendSignatureBlock(root);
-      signatureAdded = true;
-      index += 1;
-      continue;
+      appendSignatureBlock(root)
+      signatureAdded = true
+      index += 1
+      continue
     }
 
-    const isFieldOrList =
-      /^(?:Tên|Mã số thuế|Địa chỉ|Đại diện|Chức vụ|Họ tên|CCCD\/CMND|Điện thoại|\d+\.)\s*/u.test(
-        line,
-      );
+    const isFieldOrList = /^(?:Tên|Mã số thuế|Địa chỉ|Đại diện|Chức vụ|Họ tên|CCCD\/CMND|Điện thoại|\d+\.)\s*/u.test(line)
     if (FIELD_LABEL_PATTERN.test(line)) {
-      appendFieldElement(root, line, "margin:0 0 7px;text-align:justify");
-      continue;
+      appendFieldElement(root, line, 'margin:0 0 7px;text-align:justify')
+      continue
     }
     appendTextElement(
       root,
-      "p",
+      'p',
       line,
-      `margin:0 0 7px;text-align:justify;${isFieldOrList ? "" : "text-indent:24px;"}`,
-    );
+      `margin:0 0 7px;text-align:justify;${isFieldOrList ? '' : 'text-indent:24px;'}`,
+    )
   }
 
-  if (!signatureAdded) appendSignatureBlock(root);
-  return root;
+  if (!signatureAdded) appendSignatureBlock(root)
+  return root
 }
 
 export async function createContractPdfBlob(contract: ContractPdfData) {
-  const { default: html2pdf } = await import("html2pdf.js");
-  const staging = document.createElement("div");
-  staging.style.cssText =
-    "position:fixed;left:-10000px;top:0;width:605px;background:#fff;z-index:-1";
-  staging.appendChild(createContractPdfElement(contract));
-  document.body.appendChild(staging);
-  await waitForContractFontReady();
+  const { default: html2pdf } = await import('html2pdf.js')
+  const staging = document.createElement('div')
+  staging.style.cssText = 'position:fixed;left:-10000px;top:0;width:605px;background:#fff;z-index:-1'
+  staging.appendChild(createContractPdfElement(contract))
+  document.body.appendChild(staging)
+  await waitForContractFontReady()
 
   try {
     const worker = html2pdf()
@@ -376,38 +304,36 @@ export async function createContractPdfBlob(contract: ContractPdfData) {
         margin: [18, 25, 18, 25],
         filename: `${contract.contractCode}.pdf`,
         ...CONTRACT_PDF_RENDER_OPTIONS,
-        pagebreak: { mode: ["css", "legacy"] },
+        pagebreak: { mode: ['css', 'legacy'] },
       })
       .from(staging.firstElementChild as HTMLElement)
-      .toPdf();
+      .toPdf()
 
-    const pdf = (await worker.get("pdf")) as PdfDocument;
-    const totalPages = pdf.internal.getNumberOfPages();
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
+    const pdf = await worker.get('pdf') as PdfDocument
+    const totalPages = pdf.internal.getNumberOfPages()
+    const pageWidth = pdf.internal.pageSize.getWidth()
+    const pageHeight = pdf.internal.pageSize.getHeight()
     for (let page = 1; page <= totalPages; page += 1) {
-      pdf.setPage(page);
-      pdf.setFont("times", "normal");
-      pdf.setFontSize(9);
-      pdf.setTextColor(0, 0, 0);
-      pdf.text(`Trang ${page} / ${totalPages}`, pageWidth / 2, pageHeight - 8, {
-        align: "center",
-      });
+      pdf.setPage(page)
+      pdf.setFont('times', 'normal')
+      pdf.setFontSize(9)
+      pdf.setTextColor(0, 0, 0)
+      pdf.text(`Trang ${page} / ${totalPages}`, pageWidth / 2, pageHeight - 8, { align: 'center' })
     }
-    return (await worker.outputPdf("blob")) as Blob;
+    return await worker.outputPdf('blob') as Blob
   } finally {
-    staging.remove();
+    staging.remove()
   }
 }
 
 export async function downloadContractPdf(contract: ContractPdfData) {
-  const blob = await createContractPdfBlob(contract);
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `${contract.contractCode}.pdf`;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  const blob = await createContractPdfBlob(contract)
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${contract.contractCode}.pdf`
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
 }
