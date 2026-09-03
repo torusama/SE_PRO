@@ -879,3 +879,150 @@
   background: #dcefe1;
   font-size: 10px;
 }
+
+/* ---------- Lịch sử xử lý đơn (timeline) ---------- */
+/* Trước đây style này "vô tình" tồn tại nhờ CSS mồ côi copy sang
+   ReminderManagementPage.css (đã được dọn dẹp). File này chưa từng thực sự
+   định nghĩa .history-list nên khi phần mồ côi kia bị xoá, timeline mất
+   toàn bộ style và hiển thị vỡ layout. Định nghĩa lại đúng ở đây. */
+.history-list {
+  display: grid;
+  gap: 0;
+}
+
+.history-list article {
+  position: relative;
+  display: flex;
+  gap: 14px;
+  padding: 0 0 18px 2px;
+}
+
+.history-list article:last-child {
+  padding-bottom: 0;
+}
+
+.history-list article::before {
+  content: "";
+  position: absolute;
+  top: 16px;
+  bottom: -2px;
+  left: 5px;
+  width: 1px;
+  background: #dfe6ee;
+}
+
+.history-list article:last-child::before {
+  display: none;
+}
+
+.history-dot {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  width: 11px;
+  height: 11px;
+  margin-top: 3px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  outline: 1px solid #b7c3d6;
+  background: #b7c3d6;
+}
+
+.history-list article:first-child .history-dot {
+  outline-color: #002385;
+  background: #002385;
+}
+
+.history-list article > div:last-child {
+  display: grid;
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: 3px;
+}
+
+.history-list strong {
+  color: #1d2d50;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.history-list span {
+  color: #8a97a9;
+  font-size: 11px;
+}
+
+.history-list p {
+  margin: 2px 0 0;
+  color: #3f4a5c;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* ---------- Thẻ thanh toán (DemoPaymentPanel) trong popup admin ---------- */
+/* DemoPaymentPanel dùng theme tối mặc định (được thiết kế cho trang khách
+   hàng nền tối). Khi đặt trong popup quản lý dịch vụ (nền trắng) nó bị lạc
+   tông, trông như "vỡ" vì tự nhiên tối thui giữa các .detail-card sáng màu.
+   Ghi đè lại theme sáng cho đúng ngữ cảnh admin ở đây. */
+.service-drawer .demo-payment--admin {
+  border: 1px solid #dfe6ee;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 4px 18px rgba(25, 43, 77, 0.025);
+  color: #252830;
+}
+
+.service-drawer .demo-payment--admin .demo-payment-icon {
+  border-color: rgba(0, 35, 133, 0.18);
+  background: rgba(0, 35, 133, 0.06);
+  color: #002385;
+}
+
+.service-drawer .demo-payment--admin .demo-payment-icon.success {
+  border-color: #cde4d3;
+  background: #f4fbf6;
+  color: #347449;
+}
+
+.service-drawer .demo-payment--admin .demo-payment-kicker {
+  color: #8a97a9;
+}
+
+.service-drawer .demo-payment--admin h3 {
+  color: #1d2d50;
+}
+
+.service-drawer .demo-payment--admin .demo-payment-status--waiting {
+  border-color: #f4d99f;
+  background: #fff7e8;
+  color: #a76a0e;
+}
+
+.service-drawer .demo-payment--admin .demo-payment-status--paid {
+  border-color: #bcd8e6;
+  background: #eef7fb;
+  color: #2b6a86;
+}
+
+.service-drawer .demo-payment--admin .demo-payment-status--confirmed {
+  border-color: #cde4d3;
+  background: #f4fbf6;
+  color: #347449;
+}
+
+.service-drawer .demo-payment--admin .demo-payment-hint {
+  color: #8b97a4;
+}
+
+.service-drawer .demo-payment--admin .payment-primary {
+  border: 1px solid #002385;
+  background: #002385;
+  color: #fff;
+  box-shadow: none;
+}
+
+.service-drawer .demo-payment--admin .payment-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: #001a66;
+  background: #001a66;
+  box-shadow: 0 8px 18px rgba(0, 35, 133, 0.18);
+}
