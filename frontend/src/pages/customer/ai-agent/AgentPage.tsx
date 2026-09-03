@@ -24,6 +24,7 @@ import ComparisonAssessmentMessage from "./ComparisonAssessmentMessage";
 import AgentWorkflowPanel from "./AgentWorkflowPanel";
 import { buildFullMapUrl, getTourableRecommendations } from "./guidedTour";
 import { getRecommendationCompareKey } from "./agentDisplay";
+import { AgentChatInputArea } from "./AgentChatInputArea";
 import type {
   AgentRecommendation,
   AgentResponse,
@@ -227,26 +228,7 @@ const createLocalId = () =>
 
 const getTimestamp = () => Date.now();
 
-function AgentElapsedTimer({ startedAt }: { startedAt: number }) {
-  const [elapsedMs, setElapsedMs] = useState(0);
 
-  useEffect(() => {
-    const updateElapsed = () => setElapsedMs(Date.now() - startedAt);
-    updateElapsed();
-    const timer = window.setInterval(updateElapsed, 100);
-    return () => window.clearInterval(timer);
-  }, [startedAt]);
-
-  return (
-    <span className="agent-composer-timer">
-      {(elapsedMs / 1000).toLocaleString("vi-VN", {
-        minimumFractionDigits: 1,
-        maximumFractionDigits: 1,
-      })}
-      s
-    </span>
-  );
-}
 
 const comparisonText = (value: unknown, maxLength: number) =>
   String(value ?? "")
@@ -358,7 +340,7 @@ export default function AgentPage() {
   const [sessionId, setSessionId] = useState<string>();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
-  const [input, setInput] = useState("");
+  const [hasInput, setHasInput] = useState(false);
   const [loading, setLoading] = useState(false);
   const isPacing = messages.some(
     (message) => message.role === "assistant" && message.animatePresentation,
@@ -408,7 +390,7 @@ export default function AgentPage() {
       idleTimerRef.current = null;
     }
 
-    if (isBusy || input.trim() !== "") {
+    if (isBusy || hasInput) {
       setIsIdleAfterOneMin(false);
       return;
     }
@@ -431,7 +413,7 @@ export default function AgentPage() {
         clearTimeout(idleTimerRef.current);
       }
     };
-  }, [messages, isBusy, input]);
+  }, [messages, isBusy, hasInput]);
 
   const lastAssistantMessage = [...messages]
     .reverse()
@@ -785,7 +767,7 @@ export default function AgentPage() {
   }
 
   async function sendMessage(
-    text = input,
+    text: string,
     options: {
       startNewConversation?: boolean;
       replaceMessages?: boolean;
@@ -851,7 +833,6 @@ export default function AgentPage() {
       setMapRecommendations([]);
       setActiveMapIndex(0);
     }
-    setInput("");
     setError("");
     setNotice(
       options.startNewConversation
@@ -963,18 +944,6 @@ export default function AgentPage() {
       reducedMotion ? 0 : 520,
     );
     presentationTimersRef.current.push(timer);
-  }
-
-  function submit(event: FormEvent) {
-    event.preventDefault();
-    void sendMessage();
-  }
-
-  function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault();
-      void sendMessage();
-    }
   }
 
   function toggleCompare(option: AgentRecommendation) {
@@ -1326,87 +1295,15 @@ export default function AgentPage() {
               </div>
             </div>
 
-            <form
-              className="agent-composer"
-              onSubmit={submit}
-              onMouseEnter={() => setIsInputHovered(true)}
-              onMouseLeave={() => setIsInputHovered(false)}
-            >
-              <div className="agent-composer-inner">
-                {!isBusy &&
-                  !input.trim() &&
-                  isIdleAfterOneMin &&
-                  (isInputFocused || isInputHovered) && (
-                    <div className="agent-floating-suggestions">
-                      <div className="agent-floating-header">
-                        <div className="agent-floating-label">
-                          <Sparkles size={13} className="agent-sparkle-icon" />
-                          <span>Gợi ý câu hỏi AI</span>
-                        </div>
-                      </div>
-
-                      <div className="agent-prompt-pills-row">
-                        {suggestedPrompts.map((prompt, idx) => (
-                          <button
-                            key={`${prompt.category}-${idx}`}
-                            type="button"
-                            className="agent-prompt-pill"
-                            onClick={() => void sendMessage(prompt.text)}
-                            title={prompt.text}
-                          >
-                            <div className="agent-prompt-pill-content">
-                              <span className="agent-prompt-pill-category">
-                                {prompt.category}
-                              </span>
-                              <span className="agent-prompt-pill-text">
-                                {prompt.text}
-                              </span>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                <div className="agent-input-wrap">
-                  <textarea
-                    ref={inputRef}
-                    rows={1}
-                    value={input}
-                    onChange={(event) => setInput(event.target.value)}
-                    onFocus={() => setIsInputFocused(true)}
-                    onBlur={() => {
-                      setTimeout(() => setIsInputFocused(false), 200);
-                    }}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Nhắn tin cho trợ lý…"
-                    maxLength={2000}
-                  />
-                  {isBusy && (
-                    <AgentElapsedTimer
-                      startedAt={requestStartedAtRef.current}
-                    />
-                  )}
-                  <button
-                    type={isBusy ? "button" : "submit"}
-                    onClick={isBusy ? stopResponse : undefined}
-                    disabled={!isBusy && !input.trim()}
-                    aria-label={isBusy ? "Dừng phản hồi" : "Gửi tin nhắn"}
-                    title={isBusy ? "Dừng phản hồi" : "Gửi tin nhắn"}
-                  >
-                    {isBusy ? (
-                      <Square size={16} fill="currentColor" />
-                    ) : (
-                      <Send size={17} />
-                    )}
-                  </button>
-                </div>
-                <p>
-                  Trợ lý có thể mắc lỗi. Hãy kiểm tra lại thông tin quan trọng
-                  trước khi xác nhận.
-                </p>
-              </div>
-            </form>
+            <AgentChatInputArea
+              isBusy={isBusy}
+              isIdleAfterOneMin={isIdleAfterOneMin}
+              suggestedPrompts={suggestedPrompts}
+              requestStartedAtRef={requestStartedAtRef}
+              stopResponse={stopResponse}
+              sendMessage={(text) => void sendMessage(text)}
+              onHasInputChange={setHasInput}
+            />
           </main>
 
           {mapOpen && mapRecommendations.length > 0 && (

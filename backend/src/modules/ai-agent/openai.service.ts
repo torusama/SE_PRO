@@ -38,6 +38,8 @@ type LlmCallOptions = {
   strictPreferredProvider?: boolean;
   /** Internal: MultiProviderLlmService records the provider attempt itself. */
   skipRuntimeTelemetry?: boolean;
+  /** Cancels a losing hedged request without cooling down its healthy key. */
+  signal?: AbortSignal;
 };
 
 interface KeyCandidate {
@@ -184,6 +186,12 @@ export class OpenAiService {
       // to the next provider instead of starving every key to one second.
       const attemptTimeoutMs = Math.min(timeoutMs, remainingBudgetMs);
       const controller = new AbortController();
+      const abortFromCaller = () => controller.abort(options.signal?.reason);
+      if (options.signal?.aborted) abortFromCaller();
+      else
+        options.signal?.addEventListener('abort', abortFromCaller, {
+          once: true,
+        });
       const timer = setTimeout(() => controller.abort(), attemptTimeoutMs);
 
       try {
@@ -228,6 +236,7 @@ export class OpenAiService {
         return payload;
       } catch (error) {
         lastError = error;
+        if (options.signal?.aborted) throw error;
         const isTimeout =
           error instanceof Error &&
           (error.name === 'AbortError' || /timeout/i.test(error.message));
@@ -296,6 +305,7 @@ export class OpenAiService {
         throw terminalError;
       } finally {
         clearTimeout(timer);
+        options.signal?.removeEventListener('abort', abortFromCaller);
       }
     }
 
@@ -609,6 +619,30 @@ export class OpenAiService {
 export class OpenAiSecondaryService extends OpenAiService {
   protected override get configPrefix(): string {
     return 'ai.openaiSecondary';
+  }
+}
+
+/** Groq-hosted GPT-OSS 20B with its own key rotation and cooldown state. */
+@Injectable()
+export class GroqGptOss20bService extends OpenAiService {
+  protected override get configPrefix(): string {
+    return 'ai.groq20b';
+  }
+}
+
+/** Groq-hosted GPT-OSS 120B with an independent key pool. */
+@Injectable()
+export class GroqGptOss120bService extends OpenAiService {
+  protected override get configPrefix(): string {
+    return 'ai.groq120b';
+  }
+}
+
+/** Groq-hosted Qwen 3.8 27B with an independent key pool. */
+@Injectable()
+export class GroqQwen38Service extends OpenAiService {
+  protected override get configPrefix(): string {
+    return 'ai.groqQwen38';
   }
 }
 

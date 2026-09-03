@@ -1070,7 +1070,7 @@ INSERT INTO plots (plot_code, zone_id, row_number, column_number, map_x, map_y, 
 
 -- Service Types
 INSERT INTO service_types (name, description, base_price, unit, category, sort_order) VALUES
-('Dịch vụ mai táng',        'Hỗ trợ toàn bộ quy trình mai táng tại nghĩa trang',    5000000,  'lần',   'burial',      1),
+
 ('Chăm sóc mộ định kỳ',     'Vệ sinh, chăm sóc mộ phần hàng tháng',                 500000,   'tháng', 'maintenance', 2),
 ('Dọn dẹp mộ',              'Làm cỏ, vệ sinh khu vực xung quanh mộ',                200000,   'lần',   'maintenance', 3),
 ('Thay hoa tươi',           'Thay hoa tươi theo yêu cầu',                            150000,   'lần',   'maintenance', 4),

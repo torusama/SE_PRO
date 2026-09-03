@@ -275,11 +275,8 @@ Câu trả lời trợ lý vừa hoàn tất: ${input.assistantMessage.slice(0, 
           routingKey: `learning-journal:${input.conversationId}`,
           timeoutMs: 4_000,
           totalTimeoutMs: 5_000,
-          preferredProviderId: 'openai-primary',
-          // The configured 120B secondary repeatedly times out. Reflection is
-          // still optional/non-blocking, but must use a healthy provider to
-          // produce any learning signal at all.
-          strictPreferredProvider: true,
+          preferredProviderId: 'groq-20b',
+          strictPreferredProvider: false,
         },
       );
       const content = response.choices?.[0]?.message?.content?.trim() ?? '';

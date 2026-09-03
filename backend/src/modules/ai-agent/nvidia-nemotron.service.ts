@@ -27,6 +27,8 @@ type LlmCallOptions = {
   routingKey?: string;
   timeoutMs?: number;
   totalTimeoutMs?: number;
+  /** Cancels a losing hedged request without cooling down its healthy key. */
+  signal?: AbortSignal;
 };
 
 interface KeyCandidate {
@@ -134,6 +136,12 @@ export class NvidiaNemotronService {
       // the configured timeout and then yields to the next provider route.
       const attemptTimeoutMs = Math.min(timeoutMs, remainingBudgetMs);
       const controller = new AbortController();
+      const abortFromCaller = () => controller.abort(options.signal?.reason);
+      if (options.signal?.aborted) abortFromCaller();
+      else
+        options.signal?.addEventListener('abort', abortFromCaller, {
+          once: true,
+        });
       const timer = setTimeout(() => controller.abort(), attemptTimeoutMs);
       try {
         const response = await fetch(`${baseUrl}/chat/completions`, {
@@ -163,6 +171,7 @@ export class NvidiaNemotronService {
         return payload;
       } catch (error) {
         lastError = error;
+        if (options.signal?.aborted) throw error;
         const isTimeout =
           error instanceof Error &&
           (error.name === 'AbortError' || /timeout/i.test(error.message));
@@ -204,6 +213,7 @@ export class NvidiaNemotronService {
         throw new ServiceUnavailableException('NVIDIA API unavailable');
       } finally {
         clearTimeout(timer);
+        options.signal?.removeEventListener('abort', abortFromCaller);
       }
     }
     throw new ServiceUnavailableException(

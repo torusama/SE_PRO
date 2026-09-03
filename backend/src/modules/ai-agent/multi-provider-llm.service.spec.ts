@@ -2,7 +2,14 @@ import { ConfigService } from '@nestjs/config';
 import { ServiceUnavailableException } from '@nestjs/common';
 import { MultiProviderLlmService } from './multi-provider-llm.service';
 import { NvidiaNemotronService } from './nvidia-nemotron.service';
-import { OpenAiService, OpenAiSecondaryService } from './openai.service';
+import {
+  ComparisonAiService,
+  GroqGptOss20bService,
+  GroqGptOss120bService,
+  GroqQwen38Service,
+  OpenAiService,
+  OpenAiSecondaryService,
+} from './openai.service';
 import { NvidiaChatResponse } from './types/nvidia.types';
 
 describe('MultiProviderLlmService', () => {
@@ -11,17 +18,30 @@ describe('MultiProviderLlmService', () => {
   let openAiPrimary: OpenAiService;
   let openAiSecondary: OpenAiSecondaryService;
   let nvidiaService: NvidiaNemotronService;
+  let fastComparison: ComparisonAiService;
+  let groq20b: GroqGptOss20bService;
+  let groq120b: GroqGptOss120bService;
+  let groqQwen38: GroqQwen38Service;
 
   beforeEach(() => {
     configService = new ConfigService();
     openAiPrimary = new OpenAiService(configService);
     openAiSecondary = new OpenAiSecondaryService(configService);
     nvidiaService = new NvidiaNemotronService(configService);
+    fastComparison = new ComparisonAiService(configService);
+    groq20b = new GroqGptOss20bService(configService);
+    groq120b = new GroqGptOss120bService(configService);
+    groqQwen38 = new GroqQwen38Service(configService);
     service = new MultiProviderLlmService(
       configService,
       openAiPrimary,
       openAiSecondary,
       nvidiaService,
+      undefined,
+      fastComparison,
+      groq20b,
+      groq120b,
+      groqQwen38,
     );
   });
 
@@ -31,6 +51,31 @@ describe('MultiProviderLlmService', () => {
     jest.spyOn(nvidiaService, 'isConfigured').mockReturnValue(false);
 
     await expect(service.chat([])).rejects.toThrow(ServiceUnavailableException);
+  });
+
+  it('prioritizes the three independent Groq pools before NVIDIA fallbacks', async () => {
+    const response: NvidiaChatResponse = {
+      choices: [
+        { message: { role: 'assistant', content: 'Groq 20B winner' } },
+      ],
+    };
+    jest.spyOn(groq20b, 'isConfigured').mockReturnValue(true);
+    jest.spyOn(groq120b, 'isConfigured').mockReturnValue(true);
+    jest.spyOn(groqQwen38, 'isConfigured').mockReturnValue(true);
+    jest.spyOn(openAiPrimary, 'isConfigured').mockReturnValue(true);
+    jest.spyOn(nvidiaService, 'isConfigured').mockReturnValue(true);
+    const first = jest.spyOn(groq20b, 'chat').mockResolvedValue(response);
+    const second = jest.spyOn(groq120b, 'chat');
+    const third = jest.spyOn(groqQwen38, 'chat');
+    const nvidiaFallback = jest.spyOn(openAiPrimary, 'chat');
+
+    await expect(service.chat([])).resolves.toEqual(response);
+
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(second).not.toHaveBeenCalled();
+    expect(third).not.toHaveBeenCalled();
+    expect(nvidiaFallback).not.toHaveBeenCalled();
+    expect(service.model).toBe(groq20b.model);
   });
 
   it('uses the responsive 20B route before the slower model fallbacks', async () => {
@@ -229,6 +274,76 @@ describe('MultiProviderLlmService', () => {
     expect(primaryChat).toHaveBeenCalledTimes(1);
     expect(secondaryChat).not.toHaveBeenCalled();
     expect(nvidiaChat).not.toHaveBeenCalled();
+  });
+
+  it('starts a backup after the hedge delay and aborts the slower request', async () => {
+    jest.useFakeTimers();
+    try {
+      const response: NvidiaChatResponse = {
+        choices: [
+          { message: { role: 'assistant', content: 'fast hedge winner' } },
+        ],
+      };
+      let primaryWasAborted = false;
+      jest.spyOn(openAiPrimary, 'isConfigured').mockReturnValue(true);
+      jest.spyOn(openAiSecondary, 'isConfigured').mockReturnValue(true);
+      jest.spyOn(nvidiaService, 'isConfigured').mockReturnValue(true);
+      jest.spyOn(openAiPrimary, 'chat').mockImplementation((...args: any[]) => {
+        const signal = args[3]?.signal as AbortSignal | undefined;
+        return new Promise<never>((_resolve, reject) => {
+          signal?.addEventListener('abort', () => {
+            primaryWasAborted = true;
+            reject(Object.assign(new Error('cancelled'), { name: 'AbortError' }));
+          });
+        });
+      });
+      const nvidia = jest
+        .spyOn(nvidiaService, 'chat')
+        .mockResolvedValue(response);
+      const secondary = jest.spyOn(openAiSecondary, 'chat');
+
+      const result = service.chat([], [], 'auto', {
+        timeoutMs: 5_000,
+        totalTimeoutMs: 5_000,
+      });
+      await jest.advanceTimersByTimeAsync(899);
+      expect(nvidia).not.toHaveBeenCalled();
+      await jest.advanceTimersByTimeAsync(1);
+
+      await expect(result).resolves.toEqual(response);
+      expect(primaryWasAborted).toBe(true);
+      expect(nvidia).toHaveBeenCalledTimes(1);
+      expect(secondary).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('rotates provider key pools for a second bounded round', async () => {
+    const response: NvidiaChatResponse = {
+      choices: [
+        { message: { role: 'assistant', content: 'second key round winner' } },
+      ],
+    };
+    jest.spyOn(openAiPrimary, 'isConfigured').mockReturnValue(true);
+    jest.spyOn(openAiSecondary, 'isConfigured').mockReturnValue(false);
+    jest.spyOn(nvidiaService, 'isConfigured').mockReturnValue(true);
+    const primary = jest
+      .spyOn(openAiPrimary, 'chat')
+      .mockRejectedValueOnce(new Error('first primary key failed'))
+      .mockResolvedValueOnce(response);
+    const nvidia = jest
+      .spyOn(nvidiaService, 'chat')
+      .mockRejectedValueOnce(new Error('first nvidia key failed'));
+
+    await expect(
+      service.chat([], [], 'auto', {
+        timeoutMs: 5_000,
+        totalTimeoutMs: 5_000,
+      }),
+    ).resolves.toEqual(response);
+    expect(primary).toHaveBeenCalledTimes(2);
+    expect(nvidia).toHaveBeenCalledTimes(1);
   });
 
   it('reserves a fair timeout share so the third model can still return final text', async () => {
