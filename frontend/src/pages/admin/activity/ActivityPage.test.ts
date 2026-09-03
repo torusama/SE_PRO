@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { actionLabel, entityLabel } from "./ActivityPage";
+import { actionLabel, entityLabel } from "@/lib/adminAuditLabels";
 
 describe("nhãn nhật ký hoạt động quản trị", () => {
   it("hiển thị thao tác tạo hồ sơ người đã khuất bằng tiếng Việt", () => {
