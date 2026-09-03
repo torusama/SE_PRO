@@ -717,7 +717,8 @@ Thời hạn và thời điểm có hiệu lực được ghi tại phần ký k
     const result = await this.database.transaction(async (client) => {
       // 1. Verify ownership — customer must currently own ALL selected plots
       const ownerships = await client.query<any>(
-        `SELECT o.plot_id, o.ownership_id, p.plot_code, p.status AS plot_status
+        `SELECT o.plot_id, o.ownership_id, p.plot_code, p.price AS plot_price,
+                p.status AS plot_status
          FROM ownership_records o
          JOIN plots p ON p.plot_id = o.plot_id AND p.is_deleted = FALSE
          WHERE o.plot_id = ANY($1::int[])
@@ -759,7 +760,7 @@ Thời hạn và thời điểm có hiệu lực được ghi tại phần ký k
       // 4. Insert into reservation_requests (request_type = 'transfer')
       const inserted = await client.query<{ request_id: number }>(
         `INSERT INTO reservation_requests
-           (user_id, request_type, transfer_type, status, total_price, requester_name, notes)
+           (user_id, request_type, transfer_type, status, total_price, requester_name, note)
          VALUES ($1, 'transfer', $2, 'pending', $3, $4, $5)
          RETURNING request_id`,
         [
@@ -775,8 +776,14 @@ Thời hạn và thời điểm có hiệu lực được ghi tại phần ký k
       // 5. Insert request_plots (same table as purchase flow)
       for (const plotId of dto.plotIds) {
         await client.query(
-          `INSERT INTO request_plots (request_id, plot_id) VALUES ($1, $2)`,
-          [requestId, plotId],
+          `INSERT INTO request_plots (request_id, plot_id, plot_price)
+           VALUES ($1, $2, $3)`,
+          [
+            requestId,
+            plotId,
+            ownerships.rows.find((ownership: any) => ownership.plot_id === plotId)
+              ?.plot_price,
+          ],
         );
       }
 
