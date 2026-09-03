@@ -1087,7 +1087,9 @@ export default function RequestsPage() {
                       · {money.format(Number(current.totalPrice ?? 0))}
                     </p>
                   </div>
-                  <em className={`status-${current.status}`}>
+                  <em
+                    className={`request-status-badge request-status-badge--header status-${current.status}`}
+                  >
                     {statusLabels[current.status]}
                   </em>
                 </section>
@@ -1100,7 +1102,9 @@ export default function RequestsPage() {
                         {labels.length}
                       </strong>
                     </div>
-                    <em className={`status-${current.status}`}>
+                    <em
+                      className={`request-status-badge request-status-badge--progress status-${current.status}`}
+                    >
                       {statusLabels[current.status]}
                     </em>
                   </div>
@@ -1195,7 +1199,7 @@ export default function RequestsPage() {
                   </section>
                 )}
                 {!terminal && decisionDone && appointmentDone && (
-                  <CompletedStep title="Lịch hẹn offline">
+                  <CompletedStep title="Lịch hẹn ký kết trực tiếp">
                     {appointmentSummary}
                   </CompletedStep>
                 )}
@@ -1204,7 +1208,7 @@ export default function RequestsPage() {
                     <div className="step-title">
                       <span>2</span>
                       <div>
-                        <h3>Lịch hẹn offline</h3>
+                        <h3>Lịch hẹn ký kết trực tiếp</h3>
                       </div>
                     </div>
                     {appointment && appointment.customerStatus === "pending" ? (

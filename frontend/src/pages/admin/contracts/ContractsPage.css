@@ -107,3 +107,122 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* MINIMAL LUXURY REDESIGN — CONTRACTS */
+.contracts-archive {
+  --c-ink: #102044;
+  --c-text: #40516f;
+  --c-muted: #78859a;
+  --c-line: #dfe6ef;
+  --c-blue: #1d4ed8;
+  display: grid;
+  gap: 20px;
+  font-family: var(--font-body, "Inter", sans-serif);
+}
+.contracts-archive .admin-page-header h1 {
+  color: var(--c-ink);
+  font-size: 32px;
+  letter-spacing: -0.035em;
+  font-weight: 700;
+}
+.contracts-archive .admin-page-header p {
+  color: var(--c-text);
+  font-size: 14px;
+  line-height: 1.55;
+}
+.contracts-archive .admin-panel {
+  border-radius: 16px;
+  border-color: var(--c-line);
+  box-shadow: 0 8px 30px rgba(16, 32, 68, 0.045);
+}
+.contracts-archive .admin-input {
+  min-height: 46px;
+  padding: 0 13px;
+  border-radius: 10px;
+  background: #fbfcfe;
+  color: var(--c-ink);
+  font-size: 13px;
+  transition: 0.18s ease;
+}
+.contracts-archive .admin-input:focus {
+  outline: 0;
+  border-color: #9eb9eb;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.08);
+}
+.contracts-archive .admin-primary-button,
+.contracts-archive .admin-secondary-button {
+  min-height: 40px;
+  border-radius: 9px;
+  padding: 0 15px;
+  font-size: 12px;
+  transition: 0.18s ease;
+}
+.contracts-archive .admin-primary-button {
+  background: var(--c-blue);
+  border-color: var(--c-blue);
+  box-shadow: 0 5px 14px rgba(29, 78, 216, 0.15);
+}
+.contracts-archive .admin-primary-button:hover {
+  transform: translateY(-1px);
+  background: #173f9f;
+}
+.contracts-archive .admin-secondary-button:hover {
+  background: #f7f9fc;
+  border-color: #b6c4d8;
+}
+.contracts-archive .admin-detail-grid {
+  gap: 10px;
+}
+.contracts-archive .admin-detail-grid > div {
+  padding: 15px;
+  min-height: 82px;
+  border-radius: 11px;
+  border-color: #e2e8f0;
+  background: #fbfcfe;
+  transition: 0.18s ease;
+}
+.contracts-archive .admin-detail-grid > div:hover {
+  border-color: #c6d4e8;
+  background: #fff;
+  transform: translateY(-1px);
+}
+.contracts-archive .admin-detail-grid span {
+  color: var(--c-muted);
+  font-size: 11px;
+}
+.contracts-archive .admin-detail-grid strong {
+  color: var(--c-ink);
+  font-size: 15px;
+}
+.contracts-archive .admin-table-wrap {
+  border-radius: 11px;
+  border-color: var(--c-line);
+}
+.contracts-archive .admin-table th {
+  padding: 12px 14px;
+  background: #f7f9fc;
+  color: #6f7c92;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.contracts-archive .admin-table td {
+  padding: 14px;
+  color: var(--c-text);
+  font-size: 12px;
+}
+.contracts-archive .admin-table tbody tr {
+  transition: background 0.16s ease;
+}
+.contracts-archive .admin-table tbody tr:hover {
+  background: #f8faff;
+}
+.contracts-archive .admin-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+@media (max-width: 1000px) {
+  .contracts-archive .admin-detail-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

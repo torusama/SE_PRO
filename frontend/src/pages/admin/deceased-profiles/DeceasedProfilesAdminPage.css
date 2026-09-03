@@ -131,3 +131,119 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* MINIMAL LUXURY REDESIGN — DECEASED PROFILES */
+.deceased-archive {
+  --d-ink: #102044;
+  --d-text: #40516f;
+  --d-muted: #78859a;
+  --d-line: #dfe6ef;
+  --d-blue: #1d4ed8;
+  display: grid;
+  gap: 20px;
+  font-family: var(--font-body, "Inter", sans-serif);
+}
+.deceased-archive .admin-page-header h1 {
+  color: var(--d-ink);
+  font-size: 32px;
+  letter-spacing: -0.035em;
+  font-weight: 700;
+}
+.deceased-archive .admin-page-header p {
+  color: var(--d-text);
+  font-size: 14px;
+  line-height: 1.55;
+}
+.deceased-archive .admin-panel {
+  border-radius: 16px;
+  border-color: var(--d-line);
+  background: #fff;
+  box-shadow: 0 8px 30px rgba(16, 32, 68, 0.045);
+}
+.deceased-archive .admin-input {
+  min-height: 46px;
+  padding: 0 13px;
+  border-radius: 10px;
+  background: #fbfcfe;
+  color: var(--d-ink);
+  font-size: 13px;
+  transition: 0.18s ease;
+}
+.deceased-archive .admin-input:focus {
+  outline: 0;
+  border-color: #9eb9eb;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.08);
+}
+.deceased-archive .admin-primary-button,
+.deceased-archive .admin-secondary-button {
+  min-height: 40px;
+  border-radius: 9px;
+  padding: 0 15px;
+  font-size: 12px;
+  transition: 0.18s ease;
+}
+.deceased-archive .admin-primary-button {
+  background: var(--d-blue);
+  border-color: var(--d-blue);
+  box-shadow: 0 5px 14px rgba(29, 78, 216, 0.15);
+}
+.deceased-archive .admin-primary-button:hover {
+  transform: translateY(-1px);
+  background: #173f9f;
+}
+.deceased-archive .admin-secondary-button:hover {
+  background: #f7f9fc;
+  border-color: #b6c4d8;
+}
+.deceased-archive .admin-detail-grid {
+  gap: 10px;
+}
+.deceased-archive .admin-detail-grid > div {
+  min-height: 82px;
+  padding: 15px;
+  border-radius: 11px;
+  border-color: #e2e8f0;
+  background: #fbfcfe;
+  transition: 0.18s ease;
+}
+.deceased-archive .admin-detail-grid > div:hover {
+  border-color: #c6d4e8;
+  background: #fff;
+  transform: translateY(-1px);
+}
+.deceased-archive .admin-detail-grid span {
+  color: var(--d-muted);
+  font-size: 11px;
+}
+.deceased-archive .admin-detail-grid strong {
+  color: var(--d-ink);
+  font-size: 15px;
+}
+.deceased-archive .deceased-status {
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+.deceased-archive .deceased-status--verified {
+  background: #e9f7f0;
+  color: #19724e;
+}
+.deceased-archive .deceased-status--pending {
+  background: #fff7e8;
+  color: #9a6815;
+}
+.deceased-archive .deceased-status--rejected {
+  background: #fff0f0;
+  color: #a43a3a;
+}
+.deceased-archive .deceased-capacity-form label {
+  color: var(--d-text);
+  font-size: 12px;
+}
+@media (max-width: 1000px) {
+  .deceased-archive .admin-detail-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

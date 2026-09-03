@@ -255,7 +255,9 @@
   font-weight: 650;
 }
 
-.admin-notification-feed-item.is-unread .admin-notification-feed-item__content strong {
+.admin-notification-feed-item.is-unread
+  .admin-notification-feed-item__content
+  strong {
   font-weight: 750;
 }
 
@@ -408,5 +410,179 @@
 
   .admin-notification-feed-item__cta {
     align-self: flex-end;
+  }
+}
+
+/* MINIMAL LUXURY REDESIGN — NOTIFICATIONS */
+.admin-notification-page {
+  --n-ink: #102044;
+  --n-text: #40516f;
+  --n-muted: #7b879b;
+  --n-line: #dfe6ef;
+  --n-blue: #1d4ed8;
+  --n-soft: #f5f8ff;
+  font-family: var(--font-body, "Inter", sans-serif);
+  gap: 20px;
+}
+.admin-notification-page .admin-page-header h1 {
+  color: var(--n-ink);
+  font-size: 32px;
+  line-height: 1.15;
+  letter-spacing: -0.035em;
+  font-weight: 700;
+}
+.admin-notification-page .admin-page-description {
+  color: var(--n-text);
+  font-size: 14px;
+  line-height: 1.55;
+}
+.admin-notification-view-tabs {
+  gap: 0;
+}
+.admin-notification-view-tabs button {
+  min-height: 44px;
+  border-radius: 9px;
+  padding: 0 15px;
+  font-size: 12px;
+  transition: 0.18s ease;
+}
+.admin-notification-view-tabs button:hover {
+  background: #f8faff;
+}
+.admin-notification-view-tabs button.is-active {
+  background: var(--n-ink);
+  border-color: var(--n-ink);
+  box-shadow: 0 5px 14px rgba(16, 32, 68, 0.12);
+}
+.admin-notification-section-grid {
+  gap: 10px;
+}
+.admin-notification-section-grid > button {
+  padding: 14px 15px;
+  min-height: 92px;
+  border-radius: 12px;
+  border-color: var(--n-line);
+  box-shadow: 0 5px 18px rgba(16, 32, 68, 0.025);
+  transition: 0.18s ease;
+}
+.admin-notification-section-grid > button:hover {
+  border-color: #b9c9df;
+  background: #fbfcfe;
+  transform: translateY(-1px);
+}
+.admin-notification-section-grid > button.is-active {
+  border-color: #9db7e9;
+  background: #f4f7ff;
+  box-shadow:
+    inset 3px 0 0 var(--n-blue),
+    0 5px 18px rgba(16, 32, 68, 0.035);
+}
+.admin-notification-section-card__head strong {
+  color: var(--n-ink);
+  font-size: 13px;
+}
+.admin-notification-section-grid > button small {
+  color: var(--n-muted);
+  font-size: 11px;
+}
+.admin-notification-section-card__status {
+  color: var(--n-blue);
+  font-size: 10px;
+}
+.admin-notification-feed-layout {
+  grid-template-columns: minmax(0, 1.18fr) minmax(320px, 0.82fr);
+  gap: 16px;
+}
+.admin-core-panel {
+  border-color: var(--n-line);
+  border-radius: 14px;
+  box-shadow: 0 7px 24px rgba(16, 32, 68, 0.035);
+}
+.admin-notification-section-heading {
+  min-height: 62px;
+  padding: 14px 18px;
+}
+.admin-notification-section-heading h2 {
+  color: var(--n-ink);
+  font-size: 15px;
+}
+.admin-notification-section-heading p {
+  color: var(--n-muted);
+  font-size: 10px;
+}
+.admin-notification-feed-item {
+  padding: 14px 10px;
+  transition: 0.16s ease;
+}
+.admin-notification-feed-item:hover,
+.admin-notification-feed-item.is-active {
+  background: #f7f9fd;
+}
+.admin-notification-feed-item__head {
+  font-size: 10px;
+  color: var(--n-muted);
+}
+.admin-notification-feed-item__content strong {
+  color: var(--n-ink);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.admin-notification-feed-item__cta {
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.admin-notification-detail__body {
+  padding: 20px;
+}
+.admin-notification-detail__type {
+  color: var(--n-blue);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.admin-notification-detail__message {
+  color: var(--n-text);
+  font-size: 13px;
+  line-height: 1.65;
+}
+.admin-notification-detail__facts {
+  border-top: 1px solid var(--n-line);
+}
+.admin-notification-detail__facts dt {
+  color: var(--n-muted);
+  font-size: 10px;
+}
+.admin-notification-detail__facts dd {
+  color: var(--n-ink);
+  font-size: 12px;
+}
+.admin-notification-form {
+  gap: 14px;
+}
+.admin-notification-form input,
+.admin-notification-form textarea,
+.admin-notification-form select {
+  border-radius: 9px;
+  border-color: var(--n-line);
+  background: #fbfcfe;
+  font-size: 12px;
+  transition: 0.18s ease;
+}
+.admin-notification-form input:focus,
+.admin-notification-form textarea:focus,
+.admin-notification-form select:focus {
+  outline: 0;
+  border-color: #9eb9eb;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.08);
+}
+@media (max-width: 900px) {
+  .admin-notification-feed-layout {
+    grid-template-columns: 1fr;
+  }
+  .admin-notification-section-grid {
+    grid-template-columns: 1fr;
   }
 }

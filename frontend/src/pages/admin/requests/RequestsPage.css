@@ -1144,3 +1144,238 @@
     max-height: 280px;
   }
 }
+
+/* --------------------------------------------------------------------------
+   Request detail visual refinement
+   - Clear hierarchy for customer/request header
+   - Consistent rounded status badges
+   - Softer workflow cards instead of spreadsheet-like blocks
+   -------------------------------------------------------------------------- */
+.request-detail > .request-heading {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 4px 2px 6px;
+}
+
+.request-heading > div {
+  min-width: 0;
+}
+
+.request-heading span {
+  display: block;
+  margin: 0 0 8px;
+  color: var(--admin-muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.request-heading h2 {
+  margin: 0 0 7px;
+  color: var(--admin-ink);
+  font-size: clamp(28px, 2vw, 32px);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 1.12;
+}
+
+.request-heading p {
+  margin: 0;
+  color: var(--admin-muted);
+  font-size: 13px;
+  font-weight: 550;
+  line-height: 1.45;
+}
+
+.request-status-badge {
+  display: inline-flex !important;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  min-height: 34px;
+  box-sizing: border-box;
+  margin: 0 !important;
+  padding: 0 13px !important;
+  border: 1px solid transparent;
+  border-radius: 999px !important;
+  white-space: nowrap;
+  font-size: 12px !important;
+  font-style: normal !important;
+  font-weight: 750 !important;
+  letter-spacing: 0 !important;
+  line-height: 1 !important;
+  text-transform: none !important;
+  vertical-align: middle;
+  background-clip: padding-box;
+}
+
+.request-status-badge--header {
+  min-height: 38px;
+  padding-inline: 15px !important;
+  margin-top: 0 !important;
+}
+
+.request-status-badge--progress {
+  min-height: 32px;
+  padding-inline: 12px !important;
+}
+
+.request-status-badge.status-approved {
+  border-color: #cce9df !important;
+  background: #e8f6f1 !important;
+  color: #215d52 !important;
+}
+
+.request-status-badge.status-pending,
+.request-status-badge.status-submitted {
+  border-color: #f0d88f !important;
+  background: #fff6df !important;
+  color: #8a6412 !important;
+}
+
+.request-status-badge.status-rejected,
+.request-status-badge.status-cancelled {
+  border-color: #efc9c4 !important;
+  background: #fbedeb !important;
+  color: #a33b31 !important;
+}
+
+.request-status-badge.status-draft {
+  border-color: #dce2e0 !important;
+  background: #f2f5f4 !important;
+  color: #52605e !important;
+}
+
+.request-progress-card {
+  border-radius: 16px;
+  box-shadow: 0 10px 30px -24px rgba(28, 63, 143, 0.55);
+}
+
+.request-progress-card__head {
+  min-height: 56px;
+  box-sizing: border-box;
+  padding: 11px 16px;
+  background: #fbfcff;
+}
+
+.request-progress-card__head > div {
+  gap: 9px;
+}
+
+.request-progress-card__head span {
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.request-progress-card__head strong {
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.request-progress-card .request-stepper {
+  padding: 20px 16px 18px;
+}
+
+.request-progress-card .request-stepper strong {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.request-step-completed {
+  overflow: hidden;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 8px 24px -24px rgba(28, 63, 143, 0.5);
+}
+
+.request-step-completed summary {
+  min-height: 60px;
+  box-sizing: border-box;
+  padding: 12px 16px;
+  gap: 11px;
+  color: var(--admin-ink);
+  font-size: 17px;
+  font-weight: 750;
+}
+
+.request-step-completed summary > span {
+  flex-basis: 32px;
+  width: 32px;
+  height: 32px;
+  font-size: 16px;
+  box-shadow: 0 3px 8px rgba(31, 72, 159, 0.18);
+}
+
+.active-step {
+  border-radius: 14px;
+  padding: 20px;
+  box-shadow: 0 10px 30px -26px rgba(28, 63, 143, 0.55);
+}
+
+.step-title {
+  align-items: center;
+  gap: 12px;
+}
+
+.step-title > span {
+  flex-basis: 34px;
+  width: 34px;
+  height: 34px;
+  box-shadow: 0 3px 8px rgba(31, 72, 159, 0.18);
+}
+
+.step-title h3 {
+  color: var(--admin-ink);
+  font-size: 19px;
+  font-weight: 750;
+  letter-spacing: -0.015em;
+}
+
+.waiting-banner {
+  border: 1px solid #f0d88f;
+  border-radius: 10px;
+  background: #fff8e8;
+  color: #9a6419;
+  padding: 13px 16px;
+  font-size: 15px;
+  font-weight: 750;
+  text-align: center;
+}
+
+.request-summary-grid {
+  gap: 18px 28px;
+}
+
+.request-summary-grid span {
+  gap: 6px;
+}
+
+.request-summary-grid small {
+  font-size: 12px;
+}
+
+.request-summary-grid strong {
+  color: var(--admin-ink);
+  font-size: 16px;
+}
+
+@media (max-width: 640px) {
+  .request-detail > .request-heading {
+    gap: 14px;
+  }
+
+  .request-heading h2 {
+    font-size: 26px;
+  }
+
+  .request-status-badge--header {
+    min-height: 34px;
+    padding-inline: 12px !important;
+  }
+}
