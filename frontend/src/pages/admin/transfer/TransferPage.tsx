@@ -1694,19 +1694,19 @@ export default function TransferPage() {
                         </div>
 
                         <label>
-                          Bản hợp đồng đã ký (PDF, DOC, DOCX, JPG, PNG, WEBP;
+                          Bản hợp đồng đã ký (chỉ PDF, DOC, DOCX;
                           tối đa 10 tệp, 10 MB/tệp)
                           <input
                             type="file"
                             multiple
-                            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*"
+                            accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                             onChange={(event) => {
                               const selectedFiles = Array.from(
                                 event.target.files ?? [],
                               );
                               const invalidFile = selectedFiles.find(
                                 (f) =>
-                                  !/\.(pdf|doc|docx|jpg|jpeg|png|webp)$/i.test(
+                                  !/\.(pdf|doc|docx)$/i.test(
                                     f.name,
                                   ),
                               );
