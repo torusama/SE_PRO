@@ -165,6 +165,25 @@ const statusLabels: Record<string, string> = {
   declined: "Khách từ chối",
   paid: "Đã thanh toán",
 };
+
+function StatusBadge({
+  status,
+  label,
+  size = "default",
+}: {
+  status: string;
+  label?: string;
+  size?: "default" | "small";
+}) {
+  return (
+    <span
+      className={`request-status-badge request-status-badge--${size} status-${status}`}
+    >
+      {label ?? statusLabels[status] ?? status}
+    </span>
+  );
+}
+
 const cancellationStatusLabels: Record<CancellationStatus, string> = {
   pending: "Chờ duyệt hủy",
   approved: "Đã chấp thuận",
@@ -401,9 +420,13 @@ function RequestReviewInfo({ request }: { request: RequestItem }) {
                 <small>Loại lô</small>
                 {plotTypeLabels[plot.plotType ?? ""] || plot.plotType || "—"}
               </span>
-              <span>
+              <span className="plot-status-cell">
                 <small>Trạng thái</small>
-                {plotStatusLabels[plot.status] || plot.status}
+                <StatusBadge
+                  status={plot.status}
+                  label={plotStatusLabels[plot.status] || plot.status}
+                  size="small"
+                />
               </span>
               <span className="plot-price">
                 <small>Giá tại yêu cầu</small>
@@ -1051,9 +1074,7 @@ export default function RequestsPage() {
                   >
                     <span>
                       <strong>#{String(item.id).padStart(4, "0")}</strong>
-                      <em className={`status-${item.status}`}>
-                        {statusLabels[item.status]}
-                      </em>
+                      <StatusBadge status={item.status} size="small" />
                     </span>
                     <b>{item.customerName || "Khách hàng"}</b>
                     <small>
@@ -1087,11 +1108,7 @@ export default function RequestsPage() {
                       · {money.format(Number(current.totalPrice ?? 0))}
                     </p>
                   </div>
-                  <em
-                    className={`request-status-badge request-status-badge--header status-${current.status}`}
-                  >
-                    {statusLabels[current.status]}
-                  </em>
+                  <StatusBadge status={current.status} size="default" />
                 </section>
                 <div className="request-progress-card">
                   <div className="request-progress-card__head">
@@ -1102,11 +1119,7 @@ export default function RequestsPage() {
                         {labels.length}
                       </strong>
                     </div>
-                    <em
-                      className={`request-status-badge request-status-badge--progress status-${current.status}`}
-                    >
-                      {statusLabels[current.status]}
-                    </em>
+                    <StatusBadge status={current.status} size="small" />
                   </div>
                   <Stepper
                     labels={labels}
@@ -1144,7 +1157,7 @@ export default function RequestsPage() {
                     <div className="decision-result">
                       <span>
                         <small>Kết quả xử lý</small>
-                        <strong>{statusLabels[current.status]}</strong>
+                        <StatusBadge status={current.status} size="small" />
                       </span>
                       <span>
                         <small>Ngày xử lý</small>
@@ -1631,9 +1644,11 @@ export default function RequestsPage() {
                 >
                   <span>
                     <strong>Hủy #{String(item.id).padStart(4, "0")}</strong>
-                    <em className={`status-${item.status}`}>
-                      {cancellationStatusLabels[item.status]}
-                    </em>
+                    <StatusBadge
+                      status={item.status}
+                      label={cancellationStatusLabels[item.status]}
+                      size="small"
+                    />
                   </span>
                   <b>{item.customerName || "Khách hàng"}</b>
                   <small>
@@ -1674,9 +1689,10 @@ export default function RequestsPage() {
                       {String(currentCancellation.requestId).padStart(4, "0")}
                     </p>
                   </div>
-                  <em className={`status-${currentCancellation.status}`}>
-                    {cancellationStatusLabels[currentCancellation.status]}
-                  </em>
+                  <StatusBadge
+                    status={currentCancellation.status}
+                    label={cancellationStatusLabels[currentCancellation.status]}
+                  />
                 </section>
 
                 <section className="review-section cancellation-summary">
@@ -1701,15 +1717,14 @@ export default function RequestsPage() {
                     </span>
                     <span>
                       <small>Trạng thái yêu cầu mua</small>
-                      <strong>
-                        {
-                          statusLabels[
-                            currentCancellation.purchaseRequestStatus ??
-                              currentCancellationRequest?.status ??
-                              "approved"
-                          ]
+                      <StatusBadge
+                        status={
+                          currentCancellation.purchaseRequestStatus ??
+                          currentCancellationRequest?.status ??
+                          "approved"
                         }
-                      </strong>
+                        size="small"
+                      />
                     </span>
                     <span>
                       <small>Email</small>
@@ -1797,9 +1812,13 @@ export default function RequestsPage() {
                     <div className="decision-result">
                       <span>
                         <small>Kết quả xử lý</small>
-                        <strong>
-                          {cancellationStatusLabels[currentCancellation.status]}
-                        </strong>
+                        <StatusBadge
+                          status={currentCancellation.status}
+                          label={
+                            cancellationStatusLabels[currentCancellation.status]
+                          }
+                          size="small"
+                        />
                       </span>
                       <span>
                         <small>Ngày xử lý</small>

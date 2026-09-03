@@ -33,11 +33,11 @@ interface AdminReminder {
   lastNotifiedAt?: string | null;
 }
 
-const TYPE_META: Record<ReminderType, { label: string }> = {
-  death_anniversary: { label: "Ngày giỗ" },
-  memorial: { label: "Tưởng niệm" },
-  maintenance: { label: "Chăm sóc mộ" },
-  other: { label: "Khác" },
+const TYPE_META: Record<ReminderType, { label: string; cls: string }> = {
+  death_anniversary: { label: "Ngày giỗ", cls: "anniv" },
+  memorial: { label: "Tưởng niệm", cls: "memorial" },
+  maintenance: { label: "Chăm sóc mộ", cls: "maint" },
+  other: { label: "Khác", cls: "other" },
 };
 
 const TYPE_FILTERS: { value: ReminderType | "all"; label: string }[] = [
@@ -286,7 +286,9 @@ export default function ReminderManagementPage() {
                         </div>
                       </td>
                       <td>
-                        <span className="type-pill">{meta.label}</span>
+                        <span className={`type-pill type-pill--${meta.cls}`}>
+                          {meta.label}
+                        </span>
                       </td>
                       <td>
                         {r.plotCode

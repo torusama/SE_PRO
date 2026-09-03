@@ -1379,3 +1379,327 @@
     padding-inline: 12px !important;
   }
 }
+
+/* --------------------------------------------------------------------------
+   Premium request-review layer
+   - Replace spreadsheet-like information blocks with quiet data cards.
+   - Reuse one status treatment everywhere so the detail view feels cohesive.
+   -------------------------------------------------------------------------- */
+.request-workflow-page {
+  color: var(--admin-text);
+}
+
+.request-status-badge {
+  --status-bg: #f2f5f4;
+  --status-border: #dce2e0;
+  --status-text: #52605e;
+  position: relative;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: fit-content;
+  min-height: 36px;
+  box-sizing: border-box;
+  margin: 0 !important;
+  padding: 0 13px !important;
+  border: 1px solid var(--status-border) !important;
+  border-radius: 999px !important;
+  background: var(--status-bg) !important;
+  color: var(--status-text) !important;
+  font-size: 12px !important;
+  font-style: normal !important;
+  font-weight: 750 !important;
+  letter-spacing: 0 !important;
+  line-height: 1 !important;
+  text-transform: none !important;
+  white-space: nowrap;
+}
+
+.request-status-badge::before {
+  width: 6px;
+  height: 6px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  content: "";
+  opacity: 0.72;
+}
+
+.request-status-badge--small {
+  min-height: 28px;
+  padding: 0 10px !important;
+  font-size: 11px !important;
+}
+
+.request-status-badge--small::before {
+  width: 5px;
+  height: 5px;
+  margin-right: 6px;
+}
+
+.request-status-badge.status-approved {
+  --status-bg: #e9f6f2;
+  --status-border: #c9e6dd;
+  --status-text: #1d6657;
+}
+
+.request-status-badge.status-pending,
+.request-status-badge.status-submitted {
+  --status-bg: #fff7e5;
+  --status-border: #efdca8;
+  --status-text: #896515;
+}
+
+.request-status-badge.status-rejected,
+.request-status-badge.status-cancelled {
+  --status-bg: #fbedeb;
+  --status-border: #edcbc6;
+  --status-text: #a33b31;
+}
+
+.request-status-badge.status-draft {
+  --status-bg: #f2f5f4;
+  --status-border: #dce2e0;
+  --status-text: #52605e;
+}
+
+.request-status-badge.status-scheduled,
+.request-status-badge.status-confirmed,
+.request-status-badge.status-completed {
+  --status-bg: #eef3fc;
+  --status-border: #d3def2;
+  --status-text: #31568f;
+}
+
+/* Header status: slightly more presence, but still restrained. */
+.request-heading > .request-status-badge {
+  min-height: 38px;
+  padding-inline: 15px !important;
+  margin-top: 2px !important;
+}
+
+.request-progress-card__head > .request-status-badge {
+  min-height: 30px;
+}
+
+/* Turn customer information into independent data tiles instead of a table. */
+.request-review-info {
+  gap: 14px;
+}
+
+.review-section {
+  overflow: hidden;
+  border: 1px solid var(--admin-line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 8px 24px -24px rgba(28, 63, 143, 0.45);
+}
+
+.review-section > h4,
+.review-section-heading {
+  min-height: 48px;
+  box-sizing: border-box;
+  padding: 14px 16px;
+  background: linear-gradient(180deg, #fbfcff 0%, #f7f9fd 100%);
+}
+
+.review-section > h4 {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  border-bottom: 1px solid var(--admin-line);
+  color: var(--admin-ink);
+  font-size: 13px;
+  font-weight: 760;
+}
+
+.review-info-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px;
+}
+
+.review-info-grid span {
+  min-width: 0;
+  min-height: 64px;
+  box-sizing: border-box;
+  padding: 11px 12px;
+  border: 1px solid #e4eaf3 !important;
+  border-radius: 10px;
+  background: #fbfcfe;
+  overflow-wrap: anywhere;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease;
+}
+
+.review-info-grid span:hover {
+  border-color: #d5dfef !important;
+  background: #f8fbff;
+}
+
+.review-info-grid span:nth-child(3n) {
+  border-right: 1px solid #e4eaf3;
+}
+
+.review-info-grid .wide {
+  grid-column: span 2;
+}
+
+.review-info-grid small,
+.review-plot-list small,
+.request-notes small,
+.decision-result small {
+  color: var(--admin-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.review-info-grid span:not(.status-field) {
+  color: var(--admin-ink);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+/* Plot details become compact cards rather than a dense spreadsheet row. */
+.review-plot-list {
+  grid-template-columns: 1fr;
+  gap: 10px;
+  padding: 12px;
+}
+
+.review-plot-list article {
+  display: grid;
+  grid-template-columns: 1.1fr repeat(3, minmax(0, 1fr));
+  gap: 9px;
+  align-items: stretch;
+  padding: 10px;
+  border: 1px solid #e4eaf3;
+  border-radius: 12px;
+  background: #fbfcfe;
+}
+
+.review-plot-list article > div,
+.review-plot-list article > span {
+  min-width: 0;
+  box-sizing: border-box;
+  min-height: 54px;
+  padding: 8px 10px;
+  border: 1px solid #edf0f5;
+  border-radius: 9px;
+  background: #fff;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.review-plot-list article .plot-code {
+  background: #f5f8ff;
+  border-color: #dbe5f5;
+}
+
+.plot-code strong {
+  color: var(--admin-accent-2);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.plot-price {
+  color: var(--admin-accent-2);
+  font-weight: 750;
+}
+
+.plot-price small {
+  color: var(--admin-muted);
+}
+
+.plot-status-cell {
+  display: grid !important;
+  align-content: center;
+  gap: 5px !important;
+}
+
+.plot-status-cell .request-status-badge {
+  justify-self: start;
+}
+
+/* Processing result uses the same status component as the page header. */
+.decision-result span {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid #e4eaf3;
+  border-radius: 10px;
+  background: #fbfcfe;
+}
+
+.decision-result strong {
+  color: var(--admin-ink);
+  line-height: 1.45;
+}
+
+/* Keep long notes readable instead of making them look like a table cell. */
+.request-notes {
+  gap: 10px;
+  padding: 12px;
+  background: #fbfcfe;
+  border: 1px solid var(--admin-line);
+}
+
+.request-notes > div {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid #e4eaf3;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.request-notes > div:last-child {
+  border-right: 1px solid #e4eaf3;
+}
+
+.request-notes .wide-note {
+  border-top: 1px solid #e4eaf3;
+}
+
+@media (max-width: 1200px) {
+  .review-info-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .review-info-grid span:nth-child(3n) {
+    border-right: 1px solid #e4eaf3;
+  }
+
+  .review-info-grid span:nth-child(2n) {
+    border-right: 1px solid #e4eaf3;
+  }
+
+  .review-info-grid .wide {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 900px) {
+  .review-plot-list article {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .review-info-grid,
+  .review-plot-list article {
+    grid-template-columns: 1fr;
+  }
+
+  .review-info-grid .wide {
+    grid-column: auto;
+  }
+
+  .request-heading > .request-status-badge {
+    min-height: 34px;
+    padding-inline: 12px !important;
+  }
+}

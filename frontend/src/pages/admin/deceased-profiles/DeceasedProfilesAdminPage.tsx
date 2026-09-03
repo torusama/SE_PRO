@@ -354,22 +354,10 @@ export default function DeceasedProfilesAdminPage() {
                   key={item.id}
                   type="button"
                   onClick={() => setSelectedId(item.id)}
-                  style={{
-                    textAlign: "left",
-                    padding: 12,
-                    borderRadius: 8,
-                    border:
-                      item.id === selectedId
-                        ? "1px solid #008573"
-                        : "1px solid var(--color-border)",
-                    background: item.id === selectedId ? "#eef8f6" : "#fff",
-                    color: "inherit",
-                  }}
+                  className={`deceased-list-item${item.id === selectedId ? " is-active" : ""}`}
                 >
-                  <strong style={{ display: "block", color: "#008573" }}>
-                    {item.fullName}
-                  </strong>
-                  <span style={{ display: "block", margin: "5px 0" }}>
+                  <strong>{item.fullName}</strong>
+                  <span>
                     {item.isExternalPlot
                       ? "Ngoài nghĩa trang"
                       : (item.plotCode ?? `Lô #${item.plotId}`)}
@@ -382,10 +370,7 @@ export default function DeceasedProfilesAdminPage() {
                         item.verificationStatus}
                     </span>
                     {item.deletionRequestedAt && (
-                      <span
-                        className="deceased-status deceased-status--pending"
-                        style={{ marginLeft: 6 }}
-                      >
+                      <span className="deceased-status deceased-status--pending deceased-status--gap">
                         Yêu cầu xoá
                       </span>
                     )}
@@ -407,7 +392,7 @@ export default function DeceasedProfilesAdminPage() {
             <div style={{ display: "grid", gap: 22 }}>
               <section className="admin-page-header">
                 <div>
-                  <small style={{ color: "#008573", fontWeight: 800 }}>
+                  <small className="deceased-eyebrow">
                     HỒ SƠ NGƯỜI ĐÃ KHUẤT
                   </small>
                   <h2 style={{ margin: "5px 0" }}>{current.fullName}</h2>
@@ -571,15 +556,20 @@ export default function DeceasedProfilesAdminPage() {
               )}
 
               {!current.isExternalPlot && (
-                <section>
+                <section className="deceased-capacity-card">
                   <h3>Cấu hình sức chứa lô</h3>
+                  <p className="deceased-capacity-hint">
+                    Một lô đất có thể an táng nhiều người (ví dụ mộ gia đình).
+                    Thiết lập số hồ sơ tối đa được phép lưu trên lô{" "}
+                    <strong>{current.plotCode ?? `#${current.plotId}`}</strong>{" "}
+                    — hệ thống sẽ chặn thêm hồ sơ mới nếu lô đã đầy.
+                  </p>
                   <form
                     className="deceased-capacity-form"
                     onSubmit={(event) => void updateCapacity(event)}
                   >
                     <label>
-                      Sức chứa (số hồ sơ tối đa trên lô{" "}
-                      {current.plotCode ?? `#${current.plotId}`})
+                      Sức chứa (số hồ sơ tối đa)
                       <input
                         className="admin-input"
                         name="capacity"

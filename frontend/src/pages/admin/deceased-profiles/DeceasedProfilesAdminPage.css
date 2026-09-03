@@ -247,3 +247,76 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* ---------- Sidebar list items (was inline styles, now theme-consistent) ---------- */
+.deceased-archive .deceased-list-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 12px 13px;
+  border: 1px solid var(--d-line);
+  border-radius: 10px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: 0.16s ease;
+}
+.deceased-archive .deceased-list-item:hover {
+  border-color: #c6d4e8;
+  background: #fbfcfe;
+}
+.deceased-archive .deceased-list-item.is-active {
+  border-color: var(--d-blue);
+  background: #f0f4ff;
+}
+.deceased-archive .deceased-list-item strong {
+  display: block;
+  color: var(--d-ink);
+  font-size: 13.5px;
+}
+.deceased-archive .deceased-list-item.is-active strong {
+  color: var(--d-blue);
+}
+.deceased-archive .deceased-list-item > span {
+  display: block;
+  margin: 4px 0 7px;
+  color: var(--d-muted);
+  font-size: 12px;
+}
+.deceased-archive .deceased-status--gap {
+  margin-left: 6px;
+}
+
+/* ---------- Eyebrow label above the person's name ---------- */
+.deceased-archive .deceased-eyebrow {
+  display: block;
+  color: var(--d-blue);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+/* ---------- Plot capacity card (was a bare, unexplained section) ---------- */
+.deceased-archive .deceased-capacity-card {
+  padding: 18px;
+  border: 1px solid var(--d-line);
+  border-radius: 14px;
+  background: #fbfcfe;
+}
+.deceased-archive .deceased-capacity-card h3 {
+  margin: 0 0 8px;
+  color: var(--d-ink);
+  font-size: 14px;
+}
+.deceased-archive .deceased-capacity-hint {
+  margin: 0 0 14px;
+  max-width: 640px;
+  color: var(--d-muted);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+.deceased-archive .deceased-capacity-hint strong {
+  color: var(--d-text);
+}
