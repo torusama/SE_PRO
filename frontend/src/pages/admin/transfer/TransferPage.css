@@ -744,8 +744,8 @@
   background: #fff;
   border-radius: 12px;
   width: 100%;
-  max-width: 900px;
-  height: 85vh;
+  max-width: 620px;
+  height: 90vh;
   display: flex;
   flex-direction: column;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
@@ -790,8 +790,13 @@
 
 .contract-preview-dialog iframe {
   flex: 1;
+  align-self: center;
   border: 0;
-  width: 100%;
+  width: auto;
+  height: 100%;
+  max-width: 100%;
+  aspect-ratio: 210 / 297;
+  background: #525659;
 }
 
 .contract-preview-dialog footer {

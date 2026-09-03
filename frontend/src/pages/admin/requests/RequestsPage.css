@@ -599,8 +599,8 @@
 .contract-preview-dialog {
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto;
-  width: min(1120px, 100%);
-  height: min(92vh, 900px);
+  width: min(760px, 100%);
+  height: min(92vh, 960px);
   overflow: hidden;
   border: 1px solid #d6e1de;
   border-radius: 14px;
@@ -634,8 +634,11 @@
   background: var(--admin-soft);
 }
 .contract-preview-dialog iframe {
-  width: 100%;
+  justify-self: center;
+  width: auto;
   height: 100%;
+  max-width: 100%;
+  aspect-ratio: 210 / 297;
   min-height: 420px;
   border: 0;
   background: #525659;
