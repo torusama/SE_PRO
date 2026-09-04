@@ -388,6 +388,7 @@ fix/<name>            sửa lỗi
 
 Đây là **đồ án học thuật môn Kỹ thuật Phần mềm** và hiện repository chưa kèm giấy phép mã nguồn mở. Các integration bên thứ ba như AI API, SMS và payment có thể được cấu hình, giới hạn, mock hoặc tắt tùy môi trường demo.
 
+## Demo: https://youtu.be/YQLmTDCie6g
 ---
 
 <div align="center">
