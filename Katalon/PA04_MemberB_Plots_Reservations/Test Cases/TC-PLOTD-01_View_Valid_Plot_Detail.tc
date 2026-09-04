@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<TestCaseEntity>
-   <description></description>
-   <name>TC-PLOTD-01_View_Valid_Plot_Detail</name>
-   <tag></tag>
-   <comment></comment>
-   <recordOption>OTHER</recordOption>
-   <testCaseGuid>b38f8704-b2f3-486e-9add-916bd5fa9772</testCaseGuid>
-</TestCaseEntity>
