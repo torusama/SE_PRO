@@ -645,6 +645,7 @@ CREATE TABLE audit_logs (
     --     ownership_transferred, service_completed, user_login...
     entity_type     VARCHAR(50),
     entity_id       INT,
+    entity_key      VARCHAR(100),
     old_value       JSONB,
     new_value       JSONB,
     ip_address      VARCHAR(45),

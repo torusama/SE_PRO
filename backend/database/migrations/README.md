@@ -101,5 +101,6 @@ Thứ tự hiện tại:
 35. `039_transfer_request_workflow.sql`
 36. `040_backfill_transfer_contracts_content.sql`
 37. `047_finalize_purchase_requests.sql`
+38. `048_ensure_admin_audit_entity_key.sql`
 
 `015` phải chạy trước `016`; thứ tự tên file của runner bảo đảm dependency này.
