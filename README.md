@@ -388,9 +388,7 @@ fix/<name>            bug fixes
 
 This repository is an **academic software engineering project**. It currently does not include an open-source license. Third-party services, AI APIs, SMS, and payment behavior may be configured, limited, mocked, or disabled depending on the demonstration environment.
 
-## Demo
-
-[LINK]: https://youtu.be/YQLmTDCie6g 
+## Demo: https://youtu.be/YQLmTDCie6g
 ---
 
 <div align="center">
