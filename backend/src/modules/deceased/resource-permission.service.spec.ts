@@ -29,7 +29,7 @@ describe('ResourcePermissionService', () => {
         memberUserId: 2,
         resourceType: 'deceased_profile',
         resourceId: 3,
-        action: 'view_plot',
+        action: 'view_profile',
       }),
     ).rejects.toBeInstanceOf(ConflictException);
   });

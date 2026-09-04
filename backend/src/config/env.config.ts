@@ -75,7 +75,13 @@ export const envConfig = () => ({
     },
     router: {
       totalTimeoutMs: Number(process.env.AI_LLM_TOTAL_TIMEOUT_MS) || 10000,
+      maxTotalTimeoutMs:
+        Number(process.env.AI_LLM_MAX_TOTAL_TIMEOUT_MS) || 12000,
       providerTimeoutMs: Number(process.env.AI_LLM_PROVIDER_TIMEOUT_MS) || 6000,
+      hedgeProviders:
+        (process.env.AI_LLM_HEDGE_PROVIDERS ?? 'true') === 'true',
+      hedgeDelayMs: Number(process.env.AI_LLM_HEDGE_DELAY_MS) || 900,
+      maxKeyRounds: Number(process.env.AI_LLM_MAX_KEY_ROUNDS) || 2,
       providerCooldownMs: Number(process.env.AI_LLM_PROVIDER_COOLDOWN_MS) || 0,
       transientKeyCooldownMs:
         Number(process.env.AI_LLM_TRANSIENT_KEY_COOLDOWN_MS) || 800,
@@ -142,6 +148,50 @@ export const envConfig = () => ({
       invalidKeyCooldownMs:
         Number(process.env.OPENAI_SECONDARY_INVALID_KEY_COOLDOWN_MS) || 600000,
     },
+    groq20b: {
+      apiKey: process.env.GROQ_20B_API_KEY,
+      apiKeys: process.env.GROQ_20B_API_KEYS,
+      baseUrl:
+        process.env.GROQ_20B_API_BASE_URL ??
+        'https://api.groq.com/openai/v1',
+      model: process.env.GROQ_20B_MODEL ?? 'openai/gpt-oss-20b',
+      timeoutMs: Number(process.env.GROQ_20B_TIMEOUT_MS) || 5000,
+      totalTimeoutMs: Number(process.env.GROQ_20B_TOTAL_TIMEOUT_MS) || 8000,
+      maxAttempts: Number(process.env.GROQ_20B_MAX_ATTEMPTS) || 10,
+      keyCooldownMs: Number(process.env.GROQ_20B_KEY_COOLDOWN_MS) || 60000,
+      invalidKeyCooldownMs:
+        Number(process.env.GROQ_20B_INVALID_KEY_COOLDOWN_MS) || 600000,
+    },
+    groq120b: {
+      apiKey: process.env.GROQ_120B_API_KEY,
+      apiKeys: process.env.GROQ_120B_API_KEYS,
+      baseUrl:
+        process.env.GROQ_120B_API_BASE_URL ??
+        'https://api.groq.com/openai/v1',
+      model: process.env.GROQ_120B_MODEL ?? 'openai/gpt-oss-120b',
+      timeoutMs: Number(process.env.GROQ_120B_TIMEOUT_MS) || 6000,
+      totalTimeoutMs: Number(process.env.GROQ_120B_TOTAL_TIMEOUT_MS) || 9000,
+      maxAttempts: Number(process.env.GROQ_120B_MAX_ATTEMPTS) || 10,
+      keyCooldownMs: Number(process.env.GROQ_120B_KEY_COOLDOWN_MS) || 60000,
+      invalidKeyCooldownMs:
+        Number(process.env.GROQ_120B_INVALID_KEY_COOLDOWN_MS) || 600000,
+    },
+    groqQwen38: {
+      apiKey: process.env.GROQ_QWEN_38_API_KEY,
+      apiKeys: process.env.GROQ_QWEN_38_API_KEYS,
+      baseUrl:
+        process.env.GROQ_QWEN_38_API_BASE_URL ??
+        'https://api.groq.com/openai/v1',
+      model: process.env.GROQ_QWEN_38_MODEL ?? 'qwen/qwen3.8-27b',
+      timeoutMs: Number(process.env.GROQ_QWEN_38_TIMEOUT_MS) || 6000,
+      totalTimeoutMs:
+        Number(process.env.GROQ_QWEN_38_TOTAL_TIMEOUT_MS) || 9000,
+      maxAttempts: Number(process.env.GROQ_QWEN_38_MAX_ATTEMPTS) || 10,
+      keyCooldownMs:
+        Number(process.env.GROQ_QWEN_38_KEY_COOLDOWN_MS) || 60000,
+      invalidKeyCooldownMs:
+        Number(process.env.GROQ_QWEN_38_INVALID_KEY_COOLDOWN_MS) || 600000,
+    },
     emailDraft: {
       apiKey: process.env.EMAIL_AI_API_KEY,
       apiKeys: process.env.EMAIL_AI_API_KEYS,
@@ -163,7 +213,8 @@ export const envConfig = () => ({
         process.env.COMPARISON_AI_API_BASE_URL ??
         'https://integrate.api.nvidia.com/v1',
       model:
-        process.env.COMPARISON_AI_MODEL ?? 'nvidia/nemotron-3-nano-30b-a3b',
+        process.env.COMPARISON_AI_MODEL ??
+        'nvidia/nemotron-3.5-lightning-30b-a3b',
       timeoutMs: Number(process.env.COMPARISON_AI_TIMEOUT_MS) || 6500,
       totalTimeoutMs:
         Number(process.env.COMPARISON_AI_TOTAL_TIMEOUT_MS) || 14000,

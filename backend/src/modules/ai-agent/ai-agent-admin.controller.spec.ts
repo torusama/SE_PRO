@@ -68,4 +68,31 @@ describe('AiAgentAdminController knowledge review', () => {
       'incorrect',
     );
   });
+
+  it('passes the authenticated admin to journal approval', async () => {
+    const learningJournal = {
+      approve: jest.fn().mockResolvedValue({
+        learningJournalId: 12,
+        reviewStatus: 'admin_approved',
+        knowledgeEntryId: 88,
+      }),
+    };
+    const journalController = new AiAgentAdminController(
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      knowledge as never,
+      undefined,
+      learningJournal as never,
+    );
+
+    await expect(
+      journalController.approveLearningJournal({ id: 9 }, 12),
+    ).resolves.toMatchObject({
+      success: true,
+      data: { knowledgeEntryId: 88 },
+    });
+    expect(learningJournal.approve).toHaveBeenCalledWith(12, 9);
+  });
 });

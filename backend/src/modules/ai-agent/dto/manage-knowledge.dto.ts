@@ -18,8 +18,17 @@ export class ManageKnowledgeDto {
   category!: string;
 
   @IsString()
-  @IsIn(['faq', 'business_rule', 'information_correction'])
-  knowledgeType!: 'faq' | 'business_rule' | 'information_correction';
+  @IsIn([
+    'faq',
+    'business_rule',
+    'information_correction',
+    'assistant_instruction',
+  ])
+  knowledgeType!:
+    | 'faq'
+    | 'business_rule'
+    | 'information_correction'
+    | 'assistant_instruction';
 
   @IsString()
   @MinLength(10)

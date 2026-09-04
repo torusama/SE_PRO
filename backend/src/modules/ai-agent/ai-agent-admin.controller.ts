@@ -230,6 +230,18 @@ export class AiAgentAdminController {
     };
   }
 
+  @Patch('learning-journal/:id/approve')
+  async approveLearningJournal(
+    @CurrentUser() user: AdminUser,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return {
+      success: true,
+      message: 'AI learning journal entry approved and activated',
+      data: await this.learningJournal!.approve(id, user.id),
+    };
+  }
+
   @Delete('learning-journal/:id')
   async deleteLearningJournal(
     @CurrentUser() user: AdminUser,

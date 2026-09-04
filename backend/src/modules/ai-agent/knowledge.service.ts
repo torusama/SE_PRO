@@ -751,6 +751,159 @@ export class KnowledgeService {
     return this.getKnowledgeForReview(created.knowledgeEntryId);
   }
 
+  async activateLearningJournalInstruction(input: {
+    learningJournalId: number;
+    lessonKey: string;
+    title: string;
+    summary: string;
+    preventionRule: string;
+    category: string;
+    evaluatorModel: string;
+    evaluationReason: string;
+    approvedByAdminId?: number;
+  }) {
+    const content = [
+      `Bài học giao tiếp: ${this.normalize(input.summary)}`,
+      `Quy tắc áp dụng: ${this.normalize(input.preventionRule)}`,
+    ].join('\n');
+    if (isRuntimeOperationalClaim(`${input.title}\n${content}`)) {
+      throw new BadRequestException(
+        'Bài học này có dấu hiệu thay đổi vận hành nên không thể tự đưa vào kho tri thức.',
+      );
+    }
+
+    const knowledgeKey = `learning-journal-${input.learningJournalId}`;
+    const memoryKey = `assistant_instruction:${input.lessonKey}`.slice(0, 100);
+    const contentHash = createHash('sha256')
+      .update(`assistant_instruction|${input.category}|${input.title}|${content}`.toLowerCase())
+      .digest('hex');
+    const actorRole = input.approvedByAdminId ? 'admin' : 'system';
+    const validationReason = this.normalize(input.evaluationReason);
+
+    const activated = await this.database.transaction(async (client) => {
+      const oldResult = await client.query<{
+        id: number;
+        title: string;
+        content: string;
+        validation_status: string;
+        is_active: boolean;
+      }>(
+        `SELECT knowledge_entry_id AS id, title, content,
+                validation_status, is_active
+         FROM ai_knowledge_entries
+         WHERE knowledge_key = $1
+         FOR UPDATE`,
+        [knowledgeKey],
+      );
+      const oldEntry = oldResult.rows[0] ?? null;
+      const evidence = {
+        assistantInstruction: true,
+        learningJournalId: input.learningJournalId,
+        autonomousReview: !input.approvedByAdminId,
+        evaluatorModel: input.evaluatorModel,
+        approvedByAdminId: input.approvedByAdminId ?? null,
+      };
+      const entryResult = await client.query<{ id: number }>(
+        `INSERT INTO ai_knowledge_entries
+           (knowledge_key, category, title, content, knowledge_type,
+            source_type, source_reference, scope, owner_user_id, memory_key,
+            validation_status, validation_reason, validation_evidence,
+            source_role, content_hash, is_active, effective_from)
+         VALUES
+           ($1, 'ai_customer_communication', $2, $3, 'assistant_instruction',
+            'ai_learning_journal', $4, 'global', NULL, $5,
+            'active', $6, $7::jsonb,
+            $8, $9, TRUE, NOW())
+         ON CONFLICT (knowledge_key) DO UPDATE
+           SET title = EXCLUDED.title,
+               content = EXCLUDED.content,
+               knowledge_type = EXCLUDED.knowledge_type,
+               source_type = EXCLUDED.source_type,
+               source_reference = EXCLUDED.source_reference,
+               scope = 'global',
+               owner_user_id = NULL,
+               memory_key = EXCLUDED.memory_key,
+               validation_status = 'active',
+               validation_reason = EXCLUDED.validation_reason,
+               validation_evidence = EXCLUDED.validation_evidence,
+               source_role = EXCLUDED.source_role,
+               content_hash = EXCLUDED.content_hash,
+               is_active = TRUE,
+               effective_from = COALESCE(ai_knowledge_entries.effective_from, NOW()),
+               effective_to = NULL,
+               updated_at = NOW()
+         RETURNING knowledge_entry_id AS id`,
+        [
+          knowledgeKey,
+          this.normalize(input.title),
+          content,
+          `learning-journal:${input.learningJournalId}`,
+          memoryKey,
+          validationReason,
+          JSON.stringify(evidence),
+          actorRole,
+          contentHash,
+        ],
+      );
+      const entryId = Number(entryResult.rows[0].id);
+      const versionResult = await client.query<{ version: number }>(
+        `SELECT COALESCE(MAX(version_number), 0) + 1 AS version
+         FROM ai_knowledge_versions
+         WHERE entity_type = 'knowledge_entry' AND entity_id = $1`,
+        [entryId],
+      );
+      const versionNumber = Number(versionResult.rows[0]?.version ?? 1);
+      const versionName = `kb-${entryId}-v${versionNumber}-${Date.now()}`.slice(0, 50);
+      const snapshot = {
+        title: input.title,
+        content,
+        knowledgeType: 'assistant_instruction',
+        sourceType: 'ai_learning_journal',
+        validationStatus: 'active',
+        isActive: true,
+      };
+      await client.query(
+        `INSERT INTO ai_knowledge_versions
+           (version_name, entity_type, entity_id, field_name,
+            old_value, new_value, change_reason, created_by,
+            version_number, action_type, actor_role, validation_reason)
+         VALUES
+           ($1, 'knowledge_entry', $2, 'record', $3::jsonb, $4::jsonb,
+            $5, $6, $7, $8, $9, $5)`,
+        [
+          versionName,
+          entryId,
+          oldEntry ? JSON.stringify(oldEntry) : null,
+          JSON.stringify(snapshot),
+          validationReason,
+          input.approvedByAdminId ?? null,
+          versionNumber,
+          oldEntry ? 'updated' : 'created',
+          actorRole,
+        ],
+      );
+      await client.query(
+        `INSERT INTO audit_logs
+           (user_id, action, entity_type, entity_id, entity_key,
+            old_value, new_value)
+         VALUES ($1, $2, 'ai_knowledge_entry', $3, $4, $5::jsonb, $6::jsonb)`,
+        [
+          input.approvedByAdminId ?? null,
+          input.approvedByAdminId
+            ? 'ai_learning_journal_admin_approved'
+            : 'ai_learning_journal_auto_approved',
+          entryId,
+          knowledgeKey,
+          oldEntry ? JSON.stringify(oldEntry) : null,
+          JSON.stringify(snapshot),
+        ],
+      );
+      return { knowledgeEntryId: entryId, versionName };
+    });
+
+    return activated;
+  }
+
   async updateAdminKnowledge(
     id: number,
     adminId: number,
@@ -1009,6 +1162,17 @@ export class KnowledgeService {
           current.knowledge_key ?? current.category,
           JSON.stringify(oldSnapshot),
         ],
+      );
+      await client.query(
+        `UPDATE ai_learning_journal_entries
+         SET review_status = 'pending',
+             auto_generated = TRUE,
+             knowledge_entry_id = NULL,
+             evaluation_reason = 'Mục tương ứng đã bị xóa khỏi Kho tri thức.',
+             updated_at = NOW()
+         WHERE knowledge_entry_id = $1
+           AND status = 'active'`,
+        [id],
       );
       await client.query(
         `DELETE FROM ai_knowledge_entries

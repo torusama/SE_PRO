@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<TestCaseEntity>
-   <description>PA04 automated API test</description>
-   <name>TC-PLOTD-02_Nonexistent_Plot_Detail</name>
-   <tag>PA04</tag>
-   <comment></comment>
-   <recordOption>OTHER</recordOption>
-   <testCaseGuid>8c222222-2222-4222-8222-222222222222</testCaseGuid>
-</TestCaseEntity>

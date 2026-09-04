@@ -22,7 +22,7 @@ export default function AccountActions({
 
   return (
     <div className={`account-actions${className ? ` ${className}` : ""}`}>
-      {showNotification && (
+      {showNotification && role !== "admin" && (
         <NotificationMenu
           variant={variant}
           audience={notificationAudience}

@@ -289,4 +289,49 @@ describe('KnowledgeService prompt retrieval', () => {
 
     await expect(service.getUserPromptContext(5, 'question')).resolves.toBe('');
   });
+
+  it('stores an approved journal lesson as an active assistant instruction', async () => {
+    const client = {
+      query: jest
+        .fn()
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [{ id: 81 }] })
+        .mockResolvedValueOnce({ rows: [{ version: 1 }] })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [] }),
+    };
+    const database = {
+      transaction: jest.fn(async (callback: (value: typeof client) => unknown) =>
+        callback(client),
+      ),
+    };
+    const service = new KnowledgeService(database as never);
+
+    await expect(
+      service.activateLearningJournalInstruction({
+        learningJournalId: 21,
+        lessonKey: 'tone-lesson',
+        title: 'Phản hồi bình tĩnh',
+        summary: 'Ghi nhận cảm xúc của khách trước khi hướng dẫn.',
+        preventionRule: 'Giữ giọng bình tĩnh và đưa ra bước tiếp theo cụ thể.',
+        category: 'tone',
+        evaluatorModel: 'openai/gpt-oss-20b@nvidia',
+        evaluationReason: 'Bài học giao tiếp an toàn và có thể tái sử dụng.',
+      }),
+    ).resolves.toMatchObject({ knowledgeEntryId: 81 });
+
+    expect(client.query.mock.calls[1]?.[0]).toContain(
+      "'assistant_instruction'",
+    );
+    expect(client.query.mock.calls[1]?.[0]).toContain(
+      "'ai_learning_journal'",
+    );
+    expect(client.query.mock.calls[1]?.[1]).toEqual(
+      expect.arrayContaining([
+        'learning-journal-21',
+        'learning-journal:21',
+        'system',
+      ]),
+    );
+  });
 });

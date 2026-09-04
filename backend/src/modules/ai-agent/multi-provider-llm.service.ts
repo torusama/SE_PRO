@@ -6,7 +6,14 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NvidiaNemotronService } from './nvidia-nemotron.service';
-import { OpenAiService, OpenAiSecondaryService } from './openai.service';
+import {
+  ComparisonAiService,
+  GroqGptOss20bService,
+  GroqGptOss120bService,
+  GroqQwen38Service,
+  OpenAiService,
+  OpenAiSecondaryService,
+} from './openai.service';
 import { NvidiaChatResponse, NvidiaMessage } from './types/nvidia.types';
 import { DatabaseService } from '../../database/database.service';
 
@@ -25,7 +32,14 @@ export interface LlmCallOptions {
   /** Total wall-clock budget for the whole multi-provider call. */
   totalTimeoutMs?: number;
   /** Try this route first, then retain normal cross-provider failover. */
-  preferredProviderId?: 'openai-primary' | 'openai-secondary' | 'nvidia';
+  preferredProviderId?:
+    | 'groq-20b'
+    | 'groq-120b'
+    | 'groq-qwen-38'
+    | 'openai-primary'
+    | 'comparison-fast'
+    | 'openai-secondary'
+    | 'nvidia';
   /** Keep an auxiliary workload on its dedicated pool and do not borrow chat capacity. */
   strictPreferredProvider?: boolean;
   /**
@@ -37,6 +51,8 @@ export interface LlmCallOptions {
   validateResponse?: (response: NvidiaChatResponse) => boolean;
   /** Internal: prevent OpenAI-compatible providers from double-counting a router attempt. */
   skipRuntimeTelemetry?: boolean;
+  /** Internal cancellation signal used to stop losing hedged requests. */
+  signal?: AbortSignal;
 }
 
 export interface LlmProvider {
@@ -68,18 +84,30 @@ export class MultiProviderLlmService {
     private readonly openAiSecondary: OpenAiSecondaryService,
     private readonly nvidia: NvidiaNemotronService,
     @Optional() private readonly database?: DatabaseService,
+    @Optional() private readonly fastComparison?: ComparisonAiService,
+    @Optional() private readonly groq20b?: GroqGptOss20bService,
+    @Optional() private readonly groq120b?: GroqGptOss120bService,
+    @Optional() private readonly groqQwen38?: GroqQwen38Service,
   ) {}
 
   isConfigured(): boolean {
     return (
+      Boolean(this.groq20b?.isConfigured()) ||
+      Boolean(this.groq120b?.isConfigured()) ||
+      Boolean(this.groqQwen38?.isConfigured()) ||
       this.openAiPrimary.isConfigured() ||
+      Boolean(this.fastComparison?.isConfigured()) ||
       this.openAiSecondary.isConfigured() ||
       this.nvidia.isConfigured()
     );
   }
 
   get model(): string {
+    if (this.groq20b?.isConfigured()) return this.groq20b.model;
+    if (this.groq120b?.isConfigured()) return this.groq120b.model;
+    if (this.groqQwen38?.isConfigured()) return this.groqQwen38.model;
     if (this.openAiPrimary.isConfigured()) return this.openAiPrimary.model;
+    if (this.fastComparison?.isConfigured()) return this.fastComparison.model;
     if (this.nvidia.isConfigured()) return this.nvidia.model;
     if (this.openAiSecondary.isConfigured()) return this.openAiSecondary.model;
     return 'none';
@@ -87,6 +115,36 @@ export class MultiProviderLlmService {
 
   getProviders(): LlmProvider[] {
     const providers: LlmProvider[] = [];
+
+    if (this.groq20b?.isConfigured()) {
+      providers.push({
+        id: 'groq-20b',
+        name: `Groq GPT-OSS 20B (${this.groq20b.model})`,
+        isConfigured: () => this.groq20b?.isConfigured() === true,
+        model: this.groq20b.model,
+        chat: (...args) => this.groq20b!.chat(...args),
+      });
+    }
+
+    if (this.groq120b?.isConfigured()) {
+      providers.push({
+        id: 'groq-120b',
+        name: `Groq GPT-OSS 120B (${this.groq120b.model})`,
+        isConfigured: () => this.groq120b?.isConfigured() === true,
+        model: this.groq120b.model,
+        chat: (...args) => this.groq120b!.chat(...args),
+      });
+    }
+
+    if (this.groqQwen38?.isConfigured()) {
+      providers.push({
+        id: 'groq-qwen-38',
+        name: `Groq Qwen 3.8 27B (${this.groqQwen38.model})`,
+        isConfigured: () => this.groqQwen38?.isConfigured() === true,
+        model: this.groqQwen38.model,
+        chat: (...args) => this.groqQwen38!.chat(...args),
+      });
+    }
 
     // Live provider probes show the 20B route reliably returns final text while
     // 120B and Mistral can remain queued beyond twenty seconds. Keep the
@@ -101,6 +159,17 @@ export class MultiProviderLlmService {
       });
     }
 
+    // Independent key pool backed by NVIDIA's current low-latency route.
+    if (this.fastComparison?.isConfigured()) {
+      providers.push({
+        id: 'comparison-fast',
+        name: `NVIDIA Lightning (${this.fastComparison.model})`,
+        isConfigured: () => this.fastComparison?.isConfigured() === true,
+        model: this.fastComparison.model,
+        chat: (...args) => this.fastComparison!.chat(...args),
+      });
+    }
+
     if (this.nvidia.isConfigured()) {
       providers.push({
         id: 'nvidia',
@@ -111,7 +180,10 @@ export class MultiProviderLlmService {
       });
     }
 
-    if (this.openAiSecondary.isConfigured()) {
+    if (
+      this.openAiSecondary.isConfigured() &&
+      !this.isKnownRetiredModel(this.openAiSecondary.model)
+    ) {
       providers.push({
         id: 'openai-secondary',
         name: `OpenAI Secondary (${this.openAiSecondary.model})`,
@@ -139,9 +211,15 @@ export class MultiProviderLlmService {
       );
     }
 
-    const totalTimeoutMs = this.clampTimeout(
+    const requestedTotalTimeoutMs = this.clampTimeout(
       options.totalTimeoutMs,
       this.positiveConfig('ai.router.totalTimeoutMs', 10_000),
+    );
+    // A caller may request a very large planner budget. Keep one hard router
+    // ceiling so a slow model cannot hold the HTTP request for tens of seconds.
+    const totalTimeoutMs = Math.min(
+      requestedTotalTimeoutMs,
+      this.positiveConfig('ai.router.maxTotalTimeoutMs', 12_000),
     );
     const providerTimeoutMs = this.clampTimeout(
       options.timeoutMs,
@@ -161,6 +239,65 @@ export class MultiProviderLlmService {
 
     const deadline = Date.now() + totalTimeoutMs;
     let lastError: unknown;
+
+    const hedgeProviders =
+      this.config.get<boolean>('ai.router.hedgeProviders') !== false;
+    if (
+      hedgeProviders &&
+      ordered.length > 1 &&
+      options.strictPreferredProvider !== true
+    ) {
+      const maxRounds = Math.max(
+        1,
+        Math.min(
+          2,
+          this.positiveConfig('ai.router.maxKeyRounds', 2),
+        ),
+      );
+      const hedgeDelayMs = this.positiveConfig(
+        'ai.router.hedgeDelayMs',
+        900,
+      );
+
+      for (let round = 0; round < maxRounds; round += 1) {
+        const remainingBudgetMs = deadline - Date.now();
+        if (remainingBudgetMs <= 0) break;
+
+        // Give the first race most of the budget, while preserving a smaller
+        // second key round for a pool-wide timeout or transient outage.
+        const roundsRemaining = maxRounds - round;
+        const roundBudgetMs =
+          roundsRemaining > 1 && remainingBudgetMs >= 4_000
+            ? Math.max(2_000, Math.floor(remainingBudgetMs * 0.65))
+            : remainingBudgetMs;
+        try {
+          return await this.runHedgedRound({
+            providers: ordered,
+            messages,
+            tools,
+            toolChoice,
+            options,
+            providerTimeoutMs,
+            roundTimeoutMs: roundBudgetMs,
+            hedgeDelayMs,
+            round: round + 1,
+            maxRounds,
+          });
+        } catch (error) {
+          lastError = error;
+          if (round + 1 < maxRounds && Date.now() < deadline) {
+            this.logger.warn(
+              `[Multi-LLM] Hedged round ${round + 1}/${maxRounds} failed; rotating provider key pools for one final round`,
+            );
+          }
+        }
+      }
+
+      throw (
+        lastError ||
+        new ServiceUnavailableException('All AI LLM providers failed')
+      );
+    }
 
     for (let i = 0; i < ordered.length; i += 1) {
       const provider = ordered[i];
@@ -266,6 +403,210 @@ export class MultiProviderLlmService {
     );
   }
 
+  private runHedgedRound(input: {
+    providers: LlmProvider[];
+    messages: NvidiaMessage[];
+    tools: readonly unknown[];
+    toolChoice: unknown;
+    options: LlmCallOptions;
+    providerTimeoutMs: number;
+    roundTimeoutMs: number;
+    hedgeDelayMs: number;
+    round: number;
+    maxRounds: number;
+  }): Promise<NvidiaChatResponse> {
+    const roundDeadline = Date.now() + input.roundTimeoutMs;
+
+    return new Promise<NvidiaChatResponse>((resolve, reject) => {
+      const controllers = input.providers.map(() => new AbortController());
+      const errors: unknown[] = [];
+      let nextIndex = 0;
+      let activeAttempts = 0;
+      let completed = false;
+      let hedgeTimer: ReturnType<typeof setTimeout> | undefined;
+
+      const finishResolve = (value: NvidiaChatResponse) => {
+        clearTimeout(watchdog);
+        resolve(value);
+      };
+
+      const finishReject = (reason: unknown) => {
+        clearTimeout(watchdog);
+        reject(reason);
+      };
+
+      const clearHedgeTimer = () => {
+        if (!hedgeTimer) return;
+        clearTimeout(hedgeTimer);
+        hedgeTimer = undefined;
+      };
+
+      const abortLosers = (winnerIndex?: number) => {
+        controllers.forEach((controller, index) => {
+          if (index !== winnerIndex && !controller.signal.aborted) {
+            controller.abort('hedged request lost');
+          }
+        });
+      };
+
+      const lastFailure = () =>
+        [...errors]
+          .reverse()
+          .find((error): error is unknown => error !== undefined);
+
+      const rejectIfFinished = () => {
+        if (
+          completed ||
+          nextIndex < input.providers.length ||
+          activeAttempts > 0
+        ) {
+          return;
+        }
+        completed = true;
+        clearHedgeTimer();
+        finishReject(
+          lastFailure() ??
+            new ServiceUnavailableException('All AI LLM providers failed'),
+        );
+      };
+
+      const scheduleNext = () => {
+        if (
+          completed ||
+          hedgeTimer ||
+          nextIndex >= input.providers.length
+        ) {
+          return;
+        }
+        hedgeTimer = setTimeout(() => {
+          hedgeTimer = undefined;
+          startNext();
+        }, input.hedgeDelayMs);
+      };
+
+      const startNext = () => {
+        if (completed || nextIndex >= input.providers.length) return;
+
+        const index = nextIndex;
+        nextIndex += 1;
+        const provider = input.providers[index];
+        const remainingRoundMs = roundDeadline - Date.now();
+        if (remainingRoundMs <= 0) {
+          errors[index] = new ServiceUnavailableException(
+            'AI hedged round timed out',
+          );
+          rejectIfFinished();
+          return;
+        }
+
+        activeAttempts += 1;
+        const attemptTimeoutMs = Math.max(
+          250,
+          Math.min(input.providerTimeoutMs, remainingRoundMs),
+        );
+        const attemptStartedAt = Date.now();
+        this.logger.log(
+          `[Multi-LLM] Hedged round ${input.round}/${input.maxRounds}: starting ${provider.name} (${index + 1}/${input.providers.length})`,
+        );
+
+        void provider
+          .chat(input.messages, input.tools, input.toolChoice, {
+            ...input.options,
+            timeoutMs: attemptTimeoutMs,
+            totalTimeoutMs: attemptTimeoutMs,
+            skipRuntimeTelemetry: true,
+            signal: controllers[index].signal,
+          })
+          .then((result) => {
+            if (completed) return;
+            const assistant = result.choices?.[0]?.message;
+            if (
+              !assistant ||
+              (!assistant.content?.trim() && !assistant.tool_calls?.length)
+            ) {
+              throw new ServiceUnavailableException(
+                `${provider.name} returned an empty assistant response`,
+              );
+            }
+            if (
+              input.options.validateResponse &&
+              !input.options.validateResponse(result)
+            ) {
+              throw new ServiceUnavailableException(
+                `${provider.name} returned an unusable assistant response`,
+              );
+            }
+
+            completed = true;
+            clearHedgeTimer();
+            abortLosers(index);
+            this.rememberAffinity(input.options.routingKey, provider.id);
+            this.providerCooldownUntil.delete(provider.id);
+            this.recordRuntimeMetric({
+              provider,
+              result,
+              routingKey: input.options.routingKey,
+              latencyMs: Date.now() - attemptStartedAt,
+              status: 'success',
+            });
+            this.logger.log(
+              `[Multi-LLM] Hedged winner: ${provider.name}`,
+            );
+            finishResolve(result);
+          })
+          .catch((error) => {
+            activeAttempts -= 1;
+            // A winning sibling deliberately aborts this request. Do not count
+            // that cancellation as a provider/key failure or put it on cooldown.
+            if (completed && controllers[index].signal.aborted) return;
+
+            errors[index] = error;
+            const msg = error instanceof Error ? error.message : String(error);
+            this.recordRuntimeMetric({
+              provider,
+              routingKey: input.options.routingKey,
+              latencyMs: Date.now() - attemptStartedAt,
+              status: 'failed',
+              error,
+            });
+            this.logger.warn(
+              `[Multi-LLM] Hedged provider ${provider.name} failed: ${msg}`,
+            );
+            if (this.isTransientFailure(error)) {
+              this.cooldownProvider(provider.id);
+              this.forgetAffinityIfMatches(
+                input.options.routingKey,
+                provider.id,
+              );
+            }
+
+            // A fast 401/429/network/validation failure should release the next
+            // provider immediately rather than waiting for the hedge delay.
+            clearHedgeTimer();
+            if (nextIndex < input.providers.length) startNext();
+            rejectIfFinished();
+          });
+
+        scheduleNext();
+      };
+
+      // Provider attempts carry their own deadline. This watchdog only covers
+      // a broken provider implementation that ignores both timeout and abort.
+      const watchdog = setTimeout(() => {
+        if (completed) return;
+        completed = true;
+        clearHedgeTimer();
+        abortLosers();
+        finishReject(
+          lastFailure() ??
+            new ServiceUnavailableException('AI hedged round timed out'),
+        );
+      }, input.roundTimeoutMs + 50);
+
+      startNext();
+    });
+  }
+
   private recordRuntimeMetric(input: {
     provider: LlmProvider;
     result?: NvidiaChatResponse;
@@ -340,12 +681,17 @@ export class MultiProviderLlmService {
     if (promptTokens === undefined && completionTokens === undefined) {
       return null;
     }
-    const prefix =
-      providerId === 'openai-primary'
-        ? 'ai.telemetry.openaiPrimary'
-        : providerId === 'openai-secondary'
-          ? 'ai.telemetry.openaiSecondary'
-          : 'ai.telemetry.nvidia';
+    const prefixByProvider: Record<string, string> = {
+      'groq-20b': 'ai.telemetry.groq20b',
+      'groq-120b': 'ai.telemetry.groq120b',
+      'groq-qwen-38': 'ai.telemetry.groqQwen38',
+      'openai-primary': 'ai.telemetry.openaiPrimary',
+      'openai-secondary': 'ai.telemetry.openaiSecondary',
+      'comparison-fast': 'ai.telemetry.comparison',
+      nvidia: 'ai.telemetry.nvidia',
+    };
+    const prefix = prefixByProvider[providerId];
+    if (!prefix) return null;
     const inputRate = Number(
       this.config.get<number | string>(`${prefix}.inputUsdPerMillion`),
     );
@@ -453,6 +799,11 @@ export class MultiProviderLlmService {
   private positiveConfig(key: string, fallback: number) {
     const value = Number(this.config.get<number | string>(key));
     return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
+  }
+
+  private isKnownRetiredModel(model: string) {
+    // NVIDIA NIM retired this route on 2026-09-01 and now returns HTTP 410.
+    return model.trim().toLowerCase() === 'openai/gpt-oss-120b';
   }
 
   private clampTimeout(value: number | undefined, fallback: number) {

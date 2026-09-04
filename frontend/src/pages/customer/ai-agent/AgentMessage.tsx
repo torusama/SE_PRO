@@ -45,10 +45,12 @@ function escapeRegExp(value: string) {
 function splitBaziPlotNarrative(
   content: string,
   recommendations?: AgentRecommendation[],
+  hasBazi?: boolean,
 ) {
-  if (!recommendations?.length) {
+  if (!recommendations?.length || !hasBazi) {
     return { before: content.trim(), after: "" };
   }
+
 
   // Combined Bát Tự + inventory answers arrive as one assistant message from
   // the API. The visual flow must still be: AI analysis -> compass -> plot
@@ -165,6 +167,7 @@ function AgentMessage({
   const baziNarrative = splitBaziPlotNarrative(
     message.content,
     message.response?.recommendations,
+    hasBaziRecommendations,
   );
   const primaryContent = baziNarrative.before || message.content;
   const postBaziContent = baziNarrative.after;

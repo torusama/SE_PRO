@@ -79,7 +79,8 @@ Do not commit a real `.env` file. A safe `.env.example` is included.
 The AI agent supports multiple API keys and multiple providers. Routing is designed for low latency and graceful failover:
 
 - A single user turn gets a routing key, so planner/composer calls stay on the same provider and API key when possible.
-- By default main chat starts with the responsive **20B route**, then borrows the Nemotron 49B pool and keeps 120B as the final fallback. Set `AI_LLM_ROTATE_PROVIDERS=true` only if you intentionally want whole-model rotation.
+- When Groq keys are configured, main chat starts with **Groq GPT-OSS 20B**. After each short hedge delay, **Groq GPT-OSS 120B** and **Groq Qwen 3.8 27B** join the race. NVIDIA pools remain later fallbacks. The first contract-valid response wins and losing HTTP requests are aborted. Set `AI_LLM_ROTATE_PROVIDERS=true` only if you intentionally want the first model to rotate between turns.
+- The three Groq models have separate key pools (`GROQ_20B_API_KEYS`, `GROQ_120B_API_KEYS`, and `GROQ_QWEN_38_API_KEYS`), so a timeout/rate-limit rotates only that model's keys before the router retries the full model race.
 - HTTP 401/403/408/429, 5xx, network failures, timeouts, and empty assistant responses rotate to another configured key/provider instead of being accepted as success.
 - A route that is already cooling down is skipped instead of being retried and wasting the full timeout again.
 - Normal conversational turns use the LLM planner's `directResponse`. Tool/RAG and transaction turns keep backend data authoritative, then send that grounded result to the LLM for the final wording. A deterministic answer is retained only after all configured routes fail.
@@ -91,7 +92,11 @@ Latency/failover can be tuned with:
 
 ```env
 AI_LLM_TOTAL_TIMEOUT_MS=10000
+AI_LLM_MAX_TOTAL_TIMEOUT_MS=12000
 AI_LLM_PROVIDER_TIMEOUT_MS=6000
+AI_LLM_HEDGE_PROVIDERS=true
+AI_LLM_HEDGE_DELAY_MS=900
+AI_LLM_MAX_KEY_ROUNDS=2
 AI_LLM_WRITES_CONVERSATIONAL_TURNS=true
 AI_LLM_PROVIDER_COOLDOWN_MS=0
 AI_LLM_TRANSIENT_KEY_COOLDOWN_MS=800
@@ -104,7 +109,16 @@ NVIDIA_TOTAL_TIMEOUT_MS=12000
 NVIDIA_MAX_ATTEMPTS=2
 ```
 
-For multiple keys, prefer a single-line JSON array such as `OPENAI_API_KEYS=["key-1","key-2"]`. The parser also accepts comma/space/semicolon-separated values and the legacy wrapped format.
+Multiple Groq keys can be written one per line in the existing wrapped format:
+
+```env
+GROQ_20B_API_KEYS="{
+  gsk_key_1
+  gsk_key_2
+}"
+```
+
+The same format works for every `*_API_KEYS` variable. JSON arrays and comma/space/semicolon-separated values are also accepted.
 
 The concierge uses semantic LLM planning as the primary conversational decision. Ordinary in-scope conversation, contextual follow-ups, and explicit memory requests are not automatically converted into budget/plot-count questions. Unrelated topics are declined briefly and redirected back to Vĩnh Phúc Viên scope. Explicit reusable consultation preferences (for example, preferring future discussion to emphasize phong thủy/cultural guidance) can be stored as a user-scoped preference when backend validation succeeds. Colloquial Vietnamese self-reference such as `tui`, `t`, `tao`, `em`, etc. is accepted for clear preference statements. A conservative backend backstop recovers an obvious explicit preference if the LLM forgets to emit `memoryProposals`; backend validation still decides whether it is saved. Questions such as “bạn biết tui thích gì không?” are never treated as new preferences.
 

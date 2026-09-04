@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<TestCaseEntity>
-   <description>PA04 automated API test</description>
-   <name>TC-RSV2-02_Empty_PlotIds</name>
-   <tag>PA04</tag>
-   <comment></comment>
-   <recordOption>OTHER</recordOption>
-   <testCaseGuid>8c888888-8888-4888-8888-888888888888</testCaseGuid>
-</TestCaseEntity>

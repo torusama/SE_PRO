@@ -1,5 +1,11 @@
 import { ConfigService } from '@nestjs/config';
-import { EmailDraftAiService, OpenAiService } from './openai.service';
+import {
+  EmailDraftAiService,
+  GroqGptOss20bService,
+  GroqGptOss120bService,
+  GroqQwen38Service,
+  OpenAiService,
+} from './openai.service';
 
 describe('OpenAiService', () => {
   let service: OpenAiService;
@@ -290,6 +296,87 @@ describe('OpenAiService', () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+});
+
+describe('Groq model pools', () => {
+  afterEach(() => {
+    jest.resetAllMocks();
+  });
+
+  it('keeps a separate configuration namespace for each Groq model', () => {
+    const configService = new ConfigService({
+      ai: {
+        enableLlm: true,
+        groq20b: {
+          apiKeys: 'groq-20b-key',
+          model: 'openai/gpt-oss-20b',
+        },
+        groq120b: {
+          apiKeys: 'groq-120b-key',
+          model: 'openai/gpt-oss-120b',
+        },
+        groqQwen38: {
+          apiKeys: 'groq-qwen-key',
+          model: 'qwen/qwen3.8-27b',
+        },
+      },
+    });
+
+    const model20b = new GroqGptOss20bService(configService);
+    const model120b = new GroqGptOss120bService(configService);
+    const qwen = new GroqQwen38Service(configService);
+
+    expect(model20b.getConfiguredApiKeys()).toEqual(['groq-20b-key']);
+    expect(model120b.getConfiguredApiKeys()).toEqual(['groq-120b-key']);
+    expect(qwen.getConfiguredApiKeys()).toEqual(['groq-qwen-key']);
+    expect([model20b.model, model120b.model, qwen.model]).toEqual([
+      'openai/gpt-oss-20b',
+      'openai/gpt-oss-120b',
+      'qwen/qwen3.8-27b',
+    ]);
+  });
+
+  it('rotates only inside the Groq 20B key pool after a 429', async () => {
+    const configService = new ConfigService({
+      ai: {
+        enableLlm: true,
+        groq20b: {
+          apiKeys: 'groq-key-1,groq-key-2',
+          baseUrl: 'https://api.groq.com/openai/v1',
+          model: 'openai/gpt-oss-20b',
+          timeoutMs: 1000,
+          totalTimeoutMs: 2000,
+          maxAttempts: 2,
+        },
+      },
+    });
+    const service = new GroqGptOss20bService(configService);
+    const mockFetch = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        headers: { get: () => null },
+        text: async () => 'rate limited',
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          choices: [{ message: { role: 'assistant', content: 'fast' } }],
+        }),
+      });
+    global.fetch = mockFetch;
+
+    await expect(
+      service.chat([{ role: 'user', content: 'hello' }]),
+    ).resolves.toMatchObject({
+      choices: [{ message: { content: 'fast' } }],
+    });
+    expect(
+      mockFetch.mock.calls.map((call) => call[1].headers.Authorization),
+    ).toEqual(['Bearer groq-key-1', 'Bearer groq-key-2']);
   });
 });
 
