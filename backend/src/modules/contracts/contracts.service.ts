@@ -556,6 +556,21 @@ export class ContractsService {
           'Ownership records could not be created for every contract plot',
         );
       }
+
+      // A purchase request is complete once ownership has been activated.
+      // Keep this terminal state independent from the contract status: a later
+      // transfer legitimately changes the old purchase contract to
+      // `transferred`, but must not make the original request look unfinished.
+      if (contract.requestId !== null) {
+        await client.query(
+          `UPDATE reservation_requests
+           SET status = 'completed', updated_at = NOW()
+           WHERE request_id = $1
+             AND request_type = 'purchase'
+             AND status = 'approved'`,
+          [contract.requestId],
+        );
+      }
       await this.notificationsService.createInAppWithClient(
         client,
         contract.userId,

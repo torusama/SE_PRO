@@ -16,7 +16,8 @@ type RequestStatus =
   | "pending"
   | "approved"
   | "rejected"
-  | "cancelled";
+  | "cancelled"
+  | "completed";
 type CancellationStatus = "pending" | "approved" | "rejected";
 type RequestView = "purchases" | "cancellations";
 
@@ -160,6 +161,7 @@ const statusLabels: Record<string, string> = {
   approved: "Đã duyệt",
   rejected: "Đã từ chối",
   cancelled: "Đã hủy",
+  completed: "Đã hoàn tất",
   scheduled: "Đã gửi lịch",
   confirmed: "Khách đã xác nhận",
   declined: "Khách từ chối",
@@ -686,16 +688,19 @@ export default function RequestsPage() {
   const terminal =
     current?.status === "rejected" ||
     current?.status === "cancelled" ||
+    current?.status === "completed" ||
     cancellationPending;
-  const completed = terminal
-    ? 1
-    : [
+  const completed = current?.status === "completed"
+    ? 5
+    : current?.status === "rejected" || current?.status === "cancelled" || cancellationPending
+      ? 1
+      : [
         decisionDone,
         appointmentDone,
         pdfDone,
         paymentDone,
         ownershipDone,
-      ].filter(Boolean).length;
+        ].filter(Boolean).length;
   const labels = [
     "Duyệt yêu cầu",
     "Lịch hẹn",

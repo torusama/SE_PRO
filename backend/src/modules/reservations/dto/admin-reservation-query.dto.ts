@@ -3,7 +3,7 @@ import { AdminListQueryDto } from '../../../common/dto/admin-list-query.dto';
 
 export class AdminReservationQueryDto extends AdminListQueryDto {
   @IsOptional()
-  @IsIn(['draft', 'pending', 'submitted', 'approved', 'rejected', 'cancelled'])
+  @IsIn(['draft', 'pending', 'submitted', 'approved', 'rejected', 'cancelled', 'completed'])
   status?: string;
 
   @IsOptional()

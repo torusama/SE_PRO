@@ -100,5 +100,6 @@ Thứ tự hiện tại:
 34. `038_backfill_reminder_notify_email.sql`
 35. `039_transfer_request_workflow.sql`
 36. `040_backfill_transfer_contracts_content.sql`
+37. `047_finalize_purchase_requests.sql`
 
 `015` phải chạy trước `016`; thứ tự tên file của runner bảo đảm dependency này.
