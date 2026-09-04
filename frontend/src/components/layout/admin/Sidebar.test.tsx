@@ -31,4 +31,14 @@ describe("Admin Sidebar", () => {
 
     expect(screen.queryByText("Quản trị viên")).not.toBeInTheDocument();
   });
+
+  it("hides reminders and care from the admin navigation", () => {
+    render(
+      <MemoryRouter initialEntries={["/admin"]}>
+        <Sidebar />
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByText("Nhắc lịch & chăm sóc")).not.toBeInTheDocument();
+  });
 });

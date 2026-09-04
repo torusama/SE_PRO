@@ -74,11 +74,6 @@ const MENU: MenuGroup[] = [
     items: [
       { label: "Quản lý dịch vụ", to: ROUTES.ADMIN_SERVICES, icon: FileText },
       {
-        label: "Nhắc lịch & chăm sóc",
-        to: ROUTES.ADMIN_REMINDERS,
-        icon: CalendarDays,
-      },
-      {
         label: "Hồ sơ người đã khuất",
         to: ROUTES.ADMIN_DECEASED,
         alertKey: "deceased",
